@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     orthanc_base_url: AnyUrl | str = Field(default="http://localhost:8042")
     orthanc_username: Optional[str] = Field(default=None)
     orthanc_password: Optional[str] = Field(default=None)
+    orthanc_use_mock: bool = Field(default=True, description="Use fake Orthanc adapter for development")
 
     # Database and artifact storage
     database_url: str = Field(default="sqlite+aiosqlite:///./radiarch.db")

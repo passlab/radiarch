@@ -5,13 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .api.routes import info, plans, jobs, artifacts
+from .adapters import build_orthanc_adapter
 
 settings = get_settings()
 
 
 @asynccontextmanager
-def lifespan(_: FastAPI):
-    # Placeholder for DB connections, worker warmup, etc.
+def lifespan(app: FastAPI):
+    app.state.orthanc_adapter = build_orthanc_adapter(settings)
     yield
 
 
