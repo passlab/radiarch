@@ -23,7 +23,7 @@ radiarch/
 
 ```bash
 cd service
-python -m venv .venv
+python3.12 -m venv .venv   # OpenTPS requires Python 3.12.x
 source .venv/bin/activate
 pip install -e .
 uvicorn radiarch.app:create_app --factory --reload
