@@ -31,6 +31,16 @@ uvicorn radiarch.app:create_app --factory --reload
 
 Open <http://localhost:8000/api/v1/docs> to inspect the OpenAPI schema.
 
+### About OpenTPS
+
+OpenTPS 3.0 currently declares a dependency on `numpy>=2.3.2`, which has not been released yet. To keep the Radiarch service installable we ship without OpenTPS by default. The planner falls back to synthetic outputs until OpenTPS is installed.
+
+If you want to experiment with OpenTPS now:
+
+1. Clone <https://gitlab.com/openmcsquare/opentps> locally and ensure you are using Python 3.12.
+2. Install it with `pip install --no-deps /path/to/opentps` and manage its runtime dependencies manually.
+3. Reinstall Radiarch with the optional extra once OpenTPS packaging is updated: `pip install -e .[opentps]`.
+
 ## Next Steps
 
 - Flesh out Orthanc datastore + DICOMweb interactions
