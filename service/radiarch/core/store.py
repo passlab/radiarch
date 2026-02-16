@@ -47,5 +47,45 @@ class InMemoryStore:
     def get_job(self, job_id: str) -> JobStatus | None:
         return self._jobs.get(job_id)
 
+    def update_job(
+        self,
+        job_id: str,
+        *,
+        state: JobState | None = None,
+        progress: float | None = None,
+        message: str | None = None,
+    ) -> JobStatus | None:
+        job = self._jobs.get(job_id)
+        if not job:
+            return None
+        update_data = job.model_dump()
+        now = datetime.utcnow()
+        if state:
+            update_data["state"] = state
+            if state == JobState.running and not update_data.get("started_at"):
+                update_data["started_at"] = now
+            if state in {JobState.succeeded, JobState.failed, JobState.cancelled}:
+                update_data["finished_at"] = now
+        if progress is not None:
+            update_data["progress"] = progress
+        if message is not None:
+            update_data["message"] = message
+        updated = JobStatus(**update_data)
+        self._jobs[job_id] = updated
+        plan = self._plans.get(job.plan_id)
+        if plan:
+            plan.status = updated.state.value
+            plan.updated_at = datetime.utcnow()
+        return updated
+
+    def attach_artifact(self, plan_id: str, artifact_id: str):
+        plan = self._plans.get(plan_id)
+        if not plan:
+            return
+        artifacts = list(plan.artifact_ids)
+        artifacts.append(artifact_id)
+        plan.artifact_ids = artifacts
+        plan.updated_at = datetime.utcnow()
+
 
 store = InMemoryStore()
