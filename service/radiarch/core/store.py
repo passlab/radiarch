@@ -87,5 +87,12 @@ class InMemoryStore:
         plan.artifact_ids = artifacts
         plan.updated_at = datetime.utcnow()
 
+    def set_plan_summary(self, plan_id: str, summary: dict):
+        plan = self._plans.get(plan_id)
+        if not plan:
+            return
+        plan.qa_summary = summary
+        plan.updated_at = datetime.utcnow()
+
 
 store = InMemoryStore()

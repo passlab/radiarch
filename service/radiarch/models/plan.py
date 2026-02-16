@@ -35,3 +35,4 @@ class PlanDetail(PlanSummary):
     fraction_count: int
     notes: Optional[str] = None
     job_id: Optional[str] = None
+    qa_summary: Optional[dict] = None
