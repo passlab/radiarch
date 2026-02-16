@@ -11,7 +11,7 @@ settings = get_settings()
 
 
 @asynccontextmanager
-def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI):
     app.state.orthanc_adapter = build_orthanc_adapter(settings)
     yield
 
