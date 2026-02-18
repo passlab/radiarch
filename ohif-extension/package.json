@@ -1,0 +1,19 @@
+{
+    "name": "@radiarch/ohif-extension",
+    "version": "0.1.0",
+    "description": "OHIF v3 extension for Radiarch TPS",
+    "author": "Radiarch",
+    "license": "MIT",
+    "main": "src/index.ts",
+    "keywords": [
+        "ohif-extension"
+    ],
+    "peerDependencies": {
+        "@ohif/core": "^3.9.0",
+        "react": "^18.0.0",
+        "react-dom": "^18.0.0"
+    },
+    "dependencies": {
+        "axios": "^1.6.0"
+    }
+}

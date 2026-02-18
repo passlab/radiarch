@@ -55,10 +55,14 @@ class OrthancAdapter(OrthancAdapterBase):
         if DICOMwebClient is None:
             raise OrthancAdapterError("dicomweb-client is not available; install dependencies")
 
+        import requests
+        session = requests.Session()
+        if settings.orthanc_username and settings.orthanc_password:
+            session.auth = (settings.orthanc_username, settings.orthanc_password)
+
         self.client = DICOMwebClient(
-            url=settings.orthanc_base_url,
-            username=settings.orthanc_username,
-            password=settings.orthanc_password,
+            url=str(settings.orthanc_base_url),
+            session=session,
         )
 
     def get_study(self, study_instance_uid: str) -> Optional[StudyMetadata]:

@@ -4,8 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .api.routes import info, plans, jobs, artifacts
+from .api.routes import info, plans, jobs, artifacts, workflows, sessions
 from .adapters import build_orthanc_adapter
+from .core.database import init_db
 
 settings = get_settings()
 
@@ -13,6 +14,7 @@ settings = get_settings()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.orthanc_adapter = build_orthanc_adapter(settings)
+    init_db()
     yield
 
 
@@ -33,9 +35,11 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(info.router, prefix=settings.api_prefix)
+    app.include_router(workflows.router, prefix=settings.api_prefix)
     app.include_router(plans.router, prefix=settings.api_prefix)
     app.include_router(jobs.router, prefix=settings.api_prefix)
     app.include_router(artifacts.router, prefix=settings.api_prefix)
+    app.include_router(sessions.router, prefix=settings.api_prefix)
 
     @app.get("/")
     async def root():

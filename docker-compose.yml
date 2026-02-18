@@ -1,0 +1,106 @@
+# Radiarch TPS — Full Stack
+# Usage: docker compose up -d
+
+services:
+  # ---- API Server ----
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - RADIARCH_ENVIRONMENT=production
+      - RADIARCH_DATABASE_URL=postgresql+psycopg://radiarch:radiarch@postgres:5432/radiarch
+      - RADIARCH_BROKER_URL=redis://redis:6379/0
+      - RADIARCH_RESULT_BACKEND=redis://redis:6379/1
+      - RADIARCH_ORTHANC_BASE_URL=http://orthanc:8042
+      - RADIARCH_ORTHANC_USE_MOCK=false
+      - RADIARCH_ORTHANC_USERNAME=radiarch
+      - RADIARCH_ORTHANC_PASSWORD=radiarch
+      - RADIARCH_DICOMWEB_URL=http://orthanc:8042/dicom-web
+    volumes:
+      - radiarch-data:/data/artifacts
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      orthanc:
+        condition: service_started
+    restart: unless-stopped
+
+  # ---- Celery Worker ----
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: >
+      celery -A radiarch.tasks.celery_app worker --loglevel=info --concurrency=2
+    env_file: .env
+    environment:
+      - RADIARCH_ENVIRONMENT=production
+      - RADIARCH_DATABASE_URL=postgresql+psycopg://radiarch:radiarch@postgres:5432/radiarch
+      - RADIARCH_BROKER_URL=redis://redis:6379/0
+      - RADIARCH_RESULT_BACKEND=redis://redis:6379/1
+      - RADIARCH_ORTHANC_BASE_URL=http://orthanc:8042
+      - RADIARCH_ORTHANC_USE_MOCK=false
+      - RADIARCH_ORTHANC_USERNAME=radiarch
+      - RADIARCH_ORTHANC_PASSWORD=radiarch
+      - RADIARCH_DICOMWEB_URL=http://orthanc:8042/dicom-web
+    volumes:
+      - radiarch-data:/data/artifacts
+    depends_on:
+      redis:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ---- Redis (Celery Broker) ----
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+  # ---- PostgreSQL ----
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: radiarch
+      POSTGRES_PASSWORD: radiarch
+      POSTGRES_DB: radiarch
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U radiarch" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ---- Orthanc DICOM Server ----
+  orthanc:
+    image: orthancteam/orthanc:24.6.2
+    ports:
+      - "8042:8042" # Web UI + REST API
+      - "4242:4242" # DICOM port
+    environment:
+      ORTHANC__DICOM_WEB__ENABLE: "true"
+      ORTHANC__REGISTERED_USERS: |
+        {"radiarch": "radiarch"}
+    volumes:
+      - orthanc-data:/var/lib/orthanc/db
+    restart: unless-stopped
+
+volumes:
+  radiarch-data:
+  redis-data:
+  pg-data:
+  orthanc-data:

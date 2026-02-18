@@ -13,3 +13,16 @@ venv/
 *.sqlite3
 **/radiarch.db
 **/data/
+
+# External dependencies / large folders
+MONAILabel/
+Viewers/
+opentps/
+
+# Build artifacts
+*.egg-info/
+dist/
+build/
+
+# Test output
+test_output.txt

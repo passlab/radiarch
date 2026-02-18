@@ -16,6 +16,7 @@ class PlanRequest(BaseModel):
     workflow_id: PlanWorkflow = Field(default=PlanWorkflow.proton_impt_basic)
     prescription_gy: float = Field(..., gt=0)
     fraction_count: int = Field(default=1, gt=0)
+    beam_count: int = Field(default=1, ge=1, le=9, description="Number of beams (1-9)")
     notes: Optional[str] = None
 
 
@@ -33,6 +34,7 @@ class PlanDetail(PlanSummary):
     study_instance_uid: str
     segmentation_uid: Optional[str]
     fraction_count: int
+    beam_count: int = 1
     notes: Optional[str] = None
     job_id: Optional[str] = None
     qa_summary: Optional[dict] = None
