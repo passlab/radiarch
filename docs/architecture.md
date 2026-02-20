@@ -1,7 +1,7 @@
 # Radiarch TPS Service — Architecture Draft
 
 ## 1. Purpose
-Radiarch provides treatment-planning-as-a-service for OHIF. It mirrors the ergonomics of MONAILabel’s server while replacing MONAI inference tasks with proton/photon planning workflows from OpenTPS. Radiarch exposes a REST API that OHIF (and other clients) can call to:
+Radiarch provides treatment-planning-as-a-service for OHIF. It mirrors the ergonomics of MONAILabel's server while replacing MONAI inference tasks with proton/photon planning workflows powered by a vendored copy of [OpenTPS Core](https://gitlab.com/openmcsquare/opentps). Radiarch exposes a REST API that OHIF (and other clients) can call to:
 
 - Discover available workflows/beam templates
 - Submit planning jobs using studies pulled from a PACS (Orthanc via DICOMweb)
@@ -16,13 +16,13 @@ Key takeaways from MONAILabel v0.8.5 (`monailabel/app.py`, 13 routers, 781-line 
 
 | Concept | MONAILabel | Radiarch analogue |
 |---|---|---|
-| App instance | `MONAILabelApp` singleton (5 init hooks) | `RadiarchPlanner` (static, single engine) |
+| App instance | `MONAILabelApp` singleton (5 init hooks) | `RadiarchPlanner` → per-workflow modules |
 | Datastore | `Datastore` ABC → 5 impls (local, DICOM, DSA, XNAT, CVAT) | `OrthancAdapterBase` → 2 impls (real + mock) |
 | Tasks | `InferTask`, `TrainTask`, `Strategy`, `ScoringMethod` | `PlanTask` orchestrating OpenTPS pipelines |
 | Routers | 13 routers: `/info`, `/infer`, `/train`, `/activelearning`, etc. | `/info`, `/plans`, `/jobs`, `/artifacts`, `/workflows` |
 | Background workers | Internal `AsyncTask` (threading) | Celery with Redis broker |
 | Config | Pydantic `BaseSettings` (~50 `MONAI_LABEL_*` vars) | Pydantic `BaseSettings` (`RADIARCH_*` vars) |
-| Client lib | `MONAILabelClient` HTTP wrapper | `RadiarchClient` (planned, Phase 6) |
+| Client lib | `MONAILabelClient` HTTP wrapper | `RadiarchClient` ✅ |
 | Auth | Keycloak RBAC (4 roles) | Keycloak RBAC (2 roles, Phase 7) |
 | OHIF plugin | `plugins/ohifv3/` (panels, commands, toolbar) | Custom OHIF extension (Phase 6) |
 
@@ -33,23 +33,33 @@ Key takeaways from MONAILabel v0.8.5 (`monailabel/app.py`, 13 routers, 781-line 
 ```
           +-----------------+
           |   OHIF Client   |
+          | (4 panels, 8    |
+          |  commands)       |
           +-----------------+
                   | REST (JSON)
                   v
         +-----------------------+
         |   Radiarch FastAPI    |
         |-----------------------|
-        | Routers (plans/jobs)  |
-        | Services (PlanMgr)    |
+        | Routers               |
+        |   plans, workflows,   |
+        |   sessions, sims      |
+        | RadiarchPlanner        |
+        |   → workflow modules  |
+        | RadiarchSimulator      |
         | Adapters (Orthanc)    |
-        | Workers (Celery/RQ)   |
+        | Workers (Celery)      |
         +-----------------------+
              ^            |
    DICOMweb  |            |  Async tasks
              |            v
-      +-------------+  +-------------------+
-      |   Orthanc   |  | OpenTPS Executors |
-      +-------------+  +-------------------+
+      +-------------+  +---------------------------+
+      |   Orthanc   |  | Vendored OpenTPS Core     |
+      +-------------+  | MCsquare (proton MC)      |
+                       | CCC (photon convolution)  |
+                       | Plan optimization (BFGS,  |
+                       |   FISTA, gradient descent) |
+                       +---------------------------+
 ```
 
 - **Routers**: implement MONAILabel-style endpoints (`/info`, `/workflows`, `/plans`, `/jobs`, `/artifacts`).
@@ -59,46 +69,46 @@ Key takeaways from MONAILabel v0.8.5 (`monailabel/app.py`, 13 routers, 781-line 
 
 ## 4. Modules
 
-| Module                        | Responsibility |
-|------------------------------|----------------|
-| `radiarch.config.settings`   | Pydantic-based configuration (Orthanc URL, DB DSN, worker broker, OpenTPS paths). |
-| `radiarch.app`               | FastAPI instantiation, router wiring, lifespan hooks (similar to MONAILabel `app.py`). |
-| `radiarch.api.info`          | Health/data about available workflows, beam libraries, environment. |
-| `radiarch.api.plans`         | CRUD + submission of plan jobs (POST create, GET list, GET detail, DELETE cancel). |
-| `radiarch.api.jobs`          | Job status, logs, progress streaming. |
-| `radiarch.api.artifacts`     | Download RTPLAN/RTDOSE/DVH JSON. |
-| `radiarch.core.datastore`    | Interface describing `fetch_study`, `fetch_segmentation`, `store_artifact`. First implementation: Orthanc DICOMweb. |
-| `radiarch.core.planner`      | Wraps OpenTPS to build CT/ROI objects, configure `ProtonPlanDesign`, run MCsquare/CCC, emit DICOM + QA data. |
-| `radiarch.core.tasks`        | Definition of async jobs + Celery task registration. |
-| `radiarch.core.models`       | Shared Pydantic models for requests/responses. |
-| `radiarch.core.persistence`  | Postgres/SQLite repository for job metadata. |
+| Module | Responsibility |
+|---|---|
+| `radiarch.config` | Pydantic-based configuration (`RADIARCH_*` env vars). |
+| `radiarch.app` | FastAPI instantiation, router wiring, lifespan hooks. |
+| `radiarch.api.routes.*` | Routers: `/info`, `/plans`, `/workflows`, `/sessions`, `/simulations`, `/artifacts`. |
+| `radiarch.core.planner` | Orchestrator — dispatches to per-workflow modules, manages synthetic fallback. |
+| `radiarch.core.simulator` | 4D delivery simulation engine for plan delivery analysis. |
+| `radiarch.core.store` | `InMemoryStore` + SQLAlchemy-backed `DBStore` for plan/job persistence. |
+| `radiarch.core.db_models` | SQLAlchemy ORM models for plans and jobs. |
+| `radiarch.core.workflows.*` | Per-workflow modules: `proton_basic`, `proton_robust`, `proton_optimized`, `photon_ccc`, shared `_helpers`. |
+| `radiarch.models.*` | Pydantic request/response models (`PlanDetail`, `SimulationDetail`, `JobState`). |
+| `radiarch.tasks.plan_tasks` | Celery task registration and async job execution. |
+| `radiarch.client` | `RadiarchClient` Python SDK (mirrors `MONAILabelClient`). |
+| `service/opentps/` | Vendored OpenTPS Core — 174 Python files for DICOM I/O, dose calculation (MCsquare, CCC), plan optimization, image processing. |
 
 ## 5. API Surface
 
-### Implemented (Phases 1–3)
+### Implemented
 
 | Endpoint | Method | Status |
 |---|---|---|
-| `/api/v1/info` | GET | ✅ Capabilities, version, available workflows, **models** |
+| `/api/v1/info` | GET | ✅ Capabilities, version, available workflows, models |
 | `/api/v1/workflows` | GET | ✅ Planning templates (Proton IMPT, Photon CCC, etc.) |
 | `/api/v1/workflows/{id}` | GET | ✅ Workflow detail with default parameters |
 | `/api/v1/plans` | POST | ✅ Submit plan — returns job ID + status |
 | `/api/v1/plans` | GET | ✅ List all plans |
 | `/api/v1/plans/{id}` | GET | ✅ Plan metadata + job pointer + artifacts |
 | `/api/v1/plans/{id}` | DELETE | ✅ Cancel plan, update status |
-| `/api/v1/jobs/{id}` | GET | ✅ Status, progress %, messages |
+| `/api/v1/jobs/{id}` | GET | ✅ Status, progress %, stage, messages |
 | `/api/v1/artifacts/{id}` | GET | ✅ Download RTPLAN/RTDOSE/DVH |
+| `/api/v1/sessions` | POST | ✅ Upload temp image data for plan preview |
+| `/api/v1/sessions/{id}` | GET / DELETE | ✅ Retrieve or expire session |
+| `/api/v1/simulations` | POST / GET | ✅ Create and list delivery simulations |
+| `/api/v1/simulations/{id}` | GET | ✅ Simulation detail with 4D dose results |
 
-### Planned (Phase 4+)
+### Planned
 
-| Endpoint | Method | Phase | Purpose |
-|---|---|---|---|
-| `/api/v1/sessions` | POST | 4 | Upload temp image data for plan preview (mirrors MONAILabel `/session`) |
-| `/api/v1/sessions/{id}` | GET / DELETE | 4 | Retrieve or expire session |
-| `/api/v1/info` | GET | 4 | Add `models` field listing available engines (MONAILabel-style discovery) |
-| `/api/v1/hooks/orthanc` | POST | 5 | Webhook for Orthanc event ingestion |
-
-> **Note:** MONAILabel's `/info` returns `{"models": {...}, "trainers": {...}, "strategies": {...}}` to let clients discover capabilities dynamically. Radiarch's `/info` will adopt the same pattern with `models` listing planning engines.
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/api/v1/hooks/orthanc` | POST | Webhook for Orthanc event-driven study ingestion |
 
 All endpoints return JSON by default; binary DICOM is either proxied via `/artifacts/...` or saved back into Orthanc (so OHIF simply re-queries DICOMweb).
 
@@ -123,39 +133,50 @@ Real OpenTPS pipeline (CT import → plan → MCsquare dose calc), RTDOSE DICOM 
 ### Phase 3 — E2E Testing & Boot Verification ✅
 `GET /workflows`, `DELETE /plans/{id}`, 9-test e2e suite, service boot smoke test, `RADIARCH_FORCE_SYNTHETIC` for fast testing.
 
+### Phase 4 — Persistence & Data Layer ✅
+- SQLAlchemy + Alembic migrations for plans and jobs (`DBStore`, `db_models.py`)
+- Session endpoints (`POST /sessions`, `GET/DELETE /sessions/{id}`)
+- `models` field in `/info` listing available engines
+
+### Phase 5 — Production Readiness ✅
+- Celery with Redis broker, structured job progress polling with stage tracking
+- `RadiarchPlanner` refactored to dispatch to per-workflow modules
+- 4 workflow modules: `proton_basic`, `proton_robust`, `proton_optimized`, `photon_ccc`
+- `RadiarchSimulator` for 4D delivery simulation
+
+### Phase 6 — OHIF Integration & Client SDK ✅
+- `RadiarchClient` Python SDK with `create_plan()`, `poll_job()`, `get_artifact()` methods
+- OHIF v3 extension with 4 panels: Plan Submission, DVH, Dose Overlay, Simulation
+- 8 commands bridging OHIF UI → Radiarch API
+- Standalone browser demo (`demo/index.html`)
+
+### Phase 7 — Vendoring OpenTPS Core ✅
+- Vendored `opentps_core` (174 Python files) into `service/opentps/`
+- Stripped Windows/Mac MCsquare binaries, keep Linux SSE4/AVX only
+- Added `scipy`, `pandas`, `SimpleITK` as hard dependencies
+- All 27 tests pass including real MCsquare proton dose calculation
+- Added attribution (`ATTRIBUTION.md`) and Apache 2.0 license
+
 ---
 
-### Phase 4 — Persistence & Data Layer
-- **Postgres persistence** — Replace `InMemoryStore` with SQLAlchemy + Alembic migrations for plans, jobs, artifacts.
-- **Real Orthanc adapter** — Wire `OrthancAdapter` with DICOMweb (QIDO-RS search, WADO-RS retrieval, STOW-RS artifact push).
-- **Richer `/info` response** — Add `models` field listing available engines (e.g., `{"proton-mcsquare": {...}, "photon-ccc": {...}}`), mirroring MONAILabel's capability discovery pattern.
-- **Session endpoint** — `POST /sessions` for temporary image upload + plan preview before commit (inspired by MONAILabel's `/session`).
-
-### Phase 5 — Production Readiness
-- **Celery with Redis broker** — Test with `RADIARCH_ENVIRONMENT=production` and real async workers.
-- **Job progress polling** — Structured `GET /jobs/{id}` with progress %, stage, ETA. MONAILabel uses polling (not WebSocket), and OHIF clients already understand this pattern.
-- **Error handling & retries** — Celery retry policies for transient failures.
-- **Orthanc webhook** — `POST /hooks/orthanc` for event-driven study ingestion.
-
-### Phase 6 — OHIF Integration
-- **`RadiarchClient` Python library** — Ship a client class (mirrors `MONAILabelClient`) with `create_plan()`, `get_job()`, `get_artifact()` methods to simplify OHIF plugin dev.
-- **OHIF v3 extension** — Based on MONAILabel's `plugins/ohifv3/` template. Custom panel for plan submission, dose overlay, DVH display.
-- **Multi-beam workflows** — Extend `ProtonPlanDesign` beyond single-beam; implement `photon-ccc` engine.
-
-### Phase 7 — Operations
-- **Auth** — Keycloak RBAC with 2 roles: `radiarch-admin` (manage workflows, cancel jobs) and `radiarch-user` (submit plans, view results). Follows MONAILabel's RBAC pattern but simplified.
-- **Docker Compose** — FastAPI + Celery worker + Redis + Orthanc + Postgres.
-- **Artifact storage** — Optional S3/MinIO backend alongside Orthanc STOW-RS.
+### Phase 8 — Operations (Next)
+- **Auth** — Keycloak RBAC with 2 roles: `radiarch-admin` and `radiarch-user`
+- **Docker Compose** — FastAPI + Celery worker + Redis + Orthanc + Postgres
+- **Artifact storage** — Optional S3/MinIO backend alongside Orthanc STOW-RS
+- **Orthanc webhook** — `POST /hooks/orthanc` for event-driven study ingestion
 
 ## 8. Design Decisions (Resolved)
 
 | Question | Decision | Rationale |
 |---|---|---|
-| Artifacts: Orthanc-only or also S3? | **Orthanc primary**, S3/MinIO optional (Phase 7) | Keeps DICOM in PACS; S3 for large non-DICOM artifacts |
+| OpenTPS: dependency or vendored? | **Vendored** `opentps_core` in `service/opentps/` | Avoids `numpy>=2.3.2` blocker, strips GUI deps, full control over fixes |
+| MCsquare binaries: all platforms? | **Linux-only** (SSE4/AVX), strip Win/Mac | Server-only deployment; saves ~150MB |
+| Artifacts: Orthanc-only or also S3? | **Orthanc primary**, S3/MinIO optional (Phase 8) | Keeps DICOM in PACS; S3 for large non-DICOM artifacts |
 | Auth: reverse proxy or embedded JWT? | **Keycloak RBAC** (embedded JWT validation) | Same approach as MONAILabel; 2 roles sufficient |
 | Multi-tenant? | **Single Orthanc** connector, abstract later | Start simple; `OrthancAdapterBase` ABC allows future expansion |
 | Job progress: WebSocket or polling? | **Polling** (`GET /jobs/{id}`) | MONAILabel uses polling; OHIF clients already support it |
-| Dynamic app loading? | **No** — static `RadiarchPlanner` | Radiarch has one fixed engine, not a plugin marketplace |
+| Planner architecture? | **Dispatch to per-workflow modules** | Each workflow (`proton_basic`, etc.) is a standalone module; `_helpers.py` shares common logic |
+| GPU dose calculation? | **Evaluating MOQUI** (open-source CUDA MC) | MCsquare is CPU-only (SSE/AVX); MOQUI from MGH offers GPU acceleration with validated accuracy |
 
 ## 9. MONAILabel Alignment Principles
 
@@ -166,4 +187,4 @@ Real OpenTPS pipeline (CT import → plan → MCsquare dose calc), RTDOSE DICOM 
 5. **Do NOT adopt** — Dynamic app loading, active learning, scoring, training endpoints. These are annotation-specific.
 
 ---
-*Last updated: 2026-02-17 based on MONAILabel v0.8.5 analysis. See [monailabel_architecture.md](monailabel_architecture.md) for the full reference.*
+*Last updated: 2026-02-19. OpenTPS Core vendored, all 27 tests passing. See [monailabel_architecture.md](monailabel_architecture.md) for the MONAILabel reference.*

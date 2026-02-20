@@ -1,6 +1,6 @@
 # Radiarch TPS Service
 
-Radiarch is a FastAPI-based service that exposes treatment-planning workflows to OHIF using the same ergonomics as MONAILabel. Under the hood it orchestrates OpenTPS (proton/photon planning) and communicates with PACS providers such as Orthanc over DICOMweb.
+Radiarch is a FastAPI-based treatment planning service for OHIF, modeled after the MONAILabel server pattern. It vendors [OpenTPS Core](https://gitlab.com/openmcsquare/opentps) directly for proton/photon dose calculation (MCsquare, CCC) and communicates with PACS providers such as Orthanc over DICOMweb.
 
 ## Layout
 
@@ -24,12 +24,25 @@ radiarch/
         SimulationPanel.js      # Delivery simulation (4D dose)
   service/
     pyproject.toml
+    opentps/                # Vendored opentps_core (Apache 2.0)
+      ATTRIBUTION.md
+      LICENSE
+      core/                 # 174 Python files — data, IO, processing, utils
+        processing/
+          doseCalculation/
+            protons/MCsquare/   # MCsquare binaries (Linux SSE4/AVX only)
+            photons/            # CCC dose engine
+          planOptimization/     # BFGS, FISTA, gradient descent solvers
     radiarch/
       app.py            # FastAPI factory
       client.py         # RadiarchClient Python library
       config.py         # Pydantic settings
       api/routes/       # /info, /plans, /jobs, /artifacts, /workflows, /sessions, /simulations
-      core/             # Stores, adapters, planner, workflow modules
+      core/
+        planner.py      # Orchestrator — dispatches to workflow modules
+        simulator.py    # 4D delivery simulation engine
+        store.py        # InMemoryStore + SQLAlchemy persistence
+        workflows/      # proton_basic, proton_robust, proton_optimized, photon_ccc
       models/           # Pydantic request/response models
       tasks/            # Celery workers (plan execution)
 ```
@@ -66,13 +79,15 @@ uvicorn radiarch.app:create_app --factory --reload
 
 Open <http://localhost:8000/api/v1/docs> to inspect the OpenAPI schema.
 
-### About OpenTPS
+### About OpenTPS (Vendored)
 
-OpenTPS 3.0 currently declares a dependency on `numpy>=2.3.2`, which has not been released yet. The planner falls back to synthetic outputs until OpenTPS is installed:
+OpenTPS Core is vendored directly in `service/opentps/` — no separate installation needed. The vendored copy:
+- Includes all 174 Python source files from `opentps_core`
+- Ships with Linux MCsquare binaries (SSE4 + AVX variants, ~7MB)
+- Strips Windows/Mac binaries and pre-compiled `.dll`/`.dylib` files
+- Resolves the upstream `numpy>=2.3.2` incompatibility by using the project's own numpy/scipy versions
 
-1. Clone <https://gitlab.com/openmcsquare/opentps> and use Python 3.12.
-2. Install with `pip install --no-deps /path/to/opentps`.
-3. Optionally: `pip install -e .[opentps]`.
+When `RADIARCH_FORCE_SYNTHETIC=true`, the planner uses fast synthetic outputs (instant, no MCsquare needed). Set it to `false` (default) to run real Monte Carlo dose calculations.
 
 ## Configuration
 
@@ -127,12 +142,19 @@ npm install
 
 ```bash
 cd service
+source .venv/bin/activate
 
-# All tests (synthetic planner, no external deps) — 26 tests
+# All 27 tests (API + client + real MCsquare integration)
+RADIARCH_ORTHANC_USE_MOCK=true \
+  RADIARCH_OPENTPS_DATA_ROOT=/path/to/opentps/testData \
+  pytest tests/ -v
+
+# Synthetic-only (fast, no MCsquare) — 26 tests
 RADIARCH_FORCE_SYNTHETIC=true pytest tests/test_api_e2e.py tests/test_client.py -v
 
-# Full OpenTPS integration (requires MCsquare binary)
-pytest tests/test_opentps_integration.py -v
+# Full OpenTPS + MCsquare integration only
+RADIARCH_OPENTPS_DATA_ROOT=/path/to/opentps/testData \
+  pytest tests/test_opentps_integration.py -v
 ```
 
 ## Python Client Library
@@ -153,3 +175,7 @@ job = client.poll_job(plan["job_id"], timeout=300)
 ## Architecture
 
 See [`docs/architecture.md`](docs/architecture.md) for the detailed design document and [`docs/radiarch_project_report.md`](docs/radiarch_project_report.md) for the full project report including phase roadmap, testing strategy, and comparison with MONAILabel.
+
+## License & Attribution
+
+Radiarch is developed by the Radiarch Team. The vendored OpenTPS Core is © UCLouvain, licensed under Apache 2.0. See `service/opentps/ATTRIBUTION.md` for full citation and modification details.

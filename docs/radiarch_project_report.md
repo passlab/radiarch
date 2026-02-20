@@ -12,22 +12,22 @@
 
 Radiarch is a **cloud-native radiotherapy treatment planning service** that wraps [OpenTPS](https://opentps.github.io/) — an open-source proton/photon treatment planning system — behind a RESTful API. It enables DICOM-based treatment plan computation, dose calculation, and quality assurance through a containerized microservices architecture.
 
-This document chronicles the end-to-end development of Radiarch across **9 completed phases** and **1 planned phase**, built entirely through pair programming with the Antigravity AI coding assistant. It covers the software architecture, each phase's goals and deliverables, the testing strategy, bugs encountered and resolved, and reflections on the AI-assisted development experience.
+This document chronicles the end-to-end development of Radiarch across **10 completed phases** and **1 planned phase**, built entirely through pair programming with the Antigravity AI coding assistant. It covers the software architecture, each phase's goals and deliverables, the testing strategy, bugs encountered and resolved, and reflections on the AI-assisted development experience.
 
 ### Project Statistics
 
 | Metric | Value |
 |--------|-------|
-| Lines of Python | ~3,100 |
+| Lines of Python | ~3,100 + 174 vendored OpenTPS files |
 | Lines of JavaScript/TypeScript | ~2,260 |
-| Python source files | 34 |
+| Python source files | 34 (service) + 174 (vendored opentps_core) |
 | OHIF extension files | 8 |
-| Test cases | 27 (26 passing + 1 OpenTPS-dependent) |
+| Test cases | 27 (all passing, including real MCsquare) |
 | Docker services | 5 (API, Worker, Redis, Postgres, Orthanc) |
 | API endpoints | 14 |
-| Git commits | 7 |
-| Development sessions | 3 |
-| Phases completed | 9 |
+| Git commits | 8 |
+| Development sessions | 4 |
+| Phases completed | 10 |
 | Phases planned | 1 |
 
 ---
@@ -66,7 +66,7 @@ graph TB
 
     subgraph External["External Services"]
         ORTHANC["Orthanc PACS"]
-        OPENTPS["OpenTPS + MCsquare"]
+        OPENTPS["Vendored OpenTPS Core<br/>+ MCsquare (Linux)"]
     end
 
     subgraph Auth["Auth Layer (Planned)"]
@@ -120,6 +120,14 @@ radiarch/
 │           ├── DoseOverlayPanel.js     # Opacity, colormap, isodose lines
 │           └── SimulationPanel.js      # Delivery simulation (4D dose)
 ├── service/
+│   ├── opentps/                  # Vendored opentps_core (Apache 2.0)
+│   │   ├── ATTRIBUTION.md        # License + modification details
+│   │   ├── LICENSE               # Apache 2.0
+│   │   └── core/                 # 174 Python files
+│   │       ├── data/             # CT, ROI, plan, dose data structures
+│   │       ├── io/               # DICOM, MHD, MCsquare I/O
+│   │       ├── processing/       # Dose calc (MCsquare, CCC), optimization, registration
+│   │       └── utils/            # Config, settings
 │   ├── radiarch/
 │   │   ├── app.py                # FastAPI application factory
 │   │   ├── config.py             # Pydantic Settings (RADIARCH_* env vars)
@@ -147,7 +155,8 @@ radiarch/
 │   │   │       ├── proton_basic.py
 │   │   │       ├── proton_optimized.py
 │   │   │       ├── proton_robust.py
-│   │   │       └── proton_robust_optimized.py
+│   │   │       ├── photon_ccc.py
+│   │   │       └── _helpers.py   # Shared setup_sim_dir, build_mc_calculator
 │   │   ├── adapters/
 │   │   │   ├── orthanc.py        # OrthancAdapter (DICOMwebClient)
 │   │   │   ├── dicomweb.py       # DICOMwebNotifier (STOW-RS push)
@@ -170,6 +179,7 @@ radiarch/
 | **Dual-store pattern** (InMemory + SQL) | Easy local dev / testing with InMemoryStore; production Postgres via config |
 | **Orthanc adapter abstraction** | Mock adapter for testing, real adapter for production |
 | **Synthetic planner fallback** | Allows full API testing without OpenTPS/MCsquare installed |
+| **Vendored OpenTPS Core** | Full control over dependencies; strips GUI/numpy blocker; ships MCsquare Linux binaries |
 | **Pydantic Settings** | All config via `RADIARCH_*` environment variables; no config files |
 | **Docker Compose** | One-command deployment of 5 interdependent services |
 
@@ -533,9 +543,44 @@ Updated `api/routes/workflows.py` with proper `WorkflowRegistry` containing 4 wo
 
 ---
 
+### Phase 10 — Vendoring OpenTPS Core
+
+**Goal**: Vendor the `opentps_core` package directly into the Radiarch service to eliminate the external dependency, strip GUI-related code, and resolve the `numpy>=2.3.2` incompatibility.
+
+**Context**: OpenTPS 3.0 declares a dependency on `numpy>=2.3.2` which has not been released, blocking installation. Additionally, the full OpenTPS package includes GUI components (`opentps_gui`) that are unnecessary for a headless service. Vendoring the core package gives full control over dependencies and allows stripping binaries.
+
+**What was built**:
+
+*Vendored package (`service/opentps/`)*:
+- Copied 174 Python source files from `opentps_core` into `service/opentps/core/`
+- Added `ATTRIBUTION.md` with full citation, license info, and modification details
+- Included Apache 2.0 `LICENSE` file
+- Created `__init__.py` for proper package resolution
+
+*Binary management*:
+- Kept Linux MCsquare binaries only: `MCsquare_linux_sse4` (~3.5MB) and `MCsquare_linux_avx` (~3.5MB)
+- Stripped Windows (`MCsquare_windows.exe`), Mac (`MCsquare_mac`), and shared library (`libMCsquare.so`) binaries
+- Updated `.gitignore` with specific exclusion patterns for MCsquare binaries, photon engine binaries, and C shared libraries
+- Root-anchored `/opentps/` pattern to only exclude the upstream repo, not the vendored copy
+
+*Dependency updates (`pyproject.toml`)*:
+- Added `scipy`, `pandas`, `SimpleITK` as hard dependencies (previously optional or from OpenTPS)
+- Removed `opentps` from optional dependencies
+
+*Bug fixes during integration*:
+- Fixed MCsquare path resolution: `setup_sim_dir()` now returns absolute paths via `os.path.abspath()` (see Bug 6.9)
+- Fixed env var leak: `RADIARCH_FORCE_SYNTHETIC=true` set by e2e tests was bleeding into integration test (see Bug 6.10)
+- Updated deprecated `datetime.utcnow()` calls to `datetime.now(timezone.utc)`
+
+**Verification**: All 27 tests pass, including real MCsquare proton dose calculation (~10s for 1e4 primaries on 853 spots).
+
+**Key files created/modified**: `service/opentps/` (174 files), `service/opentps/ATTRIBUTION.md`, `.gitignore`, `pyproject.toml`, `core/workflows/_helpers.py`, `tests/test_opentps_integration.py`
+
+---
+
 ## 4. Development Phases — Planned
 
-### Phase 10 — Keycloak RBAC & Authentication
+### Phase 11 — Keycloak RBAC & Authentication
 
 **Goal**: Secure the Radiarch API with JWT-based authentication using Keycloak, implementing role-based access control (RBAC) for clinical workflows.
 
@@ -663,26 +708,33 @@ The `RadiarchClient` is initialized by injecting this wrapper via `__new__` (byp
 | `test_client_create_multibeam` | Multi-beam plan creation via SDK |
 | `test_client_plan_not_found` | `RadiarchClientError` with 404 status code |
 
-#### `test_opentps_integration.py` — 1 OpenTPS Test
+#### `test_opentps_integration.py` — 1 OpenTPS Integration Test
 
-A separate smoke test that exercises the real OpenTPS pipeline (not the synthetic fallback). It:
-1. Imports `opentps` and checks it's available
+A separate smoke test that exercises the real OpenTPS pipeline (not the synthetic fallback) using the vendored `opentps_core`. It:
+1. Clears the `RADIARCH_FORCE_SYNTHETIC` env var to ensure the real planner is used
 2. Creates a `RadiarchPlanner` with a mock adapter
-3. Runs `planner.run()` against `SimpleFantomWithStruct` test data
-4. Verifies the result has `engine="opentps"` and valid `maxDose`
+3. Runs `planner.run()` against `SimpleFantomWithStruct` DICOM test data (176 CT slices)
+4. Verifies the result has `engine="opentps"`, valid `maxDose`, and `doseSummary`
+5. MCsquare runs Monte Carlo simulation (~10s for 1e4 primaries, 853 spots)
 
-This test only passes when OpenTPS and MCsquare are installed with test data available. It is excluded from CI by default.
+This test requires the OpenTPS test data directory (`RADIARCH_OPENTPS_DATA_ROOT`). With the vendored `opentps_core`, no separate OpenTPS installation is needed.
 
 ### 5.5 Running Tests
 
 ```bash
-# Run all fast tests (26 tests, ~1.5 seconds)
+# Run all 27 tests (API + client + real MCsquare integration)
 cd service
+source .venv/bin/activate
+RADIARCH_ORTHANC_USE_MOCK=true \
+  RADIARCH_OPENTPS_DATA_ROOT=/path/to/opentps/testData \
+  python -m pytest tests/ -v
+
+# Run fast tests only (26 tests, ~1.5 seconds, no MCsquare)
 RADIARCH_FORCE_SYNTHETIC=true RADIARCH_ORTHANC_USE_MOCK=true \
   python -m pytest tests/test_api_e2e.py tests/test_client.py -v
 
-# Run OpenTPS integration test (requires OpenTPS + test data)
-RADIARCH_OPENTPS_VENV=/path/to/opentps/venv/lib/python3.12/site-packages \
+# Run OpenTPS integration only (requires test data directory)
+RADIARCH_OPENTPS_DATA_ROOT=/path/to/opentps/testData \
   python -m pytest tests/test_opentps_integration.py -v
 ```
 
@@ -771,18 +823,45 @@ RADIARCH_OPENTPS_VENV=/path/to/opentps/venv/lib/python3.12/site-packages \
 **Root cause**: After removing `simulation_type` from the API payload (6.7), the corresponding React state, handler, and JSX were left behind.
 **Fix**: Removed the `simulationType` state variable, its `setSimulationType` setter, and the dropdown element from the component.
 
+### 6.9 MCsquare Path Resolution Failure
+
+**Phase**: 10
+**Symptom**: MCsquare simulation failed with `Cannot open CT.mhd` error.
+**Root cause**: `setup_sim_dir()` in `_helpers.py` returned a relative path (e.g., `sim_output/abc123`). The MCsquare binary was launched from its own directory, causing it to look for `CT.mhd` relative to the binary location rather than the project root.
+**Fix**: Changed `setup_sim_dir()` to return an absolute path via `os.path.abspath()`:
+
+```diff
+-return sim_dir
++return os.path.abspath(sim_dir)
+```
+
+### 6.10 Environment Variable Leak in Integration Test
+
+**Phase**: 10
+**Symptom**: Integration test always used the synthetic planner even when OpenTPS was available and `force_synthetic=False` was passed.
+**Root cause**: `test_api_e2e.py` sets `os.environ["RADIARCH_FORCE_SYNTHETIC"] = "true"` at module import time. Since pytest imports all test modules at collection time, this environment variable persisted process-wide. `RadiarchPlanner.__init__()` checks `os.environ.get("RADIARCH_FORCE_SYNTHETIC")` directly, bypassing the Pydantic settings object.
+**Fix**: Added `os.environ.pop("RADIARCH_FORCE_SYNTHETIC", None)` at the top of the integration test to clear the leaked variable:
+
+```python
+# Clear env var set by test_api_e2e.py at import time
+os.environ.pop("RADIARCH_FORCE_SYNTHETIC", None)
+```
+
 ---
 
 ## 7. End-to-End Verification
 
 ### 7.1 Local Tests
 
-All 26 tests pass consistently:
+All 27 tests pass consistently:
 
 ```
-tests/test_api_e2e.py    — 21 tests (plan CRUD, jobs, artifacts, sessions, workflows, simulations)
-tests/test_client.py     —  5 tests (RadiarchClient SDK)
+tests/test_api_e2e.py              — 21 tests (plan CRUD, jobs, artifacts, sessions, workflows, simulations)
+tests/test_client.py               —  5 tests (RadiarchClient SDK)
+tests/test_opentps_integration.py  —  1 test  (real MCsquare proton dose calculation)
 ```
+
+The integration test runs real MCsquare Monte Carlo simulation against `SimpleFantomWithStruct` DICOM data (176 CT slices, 853 pencil-beam spots, 1e4 primaries), completing in ~10 seconds.
 
 ### 7.2 Docker Stack E2E
 
@@ -817,7 +896,7 @@ A successfully generated plan includes:
 
 ### 8.1 What Worked Well
 
-**Rapid prototyping**: The entire project — from empty directory to a 5-service Docker stack with 26 passing tests and a full OHIF extension — was built across 3 development sessions. Antigravity handled the boilerplate-heavy tasks (FastAPI routes, Pydantic models, Docker config, test scaffolding, React panels) with high accuracy.
+**Rapid prototyping**: The entire project — from empty directory to a 5-service Docker stack with 27 passing tests, a full OHIF extension, and vendored OpenTPS Core — was built across 4 development sessions. Antigravity handled the boilerplate-heavy tasks (FastAPI routes, Pydantic models, Docker config, test scaffolding, React panels, dependency vendoring) with high accuracy.
 
 **Debugging efficiency**: The Session 2 Docker debugging sequence (Section 6.3–6.5) showcases the iterative diagnosis pattern. Starting from a symptom (`Job or plan missing`), Antigravity methodically traced through: container env vars → `get_store()` return value → `SessionLocal` state → the Python import-by-value root cause. Each step narrowed the search space with targeted `docker exec` commands.
 
@@ -861,9 +940,8 @@ All settings are controlled via `RADIARCH_*` environment variables:
 | `RADIARCH_DICOMWEB_URL` | *(empty)* | DICOMweb STOW-RS push URL |
 | `RADIARCH_ARTIFACT_DIR` | `./data/artifacts` | Artifact storage path |
 | `RADIARCH_SESSION_TTL` | `3600` | Session expiry (seconds) |
-| `RADIARCH_OPENTPS_DATA_ROOT` | `/data/opentps` | OpenTPS data directory |
+| `RADIARCH_OPENTPS_DATA_ROOT` | `/data/opentps` | OpenTPS test data directory (DICOM files) |
 | `RADIARCH_OPENTPS_BEAM_LIBRARY` | `/data/opentps/beam-models` | Beam model files |
-| `RADIARCH_OPENTPS_VENV` | *(empty)* | OpenTPS venv site-packages path |
 
 ---
 
@@ -898,6 +976,18 @@ RADIARCH_FORCE_SYNTHETIC=true RADIARCH_DATABASE_URL="" RADIARCH_BROKER_URL="" \
 ### Run Tests
 ```bash
 cd service
-RADIARCH_FORCE_SYNTHETIC=true RADIARCH_ORTHANC_USE_MOCK=true \
+source .venv/bin/activate
+
+# All 27 tests (including real MCsquare)
+RADIARCH_ORTHANC_USE_MOCK=true \
+  RADIARCH_OPENTPS_DATA_ROOT=/path/to/opentps/testData \
   python -m pytest tests/ -v
+
+# Fast tests only (26 tests, no MCsquare)
+RADIARCH_FORCE_SYNTHETIC=true RADIARCH_ORTHANC_USE_MOCK=true \
+  python -m pytest tests/test_api_e2e.py tests/test_client.py -v
 ```
+
+---
+
+*Last updated: 2026-02-19. OpenTPS Core vendored, all 27 tests passing.*
