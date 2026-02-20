@@ -20,8 +20,8 @@ router = APIRouter(tags=["sessions"])
 
 settings = get_settings()
 
-# Default TTL = 1 hour
-SESSION_TTL_SECONDS = int(os.environ.get("RADIARCH_SESSION_TTL", "3600"))
+# Default TTL from settings
+SESSION_TTL_SECONDS = settings.session_ttl
 
 
 class SessionInfo(BaseModel):

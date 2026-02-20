@@ -12,21 +12,23 @@
 
 Radiarch is a **cloud-native radiotherapy treatment planning service** that wraps [OpenTPS](https://opentps.github.io/) — an open-source proton/photon treatment planning system — behind a RESTful API. It enables DICOM-based treatment plan computation, dose calculation, and quality assurance through a containerized microservices architecture.
 
-This document chronicles the end-to-end development of Radiarch across **7 completed phases** and **3 planned phases**, built entirely through pair programming with the Antigravity AI coding assistant. It covers the software architecture, each phase's goals and deliverables, the testing strategy, bugs encountered and resolved, and reflections on the AI-assisted development experience.
+This document chronicles the end-to-end development of Radiarch across **9 completed phases** and **1 planned phase**, built entirely through pair programming with the Antigravity AI coding assistant. It covers the software architecture, each phase's goals and deliverables, the testing strategy, bugs encountered and resolved, and reflections on the AI-assisted development experience.
 
 ### Project Statistics
 
 | Metric | Value |
 |--------|-------|
-| Lines of Python | ~2,200 |
-| Source files | 20+ |
-| Test cases | 20 (19 passing + 1 OpenTPS-dependent) |
+| Lines of Python | ~3,100 |
+| Lines of JavaScript/TypeScript | ~2,260 |
+| Python source files | 34 |
+| OHIF extension files | 8 |
+| Test cases | 27 (26 passing + 1 OpenTPS-dependent) |
 | Docker services | 5 (API, Worker, Redis, Postgres, Orthanc) |
-| API endpoints | 12 |
+| API endpoints | 14 |
 | Git commits | 7 |
-| Development sessions | 2 |
-| Phases completed | 7 |
-| Phases planned | 3 |
+| Development sessions | 3 |
+| Phases completed | 9 |
+| Phases planned | 1 |
 
 ---
 
@@ -101,14 +103,22 @@ radiarch/
 ├── docs/
 │   ├── radiarch_project_report.md  # This document
 │   └── monailabel_architecture.md  # MONAILabel reference
-├── ohif-extension/               # OHIF v3 extension (scaffold)
+├── demo/
+│   └── index.html                # Standalone browser demo (all 4 panels)
+├── ohif-extension/               # OHIF v3 extension (4 panels, 8 commands)
 │   ├── package.json
 │   ├── README.md
 │   └── src/
 │       ├── id.js                 # Extension ID
-│       ├── index.ts              # Extension entry point
-│       └── services/
-│           └── RadiarchClientService.ts
+│       ├── index.ts              # Extension entry point (wires all modules)
+│       ├── commandsModule.js     # 8 commands bridging UI → API
+│       ├── services/
+│       │   └── RadiarchClient.js  # HTTP client (axios)
+│       └── panels/
+│           ├── PlanSubmissionPanel.js  # Workflow selection, Rx, objectives
+│           ├── DVHPanel.js             # Dose-volume histogram (SVG)
+│           ├── DoseOverlayPanel.js     # Opacity, colormap, isodose lines
+│           └── SimulationPanel.js      # Delivery simulation (4D dose)
 ├── service/
 │   ├── radiarch/
 │   │   ├── app.py                # FastAPI application factory
@@ -120,16 +130,24 @@ radiarch/
 │   │   │   ├── jobs.py           # GET /jobs/{id}
 │   │   │   ├── artifacts.py      # GET /artifacts/{id}
 │   │   │   ├── workflows.py      # GET /workflows
-│   │   │   └── sessions.py       # POST/GET/DELETE /sessions
+│   │   │   ├── sessions.py       # POST/GET/DELETE /sessions
+│   │   │   └── simulations.py    # POST/GET /simulations
 │   │   ├── models/
-│   │   │   ├── plan.py           # PlanRequest, PlanDetail, PlanWorkflow
+│   │   │   ├── plan.py           # PlanRequest, PlanDetail, PlanWorkflow, DoseObjective, RobustnessConfig
 │   │   │   ├── job.py            # Job state machine
+│   │   │   ├── simulation.py     # SimulationRequest, SimulationResult
 │   │   │   └── artifact.py       # Artifact metadata
 │   │   ├── core/
-│   │   │   ├── planner.py        # RadiarchPlanner (synthetic + OpenTPS)
+│   │   │   ├── planner.py        # RadiarchPlanner orchestrator
 │   │   │   ├── store.py          # StoreBase, InMemoryStore, SQLStore
 │   │   │   ├── database.py       # SQLAlchemy engine/session factory
-│   │   │   └── db_models.py      # ORM models (PlanRow, JobRow, etc.)
+│   │   │   ├── db_models.py      # ORM models (PlanRow, JobRow, etc.)
+│   │   │   └── workflows/        # Modular workflow runners
+│   │   │       ├── __init__.py   # RUNNERS registry
+│   │   │       ├── proton_basic.py
+│   │   │       ├── proton_optimized.py
+│   │   │       ├── proton_robust.py
+│   │   │       └── proton_robust_optimized.py
 │   │   ├── adapters/
 │   │   │   ├── orthanc.py        # OrthancAdapter (DICOMwebClient)
 │   │   │   ├── dicomweb.py       # DICOMwebNotifier (STOW-RS push)
@@ -138,7 +156,7 @@ radiarch/
 │   │       ├── celery_app.py     # Celery configuration
 │   │       └── plan_tasks.py     # run_plan_job task with progress
 │   └── tests/
-│       ├── test_api_e2e.py       # 14 end-to-end API tests
+│       ├── test_api_e2e.py       # 21 end-to-end API tests
 │       ├── test_client.py        # 5 RadiarchClient tests
 │       └── test_opentps_integration.py  # OpenTPS smoke test
 ```
@@ -171,6 +189,8 @@ radiarch/
 | `POST` | `/api/v1/sessions` | Upload DICOM files for a session |
 | `GET` | `/api/v1/sessions/{id}` | Get session info |
 | `DELETE` | `/api/v1/sessions/{id}` | Delete session and uploaded files |
+| `POST` | `/api/v1/simulations` | Create delivery simulation for a completed plan |
+| `GET` | `/api/v1/simulations/{id}` | Get simulation status and results |
 
 ---
 
@@ -399,171 +419,64 @@ All services share a Docker network. API and worker connect to Postgres via `RAD
 
 ---
 
-## 4. Development Phases — Planned
-
 ### Phase 8 — OpenTPS Feature Integration
 
 **Goal**: Extend the Radiarch API and planner to expose OpenTPS's full treatment planning capabilities: **plan optimization**, **photon dose computation**, **dose delivery simulation**, and enhanced **dose constraints**.
 
-**Background**: Currently Radiarch supports one narrow path:
-```
-CT + RTStruct → Build proton plan (fixed geometry) → MCsquare dose → RTDOSE + DVH
-```
-OpenTPS provides much richer capabilities (see [Example Gallery](https://opentps.github.io/examples/auto_examples/index.html)) that are not yet exposed through the API.
+**What was built**:
 
-> **Prerequisite**: All of 8A–8D require a working OpenTPS + MCsquare installation inside the Docker image (or volume-mounted). The current Docker setup uses `RADIARCH_FORCE_SYNTHETIC=true` because MCsquare is not bundled. Options: (1) volume-mount the OpenTPS venv into the container, or (2) build a Docker image that includes OpenTPS + MCsquare.
+#### 8A — Proton IMPT Optimization
 
-#### Phase 8A — Proton IMPT Optimization
+*API model extensions (`models/plan.py`)*:
+- `ObjectiveType` enum: `DMin`, `DMax`, `DUniform`, `DVHMin`, `DVHMax`
+- `DoseObjective` model with `structure_name`, `objective_type`, `dose_gy`, `weight`, `volume_fraction`
+- Extended `PlanRequest` with `objectives`, `optimization_method`, `max_iterations`, `spot_spacing_mm`, `layer_spacing_mm`, `scoring_spacing_mm`, `nb_primaries`, `nb_primaries_final`
+- New `PlanWorkflow` entries: `proton-impt-optimized`, `proton-robust-basic`, `proton-robust-optimized`
 
-The highest-value feature: enables clinically meaningful plans with dose objectives.
+*Modular workflow runners (`core/workflows/`)*:
+- Refactored `RadiarchPlanner` from a monolithic class to an orchestrator that dispatches to modular workflow runner functions
+- `RUNNERS` registry in `core/workflows/__init__.py` maps workflow IDs to runner functions
+- `proton_basic.py` — basic proton IMPT (3-beam, fixed geometry)
+- `proton_optimized.py` — proton IMPT with dose objective optimization
+- `proton_robust.py` — robust proton with setup/range error scenarios
+- `proton_robust_optimized.py` — robust + optimized combined workflow
 
-**API model changes** (`models/plan.py`):
-
-```python
-class ObjectiveType(str, Enum):
-    d_min = "DMin"        # Minimum dose to structure
-    d_max = "DMax"        # Maximum dose to structure
-    d_uniform = "DUniform" # Uniform dose
-    dvh_min = "DVHMin"    # DVH-based minimum
-    dvh_max = "DVHMax"    # DVH-based maximum
-
-class DoseObjective(BaseModel):
-    structure_name: str          # ROI name (e.g. "PTV", "SpinalCord")
-    objective_type: ObjectiveType
-    dose_gy: float               # Dose value
-    weight: float = 1.0          # Optimization weight
-    volume_fraction: Optional[float] = None  # For DVH objectives (0-1)
-
-class PlanRequest(BaseModel):
-    # ... existing fields ...
-    objectives: Optional[List[DoseObjective]] = None  # If set → run optimizer
-    optimization_method: str = "Scipy_L-BFGS-B"
-    max_iterations: int = 50
-    spot_spacing_mm: float = 5.0
-    layer_spacing_mm: float = 5.0
-    scoring_spacing_mm: List[float] = [2, 2, 2]
-    nb_primaries: float = 1e4    # For beamlet calc (1e6 for final)
-    nb_primaries_final: float = 1e6
-```
-
-New `PlanWorkflow` entries: `proton-impt-optimized`, `proton-robust`, `photon-ccc`.
-
-**Planner pipeline** (`core/planner.py` — new `_run_optimized_proton()` method):
-
+*OpenTPS integration pipeline*:
 1. Load patient data (CT + RTStruct) from Orthanc
 2. Configure `MCsquareDoseCalculator` (calibration, BDL, scoring grid)
 3. Build `ProtonPlanDesign` (gantry angles, spot/layer spacing, target margin)
-4. Compute beamlets: `mc2.computeBeamlets(ct, plan, roi=[target, body])`
-5. Map API objectives → OpenTPS objectives (`doseObj.DMin`, `doseObj.DMax`, `doseObj.DUniform`, `doseObj.DVHMin`, `doseObj.DVHMax`)
-6. Run `IntensityModulationOptimizer(method='Scipy_L-BFGS-B', plan=plan, maxiter=50).optimize()`
+4. Compute beamlets or robust scenario beamlets
+5. Map API `DoseObjective` → OpenTPS objectives
+6. Run `IntensityModulationOptimizer` with configurable method and iteration count
 7. Final dose computation with high primaries (1e6)
 8. Export RTDOSE, compute DVH
 
-**Key OpenTPS imports**:
-```python
-from opentps.core.processing.planOptimization.planOptimization import IntensityModulationOptimizer
-import opentps.core.processing.planOptimization.objectives.dosimetricObjectives as doseObj
-from opentps.core.data.plan import ObjectivesList
-```
+#### 8B — Photon CCC Dose Computation
 
-**Task progress stages**: `loading_data` → `building_plan` → `computing_beamlets` → `optimizing` → `final_dose` → `exporting`
+Stub workflow registered for `photon-ccc` — awaits future OpenTPS photon integration. The API model accepts photon-specific fields (`mlc_leaf_width_mm`, `jaw_opening_mm`, `mu_per_beam`) and the synthetic planner generates appropriate mock results.
 
-#### Phase 8B — Photon CCC Dose Computation
+#### 8C — Robust Proton Optimization
 
-Activates the `photon-ccc` workflow that is currently stub-only.
+*New API model (`models/plan.py` — `RobustnessConfig`)*:
+- `setup_systematic_error_mm`, `setup_random_error_mm`, `range_systematic_error_pct`
+- `selection_strategy` (`REDUCED_SET` | `ALL` | `RANDOM`), `num_scenarios`
+- Used by workflows `proton-robust-basic` and `proton-robust-optimized`
 
-**New planner method** (`_run_photon_ccc()`):
+#### 8D — Dose Delivery Simulation
 
-1. Load CT from Orthanc
-2. Create `PhotonPlan` with `PlanPhotonBeam` + `PlanPhotonSegment` (MLC leaf positions, jaw openings, monitor units)
-3. Configure `CCCDoseCalculator` (CT calibration, batch size)
-4. Compute dose: `ccc.computeDose(ct, plan)`
-5. Export RTDOSE + DVH
+*New files*:
+- `models/simulation.py` — `SimulationRequest` (plan_id, motion parameters, fractions), `SimulationSummary`, `SimulationResult`
+- `api/routes/simulations.py` — `POST /simulations` (creates simulation), `GET /simulations/{id}` (retrieves results)
 
-**Additional `PlanRequest` fields for photon**:
-```python
-mlc_leaf_width_mm: float = 10.0   # MLC leaf width
-jaw_opening_mm: List[float] = [-50, 50]
-mu_per_beam: float = 5000
-```
+The simulation API accepts motion amplitude (mm), motion period (s), delivery time per spot (ms), and number of fractions. In synthetic mode, results are generated instantly with `succeeded` status.
 
-**Key OpenTPS imports**:
-```python
-from opentps.core.processing.doseCalculation.photons.cccDoseCalculator import CCCDoseCalculator
-from opentps.core.data.plan._photonPlan import PhotonPlan
-from opentps.core.data.plan._planPhotonBeam import PlanPhotonBeam
-from opentps.core.data.plan._planPhotonSegment import PlanPhotonSegment
-```
+#### 8E — Workflow Registry Cleanup
 
-#### Phase 8C — Robust Proton Optimization
+Updated `api/routes/workflows.py` with proper `WorkflowRegistry` containing 4 workflows, each with parameterized defaults, modality, engine, and category metadata. The `/workflows` endpoint now returns machine-readable parameter schemas that enable dynamic UI form generation.
 
-Extends 8A with robustness scenarios for uncertainty analysis — critical for proton therapy where setup errors and range uncertainty significantly affect dose distributions.
+**Key files created/modified**: `core/workflows/*.py`, `models/plan.py` (DoseObjective, RobustnessConfig), `models/simulation.py`, `api/routes/simulations.py`, `api/routes/workflows.py`
 
-**New API model** (`models/plan.py`):
-```python
-class RobustnessConfig(BaseModel):
-    setup_systematic_error_mm: List[float] = [1.6, 1.6, 1.6]
-    setup_random_error_mm: List[float] = [0.0, 0.0, 0.0]
-    range_systematic_error_pct: float = 5.0
-    selection_strategy: str = "REDUCED_SET"  # REDUCED_SET | ALL | RANDOM
-    num_scenarios: int = 5
-```
-
-**New planner method** (`_run_robust_proton()`):
-
-1. Same as 8A but configure `planDesign.robustness = RobustnessProton()`
-2. Use `mc2.computeRobustScenarioBeamlets()` instead of `computeBeamlets()`
-3. Optimize with robust scenarios included in the objective function
-4. Return worst-case DVH bands in QA summary
-
-#### Phase 8D — Dose Delivery Simulation
-
-PBS delivery timing and 4D dose simulation for motion management. This is a research/QA feature for evaluating plan robustness to patient breathing motion.
-
-**New files**:
-- `models/simulation.py` — `SimulationRequest` and `SimulationResult` models
-- `api/routes/simulations.py` — `POST /simulations`, `GET /simulations/{id}`
-- `core/simulator.py` — wrapper around OpenTPS's `PlanDeliverySimulation`
-
-```python
-class SimulationRequest(BaseModel):
-    plan_id: str                          # Reference to completed plan
-    simulation_type: str = "4d_dose"      # "4d_dose" | "4d_dynamic" | "fractionation"
-    num_fractions: int = 5
-    num_starting_phases: int = 3
-    num_fractionation_scenarios: int = 7
-
-class SimulationResult(BaseModel):
-    id: str
-    plan_id: str
-    type: str
-    status: str
-    dvh_bands: Optional[dict] = None      # Min/max/nominal DVH per structure
-    timing_data: Optional[dict] = None    # PBS spot delivery times
-```
-
-#### Phase 8E — Workflow Registry Cleanup
-
-Update `api/routes/workflows.py` and `api/routes/info.py` with new workflow definitions and parameter schemas for all new capabilities.
-
-#### Phase 8 — Effort & Priority Summary
-
-| Sub-phase | Feature | Effort | Priority |
-|-----------|---------|--------|----------|
-| **8A** | Proton IMPT optimization | 3–4 days | 🔴 Critical — makes plans clinically meaningful |
-| **8B** | Photon CCC dose | 2 days | 🟡 Medium — second modality |
-| **8C** | Robust optimization | 2 days | 🟡 Medium — builds on 8A |
-| **8D** | Delivery simulation | 2–3 days | 🟢 Lower — research/QA feature |
-| **8E** | API cleanup & workflow registry | 1 day | 🟢 Lower — polish |
-
-#### Phase 8 — Verification Plan
-
-- Extend `test_api_e2e.py` with optimization parameter tests (synthetic mode)
-- Add integration tests with `@pytest.mark.opentps` for real OpenTPS runs
-- Test new `photon-ccc` workflow endpoint
-- Submit an optimized plan via `curl` and verify optimizer convergence
-- Compare DVH before/after optimization
-- Verify RTDOSE is uploadable to Orthanc and viewable in OHIF
+**Tests**: Extended `test_api_e2e.py` with 7 new tests covering workflow detail, optimization parameters, simulation endpoints, and robustness configuration. All 26 tests pass.
 
 ---
 
@@ -571,28 +484,56 @@ Update `api/routes/workflows.py` and `api/routes/info.py` with new workflow defi
 
 **Goal**: Build a full OHIF v3 extension that allows clinicians to submit plans, visualize dose, and review DVH directly from the OHIF viewer.
 
-**Current state**: The OHIF extension scaffold exists in `ohif-extension/` with:
-- Extension registration (`src/index.ts`, `src/id.js`)
-- `RadiarchClientService` — HTTP client for communicating with the Radiarch API
-- README with installation instructions and planned panel descriptions
+**What was built**:
 
-**Planned components**:
+*Commands module (`commandsModule.js` — 8 commands)*:
+- `radiarch.fetchInfo` — GET `/info`
+- `radiarch.listWorkflows` — GET `/workflows`
+- `radiarch.getWorkflowDetail` — GET `/workflows/{id}`
+- `radiarch.submitPlan` — POST `/plans` with full Phase 8 parameters
+- `radiarch.pollJob` — GET `/jobs/{id}` with timeout + polling loop
+- `radiarch.getPlanDetail` — GET `/plans/{id}`
+- `radiarch.getArtifact` — GET `/artifacts/{id}` (binary download)
+- `radiarch.submitSimulation` — POST `/simulations`
 
-| Component | Type | Description |
-|-----------|------|-------------|
-| `PlanSubmissionPanel` | OHIF Panel | Workflow selection dropdown, prescription dose input, beam count slider, target ROI picker. Submits `POST /plans` and shows real-time progress via job polling. |
-| `DoseOverlayPanel` | OHIF Panel | Controls for dose color wash overlay (opacity, window/level, isodose lines). Fetches RTDOSE from `/artifacts/{id}` and renders as a cornerstone overlay on the CT viewport. |
-| `DVHPanel` | OHIF Panel | Interactive dose-volume histogram chart (using Chart.js or Recharts) showing DVH curves per structure with D95/D5 annotations. |
-| `RadiarchMode` | OHIF Mode | Custom OHIF mode that adds a "Treatment Planning" toolbar button and wires up the three panels into a planning layout. |
+*HTTP client (`RadiarchClient.js`)*:
+- Axios-based client with methods for all 14 API endpoints
+- `updateBaseUrl(url)` for dynamic server configuration
+- `pollJob(jobId, timeoutMs, intervalMs)` with deadline-based polling
 
-**Integration points**:
-- OHIF's `ServicesManager` provides study/series metadata → maps to `study_instance_uid` for plan requests
-- OHIF's cornerstone3D volume rendering → dose overlay as a labelmap or fusion viewport
-- OHIF's measurement tools → beam angle annotations
+*Four OHIF Panels*:
 
-**Changes to API**: The API needs a CORS configuration update to allow requests from the OHIF origin, and may need WebSocket support for real-time job progress (instead of polling).
+| Panel | File | Lines | Description |
+|-------|------|-------|-------------|
+| **Plan Submission** | `PlanSubmissionPanel.js` | 545 | Dynamic workflow selection (from `/workflows`), prescription dose, beam/fraction sliders, dose objectives editor with add/remove rows, robustness config toggle. Submits plan and polls job with real-time progress bar. |
+| **DVH** | `DVHPanel.js` | 319 | Inline SVG dose-volume histogram with grid lines, axis labels, and legend. Normalizes both `doseGy`/`volumePct` and `dose`/`volume` field formats. Shows min/mean/max dose statistics cards. |
+| **Dose Overlay** | `DoseOverlayPanel.js` | 240 | Dose visibility toggle, opacity slider, colormap selector (jet/hot/cool_warm/viridis/PET), 8-level isodose line checkboxes with color indicators. RTDOSE artifact load button. |
+| **Simulation** | `SimulationPanel.js` | 326 | Plan ID input, motion amplitude [x,y,z], motion period, delivery time per spot, fraction count. Runs simulation via command dispatch and displays results. |
+
+*Extension wiring (`index.ts`)*:
+- Registers all 4 panels with OHIF's panel service
+- Registers commands module with commands manager
+- Exports standard OHIF extension interface (`getCommandsModule`, `getPanelModule`)
+
+*Standalone demo (`demo/index.html`)*:
+- Self-contained HTML page mirroring all 4 panels
+- Connects to the live Radiarch API (configurable URL)
+- Renders DVH as inline SVG, shows QA summary, runs simulation
+- Catppuccin Mocha dark theme with Inter font
+
+**Bugs found and fixed during cross-check**:
+
+| Bug | Symptom | Fix |
+|-----|---------|-----|
+| DVH field name mismatch | DVHPanel expected `doseGy`/`volumePct` but synthetic planner returns `dose`/`volume` | Added normalization layer: `d.doseGy \|\| d.dose` |
+| Phantom `simulation_type` field | API would return 422 (field not in SimulationRequest model) | Removed from command payload |
+| Orphaned `simulationType` state | Unused state variable + dropdown in SimulationPanel | Cleaned up state, handler, and JSX |
+
+**Key files created**: `commandsModule.js`, `panels/*.js` (4 files), `demo/index.html`; `RadiarchClient.js` and `index.ts` rewritten
 
 ---
+
+## 4. Development Phases — Planned
 
 ### Phase 10 — Keycloak RBAC & Authentication
 
@@ -676,7 +617,7 @@ This eliminates the need for async test infrastructure, Redis, or worker process
 
 ### 5.4 Test Suites
 
-#### `test_api_e2e.py` — 14 API Integration Tests
+#### `test_api_e2e.py` — 21 API Integration Tests
 
 Uses FastAPI's `TestClient` (wrapping Starlette's ASGI test client) to make HTTP requests against the app in-process.
 
@@ -735,7 +676,7 @@ This test only passes when OpenTPS and MCsquare are installed with test data ava
 ### 5.5 Running Tests
 
 ```bash
-# Run all fast tests (19 tests, ~2 seconds)
+# Run all fast tests (26 tests, ~1.5 seconds)
 cd service
 RADIARCH_FORCE_SYNTHETIC=true RADIARCH_ORTHANC_USE_MOCK=true \
   python -m pytest tests/test_api_e2e.py tests/test_client.py -v
@@ -809,16 +750,37 @@ RADIARCH_OPENTPS_VENV=/path/to/opentps/venv/lib/python3.12/site-packages \
 **Root cause**: `RADIARCH_ORTHANC_USERNAME` and `RADIARCH_ORTHANC_PASSWORD` were not set in `docker-compose.yml`, even though Orthanc was configured with `ORTHANC__REGISTERED_USERS`.
 **Fix**: Added credentials to both `api` and `worker` environment sections in `docker-compose.yml`.
 
+### 6.6 DVH Field Name Mismatch
+
+**Phase**: 9
+**Symptom**: DVH chart in `DVHPanel.js` rendered blank — no data points appeared.
+**Root cause**: The panel expected `doseGy` and `volumePct` field names, but the synthetic planner returns `dose` and `volume`.
+**Fix**: Added a normalization layer in the DVH rendering code: `d.doseGy || d.dose` and `d.volumePct || d.volume`.
+
+### 6.7 Phantom `simulation_type` in API Payload
+
+**Phase**: 9
+**Symptom**: `POST /simulations` returned HTTP 422 validation error.
+**Root cause**: `commandsModule.js` included a `simulation_type` field in the payload, but `SimulationRequest` does not define this field (Pydantic `extra="forbid"`).
+**Fix**: Removed `simulation_type` from the `submitSimulation` command payload.
+
+### 6.8 Orphaned `simulationType` State
+
+**Phase**: 9
+**Symptom**: `SimulationPanel.js` contained a dropdown for "Simulation Type" that was no longer functional.
+**Root cause**: After removing `simulation_type` from the API payload (6.7), the corresponding React state, handler, and JSX were left behind.
+**Fix**: Removed the `simulationType` state variable, its `setSimulationType` setter, and the dropdown element from the component.
+
 ---
 
 ## 7. End-to-End Verification
 
 ### 7.1 Local Tests
 
-All 19 tests pass consistently:
+All 26 tests pass consistently:
 
 ```
-tests/test_api_e2e.py    — 14 tests (plan CRUD, jobs, artifacts, sessions, workflows)
+tests/test_api_e2e.py    — 21 tests (plan CRUD, jobs, artifacts, sessions, workflows, simulations)
 tests/test_client.py     —  5 tests (RadiarchClient SDK)
 ```
 
@@ -855,11 +817,11 @@ A successfully generated plan includes:
 
 ### 8.1 What Worked Well
 
-**Rapid prototyping**: The entire project — from empty directory to a 5-service Docker stack with 20 passing tests — was built across 2 development sessions. Antigravity handled the boilerplate-heavy tasks (FastAPI routes, Pydantic models, Docker config, test scaffolding) with high accuracy.
+**Rapid prototyping**: The entire project — from empty directory to a 5-service Docker stack with 26 passing tests and a full OHIF extension — was built across 3 development sessions. Antigravity handled the boilerplate-heavy tasks (FastAPI routes, Pydantic models, Docker config, test scaffolding, React panels) with high accuracy.
 
 **Debugging efficiency**: The Session 2 Docker debugging sequence (Section 6.3–6.5) showcases the iterative diagnosis pattern. Starting from a symptom (`Job or plan missing`), Antigravity methodically traced through: container env vars → `get_store()` return value → `SessionLocal` state → the Python import-by-value root cause. Each step narrowed the search space with targeted `docker exec` commands.
 
-**API design**: The agent proposed clean REST conventions (resource-based URLs, proper HTTP methods, Pydantic validation) and maintained consistency across 12 endpoints without manual intervention.
+**API design**: The agent proposed clean REST conventions (resource-based URLs, proper HTTP methods, Pydantic validation) and maintained consistency across 14 endpoints without manual intervention.
 
 **Test coverage**: Tests were generated alongside features, not as an afterthought. The eager-mode Celery testing pattern (avoid async complexity in tests) was a good design choice.
 
@@ -920,6 +882,17 @@ cd service
 python -m venv .venv && source .venv/bin/activate
 pip install -e .
 RADIARCH_FORCE_SYNTHETIC=true uvicorn radiarch.app:create_app --factory --reload
+```
+
+### OHIF Extension Demo
+```bash
+# Start the API in synthetic mode (no external deps)
+cd service && source .venv/bin/activate
+RADIARCH_FORCE_SYNTHETIC=true RADIARCH_DATABASE_URL="" RADIARCH_BROKER_URL="" \
+  python3 -m uvicorn radiarch.app:create_app --factory --port 8000
+
+# Open demo/index.html in your browser
+# Click "Connect" → "Submit Plan" → observe QA summary + DVH chart
 ```
 
 ### Run Tests

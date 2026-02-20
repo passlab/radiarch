@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .api.routes import info, plans, jobs, artifacts, workflows, sessions
+from .api.routes import info, plans, jobs, artifacts, workflows, sessions, simulations
 from .adapters import build_orthanc_adapter
 from .core.database import init_db
 
@@ -40,6 +40,7 @@ def create_app() -> FastAPI:
     app.include_router(jobs.router, prefix=settings.api_prefix)
     app.include_router(artifacts.router, prefix=settings.api_prefix)
     app.include_router(sessions.router, prefix=settings.api_prefix)
+    app.include_router(simulations.router, prefix=settings.api_prefix)
 
     @app.get("/")
     async def root():

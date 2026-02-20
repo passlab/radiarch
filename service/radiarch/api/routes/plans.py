@@ -36,5 +36,6 @@ async def delete_plan(plan_id: str):
         raise HTTPException(status_code=404, detail="Plan not found")
     if plan.job_id:
         store.update_job(plan.job_id, state=JobState.cancelled, message="Cancelled by user")
+    store.delete_plan(plan_id)
     return Response(status_code=204)
 

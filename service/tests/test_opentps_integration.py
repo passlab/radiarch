@@ -1,55 +1,47 @@
-import sys
-import os
-print(f"DEBUG: sys.executable: {sys.executable}")
-print(f"DEBUG: sys.path: {sys.path}")
+"""Integration test for OpenTPS + MCsquare proton dose calculation.
 
-try:
-    import opentps
-    print(f"DEBUG: OpenTPS imported successfully from {opentps.__file__}")
-except ImportError as e:
-    print(f"DEBUG: OpenTPS import failed: {e}")
+Requires RADIARCH_OPENTPS_DATA_ROOT to point to a directory containing
+DICOM CT + RT-Struct data (e.g. opentps/testData).
+"""
 
-import pytest
-from unittest.mock import MagicMock
-from radiarch.core.planner import RadiarchPlanner
-from radiarch.models.plan import PlanDetail
-from radiarch.models.job import JobState
-
-# Skip if opentps logic cannot be run (e.g. no data)
-# But we expect it to work with testData
 import os
 import traceback
-from radiarch.config import get_settings
+from datetime import datetime, timezone
 
 import pytest
 from unittest.mock import MagicMock
-from datetime import datetime
+
 from radiarch.core.planner import RadiarchPlanner
 from radiarch.models.plan import PlanDetail
 from radiarch.models.job import JobState
 from radiarch.config import get_settings
+
 
 @pytest.mark.asyncio
 async def test_opentps_integration():
     settings = get_settings()
+
+    # Override force_synthetic so real OpenTPS planner runs
+    # (test_api_e2e.py sets RADIARCH_FORCE_SYNTHETIC=true as a process env var)
+    os.environ.pop("RADIARCH_FORCE_SYNTHETIC", None)
+    settings.force_synthetic = False
+
     # Use specific subfolder for speed
     settings.opentps_data_root = os.path.join(settings.opentps_data_root, "SimpleFantomWithStruct")
-    
+
     # Check if OpenTPS is importable
     try:
-        import opentps
+        import opentps  # noqa: F401
     except ImportError:
-        pytest.fail("OpenTPS not importable - sys.path setup might have failed or venv missing")
+        pytest.fail("OpenTPS not importable — vendored copy missing?")
 
     # Mock adapter
     adapter = MagicMock()
-    # We don't need real study/segmentation from adapter because _run_opentps currently 
-    # loads from settings.opentps_data_root directly as a fallback.
     adapter.get_study.return_value = {"valid": "study"}
     adapter.get_segmentation.return_value = None
 
     planner = RadiarchPlanner(adapter=adapter)
-    
+
     # Create valid plan request
     plan = PlanDetail(
         id="test-plan-001",
@@ -58,17 +50,14 @@ async def test_opentps_integration():
         status=JobState.queued.value,
         prescription_gy=20.0,
         fraction_count=1,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
         artifact_ids=[],
         segmentation_uid=None,
-        notes="Integration test"
+        notes="Integration test",
     )
 
-    # Run planner
-    # This invokes _run_opentps which does heavy lifting: loading DICOMs, MCsquare
-    # It might fail if testData is missing or incompatible binaries
-    
+    # Run planner — invokes MCsquare for real proton dose calculation
     try:
         result = planner.run(plan)
     except Exception as e:
@@ -84,6 +73,8 @@ async def test_opentps_integration():
 
     print("OpenTPS Execution Result:", result.qa_summary)
 
+
 if __name__ == "__main__":
     import asyncio
     asyncio.run(test_opentps_integration())
+

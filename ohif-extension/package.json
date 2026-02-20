@@ -1,12 +1,14 @@
 {
     "name": "@radiarch/ohif-extension",
-    "version": "0.1.0",
-    "description": "OHIF v3 extension for Radiarch TPS",
+    "version": "0.2.0",
+    "description": "OHIF v3 extension for Radiarch TPS — plan submission, DVH, dose overlay, simulation",
     "author": "Radiarch",
     "license": "MIT",
     "main": "src/index.ts",
     "keywords": [
-        "ohif-extension"
+        "ohif-extension",
+        "radiotherapy",
+        "treatment-planning"
     ],
     "peerDependencies": {
         "@ohif/core": "^3.9.0",

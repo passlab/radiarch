@@ -55,13 +55,38 @@ def run_plan_job(job_id: str, plan_id: str):
             eta_seconds=max(0, 30 - _elapsed()),
         )
 
-        # Stage 3: Computing dose
-        store.update_job(
-            job_id, state=JobState.running, progress=0.20,
-            message="Running dose calculation", stage="computing",
-            eta_seconds=max(0, 120 - _elapsed()),
-        )
+
+        # Stage 3: Computing / Optimization
+        # For optimized plans, this step takes longer and has sub-stages
+        progress_start = 0.20
+        progress_end = 0.85
+        
+        if plan.workflow_id in ("proton-impt-optimized", "proton-robust"):
+             stage_label = "computing_beamlets" if plan.workflow_id == "proton-impt-optimized" else "computing_robust_beamlets"
+             desc = "Computing beamlets (interaction matrix)" if plan.workflow_id == "proton-impt-optimized" else "Computing robust scenario beamlets"
+             store.update_job(
+                job_id, state=JobState.running, progress=progress_start,
+                message=desc, stage=stage_label,
+                eta_seconds=max(0, 300 - _elapsed()),
+            )
+        elif plan.workflow_id == "photon-ccc":
+            store.update_job(
+                job_id, state=JobState.running, progress=progress_start,
+                message="Running CCC photon dose calculation", stage="computing_photon",
+                eta_seconds=max(0, 120 - _elapsed()),
+            )
+        else:
+            store.update_job(
+                job_id, state=JobState.running, progress=progress_start,
+                message="Running dose calculation", stage="computing",
+                eta_seconds=max(0, 120 - _elapsed()),
+            )
+
+        # Execute planner
+        # Note: The planner is synchronous here. Ideally, we'd have a callback for progress,
+        # but for now we just jump to "persisting" after it returns.
         result = planner.run(plan)
+
 
         # Stage 4: Persisting artifacts
         store.update_job(

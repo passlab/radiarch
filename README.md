@@ -9,15 +9,27 @@ radiarch/
   Dockerfile            # Multi-stage container build
   docker-compose.yml    # Full stack: API + Worker + Redis + Postgres + Orthanc
   .env.example          # Documented env var template
-  ohif-extension/       # OHIF v3 extension scaffold
+  demo/
+    index.html          # Standalone browser demo (all 4 panels vs. live API)
+  ohif-extension/       # OHIF v3 extension (8 commands, 4 panels)
+    src/
+      index.ts          # Extension entry point
+      commandsModule.js # 8 commands bridging UI → API
+      services/
+        RadiarchClient.js   # HTTP client (axios)
+      panels/
+        PlanSubmissionPanel.js  # Workflow selection, Rx, objectives
+        DVHPanel.js             # Dose-volume histogram (SVG)
+        DoseOverlayPanel.js     # Opacity, colormap, isodose lines
+        SimulationPanel.js      # Delivery simulation (4D dose)
   service/
     pyproject.toml
     radiarch/
       app.py            # FastAPI factory
       client.py         # RadiarchClient Python library
       config.py         # Pydantic settings
-      api/routes/       # /info, /plans, /jobs, /artifacts, /workflows, /sessions
-      core/             # Stores, adapters, planners
+      api/routes/       # /info, /plans, /jobs, /artifacts, /workflows, /sessions, /simulations
+      core/             # Stores, adapters, planner, workflow modules
       models/           # Pydantic request/response models
       tasks/            # Celery workers (plan execution)
 ```
@@ -76,12 +88,47 @@ All settings use `RADIARCH_` prefix. Place them in `.env` or export as env vars.
 | `RADIARCH_BROKER_URL` | `redis://localhost:6379/0` | Celery broker (Redis) |
 | `RADIARCH_DICOMWEB_URL` | `""` | DICOMweb STOW-RS URL for artifact push; empty = disabled |
 
+## OHIF v3 Extension
+
+The `ohif-extension/` directory contains a complete OHIF Viewer v3 extension that connects to the Radiarch API. It provides:
+
+| Panel | Description |
+|---|---|
+| **Plan Submission** | Dynamic workflow selection, prescription dose, beam/fraction config, dose objectives editor, robustness settings |
+| **DVH** | Interactive dose-volume histogram rendered as inline SVG with dose statistics cards |
+| **Dose Overlay** | Controls for dose visibility, opacity, colormap selection, and isodose line toggles |
+| **Simulation** | 4D delivery simulation with motion amplitude, period, and fractionation parameters |
+
+### Standalone Demo
+
+A self-contained browser demo (`demo/index.html`) exercises all 4 panels against the live API without needing OHIF:
+
+```bash
+# 1. Start the API in synthetic mode (no OpenTPS needed)
+cd service && source .venv/bin/activate
+RADIARCH_FORCE_SYNTHETIC=true RADIARCH_DATABASE_URL="" RADIARCH_BROKER_URL="" \
+  python3 -m uvicorn radiarch.app:create_app --factory --port 8000
+
+# 2. Open the demo page in your browser
+open demo/index.html
+# Click "Connect", then "Submit Plan" → observe QA summary + DVH chart
+# Enter the plan ID into the Simulation panel → "Run Simulation"
+```
+
+### Installing in OHIF
+
+```bash
+cd ohif-extension
+npm install
+# Then register in your OHIF config — see ohif-extension/README.md for details
+```
+
 ## Testing
 
 ```bash
 cd service
 
-# All tests (synthetic planner, no external deps)
+# All tests (synthetic planner, no external deps) — 26 tests
 RADIARCH_FORCE_SYNTHETIC=true pytest tests/test_api_e2e.py tests/test_client.py -v
 
 # Full OpenTPS integration (requires MCsquare binary)
@@ -105,4 +152,4 @@ job = client.poll_job(plan["job_id"], timeout=300)
 
 ## Architecture
 
-See [`docs/architecture.md`](docs/architecture.md) for the detailed design document including phase roadmap and comparison with MONAILabel.
+See [`docs/architecture.md`](docs/architecture.md) for the detailed design document and [`docs/radiarch_project_report.md`](docs/radiarch_project_report.md) for the full project report including phase roadmap, testing strategy, and comparison with MONAILabel.

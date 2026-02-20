@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Radiarch OHIF Extension — Live Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --crust: #11111b; --base: #1e1e2e; --mantle: #181825;
+    --surface0: #313244; --surface1: #45475a; --surface2: #585b70;
+    --overlay0: #6c7086; --overlay1: #7f849c;
+    --text: #cdd6f4; --subtext0: #a6adc8; --subtext1: #bac2de;
+    --blue: #89b4fa; --green: #a6e3a1; --yellow: #f9e2af;
+    --red: #f38ba8; --mauve: #cba6f7; --peach: #fab387;
+    --teal: #94e2d5; --sapphire: #74c7ec;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Inter', sans-serif; font-size: 13px; color: var(--text);
+    background: var(--crust); min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, var(--base) 0%, var(--mantle) 100%);
+    padding: 16px 24px; border-bottom: 1px solid var(--surface1);
+    display: flex; align-items: center; gap: 12px;
+  }
+  header h1 { font-size: 20px; font-weight: 700; color: var(--blue); }
+  header .badge {
+    background: var(--green); color: var(--crust); font-size: 10px;
+    font-weight: 700; padding: 2px 8px; border-radius: 10px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  header .server-url {
+    margin-left: auto; display: flex; align-items: center; gap: 6px;
+  }
+  header input {
+    background: var(--surface0); border: 1px solid var(--surface1);
+    color: var(--text); padding: 5px 10px; border-radius: 4px;
+    font-size: 12px; width: 260px; outline: none;
+  }
+  header button { 
+    background: var(--blue); color: var(--crust); border: none;
+    padding: 5px 12px; border-radius: 4px; font-size: 12px;
+    font-weight: 600; cursor: pointer;
+  }
+  .grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px; padding: 16px; max-width: 1200px; margin: 0 auto;
+  }
+  .panel {
+    background: var(--base); border: 1px solid var(--surface1);
+    border-radius: 10px; padding: 16px; min-height: 320px;
+    transition: box-shadow 0.2s;
+  }
+  .panel:hover { box-shadow: 0 0 20px rgba(137,180,250,0.08); }
+  .panel h3 {
+    font-size: 15px; font-weight: 600; color: var(--text);
+    margin-bottom: 12px; display: flex; align-items: center; gap: 8px;
+  }
+  .field { margin-bottom: 10px; }
+  label.fld {
+    display: block; font-size: 10px; font-weight: 600;
+    color: var(--overlay1); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 3px;
+  }
+  input.inp, select.inp {
+    width: 100%; padding: 6px 8px; background: var(--surface0);
+    border: 1px solid var(--surface1); border-radius: 4px;
+    color: var(--text); font-size: 13px; outline: none;
+  }
+  input.inp:focus, select.inp:focus { border-color: var(--blue); }
+  .hint { font-size: 10px; color: var(--overlay0); margin-top: 2px; }
+  .btn {
+    width: 100%; padding: 9px; border: none; border-radius: 6px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: all 0.15s; margin-top: 8px;
+  }
+  .btn-primary { background: var(--blue); color: var(--crust); }
+  .btn-primary:hover { filter: brightness(1.1); }
+  .btn-mauve { background: var(--mauve); color: var(--crust); }
+  .btn-mauve:hover { filter: brightness(1.1); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .section-title {
+    font-size: 10px; font-weight: 600; color: var(--blue);
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 14px 0 8px;
+  }
+  .inline-3 { display: flex; gap: 4px; }
+  .inline-3 > div { flex: 1; }
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-top: 8px; }
+  .stat-card {
+    background: var(--surface0); border-radius: 6px;
+    padding: 8px; text-align: center;
+  }
+  .stat-val { font-size: 16px; font-weight: 700; }
+  .stat-lbl { font-size: 9px; color: var(--overlay0); text-transform: uppercase; margin-top: 2px; }
+  .result-card {
+    margin-top: 10px; padding: 10px; background: var(--surface0);
+    border-radius: 6px; border: 1px solid var(--surface1);
+  }
+  .result-row {
+    display: flex; justify-content: space-between; padding: 3px 0; font-size: 12px;
+  }
+  .badge-status {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+  }
+  .badge-succeeded, .badge-completed { background: var(--green); color: var(--crust); }
+  .badge-running { background: var(--mauve); color: var(--crust); }
+  .badge-failed { background: var(--red); color: var(--crust); }
+  .badge-queued { background: var(--yellow); color: var(--crust); }
+  .progress-bar {
+    height: 6px; background: var(--surface1); border-radius: 3px;
+    margin-top: 6px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; border-radius: 3px; transition: width 0.3s;
+    background: linear-gradient(90deg, var(--blue), var(--mauve));
+  }
+  .log-area {
+    background: var(--mantle); border: 1px solid var(--surface0);
+    border-radius: 4px; padding: 8px; margin-top: 10px;
+    max-height: 160px; overflow-y: auto; font-size: 11px;
+    font-family: 'Fira Code', monospace;
+  }
+  .log-area .line { margin: 1px 0; }
+  .log-area .ts { color: var(--overlay0); }
+  .log-area .msg { color: var(--subtext0); }
+  .log-area .ok { color: var(--green); }
+  .log-area .err { color: var(--red); }
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; height: 150px; color: var(--overlay0);
+    text-align: center;
+  }
+  .empty-state .icon { font-size: 28px; margin-bottom: 6px; }
+  .chart-box {
+    background: var(--surface0); border-radius: 8px;
+    padding: 10px; margin-bottom: 8px;
+  }
+  .legend {
+    display: flex; gap: 10px; margin-top: 6px; font-size: 11px;
+    color: var(--subtext0); flex-wrap: wrap;
+  }
+  .legend-dot {
+    display: inline-block; width: 8px; height: 8px;
+    border-radius: 50%; margin-right: 3px; vertical-align: middle;
+  }
+  /* Dose overlay controls */
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .slider-container { display: flex; align-items: center; gap: 8px; }
+  .slider {
+    flex: 1; -webkit-appearance: none; height: 4px;
+    background: var(--surface1); border-radius: 2px; outline: none;
+  }
+  .slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px;
+    background: var(--blue); border-radius: 50%; cursor: pointer;
+  }
+  .isodose-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .isodose-item {
+    display: flex; align-items: center; gap: 5px; font-size: 11px;
+    background: var(--surface0); padding: 4px 8px; border-radius: 4px;
+  }
+  .isodose-color {
+    width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0;
+  }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
+  .pulsing { animation: pulse 1.5s infinite; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚛ Radiarch OHIF Extension</h1>
+  <span class="badge">Live Demo</span>
+  <div class="server-url">
+    <input id="serverUrl" value="http://127.0.0.1:9123/api/v1" placeholder="API base URL">
+    <button onclick="testConnection()">Connect</button>
+    <span id="connStatus" style="font-size:11px;color:var(--overlay0)">⚪ Not connected</span>
+  </div>
+</header>
+
+<div class="grid">
+  <!-- ====== Panel 1: Plan Submission ====== -->
+  <div class="panel" id="planPanel">
+    <h3>📋 Treatment Plan Submission</h3>
+
+    <div class="field">
+      <label class="fld">Workflow</label>
+      <select id="wfSelect" class="inp" onchange="onWorkflowChange()">
+        <option value="">Loading...</option>
+      </select>
+    </div>
+
+    <div class="field">
+      <label class="fld">Study Instance UID</label>
+      <input class="inp" id="studyUid" value="1.2.826.0.1.3680043.8.1055.1"
+             placeholder="DICOM Study UID">
+    </div>
+
+    <div class="inline-3" style="margin-bottom:10px">
+      <div class="field">
+        <label class="fld">Rx (Gy)</label>
+        <input class="inp" id="rxGy" type="number" value="2.0" min="0.1" step="0.1">
+      </div>
+      <div class="field">
+        <label class="fld">Beams</label>
+        <input class="inp" id="beamCount" type="number" value="3" min="1" max="9">
+      </div>
+      <div class="field">
+        <label class="fld">Fractions</label>
+        <input class="inp" id="fractionCount" type="number" value="1" min="1">
+      </div>
+    </div>
+
+    <!-- Dynamic params rendered here -->
+    <div id="dynamicParams"></div>
+
+    <button class="btn btn-primary" id="submitBtn" onclick="submitPlan()" disabled>
+      ▶ Submit Plan
+    </button>
+
+    <div id="planProgress" style="display:none">
+      <div style="margin-top:10px;display:flex;align-items:center;gap:8px">
+        <span id="planBadge" class="badge-status badge-running">running</span>
+        <span id="planMsg" style="font-size:12px;color:var(--subtext0)"></span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="planBar" style="width:0%"></div></div>
+    </div>
+
+    <div id="qaResult" style="display:none"></div>
+  </div>
+
+  <!-- ====== Panel 2: DVH ====== -->
+  <div class="panel" id="dvhPanel">
+    <h3>📊 Dose-Volume Histogram</h3>
+    <div id="dvhChart">
+      <div class="empty-state">
+        <div class="icon">📈</div>
+        <div>No DVH data available</div>
+        <div style="font-size:11px;margin-top:4px">Submit a plan to view DVH curves</div>
+      </div>
+    </div>
+    <div id="dvhStats" style="display:none"></div>
+  </div>
+
+  <!-- ====== Panel 3: Dose Overlay ====== -->
+  <div class="panel" id="overlayPanel">
+    <h3>🎨 Dose Overlay Controls</h3>
+
+    <div class="toggle-row">
+      <span>Dose Visibility</span>
+      <label style="cursor:pointer">
+        <input type="checkbox" id="doseVisible" checked style="margin-right:4px"> Show
+      </label>
+    </div>
+
+    <div class="field">
+      <label class="fld">Opacity</label>
+      <div class="slider-container">
+        <input class="slider" id="opacitySlider" type="range" min="0" max="100" value="60">
+        <span id="opacityVal" style="font-size:12px;color:var(--subtext0);min-width:30px">60%</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="fld">Color Map</label>
+      <select id="colorMap" class="inp">
+        <option value="jet">Jet (Rainbow)</option>
+        <option value="hot">Hot</option>
+        <option value="cool_warm">Cool-Warm</option>
+        <option value="viridis">Viridis</option>
+        <option value="pet">PET</option>
+      </select>
+    </div>
+
+    <div class="section-title">Isodose Lines</div>
+    <div class="isodose-grid" id="isodoseGrid"></div>
+
+    <div class="section-title" style="margin-top:16px">RTDOSE Load</div>
+    <div class="field">
+      <label class="fld">Artifact ID</label>
+      <input class="inp" id="rtdoseArtifact" placeholder="Artifact ID from plan...">
+      <div class="hint">Enter the RTDOSE artifact ID to overlay on viewport</div>
+    </div>
+    <button class="btn btn-primary" onclick="loadRtdose()" style="font-size:12px;padding:7px">
+      Load RTDOSE
+    </button>
+  </div>
+
+  <!-- ====== Panel 4: Simulation ====== -->
+  <div class="panel" id="simPanel">
+    <h3>🔬 Delivery Simulation</h3>
+
+    <div class="field">
+      <label class="fld">Plan ID</label>
+      <input class="inp" id="simPlanId" placeholder="Completed plan ID...">
+      <div class="hint">Enter a completed plan's ID</div>
+    </div>
+
+    <div class="section-title">Motion Parameters</div>
+    <div class="field">
+      <label class="fld">Motion Amplitude (mm) [x, y, z]</label>
+      <div class="inline-3">
+        <div><input class="inp" id="motionX" type="number" value="0" step="0.5" min="0"><div class="hint" style="text-align:center">X</div></div>
+        <div><input class="inp" id="motionY" type="number" value="0" step="0.5" min="0"><div class="hint" style="text-align:center">Y</div></div>
+        <div><input class="inp" id="motionZ" type="number" value="5" step="0.5" min="0"><div class="hint" style="text-align:center">Z</div></div>
+      </div>
+    </div>
+    <div class="field">
+      <label class="fld">Motion Period (s)</label>
+      <input class="inp" id="motionPeriod" type="number" value="4.0" step="0.5" min="0.5">
+    </div>
+
+    <div class="section-title">Delivery Parameters</div>
+    <div class="field">
+      <label class="fld">Delivery Time per Spot (ms)</label>
+      <input class="inp" id="deliveryTime" type="number" value="1.0" step="0.1" min="0.1">
+    </div>
+    <div class="field">
+      <label class="fld">Number of Fractions</label>
+      <input class="inp" id="numFractions" type="number" value="5" min="1" max="50">
+    </div>
+
+    <button class="btn btn-mauve" id="simBtn" onclick="runSimulation()">
+      ▶ Run Simulation
+    </button>
+
+    <div id="simProgress" style="display:none"></div>
+    <div id="simResult" style="display:none"></div>
+  </div>
+</div>
+
+<!-- Event Log -->
+<div style="max-width:1200px;margin:0 auto 20px;padding:0 16px">
+  <div class="panel" style="min-height:auto">
+    <h3>🗒 Event Log</h3>
+    <div class="log-area" id="logArea"></div>
+  </div>
+</div>
+
+<script>
+const API = () => document.getElementById('serverUrl').value.replace(/\/$/, '');
+let currentPlanId = null;
+
+function log(msg, type = 'msg') {
+  const area = document.getElementById('logArea');
+  const ts = new Date().toLocaleTimeString();
+  area.innerHTML += `<div class="line"><span class="ts">${ts}</span> <span class="${type}">${msg}</span></div>`;
+  area.scrollTop = area.scrollHeight;
+}
+
+async function apiFetch(path, opts = {}) {
+  const url = `${API()}${path}`;
+  log(`${(opts.method||'GET')} ${path}`);
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    log(`Error ${res.status}: ${err}`, 'err');
+    throw new Error(err);
+  }
+  return res.json();
+}
+
+// ---- Connection ----
+async function testConnection() {
+  try {
+    const info = await apiFetch('/info');
+    document.getElementById('connStatus').textContent = '🟢 Connected';
+    document.getElementById('connStatus').style.color = 'var(--green)';
+    log(`Connected: ${info.name} v${info.version}`, 'ok');
+    document.getElementById('submitBtn').disabled = false;
+    loadWorkflows();
+  } catch (e) {
+    document.getElementById('connStatus').textContent = '🔴 Failed';
+    document.getElementById('connStatus').style.color = 'var(--red)';
+    log(`Connection failed: ${e.message}`, 'err');
+  }
+}
+
+// ---- Workflows ----
+let workflowMetadata = {};
+async function loadWorkflows() {
+  const wfs = await apiFetch('/workflows');
+  const sel = document.getElementById('wfSelect');
+  sel.innerHTML = '';
+  wfs.forEach(wf => {
+    workflowMetadata[wf.id] = wf;
+    const opt = document.createElement('option');
+    opt.value = wf.id;
+    opt.textContent = `${wf.name} (${wf.category})`;
+    sel.appendChild(opt);
+  });
+  log(`Loaded ${wfs.length} workflows`, 'ok');
+  onWorkflowChange();
+}
+
+function onWorkflowChange() {
+  const wfId = document.getElementById('wfSelect').value;
+  const wf = workflowMetadata[wfId];
+  const container = document.getElementById('dynamicParams');
+  container.innerHTML = '';
+  if (!wf || !wf.default_parameters) return;
+
+  const params = wf.default_parameters;
+  const keys = Object.keys(params);
+  if (keys.length === 0) return;
+
+  let html = '<div class="section-title">Workflow Parameters</div>';
+  keys.forEach(key => {
+    const val = params[key];
+    html += `<div class="field">
+      <label class="fld">${key.replace(/_/g, ' ')}</label>
+      <input class="inp dyn-param" data-key="${key}" value="${val}" type="${typeof val === 'number' ? 'number' : 'text'}">
+    </div>`;
+  });
+  container.innerHTML = html;
+}
+
+// ---- Plan Submission ----
+async function submitPlan() {
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Submitting...';
+
+  const payload = {
+    study_instance_uid: document.getElementById('studyUid').value,
+    prescription_gy: parseFloat(document.getElementById('rxGy').value),
+    workflow_id: document.getElementById('wfSelect').value,
+    beam_count: parseInt(document.getElementById('beamCount').value),
+    fraction_count: parseInt(document.getElementById('fractionCount').value),
+  };
+
+  // Add dynamic params
+  document.querySelectorAll('.dyn-param').forEach(el => {
+    const val = el.type === 'number' ? parseFloat(el.value) : el.value;
+    payload[el.dataset.key] = val;
+  });
+
+  try {
+    const plan = await apiFetch('/plans', {
+      method: 'POST', body: JSON.stringify(payload)
+    });
+    currentPlanId = plan.id;
+    log(`Plan created: ${plan.id}`, 'ok');
+    document.getElementById('simPlanId').value = plan.id;
+
+    // Show progress
+    const progDiv = document.getElementById('planProgress');
+    progDiv.style.display = 'block';
+
+    if (plan.job_id) {
+      await pollJob(plan.job_id);
+    }
+
+    // Load result
+    const detail = await apiFetch(`/plans/${plan.id}`);
+    showQA(detail);
+    showDVH(detail);
+    if (detail.artifact_ids && detail.artifact_ids.length > 0) {
+      document.getElementById('rtdoseArtifact').value = detail.artifact_ids[0];
+    }
+  } catch (e) {
+    log(`Plan submission failed: ${e.message}`, 'err');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '▶ Submit Plan';
+}
+
+async function pollJob(jobId) {
+  const badge = document.getElementById('planBadge');
+  const msg = document.getElementById('planMsg');
+  const bar = document.getElementById('planBar');
+  const terminal = new Set(['succeeded', 'failed', 'cancelled']);
+
+  while (true) {
+    const job = await apiFetch(`/jobs/${jobId}`);
+    badge.className = `badge-status badge-${job.state}`;
+    badge.textContent = job.state;
+    msg.textContent = job.message || '';
+    bar.style.width = `${(job.progress || 0) * 100}%`;
+
+    if (terminal.has(job.state)) {
+      log(`Job ${jobId}: ${job.state}`, job.state === 'succeeded' ? 'ok' : 'err');
+      return job;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
+
+function showQA(plan) {
+  const qa = plan.qa_summary;
+  if (!qa) return;
+  const div = document.getElementById('qaResult');
+  div.style.display = 'block';
+  div.innerHTML = `
+    <div class="result-card">
+      <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px;text-transform:uppercase">
+        QA Summary
+      </div>
+      <div class="result-row"><span style="color:var(--subtext0)">Engine</span><span>${qa.engine}</span></div>
+      <div class="result-row"><span style="color:var(--subtext0)">Beams</span><span>${qa.beamCount}</span></div>
+      <div class="result-row"><span style="color:var(--subtext0)">Gantry Angles</span><span>${qa.gantryAngles?.join('°, ')}°</span></div>
+      <div class="result-row"><span style="color:var(--subtext0)">Spots</span><span>${qa.spotCount?.toLocaleString()}</span></div>
+      <div class="result-row"><span style="color:var(--subtext0)">Coverage</span><span style="color:var(--green)">${(qa.targetCoverage * 100).toFixed(1)}%</span></div>
+      <div class="result-row"><span style="color:var(--subtext0)">Hot Spot</span><span style="color:var(--yellow)">${(qa.maxDoseRatio * 100).toFixed(1)}%</span></div>
+      <div class="result-row"><span style="color:var(--subtext0)">Plan ID</span><span style="font-size:10px;opacity:0.7">${plan.id}</span></div>
+    </div>`;
+}
+
+// ---- DVH Chart ----
+function showDVH(plan) {
+  const qa = plan.qa_summary;
+  if (!qa?.dvh) return;
+  const dvh = qa.dvh;
+  const doses = dvh.doseGy || dvh.dose || [];
+  const vols = dvh.volumePct || dvh.volume || [];
+  if (doses.length < 2) return;
+
+  const W = 400, H = 240;
+  const m = { t: 15, r: 15, b: 35, l: 45 };
+  const cW = W - m.l - m.r, cH = H - m.t - m.b;
+  const maxD = Math.max(...doses, 1);
+
+  const sx = v => m.l + (v / maxD) * cW;
+  const sy = v => m.t + cH - (v / 100) * cH;
+
+  let svg = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">`;
+  // Grid
+  [0,25,50,75,100].forEach(v => {
+    svg += `<line x1="${m.l}" y1="${sy(v)}" x2="${W-m.r}" y2="${sy(v)}" stroke="var(--surface1)" stroke-width="0.5"/>`;
+    svg += `<text x="${m.l-4}" y="${sy(v)+3}" fill="var(--overlay0)" font-size="9" text-anchor="end">${v}%</text>`;
+  });
+  for (let i=1;i<=5;i++) {
+    const v = maxD*i/5;
+    svg += `<line x1="${sx(v)}" y1="${m.t}" x2="${sx(v)}" y2="${m.t+cH}" stroke="var(--surface1)" stroke-width="0.5"/>`;
+    svg += `<text x="${sx(v)}" y="${H-8}" fill="var(--overlay0)" font-size="9" text-anchor="middle">${v.toFixed(1)}</text>`;
+  }
+  // Axes
+  svg += `<text x="${W/2}" y="${H-1}" fill="var(--subtext0)" font-size="10" text-anchor="middle">Dose (Gy)</text>`;
+  svg += `<text x="8" y="${H/2}" fill="var(--subtext0)" font-size="10" text-anchor="middle" transform="rotate(-90,8,${H/2})">Volume (%)</text>`;
+  // Curve
+  let path = doses.map((d,i) => `${i===0?'M':'L'} ${sx(d)} ${sy(vols[i]||0)}`).join(' ');
+  svg += `<path d="${path}" fill="none" stroke="var(--blue)" stroke-width="2.5" stroke-linejoin="round"/>`;
+  svg += `</svg>`;
+
+  const dvhDiv = document.getElementById('dvhChart');
+  dvhDiv.innerHTML = `<div class="chart-box">${svg}
+    <div class="legend"><span><span class="legend-dot" style="background:var(--blue)"></span>Target</span></div>
+  </div>`;
+
+  // Stats
+  const statsDiv = document.getElementById('dvhStats');
+  statsDiv.style.display = 'block';
+  const minD = Math.min(...doses).toFixed(2);
+  const maxDv = Math.max(...doses).toFixed(2);
+  const meanD = (doses.reduce((a,b)=>a+b,0)/doses.length).toFixed(2);
+  statsDiv.innerHTML = `<div class="stat-grid">
+    <div class="stat-card"><div class="stat-val" style="color:var(--blue)">${minD}</div><div class="stat-lbl">Min Dose (Gy)</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--red)">${maxDv}</div><div class="stat-lbl">Max Dose (Gy)</div></div>
+    <div class="stat-card"><div class="stat-val" style="color:var(--green)">${meanD}</div><div class="stat-lbl">Mean Dose (Gy)</div></div>
+  </div>`;
+
+  log('DVH chart rendered', 'ok');
+}
+
+// ---- Dose Overlay ----
+document.getElementById('opacitySlider').addEventListener('input', e => {
+  document.getElementById('opacityVal').textContent = e.target.value + '%';
+});
+
+const isodoseLevels = [
+  { pct: 105, color: '#f38ba8', label: '105%' },
+  { pct: 100, color: '#f9e2af', label: '100% (Rx)' },
+  { pct: 95, color: '#a6e3a1', label: '95%' },
+  { pct: 90, color: '#89b4fa', label: '90%' },
+  { pct: 80, color: '#94e2d5', label: '80%' },
+  { pct: 70, color: '#74c7ec', label: '70%' },
+  { pct: 50, color: '#cba6f7', label: '50%' },
+  { pct: 30, color: '#fab387', label: '30%' },
+];
+const isoGrid = document.getElementById('isodoseGrid');
+isodoseLevels.forEach(lv => {
+  const el = document.createElement('div');
+  el.className = 'isodose-item';
+  el.innerHTML = `<input type="checkbox" ${lv.pct >= 50 ? 'checked' : ''}>
+    <span class="isodose-color" style="background:${lv.color}"></span>
+    <span>${lv.label}</span>`;
+  isoGrid.appendChild(el);
+});
+
+function loadRtdose() {
+  const artId = document.getElementById('rtdoseArtifact').value;
+  if (!artId) return;
+  log(`Would load RTDOSE artifact: ${artId} (requires Cornerstone3D viewport)`, 'msg');
+}
+
+// ---- Simulation ----
+async function runSimulation() {
+  const planId = document.getElementById('simPlanId').value;
+  if (!planId) { log('No plan ID for simulation', 'err'); return; }
+
+  const btn = document.getElementById('simBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Running...';
+
+  const payload = {
+    plan_id: planId,
+    motion_amplitude_mm: [
+      parseFloat(document.getElementById('motionX').value),
+      parseFloat(document.getElementById('motionY').value),
+      parseFloat(document.getElementById('motionZ').value),
+    ],
+    motion_period_s: parseFloat(document.getElementById('motionPeriod').value),
+    delivery_time_per_spot_ms: parseFloat(document.getElementById('deliveryTime').value),
+    num_fractions: parseInt(document.getElementById('numFractions').value),
+  };
+
+  try {
+    const sim = await apiFetch('/simulations', {
+      method: 'POST', body: JSON.stringify(payload)
+    });
+    log(`Simulation created: ${sim.id}`, 'ok');
+
+    // Show status
+    const progDiv = document.getElementById('simProgress');
+    progDiv.style.display = 'block';
+    progDiv.innerHTML = `<div style="margin-top:10px">
+      <span class="badge-status badge-${sim.status}">${sim.status}</span>
+    </div>`;
+
+    // Poll if needed
+    if (sim.status !== 'succeeded' && sim.status !== 'failed') {
+      const terminal = new Set(['succeeded', 'failed', 'cancelled']);
+      const deadline = Date.now() + 60000;
+      while (Date.now() < deadline) {
+        const s = await apiFetch(`/simulations/${sim.id}`);
+        progDiv.innerHTML = `<div style="margin-top:10px">
+          <span class="badge-status badge-${s.status}">${s.status}</span>
+        </div>`;
+        if (terminal.has(s.status)) { sim.status = s.status; Object.assign(sim, s); break; }
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+
+    // Show result
+    const resDiv = document.getElementById('simResult');
+    resDiv.style.display = 'block';
+    let rows = '';
+    const display = {
+      'status': sim.status,
+      'plan_id': sim.plan_id,
+      'delivered_dose_max_gy': sim.delivered_dose_max_gy,
+      'delivered_dose_mean_gy': sim.delivered_dose_mean_gy,
+      'gamma_pass_rate': sim.gamma_pass_rate,
+      'dose_difference_pct': sim.dose_difference_pct,
+    };
+    Object.entries(display).forEach(([k,v]) => {
+      if (v == null) return;
+      const fv = typeof v === 'number' ? v.toFixed(4) : v;
+      rows += `<div class="result-row"><span style="color:var(--subtext0)">${k.replace(/_/g,' ')}</span><span>${fv}</span></div>`;
+    });
+    resDiv.innerHTML = `<div class="result-card">
+      <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:6px;text-transform:uppercase">Simulation Results</div>
+      ${rows}
+    </div>`;
+    log(`Simulation ${sim.status}`, sim.status === 'succeeded' ? 'ok' : 'err');
+  } catch (e) {
+    log(`Simulation failed: ${e.message}`, 'err');
+  }
+
+  btn.disabled = false;
+  btn.textContent = '▶ Run Simulation';
+}
+
+// Auto-connect on load
+window.addEventListener('DOMContentLoaded', () => {
+  log('Demo page loaded. Click Connect to start.', 'msg');
+});
+</script>
+</body>
+</html>

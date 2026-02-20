@@ -45,6 +45,19 @@ export default class RadiarchClient {
         beamCount = 1,
         segmentationUid = null,
         notes = null,
+        // Phase 8A: Optimization parameters
+        objectives = null,
+        optimizationMethod = null,
+        maxIterations = null,
+        spotSpacingMm = null,
+        layerSpacingMm = null,
+        nbPrimaries = null,
+        nbPrimariesFinal = null,
+        // Phase 8B: Photon parameters
+        muPerBeam = null,
+        jawOpeningMm = null,
+        // Phase 8C: Robustness
+        robustness = null,
     }) {
         const payload = {
             study_instance_uid: studyInstanceUid,
@@ -55,6 +68,22 @@ export default class RadiarchClient {
         };
         if (segmentationUid) payload.segmentation_uid = segmentationUid;
         if (notes) payload.notes = notes;
+
+        // Phase 8A: Objectives & optimization
+        if (objectives && objectives.length > 0) payload.objectives = objectives;
+        if (optimizationMethod) payload.optimization_method = optimizationMethod;
+        if (maxIterations != null) payload.max_iterations = maxIterations;
+        if (spotSpacingMm != null) payload.spot_spacing_mm = spotSpacingMm;
+        if (layerSpacingMm != null) payload.layer_spacing_mm = layerSpacingMm;
+        if (nbPrimaries != null) payload.nb_primaries = nbPrimaries;
+        if (nbPrimariesFinal != null) payload.nb_primaries_final = nbPrimariesFinal;
+
+        // Phase 8B: Photon
+        if (muPerBeam != null) payload.mu_per_beam = muPerBeam;
+        if (jawOpeningMm) payload.jaw_opening_mm = jawOpeningMm;
+
+        // Phase 8C: Robustness
+        if (robustness) payload.robustness = robustness;
 
         return RadiarchClient.apiPost(`${this.serverUrl}/plans`, payload);
     }
@@ -135,6 +164,25 @@ export default class RadiarchClient {
         return RadiarchClient.apiDelete(
             `${this.serverUrl}/sessions/${encodeURIComponent(sessionId)}`
         );
+    }
+
+    // ---- Simulations (Phase 8D) ----
+
+    async createSimulation(payload) {
+        return RadiarchClient.apiPost(
+            `${this.serverUrl}/simulations`,
+            payload
+        );
+    }
+
+    async getSimulation(simulationId) {
+        return RadiarchClient.apiGet(
+            `${this.serverUrl}/simulations/${encodeURIComponent(simulationId)}`
+        );
+    }
+
+    async listSimulations() {
+        return RadiarchClient.apiGet(`${this.serverUrl}/simulations`);
     }
 
     // ---- Static HTTP helpers ----

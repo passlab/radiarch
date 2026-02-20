@@ -4,10 +4,16 @@ import os
 import pytest
 
 # Force test environment before importing anything from radiarch
-os.environ.setdefault("RADIARCH_FORCE_SYNTHETIC", "true")
-os.environ.setdefault("RADIARCH_ENVIRONMENT", "dev")
-os.environ.setdefault("RADIARCH_ORTHANC_USE_MOCK", "true")
-os.environ.setdefault("RADIARCH_DATABASE_URL", "")
+os.environ["RADIARCH_FORCE_SYNTHETIC"] = "true"
+os.environ["RADIARCH_ENVIRONMENT"] = "dev"
+os.environ["RADIARCH_ORTHANC_USE_MOCK"] = "true"
+os.environ["RADIARCH_DATABASE_URL"] = ""
+os.environ["RADIARCH_BROKER_URL"] = "memory://"
+os.environ["RADIARCH_RESULT_BACKEND"] = "cache+memory://"
+os.environ["RADIARCH_DICOMWEB_URL"] = ""
+
+import tempfile
+os.environ["RADIARCH_ARTIFACT_DIR"] = tempfile.mkdtemp(prefix="radiarch_test_")
 
 from radiarch.client import RadiarchClient, RadiarchClientError  # noqa: E402
 

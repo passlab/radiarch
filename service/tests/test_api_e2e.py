@@ -15,9 +15,18 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 # Force dev/mock mode and synthetic planner (skip real MCsquare)
+# Override Docker-internal hostnames from .env to use local/in-memory stores
 os.environ["RADIARCH_ENVIRONMENT"] = "dev"
 os.environ["RADIARCH_ORTHANC_USE_MOCK"] = "true"
 os.environ["RADIARCH_FORCE_SYNTHETIC"] = "true"
+os.environ["RADIARCH_DATABASE_URL"] = ""          # → InMemoryStore
+os.environ["RADIARCH_BROKER_URL"] = "memory://"   # Celery in-memory broker
+os.environ["RADIARCH_RESULT_BACKEND"] = "cache+memory://"
+os.environ["RADIARCH_DICOMWEB_URL"] = ""           # disable STOW-RS push
+
+import tempfile
+_test_artifact_dir = tempfile.mkdtemp(prefix="radiarch_test_")
+os.environ["RADIARCH_ARTIFACT_DIR"] = _test_artifact_dir
 
 import pytest
 from fastapi.testclient import TestClient
@@ -134,9 +143,9 @@ def test_delete_plan(client):
     resp = client.delete(f"/api/v1/plans/{plan_id}")
     assert resp.status_code == 204
 
-    # Verify job is cancelled
-    plan = client.get(f"/api/v1/plans/{plan_id}").json()
-    assert plan["status"] == "cancelled"
+    # Verify plan is actually deleted
+    resp = client.get(f"/api/v1/plans/{plan_id}")
+    assert resp.status_code == 404
 
 
 def test_delete_plan_not_found(client):
@@ -258,6 +267,189 @@ def test_create_plan_with_beam_count(client):
     detail = client.get(f"/api/v1/plans/{plan['id']}").json()
     assert detail["qa_summary"]["beamCount"] == 3
     assert len(detail["qa_summary"]["gantryAngles"]) == 3
+
+
+
+# ---- Phase 8: Optimization ----
+
+def test_create_optimized_plan(client):
+    """
+    Verify creation of a plan with optimization objectives.
+    Uses 'proton-impt-optimized' workflow.
+    """
+    payload = {
+        "study_instance_uid": "1.2.840.113619.2.55.3.604688321.783.1459769131.467",
+        "workflow_id": "proton-impt-optimized",
+        "prescription_gy": 60.0,
+        "beam_count": 2,
+        "objectives": [
+            {
+                "structure_name": "PTV",
+                "objective_type": "DMin",
+                "dose_gy": 58.0,
+                "weight": 100.0
+            },
+            {
+                "structure_name": "SpinalCord",
+                "objective_type": "DMax",
+                "dose_gy": 45.0,
+                "weight": 50.0
+            }
+        ],
+        "optimization_method": "Scipy_L-BFGS-B",
+        "max_iterations": 25
+    }
+    
+    resp = client.post("/api/v1/plans", json=payload)
+    assert resp.status_code == 201
+    plan = resp.json()
+    assert plan["workflow_id"] == "proton-impt-optimized"
+    assert len(plan["objectives"]) == 2
+    
+    # Verify job execution (synthetic fallback expected)
+    job = client.get(f"/api/v1/jobs/{plan['job_id']}").json()
+    assert job["state"] == "succeeded"
+    
+    # Verify QA summary
+    detail = client.get(f"/api/v1/plans/{plan['id']}").json()
+    qa = detail["qa_summary"]
+    assert qa["engine"] == "synthetic"  # Unless real OpenTPS is present
+    assert "proton-impt-optimized" in qa["notes"]
+
+
+def test_create_photon_ccc_plan(client):
+    """Verify photon-ccc workflow submission and synthetic fallback."""
+    payload = {
+        "study_instance_uid": "1.2.840.113619.2.55.3.604688321.783.1459769131.467",
+        "workflow_id": "photon-ccc",
+        "prescription_gy": 50.0,
+        "beam_count": 4,
+        "mu_per_beam": 3000.0,
+    }
+    resp = client.post("/api/v1/plans", json=payload)
+    assert resp.status_code == 201
+    plan = resp.json()
+    assert plan["workflow_id"] == "photon-ccc"
+
+    job = client.get(f"/api/v1/jobs/{plan['job_id']}").json()
+    assert job["state"] == "succeeded"
+
+    detail = client.get(f"/api/v1/plans/{plan['id']}").json()
+    qa = detail["qa_summary"]
+    assert qa["engine"] == "synthetic"
+    assert "photon-ccc" in qa["notes"]
+
+
+def test_create_robust_proton_plan(client):
+    """Verify proton-robust workflow with robustness config."""
+    payload = {
+        "study_instance_uid": "1.2.840.113619.2.55.3.604688321.783.1459769131.467",
+        "workflow_id": "proton-robust",
+        "prescription_gy": 60.0,
+        "beam_count": 2,
+        "objectives": [
+            {
+                "structure_name": "PTV",
+                "objective_type": "DMin",
+                "dose_gy": 56.0,
+                "weight": 100.0
+            }
+        ],
+        "robustness": {
+            "setup_systematic_error_mm": [2.0, 2.0, 2.0],
+            "range_systematic_error_pct": 3.5,
+            "num_scenarios": 7
+        }
+    }
+    resp = client.post("/api/v1/plans", json=payload)
+    assert resp.status_code == 201
+    plan = resp.json()
+    assert plan["workflow_id"] == "proton-robust"
+    assert plan["robustness"]["num_scenarios"] == 7
+    assert plan["robustness"]["range_systematic_error_pct"] == 3.5
+
+    job = client.get(f"/api/v1/jobs/{plan['job_id']}").json()
+    assert job["state"] == "succeeded"
+
+    detail = client.get(f"/api/v1/plans/{plan['id']}").json()
+    qa = detail["qa_summary"]
+    assert qa["engine"] == "synthetic"
+    assert "proton-robust" in qa["notes"]
+
+
+def test_list_workflows_includes_new(client):
+    """Verify all 4 workflow types are registered."""
+    resp = client.get("/api/v1/workflows")
+    assert resp.status_code == 200
+    workflows = resp.json()
+    ids = [w["id"] for w in workflows]
+    assert "proton-impt-basic" in ids
+    assert "proton-impt-optimized" in ids
+    assert "proton-robust" in ids
+    assert "photon-ccc" in ids
+    assert len(workflows) == 4
+
+
+# ---- Phase 8D: Delivery Simulation ----
+
+def test_create_simulation(client):
+    """
+    Submit a delivery simulation against a completed plan.
+    Verifies the synthetic simulator returns valid gamma/dose metrics.
+    """
+    # First, create a plan that will have a qa_summary
+    plan_payload = {
+        "study_instance_uid": "1.2.840.113619.2.55.3.604688321.783.1459769131.467",
+        "workflow_id": "proton-impt-basic",
+        "prescription_gy": 2.0,
+    }
+    resp = client.post("/api/v1/plans", json=plan_payload)
+    assert resp.status_code == 201
+    plan_id = resp.json()["id"]
+
+    # Verify plan has QA summary
+    detail = client.get(f"/api/v1/plans/{plan_id}").json()
+    assert detail["qa_summary"] is not None
+
+    # Submit simulation
+    sim_payload = {
+        "plan_id": plan_id,
+        "motion_amplitude_mm": [3.0, 0.0, 5.0],
+        "motion_period_s": 4.0,
+        "num_fractions": 3,
+    }
+    resp = client.post("/api/v1/simulations", json=sim_payload)
+    assert resp.status_code == 201
+    sim = resp.json()
+    assert sim["plan_id"] == plan_id
+    assert sim["status"] == "succeeded"
+
+    # Get full simulation result
+    resp = client.get(f"/api/v1/simulations/{sim['id']}")
+    assert resp.status_code == 200
+    result = resp.json()
+    assert result["gamma_pass_rate"] is not None
+    assert result["gamma_pass_rate"] > 0
+    assert result["delivered_dose_max_gy"] is not None
+    assert result["motion_amplitude_mm"] == [3.0, 0.0, 5.0]
+    assert result["qa_metrics"]["engine"] == "synthetic_simulation"
+
+
+def test_simulation_requires_completed_plan(client):
+    """Simulation should fail if plan doesn't exist."""
+    resp = client.post("/api/v1/simulations", json={
+        "plan_id": "nonexistent-plan",
+        "motion_amplitude_mm": [0.0, 0.0, 0.0],
+    })
+    assert resp.status_code == 404
+
+
+def test_list_simulations(client):
+    """Verify list endpoint returns simulation summaries."""
+    resp = client.get("/api/v1/simulations")
+    assert resp.status_code == 200
+    sims = resp.json()
+    assert isinstance(sims, list)
 
 
 if __name__ == "__main__":

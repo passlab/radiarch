@@ -14,10 +14,23 @@ venv/
 **/radiarch.db
 **/data/
 
-# External dependencies / large folders
+# External dependencies / large folders (root-level)
 MONAILabel/
 Viewers/
-opentps/
+/opentps/
+/matRad/
+
+# Vendored opentps_core — include Python, exclude binaries
+!service/opentps/
+service/opentps/core/processing/doseCalculation/protons/MCsquare/MCsquare_*
+service/opentps/core/processing/doseCalculation/protons/MCsquare/libMCsquare.so
+service/opentps/core/processing/doseCalculation/protons/MCsquare/Materials/
+service/opentps/core/processing/doseCalculation/protons/MCsquare/BDL/
+service/opentps/core/processing/doseCalculation/protons/MCsquare/Scanners/
+service/opentps/core/processing/doseCalculation/photons/CCC_DoseEngine/
+service/opentps/core/processing/doseCalculation/photons/Kernels_*/
+service/opentps/core/processing/doseCalculation/photons/*.so
+service/opentps/core/processing/C_libraries/*.so
 
 # Build artifacts
 *.egg-info/

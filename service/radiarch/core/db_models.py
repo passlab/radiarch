@@ -28,6 +28,8 @@ class PlanRow(Base):
     notes = Column(Text, nullable=True)
     job_id = Column(String(36), nullable=True)
     qa_summary = Column(JSON, nullable=True)
+    objectives = Column(JSON, nullable=True)     # Phase 8A: List[DoseObjective] as JSON
+    robustness = Column(JSON, nullable=True)     # Phase 8C: RobustnessConfig as JSON
     created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
     updated_at = Column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow, nullable=False)
 

@@ -69,6 +69,11 @@ class StoreBase(abc.ABC):
     @abc.abstractmethod
     def set_plan_summary(self, plan_id: str, summary: dict) -> None: ...
 
+    @abc.abstractmethod
+    def delete_plan(self, plan_id: str) -> bool:
+        """Delete a plan and all associated jobs/artifacts. Returns True if deleted."""
+        ...
+
 
 # ---------------------------------------------------------------------------
 # In-memory implementation (used in tests & dev)
@@ -98,6 +103,8 @@ class InMemoryStore(StoreBase):
             beam_count=payload.beam_count,
             notes=payload.notes,
             job_id=job_id,
+            objectives=payload.objectives,
+            robustness=payload.robustness,
         )
         job = JobStatus(id=job_id, plan_id=plan_id, state=JobState.queued, progress=0.0)
         self._plans[plan_id] = detail
@@ -189,6 +196,19 @@ class InMemoryStore(StoreBase):
         plan.qa_summary = summary
         plan.updated_at = _utcnow()
 
+    def delete_plan(self, plan_id: str) -> bool:
+        plan = self._plans.pop(plan_id, None)
+        if not plan:
+            return False
+        # Remove associated job
+        if plan.job_id:
+            self._jobs.pop(plan.job_id, None)
+        # Remove associated artifacts
+        artifact_ids_to_remove = [aid for aid, a in self._artifacts.items() if a.plan_id == plan_id]
+        for aid in artifact_ids_to_remove:
+            self._artifacts.pop(aid, None)
+        return True
+
 
 # ---------------------------------------------------------------------------
 # SQL implementation (production)
@@ -223,6 +243,8 @@ class SQLStore(StoreBase):
                 beam_count=payload.beam_count,
                 notes=payload.notes,
                 job_id=job_id,
+                objectives=[obj.model_dump() for obj in payload.objectives] if payload.objectives else None,
+                robustness=payload.robustness.model_dump() if payload.robustness else None,
                 created_at=now,
                 updated_at=now,
             )
@@ -380,14 +402,41 @@ class SQLStore(StoreBase):
         finally:
             session.close()
 
+    def delete_plan(self, plan_id: str) -> bool:
+        from .db_models import PlanRow
+
+        session = self._session()
+        try:
+            row = session.query(PlanRow).filter_by(id=plan_id).first()
+            if not row:
+                return False
+            session.delete(row)  # cascade deletes jobs + artifacts
+            session.commit()
+            return True
+        finally:
+            session.close()
+
     # -- helpers --
 
     @staticmethod
     def _plan_row_to_detail(row, session) -> PlanDetail:
         from .db_models import ArtifactRow
+        from ..models.plan import DoseObjective, RobustnessConfig
+
         artifact_ids = [
             a.id for a in session.query(ArtifactRow).filter_by(plan_id=row.id).all()
         ]
+
+        # Deserialize objectives from JSON
+        objectives = None
+        if row.objectives:
+            objectives = [DoseObjective(**obj) for obj in row.objectives]
+
+        # Deserialize robustness from JSON
+        robustness = None
+        if row.robustness:
+            robustness = RobustnessConfig(**row.robustness)
+
         return PlanDetail(
             id=row.id,
             workflow_id=row.workflow_id,
@@ -403,6 +452,8 @@ class SQLStore(StoreBase):
             notes=row.notes,
             job_id=row.job_id,
             qa_summary=row.qa_summary,
+            objectives=objectives,
+            robustness=robustness,
         )
 
     @staticmethod
