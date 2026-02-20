@@ -77,7 +77,7 @@ class RadiarchPlanner:
             qa_summary["notes"] = f"Synthetic result ({wf_label} skipped)"
         else:
             try:
-                import opentps  # noqa: F401 – availability check
+                import opentps.core  # noqa: F401 – availability check
                 qa_summary = runner(plan)
             except ImportError:
                 logger.warning("OpenTPS not found; falling back to synthetic for %s", wf_label)

@@ -31,9 +31,9 @@ COPY service/ ./
 # Create data directories
 RUN mkdir -p /data/artifacts /data/sessions
 
-# Default environment (synthetic mode for Docker — no MCsquare binary)
+# Default environment (vendored OpenTPS Core available)
 ENV RADIARCH_ENVIRONMENT=production \
-    RADIARCH_FORCE_SYNTHETIC=true \
+    RADIARCH_FORCE_SYNTHETIC=false \
     RADIARCH_DATABASE_URL=postgresql+psycopg://radiarch:radiarch@postgres:5432/radiarch \
     RADIARCH_BROKER_URL=redis://redis:6379/0 \
     RADIARCH_RESULT_BACKEND=redis://redis:6379/1 \
