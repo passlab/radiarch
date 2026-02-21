@@ -32,3 +32,8 @@ build/
 
 # Test output
 test_output.txt
+
+# Test data — include DICOM, exclude large unused pickles
+!tests/opentps/
+!tests/opentps/core/MCsquare-python_interface/data/
+tests/opentps/core/opentps-testData/*.p

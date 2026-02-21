@@ -163,9 +163,8 @@ Real OpenTPS pipeline (CT import → plan → MCsquare dose calc), RTDOSE DICOM 
 - **Artifact storage** — Optional S3/MinIO backend alongside Orthanc STOW-RS
 - **Orthanc webhook** — `POST /hooks/orthanc` for event-driven study ingestion
 
-### Phase 9 Testing of MCsquare and TPS cores
+### Phase 10 — Testing of MCsquare and TPS Cores
 - Add more testing based on OpenTPS test data which can be found from [OpenTPS Test Data](https://gitlab.com/openmcsquare/opentps/-/tree/master/testData), and the MCsquare python interface which can be found from https://gitlab.com/openmcsquare/python_interface
-
 
 
 ### Future Phases - Enhancements of TPS Algorithms and Features, and GUI

@@ -5,11 +5,34 @@ DICOM CT + RT-Struct data (e.g. opentps/testData).
 """
 
 import os
+import sys
 import traceback
+import types
 from datetime import datetime, timezone
 
 import pytest
 from unittest.mock import MagicMock
+
+# ── Path & env setup (same pattern as test_api_e2e.py) ──────────────
+_repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+_service_dir = os.path.join(_repo_root, "service")
+if _service_dir not in sys.path:
+    sys.path.insert(0, _service_dir)
+
+os.environ.setdefault("RADIARCH_ENVIRONMENT", "dev")
+os.environ.setdefault("RADIARCH_ORTHANC_USE_MOCK", "true")
+os.environ.setdefault("RADIARCH_DATABASE_URL", "")
+os.environ.setdefault("RADIARCH_BROKER_URL", "memory://")
+os.environ.setdefault("RADIARCH_RESULT_BACKEND", "cache+memory://")
+os.environ.setdefault("RADIARCH_DICOMWEB_URL", "")
+
+# Point opentps_data_root at the test data BEFORE importing config/settings
+_test_data_root = os.path.join(
+    os.path.dirname(__file__), "opentps", "core",
+    "opentps-testData", "SimpleFantomWithStruct",
+)
+if os.path.isdir(_test_data_root):
+    os.environ["RADIARCH_OPENTPS_DATA_ROOT"] = _test_data_root
 
 from radiarch.core.planner import RadiarchPlanner
 from radiarch.models.plan import PlanDetail
@@ -17,17 +40,17 @@ from radiarch.models.job import JobState
 from radiarch.config import get_settings
 
 
-@pytest.mark.asyncio
-async def test_opentps_integration():
+def test_opentps_integration():
+    # Skip if test data is not available
+    if not os.path.isdir(_test_data_root):
+        pytest.skip("opentps-testData/SimpleFantomWithStruct not found")
+
     settings = get_settings()
 
     # Override force_synthetic so real OpenTPS planner runs
-    # (test_api_e2e.py sets RADIARCH_FORCE_SYNTHETIC=true as a process env var)
     os.environ.pop("RADIARCH_FORCE_SYNTHETIC", None)
     settings.force_synthetic = False
-
-    # Use specific subfolder for speed
-    settings.opentps_data_root = os.path.join(settings.opentps_data_root, "SimpleFantomWithStruct")
+    settings.opentps_data_root = _test_data_root
 
     # Check if OpenTPS is importable
     try:
@@ -75,6 +98,4 @@ async def test_opentps_integration():
 
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(test_opentps_integration())
-
+    test_opentps_integration()

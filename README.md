@@ -71,7 +71,7 @@ Stop everything: `docker compose down` (add `-v` to remove volumes).
 
 ```bash
 cd service
-python3.12 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -e .
 uvicorn radiarch.app:create_app --factory --reload
@@ -140,21 +140,35 @@ npm install
 
 ## Testing
 
+The project includes **92 tests** covering the API, client SDK, OpenTPS core, MCsquare dose calculation, and end-to-end integration.
+
+### Test Suite Overview
+
+| Test File | Tests | What It Covers |
+|-----------|-------|----------------|
+| `tests/opentps/core/test_api_backend.py` | 48 | InMemoryStore CRUD, workflow registry, delivery simulator, session helpers, Pydantic models |
+| `tests/opentps/core/test_mcsquare_interface.py` | 8 | Patient data loading, contour extraction, DICE, DVH, MCsquare simulation, SPR/WET |
+| `tests/opentps/core/test_opentps_core.py` | 9 | CT/RTStruct loading, plan design, MCsquare dose calculation, DVH computation |
+| `tests/test_api_e2e.py` | 21 | End-to-end API (plans, jobs, artifacts, sessions, workflows, simulations) |
+| `tests/test_client.py` | 5 | RadiarchClient Python SDK |
+| `tests/test_opentps_integration.py` | 1 | Full OpenTPS pipeline with real MCsquare Monte Carlo |
+
+### Running Tests
+
 ```bash
-cd service
 source .venv/bin/activate
 
-# All 27 tests (API + client + real MCsquare integration)
-RADIARCH_ORTHANC_USE_MOCK=true \
-  RADIARCH_OPENTPS_DATA_ROOT=/path/to/opentps/testData \
-  pytest tests/ -v
+# All 92 tests (API + MCsquare + OpenTPS core)
+python -m pytest tests/ -v
 
-# Synthetic-only (fast, no MCsquare) — 26 tests
-RADIARCH_FORCE_SYNTHETIC=true pytest tests/test_api_e2e.py tests/test_client.py -v
+# Fast tests only (API + client, no MCsquare) — ~2 seconds
+python -m pytest tests/test_api_e2e.py tests/test_client.py tests/opentps/core/test_api_backend.py -v
 
-# Full OpenTPS + MCsquare integration only
-RADIARCH_OPENTPS_DATA_ROOT=/path/to/opentps/testData \
-  pytest tests/test_opentps_integration.py -v
+# OpenTPS core + MCsquare dose calculation tests
+python -m pytest tests/opentps/core/ -v
+
+# Full OpenTPS integration only
+python -m pytest tests/test_opentps_integration.py -v
 ```
 
 ## Python Client Library

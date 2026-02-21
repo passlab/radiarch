@@ -12,7 +12,7 @@
 
 Radiarch is a **cloud-native radiotherapy treatment planning service** that wraps [OpenTPS](https://opentps.github.io/) — an open-source proton/photon treatment planning system — behind a RESTful API. It enables DICOM-based treatment plan computation, dose calculation, and quality assurance through a containerized microservices architecture.
 
-This document chronicles the end-to-end development of Radiarch across **10 completed phases** and **1 planned phase**, built entirely through pair programming with the Antigravity AI coding assistant. It covers the software architecture, each phase's goals and deliverables, the testing strategy, bugs encountered and resolved, and reflections on the AI-assisted development experience.
+This document chronicles the end-to-end development of Radiarch across **11 completed phases**, built entirely through pair programming with the Antigravity AI coding assistant. It covers the software architecture, each phase's goals and deliverables, the testing strategy, bugs encountered and resolved, and reflections on the AI-assisted development experience.
 
 ### Project Statistics
 
@@ -22,13 +22,13 @@ This document chronicles the end-to-end development of Radiarch across **10 comp
 | Lines of JavaScript/TypeScript | ~2,260 |
 | Python source files | 34 (service) + 174 (vendored opentps_core) |
 | OHIF extension files | 8 |
-| Test cases | 27 (all passing, including real MCsquare) |
+| Test cases | 92 (all passing, including real MCsquare simulation) |
+| Test files | 6 |
 | Docker services | 5 (API, Worker, Redis, Postgres, Orthanc) |
 | API endpoints | 14 |
 | Git commits | 8 |
-| Development sessions | 4 |
-| Phases completed | 10 |
-| Phases planned | 1 |
+| Development sessions | 5 |
+| Phases completed | 11 |
 
 ---
 
@@ -164,10 +164,15 @@ radiarch/
 │   │   └── tasks/
 │   │       ├── celery_app.py     # Celery configuration
 │   │       └── plan_tasks.py     # run_plan_job task with progress
-│   └── tests/
-│       ├── test_api_e2e.py       # 21 end-to-end API tests
-│       ├── test_client.py        # 5 RadiarchClient tests
-│       └── test_opentps_integration.py  # OpenTPS smoke test
+├── tests/
+│   ├── test_api_e2e.py               # 21 end-to-end API tests
+│   ├── test_client.py                # 5 RadiarchClient tests
+│   ├── test_opentps_integration.py   # OpenTPS integration smoke test
+│   └── opentps/core/
+│       ├── conftest.py               # Shared fixtures and path setup
+│       ├── test_api_backend.py       # 48 store/registry/model tests
+│       ├── test_mcsquare_interface.py # 8 MCsquare python_interface tests
+│       └── test_opentps_core.py      # 9 OpenTPS core pipeline tests
 ```
 
 ### 2.3 Key Design Decisions
@@ -578,9 +583,59 @@ Updated `api/routes/workflows.py` with proper `WorkflowRegistry` containing 4 wo
 
 ---
 
+### Phase 11 — Testing of MCsquare and TPS Cores
+
+**Goal**: Expand test coverage from 27 to 92 tests, covering the vendored OpenTPS core, MCsquare dose calculation engine, API backend internals, and the MCsquare python interface using real patient data.
+
+**What was built**:
+
+*Test infrastructure*:
+- Moved test suite from `service/tests/` to top-level `tests/` directory
+- Synced all Linux MCsquare binaries (5 arch variants + 5 opti variants), shared libraries, Materials, BDL, Scanners, photon CCC engine, and CT calibration data from the official OpenTPS repo to `service/opentps/core/`
+- Updated `.gitignore` to track vendored binaries
+- Added OpenTPS test data (`testData/SimpleFantomWithStruct`) and MCsquare python interface to `tests/opentps/core/`
+- Added `conftest.py` with shared `sys.path` setup and pytest fixtures for data directories
+
+*New test file: `test_api_backend.py` — 48 tests*:
+- `TestInMemoryStore` (18 tests): Full CRUD for plans, jobs, and artifacts using `InMemoryStore`
+- `TestWorkflowRegistry` (10 tests): Workflow registration, lookup, built-in workflow verification
+- `TestDeliverySimulator` (4 tests): Synthetic delivery simulation with motion degradation
+- `TestSessionHelpers` (4 tests): Session directory construction and cleanup
+- `TestPydanticModels` (12 tests): Validation of all request/response models including edge cases
+
+*New test file: `test_opentps_core.py` — 9 tests*:
+- `TestDataLoading` (3 tests): CT image loading, RTStruct/ROI extraction from DICOM
+- `TestPlanDesign` (1 test): `ProtonPlanDesign` construction via OpenTPS API
+- `TestMCsquareDoseCalculation` (2 tests): MCsquare calculator setup and real dose computation (1e4 primaries)
+- `TestDVH` (1 test): DVH computation from dose + ROI contour
+
+*New test file: `test_mcsquare_interface.py` — 8 tests*:
+- `TestPatientDataLoading` (2 tests): DICOM patient data and CT image property verification
+- `TestContourExtraction` (3 tests): PTV/rectum contour extraction and ROI name listing
+- `TestDICE` (1 test): DICE similarity coefficient computation
+- `TestDVHComputation` (2 tests): DVH metrics (D95, D5, Dmean) for target and OAR
+- `TestMCsquareSimulation` (1 test): End-to-end MCsquare simulation with dose output verification
+- `TestSPRandWET` (1 test): Stopping Power Ratio and Water Equivalent Thickness conversion
+
+**Bugs found and fixed** (see Section 6.11–6.18 for details):
+- Calibration must be set before `buildPlan()` (RSP conversion needed during beam initialization)
+- `defineTargetMaskAndPrescription()` required instead of direct `targetStructure` assignment
+- `couchAngles` must be a list, not a scalar
+- DVH constructor argument order was reversed in test
+- MCsquare `Path_MCsquareLib` must point to core folder with actual binaries
+- MCsquare python_interface requires `chdir` for relative path resolution
+- Dose output assertions must check `Outputs/` subdirectory
+- Integration test data root environment variable setup
+
+**Verification**: All 92 tests pass in ~57 seconds, including two real MCsquare Monte Carlo simulations.
+
+**Key files created**: `tests/conftest.py`, `tests/opentps/core/test_api_backend.py`, `tests/opentps/core/test_opentps_core.py`, `tests/opentps/core/test_mcsquare_interface.py`
+
+---
+
 ## 4. Development Phases — Planned
 
-### Phase 11 — Keycloak RBAC & Authentication
+### Phase 12 — Keycloak RBAC & Authentication
 
 **Goal**: Secure the Radiarch API with JWT-based authentication using Keycloak, implementing role-based access control (RBAC) for clinical workflows.
 
@@ -628,15 +683,15 @@ sequenceDiagram
 
 ### 5.1 Testing Philosophy
 
-The Radiarch test suite follows a **"test in isolation, verify in integration"** approach:
+The Radiarch test suite follows a **"test in isolation, verify in integration"** approach across three tiers:
 
-- **Unit-level**: Individual tests exercise single API endpoints or client methods
-- **Integration-level**: The e2e test file verifies the full data flow across all layers (API → Store → Celery → Planner → Adapter)
-- **External dependencies eliminated**: All tests run without Redis, PostgreSQL, Orthanc, or OpenTPS by using Celery eager mode, InMemoryStore, FakeOrthancAdapter, and the synthetic planner
+- **Unit-level**: Backend data stores, Pydantic models, workflow registry, and delivery simulator are tested in isolation with `InMemoryStore` (48 tests in `test_api_backend.py`)
+- **Component-level**: OpenTPS core pipeline (data loading, plan design, MCsquare dose calculation, DVH computation) and the MCsquare python interface are tested with real DICOM data (17 tests in `test_opentps_core.py` and `test_mcsquare_interface.py`)
+- **Integration-level**: End-to-end API tests verify the full data flow across all layers (API → Store → Celery → Planner → Adapter), and the OpenTPS integration test exercises the complete real-world pipeline (22 tests in `test_api_e2e.py`, `test_client.py`, `test_opentps_integration.py`)
 
 ### 5.2 Test Environment Setup
 
-All three test files configure the environment at import time:
+The API and client tests configure the environment at import time:
 
 ```python
 os.environ["RADIARCH_ENVIRONMENT"] = "dev"
@@ -649,6 +704,8 @@ This ensures:
 - `_run_synthetic()` is called (no MCsquare binary needed)
 - `InMemoryStore` is used (no database needed)
 
+The OpenTPS and MCsquare tests use a `conftest.py` with shared fixtures that set up `sys.path` for vendored modules and provide data directory paths.
+
 ### 5.3 Celery Eager Mode
 
 The most important testing decision: Celery's `task_always_eager = True` setting makes tasks execute **synchronously within the calling thread**. This means:
@@ -658,9 +715,21 @@ The most important testing decision: Celery's `task_always_eager = True` setting
 # In tests: POST /plans → task runs synchronously → by the time POST returns, the job is done
 ```
 
-This eliminates the need for async test infrastructure, Redis, or worker processes. The eager mode is configured via the Celery app's `task_always_eager` setting.
+This eliminates the need for async test infrastructure, Redis, or worker processes.
 
 ### 5.4 Test Suites
+
+#### `test_api_backend.py` — 48 Unit Tests (New in Phase 11)
+
+Comprehensive unit tests for the API backend layer, testing components in isolation without FastAPI or HTTP:
+
+| Test Class | Tests | What it verifies |
+|------------|-------|------------------|
+| `TestInMemoryStore` | 18 | Plan/Job/Artifact CRUD, state transitions, deletion |
+| `TestWorkflowRegistry` | 10 | Registration, lookup, contains, len, built-in workflows |
+| `TestDeliverySimulator` | 4 | Synthetic mode, positive dose values, motion degradation |
+| `TestSessionHelpers` | 4 | Session directory construction, expiry cleanup |
+| `TestPydanticModels` | 12 | Validation including edge cases (invalid Rx, fractions, objectives) |
 
 #### `test_api_e2e.py` — 21 API Integration Tests
 
@@ -685,20 +754,7 @@ Uses FastAPI's `TestClient` (wrapping Starlette's ASGI test client) to make HTTP
 
 #### `test_client.py` — 5 SDK Tests
 
-Tests the `RadiarchClient` Python SDK. Uses a `_TestClientWrapper` class that bridges Starlette's `TestClient` to `RadiarchClient`'s expected `httpx.Client` interface:
-
-```python
-class _TestClientWrapper:
-    """Wraps Starlette TestClient to prepend base_url."""
-    def __init__(self, test_client, base_url: str):
-        self._tc = test_client
-        self._base = base_url.rstrip("/")
-
-    def get(self, path, **kwargs):
-        return self._tc.get(f"{self._base}{path}", **kwargs)
-```
-
-The `RadiarchClient` is initialized by injecting this wrapper via `__new__` (bypassing the constructor), so no real HTTP server is needed.
+Tests the `RadiarchClient` Python SDK. Uses a `_TestClientWrapper` class that bridges Starlette's `TestClient` to `RadiarchClient`'s expected `httpx.Client` interface.
 
 | Test | What it verifies |
 |------|-----------------|
@@ -707,6 +763,34 @@ The `RadiarchClient` is initialized by injecting this wrapper via `__new__` (byp
 | `test_client_create_and_poll` | `client.create_plan()` + `client.get_job()` lifecycle |
 | `test_client_create_multibeam` | Multi-beam plan creation via SDK |
 | `test_client_plan_not_found` | `RadiarchClientError` with 404 status code |
+
+#### `test_opentps_core.py` — 9 OpenTPS Core Tests (New in Phase 11)
+
+Tests the vendored OpenTPS core pipeline with real DICOM data from `SimpleFantomWithStruct`:
+
+| Test Class | Tests | What it verifies |
+|------------|-------|------------------|
+| `TestDataLoading` | 3 | CT image loading, RTStruct extraction, `readData()` multi-type return |
+| `TestPlanDesign` | 1 | `ProtonPlanDesign` construction (target, gantry/couch angles, spot spacing) |
+| `TestMCsquareDoseCalculation` | 2 | MCsquare calculator setup + real dose computation (1e4 primaries) |
+| `TestDVH` | 1 | DVH computation from dose + ROI contour |
+
+The dose computation test runs a real Monte Carlo simulation (~10s, 1e4 primaries, ~850 spots) and verifies that the returned `DoseImage` has positive values.
+
+#### `test_mcsquare_interface.py` — 8 MCsquare Python Interface Tests (New in Phase 11)
+
+Tests the MCsquare python interface (`MCsquare-python_interface`) with DICOM patient data:
+
+| Test Class | Tests | What it verifies |
+|------------|-------|------------------|
+| `TestPatientDataLoading` | 2 | DICOM patient list import, CT image dimensions |
+| `TestContourExtraction` | 3 | PTV/rectum contour lookup, ROI name listing |
+| `TestDICE` | 1 | DICE similarity coefficient (self-comparison = 1.0) |
+| `TestDVHComputation` | 2 | DVH metrics for target (D95, D5, Dmean) and OAR |
+| `TestMCsquareSimulation` | 1 | End-to-end MCsquare simulation with dose file output |
+| `TestSPRandWET` | 1 | Stopping Power Ratio map and Water Equivalent Thickness |
+
+The MCsquare simulation test uses binaries from the core folder (`service/opentps/core/.../MCsquare/`) and verifies both the returned dose object and the `Outputs/Dose.mhd` file.
 
 #### `test_opentps_integration.py` — 1 OpenTPS Integration Test
 
@@ -717,25 +801,22 @@ A separate smoke test that exercises the real OpenTPS pipeline (not the syntheti
 4. Verifies the result has `engine="opentps"`, valid `maxDose`, and `doseSummary`
 5. MCsquare runs Monte Carlo simulation (~10s for 1e4 primaries, 853 spots)
 
-This test requires the OpenTPS test data directory (`RADIARCH_OPENTPS_DATA_ROOT`). With the vendored `opentps_core`, no separate OpenTPS installation is needed.
-
 ### 5.5 Running Tests
 
 ```bash
-# Run all 27 tests (API + client + real MCsquare integration)
-cd service
 source .venv/bin/activate
-RADIARCH_ORTHANC_USE_MOCK=true \
-  RADIARCH_OPENTPS_DATA_ROOT=/path/to/opentps/testData \
-  python -m pytest tests/ -v
 
-# Run fast tests only (26 tests, ~1.5 seconds, no MCsquare)
-RADIARCH_FORCE_SYNTHETIC=true RADIARCH_ORTHANC_USE_MOCK=true \
-  python -m pytest tests/test_api_e2e.py tests/test_client.py -v
+# Run all 92 tests (API + MCsquare + OpenTPS core)
+python -m pytest tests/ -v
 
-# Run OpenTPS integration only (requires test data directory)
-RADIARCH_OPENTPS_DATA_ROOT=/path/to/opentps/testData \
-  python -m pytest tests/test_opentps_integration.py -v
+# Run fast tests only (74 tests, ~2 seconds, no MCsquare)
+python -m pytest tests/test_api_e2e.py tests/test_client.py tests/opentps/core/test_api_backend.py -v
+
+# Run OpenTPS core + MCsquare tests
+python -m pytest tests/opentps/core/ -v
+
+# Run OpenTPS integration only
+python -m pytest tests/test_opentps_integration.py -v
 ```
 
 ---
@@ -847,21 +928,80 @@ RADIARCH_OPENTPS_DATA_ROOT=/path/to/opentps/testData \
 os.environ.pop("RADIARCH_FORCE_SYNTHETIC", None)
 ```
 
+### 6.11 Calibration Required Before `buildPlan()`
+
+**Phase**: 11
+**Symptom**: `NoneType` error during `buildPlan()` — `RSPImage.fromCT()` called `calibration.convertHU2RSP()` but calibration was `None`.
+**Root cause**: `buildPlan()` → `initializeBeams()` → `PlanInitializer.placeSpots()` → `RSPImage.fromCT()` requires the MCsquare CT calibration to convert HU values to RSP for spot placement. The test set calibration *after* calling `buildPlan()`.
+**Fix**: Moved `MCsquareCTCalibration` and BDL setup to *before* `plan_design.buildPlan()`.
+
+### 6.12 `defineTargetMaskAndPrescription()` Required
+
+**Phase**: 11
+**Symptom**: `IndexError` in `buildPlan()` — `self.targetMask.centerOfMass` failed because `targetMask` was not set.
+**Root cause**: The test assigned `plan_design.targetStructure = roi` (an `ROIContour`), but `buildPlan()` requires `targetMask` (an `ROIMask` with a binary voxel array). The correct API is `defineTargetMaskAndPrescription(roi, dose)` which converts the contour to a mask.
+**Fix**: Replaced `plan_design.targetStructure = target_roi` with `plan_design.defineTargetMaskAndPrescription(target_roi, 2.0)`.
+
+### 6.13 `couchAngles` Must Be a List
+
+**Phase**: 11
+**Symptom**: `TypeError` in `createBeams()` — `self.couchAngles[i]` failed because `couchAngles` was a scalar.
+**Root cause**: `ProtonPlanDesign.createBeams()` indexes `self.couchAngles[i]` in a loop, expecting a list. The test set `plan_design.couchAngle = 0.0` (scalar attribute, doesn't exist).
+**Fix**: Changed to `plan_design.couchAngles = [0.0]`.
+
+### 6.14 DVH Constructor Argument Order
+
+**Phase**: 11
+**Symptom**: `AttributeError: 'DoseImage' has no attribute 'name'` in `DVH.__init__`.
+**Root cause**: `DVH.__init__(roiMask, dose)` — the first argument is the ROI mask, the second is the dose image. The test called `DVH(dose, target_roi)` with arguments **reversed**.
+**Fix**: Changed to `DVH(target_roi, dose)`.
+
+### 6.15 MCsquare Binary Path Missing
+
+**Phase**: 11
+**Symptom**: MCsquare simulation returned `None` — no dose output produced.
+**Root cause**: The python_interface's `MCsquare/` directory only contained the shell script wrapper (`MCsquare`, 763 bytes). The actual binaries (`MCsquare_linux`, `MCsquare_linux_avx2`, etc.) live in the vendored core folder at `service/opentps/core/processing/doseCalculation/protons/MCsquare/`.
+**Fix**: Updated `Path_MCsquareLib` to point to the core MCsquare directory. Also updated `BDL.BDL_folder` and `Scanner.Scanner_folder` since they resolve `./MCsquare` at construction time.
+
+### 6.16 MCsquare Relative Path Resolution
+
+**Phase**: 11
+**Symptom**: `FileNotFoundError` — MCsquare python_interface modules couldn't find `MCsquare/BDL/` files.
+**Root cause**: Several `Process` modules use hardcoded relative paths like `os.path.abspath("./MCsquare")` at construction time, resolved relative to the current working directory.
+**Fix**: Added `os.chdir(mcsquare_interface_dir)` before simulation (same pattern as the working SPR test).
+
+### 6.17 Dose Output Directory Assertion
+
+**Phase**: 11
+**Symptom**: Test assertion `os.path.exists(os.path.join(mc2.WorkDir, "Dose.mhd"))` failed despite successful simulation.
+**Root cause**: MCsquare writes dose output to `WorkDir/Outputs/Dose.mhd`, not `WorkDir/Dose.mhd`.
+**Fix**: Updated assertion to check `os.path.join(mc2.WorkDir, "Outputs", "Dose.mhd")`.
+
+### 6.18 Integration Test Data Root
+
+**Phase**: 11
+**Symptom**: `PlannerError: No data found in OpenTPS data root` during integration test.
+**Root cause**: The integration test's `RADIARCH_OPENTPS_DATA_ROOT` was not set to the correct test data path before importing settings.
+**Fix**: Set `RADIARCH_OPENTPS_DATA_ROOT` environment variable to the actual test data directory before importing settings, and added a skip condition if the data directory is not found.
+
 ---
 
 ## 7. End-to-End Verification
 
 ### 7.1 Local Tests
 
-All 27 tests pass consistently:
+All 92 tests pass consistently (~57 seconds):
 
 ```
-tests/test_api_e2e.py              — 21 tests (plan CRUD, jobs, artifacts, sessions, workflows, simulations)
-tests/test_client.py               —  5 tests (RadiarchClient SDK)
-tests/test_opentps_integration.py  —  1 test  (real MCsquare proton dose calculation)
+tests/opentps/core/test_api_backend.py     — 48 tests (store, registry, simulator, models)
+tests/opentps/core/test_mcsquare_interface.py — 8 tests (MCsquare python_interface)
+tests/opentps/core/test_opentps_core.py    —  9 tests (OpenTPS core pipeline)
+tests/test_api_e2e.py                      — 21 tests (plan CRUD, jobs, artifacts, sessions)
+tests/test_client.py                       —  5 tests (RadiarchClient SDK)
+tests/test_opentps_integration.py           —  1 test  (real MCsquare proton dose calculation)
 ```
 
-The integration test runs real MCsquare Monte Carlo simulation against `SimpleFantomWithStruct` DICOM data (176 CT slices, 853 pencil-beam spots, 1e4 primaries), completing in ~10 seconds.
+The test suite includes two real MCsquare Monte Carlo simulations: one through the OpenTPS core dose calculator and one through the MCsquare python interface, each running against `SimpleFantomWithStruct` DICOM data (176 CT slices, 853 pencil-beam spots, 1e4–1e5 primaries).
 
 ### 7.2 Docker Stack E2E
 
@@ -975,19 +1115,18 @@ RADIARCH_FORCE_SYNTHETIC=true RADIARCH_DATABASE_URL="" RADIARCH_BROKER_URL="" \
 
 ### Run Tests
 ```bash
-cd service
 source .venv/bin/activate
 
-# All 27 tests (including real MCsquare)
-RADIARCH_ORTHANC_USE_MOCK=true \
-  RADIARCH_OPENTPS_DATA_ROOT=/path/to/opentps/testData \
-  python -m pytest tests/ -v
+# All 92 tests (API + MCsquare + OpenTPS core)
+python -m pytest tests/ -v
 
-# Fast tests only (26 tests, no MCsquare)
-RADIARCH_FORCE_SYNTHETIC=true RADIARCH_ORTHANC_USE_MOCK=true \
-  python -m pytest tests/test_api_e2e.py tests/test_client.py -v
+# Fast tests only (74 tests, ~2 seconds, no MCsquare)
+python -m pytest tests/test_api_e2e.py tests/test_client.py tests/opentps/core/test_api_backend.py -v
+
+# OpenTPS core + MCsquare tests
+python -m pytest tests/opentps/core/ -v
 ```
 
 ---
 
-*Last updated: 2026-02-19. OpenTPS Core vendored, all 27 tests passing.*
+*Last updated: 2026-02-21. Phase 11 complete, all 92 tests passing including real MCsquare simulations.*
