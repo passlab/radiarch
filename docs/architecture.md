@@ -157,13 +157,21 @@ Real OpenTPS pipeline (CT import → plan → MCsquare dose calc), RTDOSE DICOM 
 - All 27 tests pass including real MCsquare proton dose calculation
 - Added attribution (`ATTRIBUTION.md`) and Apache 2.0 license
 
----
-
 ### Phase 8 — Operations (Next)
 - **Auth** — Keycloak RBAC with 2 roles: `radiarch-admin` and `radiarch-user`
 - **Docker Compose** — FastAPI + Celery worker + Redis + Orthanc + Postgres
 - **Artifact storage** — Optional S3/MinIO backend alongside Orthanc STOW-RS
 - **Orthanc webhook** — `POST /hooks/orthanc` for event-driven study ingestion
+
+### Phase 9 Testing of MCsquare and TPS cores
+- Add more testing based on OpenTPS test data which can be found from [OpenTPS Test Data](https://gitlab.com/openmcsquare/opentps/-/tree/master/testData), and the MCsquare python interface which can be found from https://gitlab.com/openmcsquare/python_interface
+
+
+
+### Future Phases - Enhancements of TPS Algorithms and Features, and GUI
+- E.g. incorporate development from [gitlab.com/flash-tps/flash-tps](https://gitlab.com/flash-tps/flash-tps) and [Eliot-P/PRBIO](https://github.com/Eliot-P/PRBIO) that is based on OpenTPS Core. 
+- Enhancing the UI according to OpenTPS GUI, which can be found from its [OpenTPS User Guide](https://opentps.org/docs/OpenTPS_user_guide_FINAL.pdf)
+-
 
 ## 8. Design Decisions (Resolved)
 
