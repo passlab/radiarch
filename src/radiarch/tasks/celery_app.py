@@ -30,6 +30,7 @@ celery_app.conf.update(
     task_acks_late=True,           # ACK after completion, not before
     worker_prefetch_multiplier=1,  # One task at a time per worker
     task_reject_on_worker_lost=True,
+    broker_connection_retry_on_startup=True,
 )
 
 if settings.environment == "dev":
