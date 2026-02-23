@@ -82,7 +82,7 @@ Key takeaways from MONAILabel v0.8.5 (`monailabel/app.py`, 13 routers, 781-line 
 | `radiarch.models.*` | Pydantic request/response models (`PlanDetail`, `SimulationDetail`, `JobState`). |
 | `radiarch.tasks.plan_tasks` | Celery task registration and async job execution. |
 | `radiarch.client` | `RadiarchClient` Python SDK (mirrors `MONAILabelClient`). |
-| `service/opentps/` | Vendored OpenTPS Core — 174 Python files for DICOM I/O, dose calculation (MCsquare, CCC), plan optimization, image processing. |
+| `src/opentps/` | Vendored OpenTPS Core — 174 Python files for DICOM I/O, dose calculation (MCsquare, CCC), plan optimization, image processing. |
 
 ## 5. API Surface
 
@@ -151,7 +151,7 @@ Real OpenTPS pipeline (CT import → plan → MCsquare dose calc), RTDOSE DICOM 
 - Standalone browser demo (`demo/index.html`)
 
 ### Phase 7 — Vendoring OpenTPS Core ✅
-- Vendored `opentps_core` (174 Python files) into `service/opentps/`
+- Vendored `opentps_core` (174 Python files) into `src/opentps/`
 - Stripped Windows/Mac MCsquare binaries, keep Linux SSE4/AVX only
 - Added `scipy`, `pandas`, `SimpleITK` as hard dependencies
 - All 27 tests pass including real MCsquare proton dose calculation
@@ -176,7 +176,7 @@ Real OpenTPS pipeline (CT import → plan → MCsquare dose calc), RTDOSE DICOM 
 
 | Question | Decision | Rationale |
 |---|---|---|
-| OpenTPS: dependency or vendored? | **Vendored** `opentps_core` in `service/opentps/` | Avoids `numpy>=2.3.2` blocker, strips GUI deps, full control over fixes |
+| OpenTPS: dependency or vendored? | **Vendored** `opentps_core` in `src/opentps/` | Avoids `numpy>=2.3.2` blocker, strips GUI deps, full control over fixes |
 | MCsquare binaries: all platforms? | **Linux-only** (SSE4/AVX), strip Win/Mac | Server-only deployment; saves ~150MB |
 | Artifacts: Orthanc-only or also S3? | **Orthanc primary**, S3/MinIO optional (Phase 8) | Keeps DICOM in PACS; S3 for large non-DICOM artifacts |
 | Auth: reverse proxy or embedded JWT? | **Keycloak RBAC** (embedded JWT validation) | Same approach as MONAILabel; 2 roles sufficient |

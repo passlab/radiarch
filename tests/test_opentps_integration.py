@@ -15,9 +15,9 @@ from unittest.mock import MagicMock
 
 # ── Path & env setup (same pattern as test_api_e2e.py) ──────────────
 _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-_service_dir = os.path.join(_repo_root, "service")
-if _service_dir not in sys.path:
-    sys.path.insert(0, _service_dir)
+_src_dir = os.path.join(_repo_root, "src")
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
 
 os.environ.setdefault("RADIARCH_ENVIRONMENT", "dev")
 os.environ.setdefault("RADIARCH_ORTHANC_USE_MOCK", "true")

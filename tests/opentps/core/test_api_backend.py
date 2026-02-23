@@ -18,9 +18,9 @@ import pytest
 
 # ── Path setup ──────────────────────────────────────────────────────
 _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, os.pardir))
-_service_dir = os.path.join(_repo_root, "service")
-if _service_dir not in sys.path:
-    sys.path.insert(0, _service_dir)
+_src_dir = os.path.join(_repo_root, "src")
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
 
 # Force dev mode env vars BEFORE any radiarch import
 os.environ["RADIARCH_ENVIRONMENT"] = "dev"
@@ -40,11 +40,10 @@ os.environ["RADIARCH_ARTIFACT_DIR"] = _tmpdir
 # simulator, sessions, and workflows — none of which require sqlalchemy.
 import importlib
 
-# Swap out _service_dir/radiarch/__init__.py temporarily so Python doesn't
-# run it (it triggers create_app → sqlalchemy).
-import types
-_radiarch_pkg = types.ModuleType("radiarch")
-_radiarch_pkg.__path__ = [os.path.join(_service_dir, "radiarch")]
+# Swap out _src_dir/radiarch/__init__.py temporarily so Python doesn't
+# confuse the 'radiarch' namespace when importing sub-modules.
+import radiarch as _radiarch_pkg
+_radiarch_pkg.__path__ = [os.path.join(_src_dir, "radiarch")]
 _radiarch_pkg.__package__ = "radiarch"
 sys.modules["radiarch"] = _radiarch_pkg
 

@@ -24,7 +24,7 @@ radiarch/
         DVHPanel.js             # Dose-volume histogram (SVG)
         DoseOverlayPanel.js     # Opacity, colormap, isodose lines
         SimulationPanel.js      # Delivery simulation (4D dose)
-  service/
+  src/
     pyproject.toml
     opentps/                # Vendored opentps_core (Apache 2.0)
       ATTRIBUTION.md
@@ -83,7 +83,7 @@ Open <http://localhost:8000/api/v1/docs> to inspect the OpenAPI schema.
 
 ### About OpenTPS (Vendored)
 
-OpenTPS Core is vendored directly in `service/opentps/` — no separate installation needed. The vendored copy:
+OpenTPS Core is vendored directly in `src/opentps/` — no separate installation needed. The vendored copy:
 - Includes all 174 Python source files from `opentps_core`
 - Ships with Linux MCsquare binaries (SSE4 + AVX variants, ~7MB)
 - Strips Windows/Mac binaries and pre-compiled `.dll`/`.dylib` files
@@ -194,4 +194,4 @@ See [`docs/architecture.md`](docs/architecture.md) for the detailed design docum
 
 ## License & Attribution
 
-Radiarch is developed by the Radiarch Team. The vendored OpenTPS Core is © UCLouvain, licensed under Apache 2.0. See `service/opentps/ATTRIBUTION.md` for full citation and modification details.
+Radiarch is developed by the Radiarch Team. The vendored OpenTPS Core is © UCLouvain, licensed under Apache 2.0. See `src/opentps/ATTRIBUTION.md` for full citation and modification details.

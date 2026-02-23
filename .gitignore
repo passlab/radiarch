@@ -22,8 +22,8 @@ Viewers/
 /matRad/
 
 # Vendored opentps_core — include Python and all binaries
-!service/opentps/
-!service/opentps/core/data/
+!src/opentps/
+!src/opentps/core/data/
 
 # Build artifacts
 *.egg-info/

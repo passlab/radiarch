@@ -119,7 +119,7 @@ radiarch/
 │           ├── DVHPanel.js             # Dose-volume histogram (SVG)
 │           ├── DoseOverlayPanel.js     # Opacity, colormap, isodose lines
 │           └── SimulationPanel.js      # Delivery simulation (4D dose)
-├── service/
+├── src/
 │   ├── opentps/                  # Vendored opentps_core (Apache 2.0)
 │   │   ├── ATTRIBUTION.md        # License + modification details
 │   │   ├── LICENSE               # Apache 2.0
@@ -221,7 +221,7 @@ radiarch/
 - FastAPI application factory (`create_app()`) with configurable lifespan
 - `/info` endpoint returning service name, version, and available workflows
 - `config.py` using `pydantic-settings` for environment-based configuration with `RADIARCH_*` prefix
-- Project layout following Python best practices: `service/radiarch/` package with `models/`, `api/`, `core/` sub-packages
+- Project layout following Python best practices: `src/radiarch/` package with `models/`, `api/`, `core/` sub-packages
 - `pyproject.toml` with dependencies (FastAPI, Uvicorn, Pydantic, Celery, Redis)
 
 **Key files created**: `app.py`, `config.py`, `api/routes/info.py`, `models/plan.py`
@@ -556,8 +556,8 @@ Updated `api/routes/workflows.py` with proper `WorkflowRegistry` containing 4 wo
 
 **What was built**:
 
-*Vendored package (`service/opentps/`)*:
-- Copied 174 Python source files from `opentps_core` into `service/opentps/core/`
+*Vendored package (`src/opentps/`)*:
+- Copied 174 Python source files from `opentps_core` into `src/opentps/core/`
 - Added `ATTRIBUTION.md` with full citation, license info, and modification details
 - Included Apache 2.0 `LICENSE` file
 - Created `__init__.py` for proper package resolution
@@ -579,7 +579,7 @@ Updated `api/routes/workflows.py` with proper `WorkflowRegistry` containing 4 wo
 
 **Verification**: All 27 tests pass, including real MCsquare proton dose calculation (~10s for 1e4 primaries on 853 spots).
 
-**Key files created/modified**: `service/opentps/` (174 files), `service/opentps/ATTRIBUTION.md`, `.gitignore`, `pyproject.toml`, `core/workflows/_helpers.py`, `tests/test_opentps_integration.py`
+**Key files created/modified**: `src/opentps/` (174 files), `src/opentps/ATTRIBUTION.md`, `.gitignore`, `pyproject.toml`, `core/workflows/_helpers.py`, `tests/test_opentps_integration.py`
 
 ---
 
@@ -590,8 +590,8 @@ Updated `api/routes/workflows.py` with proper `WorkflowRegistry` containing 4 wo
 **What was built**:
 
 *Test infrastructure*:
-- Moved test suite from `service/tests/` to top-level `tests/` directory
-- Synced all Linux MCsquare binaries (5 arch variants + 5 opti variants), shared libraries, Materials, BDL, Scanners, photon CCC engine, and CT calibration data from the official OpenTPS repo to `service/opentps/core/`
+- Moved test suite from `src/tests/` to top-level `tests/` directory
+- Synced all Linux MCsquare binaries (5 arch variants + 5 opti variants), shared libraries, Materials, BDL, Scanners, photon CCC engine, and CT calibration data from the official OpenTPS repo to `src/opentps/core/`
 - Updated `.gitignore` to track vendored binaries
 - Added OpenTPS test data (`testData/SimpleFantomWithStruct`) and MCsquare python interface to `tests/opentps/core/`
 - Added `conftest.py` with shared `sys.path` setup and pytest fixtures for data directories
@@ -790,7 +790,7 @@ Tests the MCsquare python interface (`MCsquare-python_interface`) with DICOM pat
 | `TestMCsquareSimulation` | 1 | End-to-end MCsquare simulation with dose file output |
 | `TestSPRandWET` | 1 | Stopping Power Ratio map and Water Equivalent Thickness |
 
-The MCsquare simulation test uses binaries from the core folder (`service/opentps/core/.../MCsquare/`) and verifies both the returned dose object and the `Outputs/Dose.mhd` file.
+The MCsquare simulation test uses binaries from the core folder (`src/opentps/core/.../MCsquare/`) and verifies both the returned dose object and the `Outputs/Dose.mhd` file.
 
 #### `test_opentps_integration.py` — 1 OpenTPS Integration Test
 
@@ -960,7 +960,7 @@ os.environ.pop("RADIARCH_FORCE_SYNTHETIC", None)
 
 **Phase**: 11
 **Symptom**: MCsquare simulation returned `None` — no dose output produced.
-**Root cause**: The python_interface's `MCsquare/` directory only contained the shell script wrapper (`MCsquare`, 763 bytes). The actual binaries (`MCsquare_linux`, `MCsquare_linux_avx2`, etc.) live in the vendored core folder at `service/opentps/core/processing/doseCalculation/protons/MCsquare/`.
+**Root cause**: The python_interface's `MCsquare/` directory only contained the shell script wrapper (`MCsquare`, 763 bytes). The actual binaries (`MCsquare_linux`, `MCsquare_linux_avx2`, etc.) live in the vendored core folder at `src/opentps/core/processing/doseCalculation/protons/MCsquare/`.
 **Fix**: Updated `Path_MCsquareLib` to point to the core MCsquare directory. Also updated `BDL.BDL_folder` and `Scanner.Scanner_folder` since they resolve `./MCsquare` at construction time.
 
 ### 6.16 MCsquare Relative Path Resolution

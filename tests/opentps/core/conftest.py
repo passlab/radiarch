@@ -1,7 +1,7 @@
 """
 Shared fixtures and path setup for OpenTPS core tests.
 
-Adds service/ to sys.path so vendored opentps.core is importable,
+Adds src/ to sys.path so vendored opentps.core is importable,
 and provides path fixtures for test data directories.
 """
 
@@ -11,11 +11,11 @@ import sys
 import pytest
 
 # ── Path setup ──────────────────────────────────────────────────────
-# Ensure vendored opentps (service/opentps/) is importable
+# Ensure vendored opentps (src/opentps/) is importable
 _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, os.pardir))
-_service_dir = os.path.join(_repo_root, "service")
-if _service_dir not in sys.path:
-    sys.path.insert(0, _service_dir)
+_src_dir = os.path.join(_repo_root, "src")
+if _src_dir not in sys.path:
+    sys.path.insert(0, _src_dir)
 
 # MCsquare python_interface Process modules
 _mcsquare_interface_dir = os.path.join(os.path.dirname(__file__), "MCsquare-python_interface")

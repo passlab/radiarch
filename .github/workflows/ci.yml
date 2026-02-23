@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           sparse-checkout: |
-            service/
+            src/
             tests/test_api_e2e.py
             tests/test_client.py
             tests/opentps/core/conftest.py
@@ -32,7 +32,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip setuptools wheel
-          pip install -e ./service[dev]
+          pip install -e ./src[dev]
 
       - name: Run fast tests (74 tests)
         run: python -m pytest tests/test_api_e2e.py tests/test_client.py tests/opentps/core/test_api_backend.py -v
@@ -54,7 +54,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip setuptools wheel
-          pip install -e ./service[dev]
+          pip install -e ./src[dev]
 
       - name: Run all tests (92 tests)
         run: python -m pytest tests/ -v --tb=short

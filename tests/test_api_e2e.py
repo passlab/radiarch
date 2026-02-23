@@ -11,8 +11,8 @@ Uses FakeOrthancAdapter so no Orthanc is needed.
 import sys
 import os
 
-# Ensure service package is importable
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+# Ensure src package is importable
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 # Force dev/mock mode and synthetic planner (skip real MCsquare)
 # Override Docker-internal hostnames from .env to use local/in-memory stores

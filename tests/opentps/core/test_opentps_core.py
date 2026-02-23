@@ -4,7 +4,7 @@ Tests for the vendored OpenTPS core library.
 Uses SimpleFantomWithStruct test data (200 CT slices + RTStruct) to test
 data loading, plan construction, MCsquare dose calculation, and DVH computation.
 
-Requires: vendored opentps.core at service/opentps/core/
+Requires: vendored opentps.core at src/opentps/core/
 Test data: tests/opentps/core/opentps-testData/SimpleFantomWithStruct/
 """
 
