@@ -30,7 +30,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ./service[dev]
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -e ./service[dev]
 
       - name: Run fast tests (74 tests)
         run: python -m pytest tests/test_api_e2e.py tests/test_client.py tests/opentps/core/test_api_backend.py -v
@@ -50,7 +52,9 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ./service[dev]
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -e ./service[dev]
 
       - name: Run all tests (92 tests)
         run: python -m pytest tests/ -v --tb=short
