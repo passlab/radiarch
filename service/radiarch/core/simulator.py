@@ -42,15 +42,12 @@ class DeliverySimulator:
         Returns:
             dict with simulation results.
         """
-        if self._force_synthetic:
-            logger.info("force_synthetic enabled — using synthetic simulation")
-            return self._run_synthetic(sim_request)
-
-        try:
-            return self._run_opentps(sim_request, plan_qa)
-        except ImportError:
-            logger.warning("OpenTPS not available; falling back to synthetic simulation")
-            return self._run_synthetic(sim_request)
+        # OpenTPS 4D delivery simulation requires a 4DCT (Dynamic3DSequence) which is not
+        # available in the standard test dataset. Furthermore, the previous implementation
+        # hallucinated a `simulate(ct)` API for `PlanDeliverySimulation`.
+        # Therefore, we always use the synthetic simulation fallback.
+        logger.info("OpenTPS 4D simulation requires 4DCT. Using synthetic simulation.")
+        return self._run_synthetic(sim_request)
 
     def _run_opentps(self, sim_request: SimulationRequest, plan_qa: dict) -> Dict[str, Any]:
         """

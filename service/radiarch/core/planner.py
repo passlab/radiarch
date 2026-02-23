@@ -79,8 +79,8 @@ class RadiarchPlanner:
             try:
                 import opentps.core  # noqa: F401 – availability check
                 qa_summary = runner(plan)
-            except ImportError:
-                logger.warning("OpenTPS not found; falling back to synthetic for %s", wf_label)
+            except ImportError as e:
+                logger.exception("OpenTPS not found or failed to load. Falling back to synthetic. Exception: %s", e)
                 qa_summary = self._run_synthetic(plan, None)
                 qa_summary["notes"] = f"OpenTPS missing ({wf_label} skipped)"
 

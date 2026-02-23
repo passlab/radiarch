@@ -27,7 +27,7 @@ Postgres has health check, API/worker depend on it.
 
 ```diff
 -opentps_data_root = "/home/yyan7/work/SMIS/radiarch/opentps/testData"  # hardcoded
-+opentps_data_root = "/data/opentps"  # parameterized via env var
++opentps_data_root = "/data/opentps/testData"  # parameterized via env var
 +force_synthetic: bool = False        # proper config field
 +session_ttl: int = 3600              # was missing from config
 +opentps_venv: str = ""               # replaces hardcoded venv path

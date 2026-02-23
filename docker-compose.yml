@@ -11,6 +11,7 @@ services:
       - "8000:8000"
     env_file: .env
     environment:
+      - PYTHONPATH=/app
       - RADIARCH_ENVIRONMENT=production
       - RADIARCH_FORCE_SYNTHETIC=false
       - RADIARCH_DATABASE_URL=postgresql+psycopg://radiarch:radiarch@postgres:5432/radiarch
@@ -23,6 +24,7 @@ services:
       - RADIARCH_DICOMWEB_URL=http://orthanc:8042/dicom-web
     volumes:
       - radiarch-data:/data/artifacts
+      - ./tests/opentps/core/opentps-testData:/data/opentps/testData:ro
     depends_on:
       redis:
         condition: service_started
@@ -41,6 +43,7 @@ services:
       celery -A radiarch.tasks.celery_app worker --loglevel=info --concurrency=2
     env_file: .env
     environment:
+      - PYTHONPATH=/app
       - RADIARCH_ENVIRONMENT=production
       - RADIARCH_FORCE_SYNTHETIC=false
       - RADIARCH_DATABASE_URL=postgresql+psycopg://radiarch:radiarch@postgres:5432/radiarch
@@ -53,6 +56,7 @@ services:
       - RADIARCH_DICOMWEB_URL=http://orthanc:8042/dicom-web
     volumes:
       - radiarch-data:/data/artifacts
+      - ./tests/opentps/core/opentps-testData:/data/opentps/testData:ro
     depends_on:
       redis:
         condition: service_started

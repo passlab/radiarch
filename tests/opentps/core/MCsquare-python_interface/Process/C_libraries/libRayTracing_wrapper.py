@@ -12,7 +12,7 @@ def WET_raytracing(SPR, beam_direction, ROI=[]):
     libRaytracing = ctypes.cdll.LoadLibrary("Process/C_libraries/libRayTracing.so")
     float_array = np.ctypeslib.ndpointer(dtype=np.float32)
     int_array = np.ctypeslib.ndpointer(dtype=np.int32)
-    bool_array = np.ctypeslib.ndpointer(dtype=np.bool)
+    bool_array = np.ctypeslib.ndpointer(dtype=bool)
     libRaytracing.raytrace_WET.argtypes = [float_array, bool_array, float_array, float_array, float_array, int_array, float_array]
     libRaytracing.raytrace_WET.restype  = ctypes.c_void_p
 
@@ -28,7 +28,7 @@ def WET_raytracing(SPR, beam_direction, ROI=[]):
       ROI_mask = ROI.Mask
 
     # call C function
-    libRaytracing.raytrace_WET(SPR.Image.astype(np.float32), ROI_mask.astype(np.bool), WET, Offset, PixelSpacing, GridSize, beam_direction)
+    libRaytracing.raytrace_WET(SPR.Image.astype(np.float32), ROI_mask.astype(bool), WET, Offset, PixelSpacing, GridSize, beam_direction)
 
 
   except:

@@ -287,6 +287,10 @@ class Image3D(PatientData):
         positionInMM = np.array(position)
         shiftedPosInMM = positionInMM - self.origin
         posInVoxels = np.round(np.divide(shiftedPosInMM, self.spacing)).astype(int)
+        
+        # Clip to boundary to avoid floating point precision errors exceeding grid
+        posInVoxels = np.clip(posInVoxels, 0, self.gridSize - 1)
+        
         if np.any(np.logical_or(posInVoxels < 0, posInVoxels > (self.gridSize - 1))):
             raise ValueError(f'Voxel position {position} requested is outside of the domain of the '
                             + f'image with grid size {self.gridSize} and origin {self.origin} and spacing {self.spacing}')

@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     result_backend: str = Field(default="redis://localhost:6379/1")
 
     # OpenTPS configuration (only needed when force_synthetic=false)
-    opentps_data_root: str = Field(default="/data/opentps")
+    opentps_data_root: str = Field(default="/data/opentps/testData")
     opentps_beam_library: str = Field(default="/data/opentps/beam-models")
     opentps_venv: str = Field(default="", description="Path to OpenTPS venv site-packages; empty = skip")
 

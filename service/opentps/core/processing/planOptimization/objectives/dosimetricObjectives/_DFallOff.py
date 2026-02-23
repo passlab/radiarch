@@ -92,7 +92,7 @@ class DFallOff(DosimetricObjective):
 
         euclidDist = ndimage.distance_transform_edt(targetMask.imageArray == 0,sampling=self.target.spacing)  # sampling to express distance in metric units (mm)
         # Check euclid dist size
-        masknan = ~np.bool(copy.deepcopy(mask.imageArray))
+        masknan = ~np.asarray(copy.deepcopy(mask.imageArray), dtype=bool)
         masknan[masknan] = 0
         euclidDistROI = euclidDist * masknan
 

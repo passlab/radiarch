@@ -52,12 +52,12 @@ class RTstruct:
     
       #print("Import contour " + str(len(self.Contours)) + ": " + Contour.ROIName)
     
-      Contour.Mask = np.zeros((CT.GridSize[0], CT.GridSize[1], CT.GridSize[2]), dtype=np.bool)
+      Contour.Mask = np.zeros((CT.GridSize[0], CT.GridSize[1], CT.GridSize[2]), dtype=bool)
       Contour.Mask_GridSize = CT.GridSize
       Contour.Mask_PixelSpacing = CT.PixelSpacing
       Contour.Mask_Offset = CT.ImagePositionPatient
       Contour.Mask_NumVoxels = CT.NumVoxels   
-      Contour.ContourMask = np.zeros((CT.GridSize[0], CT.GridSize[1], CT.GridSize[2]), dtype=np.bool)
+      Contour.ContourMask = np.zeros((CT.GridSize[0], CT.GridSize[1], CT.GridSize[2]), dtype=bool)
       
       SOPInstanceUID_match = 1
       

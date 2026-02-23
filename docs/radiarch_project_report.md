@@ -1080,7 +1080,7 @@ All settings are controlled via `RADIARCH_*` environment variables:
 | `RADIARCH_DICOMWEB_URL` | *(empty)* | DICOMweb STOW-RS push URL |
 | `RADIARCH_ARTIFACT_DIR` | `./data/artifacts` | Artifact storage path |
 | `RADIARCH_SESSION_TTL` | `3600` | Session expiry (seconds) |
-| `RADIARCH_OPENTPS_DATA_ROOT` | `/data/opentps` | OpenTPS test data directory (DICOM files) |
+| `RADIARCH_OPENTPS_DATA_ROOT` | `/data/opentps/testData` | OpenTPS test data directory (DICOM files) |
 | `RADIARCH_OPENTPS_BEAM_LIBRARY` | `/data/opentps/beam-models` | Beam model files |
 
 ---

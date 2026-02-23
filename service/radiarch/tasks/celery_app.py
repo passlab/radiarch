@@ -1,3 +1,10 @@
+import sys
+import os
+
+# Ensure /app is in sys.path so vendored packages like opentps can be imported
+if "/app" not in sys.path:
+    sys.path.insert(0, "/app")
+
 from celery import Celery
 
 from ..config import get_settings
