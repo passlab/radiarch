@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  fast-tests:
+    name: Fast Tests (API + Backend)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout (sparse — skip large binaries and test data)
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            service/
+            tests/test_api_e2e.py
+            tests/test_client.py
+            tests/opentps/core/conftest.py
+            tests/opentps/core/test_api_backend.py
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ./service[dev]
+
+      - name: Run fast tests (74 tests)
+        run: python -m pytest tests/test_api_e2e.py tests/test_client.py tests/opentps/core/test_api_backend.py -v
+
+  full-tests:
+    name: Full Tests (including MCsquare)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout (full — includes MCsquare binaries and DICOM test data)
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ./service[dev]
+
+      - name: Run all tests (92 tests)
+        run: python -m pytest tests/ -v --tb=short

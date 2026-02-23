@@ -1,5 +1,7 @@
 # Radiarch TPS Service
 
+[![CI](https://github.com/passlab/radiarch/actions/workflows/ci.yml/badge.svg)](https://github.com/passlab/radiarch/actions/workflows/ci.yml)
+
 Radiarch is a FastAPI-based treatment planning service for OHIF, modeled after the MONAILabel server pattern. It vendors [OpenTPS Core](https://gitlab.com/openmcsquare/opentps) directly for proton/photon dose calculation (MCsquare, CCC) and communicates with PACS providers such as Orthanc over DICOMweb.
 
 ## Layout
