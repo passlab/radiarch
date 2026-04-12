@@ -59,6 +59,21 @@ docker compose up -d        # Starts all 5 services
 curl http://localhost:8000/api/v1/info
 ```
 
+### Smoke test (recommended)
+
+After the stack is up, run an end-to-end API smoke test (plan → job → artifacts):
+
+```bash
+chmod +x scripts/smoke_test.sh
+./scripts/smoke_test.sh
+```
+
+To target a different API base URL:
+
+```bash
+API_BASE_URL="http://127.0.0.1:8000/api/v1" ./scripts/smoke_test.sh
+```
+
 | Service | Port | Description |
 |---|---|---|
 | `api` | 8000 | Radiarch FastAPI server |
