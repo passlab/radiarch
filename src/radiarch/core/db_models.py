@@ -63,3 +63,50 @@ class ArtifactRow(Base):
     created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
     plan = relationship("PlanRow", back_populates="artifacts")
+
+
+class GeometryJobRow(Base):
+    """Async tracking row for one ``POST /geometry/build`` invocation.
+
+    Unlike ``JobRow`` this isn't tied to a plan. ``cache_key`` is indexed
+    so we can look up in-flight builds for the same inputs (future dedup
+    work) and ``geometry_id`` is populated when the build succeeds so
+    clients polling the job endpoint can follow the link to the result.
+    """
+
+    __tablename__ = "geometry_jobs"
+
+    id = Column(String(36), primary_key=True)
+    cache_key = Column(String(64), nullable=False, index=True)
+    state = Column(String(20), nullable=False, default="queued")
+    progress = Column(Float, default=0.0)
+    # Persist stage across restarts — clients polling want to see the
+    # current pipeline phase (loading_dicom / rasterizing_contours / …).
+    stage = Column(String(32), nullable=True, default="queued")
+    message = Column(Text, nullable=True)
+    geometry_id = Column(String(36), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+
+class BeamModelJobRow(Base):
+    """Async tracking row for one ``POST /beam-model/build`` invocation.
+
+    Mirrors :class:`GeometryJobRow` exactly — same fields, different
+    table. ``beam_model_id`` is populated when the build succeeds so
+    clients polling the jobs endpoint can deep-link to the result.
+    """
+
+    __tablename__ = "beam_model_jobs"
+
+    id = Column(String(36), primary_key=True)
+    cache_key = Column(String(64), nullable=False, index=True)
+    state = Column(String(20), nullable=False, default="queued")
+    progress = Column(Float, default=0.0)
+    stage = Column(String(32), nullable=True, default="queued")
+    message = Column(Text, nullable=True)
+    beam_model_id = Column(String(36), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)

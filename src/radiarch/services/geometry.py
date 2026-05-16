@@ -36,7 +36,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any, Callable, Optional, Tuple
 
 import numpy as np
 from loguru import logger
@@ -46,9 +46,14 @@ from ..models.geometry import (
     CTMetadata,
     GeometryBuildRequest,
     GeometryResult,
+    GeometryStage,
     GridSpec,
     HUDensityModel,
 )
+
+
+# Type alias: (stage, progress_fraction_0_to_1, human_message) -> None.
+ProgressCallback = Callable[[GeometryStage, float, str], None]
 from .hu_density import get_model as get_hu_density_model
 from .persistence import (
     DENSITY_FILENAME,
@@ -103,36 +108,62 @@ class GeometryService:
     # Public entry point
     # -----------------------------------------------------------------
 
-    def build(self, request: GeometryBuildRequest) -> GeometryResult:
+    def build(
+        self,
+        request: GeometryBuildRequest,
+        progress_callback: Optional[ProgressCallback] = None,
+    ) -> GeometryResult:
+        """Run the geometry pipeline for ``request``.
+
+        ``progress_callback`` is invoked as the pipeline advances through
+        its stages so async callers (the Celery task) can update job
+        status rows in real time. A no-op is used when None.
+        """
+        on_progress = progress_callback or _noop_progress
+
         cache_key = request.compute_cache_key()
 
         cached = self.store.lookup_by_cache_key(cache_key)
         if cached is not None:
             logger.info("Geometry cache hit for key %s → %s", cache_key[:10], cached.geometry_id)
+            on_progress(GeometryStage.done, 1.0, "cache hit")
             return cached
 
         logger.info("Building geometry (cache miss, key %s)", cache_key[:10])
+        on_progress(GeometryStage.loading_dicom, 0.05, "Loading CT and RTSTRUCT")
         loaded = self._load(request)
-        return self._process(request, loaded, cache_key)
+        return self._process(request, loaded, cache_key, on_progress)
 
     # -----------------------------------------------------------------
     # DICOM loading.
     #
-    # Two paths, chosen at request time:
+    # Three paths, chosen at request time (in priority order):
     #
-    #   1. PACS path — if the adapter exposes ``can_retrieve_instances()``
+    #   1. Upload path — if ``patient_ref.upload_id`` is set, read from
+    #      ``{settings.upload_dir}/{upload_id}/``. This is the production
+    #      entry point (client uploads a ZIP, gets back an upload_id,
+    #      then references it in a build request).
+    #   2. PACS path — if the adapter exposes ``can_retrieve_instances()``
     #      (i.e. a real Orthanc / DICOMweb backend), we fetch the study
     #      into a temp dir and point OpenTPS at it.
-    #   2. Disk path — fall back to the legacy ``load_ct_and_patient``
+    #   3. Disk path — fall back to the legacy ``load_ct_and_patient``
     #      helper which reads from ``opentps_data_root`` (or the request's
-    #      ``data_root_override``). This keeps the existing dev/test
-    #      flows working when Orthanc is mocked or unreachable.
+    #      ``data_root_override``). Dev-only convenience that keeps the
+    #      existing tests + SimpleFantom demo working when Orthanc is
+    #      mocked and no upload was provided.
     #
     # This is also the seam that tests stub out (monkeypatch ``_load``
     # to return a synthetic CT + fake contours).
     # -----------------------------------------------------------------
 
     def _load(self, request: GeometryBuildRequest) -> _LoadedCT:
+        # 1. Upload path — highest priority. The client explicitly
+        # uploaded files; we should read those, never silently fall
+        # through to anything else.
+        if request.patient_ref.upload_id:
+            upload_path = self._resolve_upload_path(request.patient_ref.upload_id)
+            return self._load_from_disk(str(upload_path))
+
         # If the caller forced a data_root, honor it — useful for tests
         # and one-off debugging against local fixtures even when Orthanc
         # is reachable.
@@ -159,6 +190,26 @@ class GeometryService:
             return self._load_from_disk(None)
 
         return self._load_from_pacs(fetcher, request)
+
+    # ---- Upload path -------------------------------------------------
+
+    @staticmethod
+    def _resolve_upload_path(upload_id: str) -> Path:
+        """Map an upload_id to its extracted directory.
+
+        Raises ``ValueError`` (→ 422 at the API) if the upload directory
+        doesn't exist — covers the case where a client passes a stale or
+        bogus upload_id.
+        """
+        settings = get_settings()
+        base = settings.upload_dir or str(Path(settings.artifact_dir) / "uploads")
+        path = Path(base).expanduser().resolve() / upload_id
+        if not path.is_dir():
+            raise ValueError(
+                f"Upload id not found: {upload_id!r}. "
+                "POST a ZIP to /api/v1/uploads/dicom first."
+            )
+        return path
 
     # ---- Disk path ----------------------------------------------------
 
@@ -230,7 +281,10 @@ class GeometryService:
         request: GeometryBuildRequest,
         loaded: _LoadedCT,
         cache_key: str,
+        on_progress: Optional[ProgressCallback] = None,
     ) -> GeometryResult:
+        on_progress = on_progress or _noop_progress
+
         ct = loaded.ct
         ct_array = np.asarray(ct.imageArray)
         if ct_array.ndim != 3:
@@ -249,6 +303,7 @@ class GeometryService:
         src_affine = source_grid.to_numpy_affine()
 
         # 1. HU → density on the NATIVE grid.
+        on_progress(GeometryStage.converting_hu, 0.25, "HU → density")
         hu_model = get_hu_density_model(request.hu_to_density_model)
         density_native = hu_model.convert(ct_array)
 
@@ -256,11 +311,13 @@ class GeometryService:
         target_grid = self._resolve_target_grid(request, source_grid)
 
         # 3. Resample density if target ≠ source.
+        on_progress(GeometryStage.resampling, 0.45, "Resampling density to target grid")
         density_final = self._maybe_resample(
             density_native, src_affine, source_grid, target_grid
         )
 
         # 4. Rasterize contours directly on the target grid.
+        on_progress(GeometryStage.rasterizing_contours, 0.70, "Rasterizing contours")
         masks, structure_index = rasterize_contours(
             loaded.contours,
             target_grid,
@@ -268,6 +325,7 @@ class GeometryService:
         )
 
         # 5. Persist + build the result.
+        on_progress(GeometryStage.persisting, 0.90, "Writing NIfTI + cache index")
         geometry_id = str(uuid.uuid4())
         paths = GeometryPaths.for_id(self.store.base_dir, geometry_id)
         ct_meta = self._ct_metadata(ct)
@@ -296,6 +354,7 @@ class GeometryService:
             target_grid.size,
             list(structure_index.keys()),
         )
+        on_progress(GeometryStage.done, 1.0, f"geometry_id={geometry_id}")
         return result
 
     # -----------------------------------------------------------------
@@ -370,4 +429,9 @@ class GeometryService:
         return str(for_uid)
 
 
-__all__ = ["GeometryService"]
+def _noop_progress(stage: GeometryStage, fraction: float, message: str) -> None:
+    """Default ``progress_callback`` when none is supplied."""
+    del stage, fraction, message  # unused
+
+
+__all__ = ["GeometryService", "ProgressCallback"]

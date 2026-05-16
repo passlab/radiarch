@@ -14,6 +14,8 @@ from typing import Dict, List, Optional
 from ..models.plan import PlanDetail, PlanRequest, PlanSummary
 from ..models.job import JobStatus, JobState
 from ..models.artifact import ArtifactRecord
+from ..models.geometry import GeometryJobStatus, GeometryStage
+from ..models.beam_model import BeamModelJobStatus, BeamModelStage
 
 
 def _utcnow():
@@ -74,6 +76,50 @@ class StoreBase(abc.ABC):
         """Delete a plan and all associated jobs/artifacts. Returns True if deleted."""
         ...
 
+    # ---- Geometry async jobs -----------------------------------------
+
+    @abc.abstractmethod
+    def create_geometry_job(self, cache_key: str) -> GeometryJobStatus:
+        """Record a new queued geometry build. Returns the new status row."""
+        ...
+
+    @abc.abstractmethod
+    def get_geometry_job(self, job_id: str) -> Optional[GeometryJobStatus]: ...
+
+    @abc.abstractmethod
+    def update_geometry_job(
+        self,
+        job_id: str,
+        *,
+        state: Optional[JobState] = None,
+        progress: Optional[float] = None,
+        message: Optional[str] = None,
+        stage: Optional[GeometryStage] = None,
+        geometry_id: Optional[str] = None,
+    ) -> Optional[GeometryJobStatus]: ...
+
+    # ---- Beam model async jobs ---------------------------------------
+
+    @abc.abstractmethod
+    def create_beam_model_job(self, cache_key: str) -> BeamModelJobStatus:
+        """Record a new queued beam-model build."""
+        ...
+
+    @abc.abstractmethod
+    def get_beam_model_job(self, job_id: str) -> Optional[BeamModelJobStatus]: ...
+
+    @abc.abstractmethod
+    def update_beam_model_job(
+        self,
+        job_id: str,
+        *,
+        state: Optional[JobState] = None,
+        progress: Optional[float] = None,
+        message: Optional[str] = None,
+        stage: Optional[BeamModelStage] = None,
+        beam_model_id: Optional[str] = None,
+    ) -> Optional[BeamModelJobStatus]: ...
+
 
 # ---------------------------------------------------------------------------
 # In-memory implementation (used in tests & dev)
@@ -84,6 +130,8 @@ class InMemoryStore(StoreBase):
         self._plans: Dict[str, PlanDetail] = {}
         self._jobs: Dict[str, JobStatus] = {}
         self._artifacts: Dict[str, ArtifactRecord] = {}
+        self._geometry_jobs: Dict[str, GeometryJobStatus] = {}
+        self._beam_model_jobs: Dict[str, BeamModelJobStatus] = {}
 
     def create_plan(self, payload: PlanRequest) -> tuple[PlanDetail, JobStatus]:
         plan_id = str(uuid.uuid4())
@@ -208,6 +256,110 @@ class InMemoryStore(StoreBase):
         for aid in artifact_ids_to_remove:
             self._artifacts.pop(aid, None)
         return True
+
+    # ---- Geometry async jobs -----------------------------------------
+
+    def create_geometry_job(self, cache_key: str) -> GeometryJobStatus:
+        job_id = str(uuid.uuid4())
+        now = _utcnow()
+        job = GeometryJobStatus(
+            id=job_id,
+            cache_key=cache_key,
+            state=JobState.queued,
+            progress=0.0,
+            stage=GeometryStage.queued,
+            created_at=now,
+        )
+        self._geometry_jobs[job_id] = job
+        return job
+
+    def get_geometry_job(self, job_id: str) -> Optional[GeometryJobStatus]:
+        return self._geometry_jobs.get(job_id)
+
+    def update_geometry_job(
+        self,
+        job_id: str,
+        *,
+        state: Optional[JobState] = None,
+        progress: Optional[float] = None,
+        message: Optional[str] = None,
+        stage: Optional[GeometryStage] = None,
+        geometry_id: Optional[str] = None,
+    ) -> Optional[GeometryJobStatus]:
+        job = self._geometry_jobs.get(job_id)
+        if not job:
+            return None
+        data = job.model_dump()
+        now = _utcnow()
+        if state:
+            data["state"] = state
+            if state == JobState.running and not data.get("started_at"):
+                data["started_at"] = now
+            if state in {JobState.succeeded, JobState.failed, JobState.cancelled}:
+                data["finished_at"] = now
+        if progress is not None:
+            data["progress"] = progress
+        if message is not None:
+            data["message"] = message
+        if stage is not None:
+            data["stage"] = stage
+        if geometry_id is not None:
+            data["geometry_id"] = geometry_id
+        updated = GeometryJobStatus(**data)
+        self._geometry_jobs[job_id] = updated
+        return updated
+
+    # ---- Beam model async jobs ---------------------------------------
+
+    def create_beam_model_job(self, cache_key: str) -> BeamModelJobStatus:
+        job_id = str(uuid.uuid4())
+        now = _utcnow()
+        job = BeamModelJobStatus(
+            id=job_id,
+            cache_key=cache_key,
+            state=JobState.queued,
+            progress=0.0,
+            stage=BeamModelStage.queued,
+            created_at=now,
+        )
+        self._beam_model_jobs[job_id] = job
+        return job
+
+    def get_beam_model_job(self, job_id: str) -> Optional[BeamModelJobStatus]:
+        return self._beam_model_jobs.get(job_id)
+
+    def update_beam_model_job(
+        self,
+        job_id: str,
+        *,
+        state: Optional[JobState] = None,
+        progress: Optional[float] = None,
+        message: Optional[str] = None,
+        stage: Optional[BeamModelStage] = None,
+        beam_model_id: Optional[str] = None,
+    ) -> Optional[BeamModelJobStatus]:
+        job = self._beam_model_jobs.get(job_id)
+        if not job:
+            return None
+        data = job.model_dump()
+        now = _utcnow()
+        if state:
+            data["state"] = state
+            if state == JobState.running and not data.get("started_at"):
+                data["started_at"] = now
+            if state in {JobState.succeeded, JobState.failed, JobState.cancelled}:
+                data["finished_at"] = now
+        if progress is not None:
+            data["progress"] = progress
+        if message is not None:
+            data["message"] = message
+        if stage is not None:
+            data["stage"] = stage
+        if beam_model_id is not None:
+            data["beam_model_id"] = beam_model_id
+        updated = BeamModelJobStatus(**data)
+        self._beam_model_jobs[job_id] = updated
+        return updated
 
 
 # ---------------------------------------------------------------------------
@@ -415,6 +567,180 @@ class SQLStore(StoreBase):
             return True
         finally:
             session.close()
+
+    # ---- Geometry async jobs -----------------------------------------
+
+    def create_geometry_job(self, cache_key: str) -> GeometryJobStatus:
+        from .db_models import GeometryJobRow
+
+        job_id = str(uuid.uuid4())
+        now = _utcnow()
+        session = self._session()
+        try:
+            row = GeometryJobRow(
+                id=job_id,
+                cache_key=cache_key,
+                state=JobState.queued.value,
+                progress=0.0,
+                stage=GeometryStage.queued.value,
+                created_at=now,
+            )
+            session.add(row)
+            session.commit()
+            return self._geometry_job_row_to_status(row)
+        finally:
+            session.close()
+
+    def get_geometry_job(self, job_id: str) -> Optional[GeometryJobStatus]:
+        from .db_models import GeometryJobRow
+
+        session = self._session()
+        try:
+            row = session.query(GeometryJobRow).filter_by(id=job_id).first()
+            if not row:
+                return None
+            return self._geometry_job_row_to_status(row)
+        finally:
+            session.close()
+
+    def update_geometry_job(
+        self,
+        job_id: str,
+        *,
+        state: Optional[JobState] = None,
+        progress: Optional[float] = None,
+        message: Optional[str] = None,
+        stage: Optional[GeometryStage] = None,
+        geometry_id: Optional[str] = None,
+    ) -> Optional[GeometryJobStatus]:
+        from .db_models import GeometryJobRow
+
+        session = self._session()
+        try:
+            row = session.query(GeometryJobRow).filter_by(id=job_id).first()
+            if not row:
+                return None
+            now = _utcnow()
+            if state:
+                row.state = state.value if hasattr(state, "value") else state
+                if state == JobState.running and not row.started_at:
+                    row.started_at = now
+                if state in {JobState.succeeded, JobState.failed, JobState.cancelled}:
+                    row.finished_at = now
+            if progress is not None:
+                row.progress = progress
+            if message is not None:
+                row.message = message
+            if stage is not None:
+                row.stage = stage.value if hasattr(stage, "value") else stage
+            if geometry_id is not None:
+                row.geometry_id = geometry_id
+            session.commit()
+            return self._geometry_job_row_to_status(row)
+        finally:
+            session.close()
+
+    @staticmethod
+    def _geometry_job_row_to_status(row) -> GeometryJobStatus:
+        return GeometryJobStatus(
+            id=row.id,
+            cache_key=row.cache_key,
+            state=row.state,
+            progress=row.progress or 0.0,
+            stage=row.stage,
+            message=row.message,
+            geometry_id=row.geometry_id,
+            started_at=row.started_at,
+            finished_at=row.finished_at,
+            created_at=row.created_at,
+        )
+
+    # ---- Beam model async jobs ---------------------------------------
+
+    def create_beam_model_job(self, cache_key: str) -> BeamModelJobStatus:
+        from .db_models import BeamModelJobRow
+
+        job_id = str(uuid.uuid4())
+        now = _utcnow()
+        session = self._session()
+        try:
+            row = BeamModelJobRow(
+                id=job_id,
+                cache_key=cache_key,
+                state=JobState.queued.value,
+                progress=0.0,
+                stage=BeamModelStage.queued.value,
+                created_at=now,
+            )
+            session.add(row)
+            session.commit()
+            return self._beam_model_job_row_to_status(row)
+        finally:
+            session.close()
+
+    def get_beam_model_job(self, job_id: str) -> Optional[BeamModelJobStatus]:
+        from .db_models import BeamModelJobRow
+
+        session = self._session()
+        try:
+            row = session.query(BeamModelJobRow).filter_by(id=job_id).first()
+            if not row:
+                return None
+            return self._beam_model_job_row_to_status(row)
+        finally:
+            session.close()
+
+    def update_beam_model_job(
+        self,
+        job_id: str,
+        *,
+        state: Optional[JobState] = None,
+        progress: Optional[float] = None,
+        message: Optional[str] = None,
+        stage: Optional[BeamModelStage] = None,
+        beam_model_id: Optional[str] = None,
+    ) -> Optional[BeamModelJobStatus]:
+        from .db_models import BeamModelJobRow
+
+        session = self._session()
+        try:
+            row = session.query(BeamModelJobRow).filter_by(id=job_id).first()
+            if not row:
+                return None
+            now = _utcnow()
+            if state:
+                row.state = state.value if hasattr(state, "value") else state
+                if state == JobState.running and not row.started_at:
+                    row.started_at = now
+                if state in {JobState.succeeded, JobState.failed, JobState.cancelled}:
+                    row.finished_at = now
+            if progress is not None:
+                row.progress = progress
+            if message is not None:
+                row.message = message
+            if stage is not None:
+                row.stage = stage.value if hasattr(stage, "value") else stage
+            if beam_model_id is not None:
+                row.beam_model_id = beam_model_id
+            session.commit()
+            return self._beam_model_job_row_to_status(row)
+        finally:
+            session.close()
+
+    @staticmethod
+    def _beam_model_job_row_to_status(row) -> BeamModelJobStatus:
+        return BeamModelJobStatus(
+            id=row.id,
+            cache_key=row.cache_key,
+            state=row.state,
+            progress=row.progress or 0.0,
+            stage=row.stage,
+            message=row.message,
+            beam_model_id=row.beam_model_id,
+            started_at=row.started_at,
+            finished_at=row.finished_at,
+            created_at=row.created_at,
+        )
 
     # -- helpers --
 

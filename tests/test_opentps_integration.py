@@ -40,6 +40,10 @@ from radiarch.models.job import JobState
 from radiarch.config import get_settings
 
 
+@pytest.mark.skipif(
+    sys.platform == "darwin",
+    reason="MCsquare binary not shipped for Darwin; vendored OpenTPS is Linux-only.",
+)
 def test_opentps_integration():
     # Skip if test data is not available
     if not os.path.isdir(_test_data_root):

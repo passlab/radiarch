@@ -219,6 +219,41 @@ class GeometryStore:
         self._save_index(index)
         return paths
 
+    # ---- deletes ------------------------------------------------------
+
+    def delete_by_id(self, geometry_id: str) -> bool:
+        """Remove a geometry directory and scrub its cache_key from the index.
+
+        Returns True when a geometry was actually deleted, False when the
+        id was unknown. Safe to call against partial state (missing meta,
+        missing files, stale index entry) — each step is defensive.
+        """
+        root = self.base_dir / geometry_id
+        if not root.exists():
+            return False
+
+        # Scrub the cache index first. If we're about to delete files,
+        # the index entry should disappear atomically enough that a
+        # racing reader never sees "cache hit → files gone".
+        cache_key = self._read_cache_key(root)
+        if cache_key is not None:
+            index = self._load_index()
+            if index.get(cache_key) == geometry_id:
+                index.pop(cache_key)
+                self._save_index(index)
+
+        shutil.rmtree(root, ignore_errors=True)
+        return True
+
+    def _read_cache_key(self, root: Path) -> Optional[str]:
+        meta = root / META_FILENAME
+        if not meta.exists():
+            return None
+        try:
+            return json.loads(meta.read_text()).get("cache_key")
+        except (OSError, json.JSONDecodeError):
+            return None
+
     # ---- debugging helpers -------------------------------------------
 
     def list_ids(self) -> list[str]:

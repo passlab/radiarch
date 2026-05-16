@@ -28,6 +28,8 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .job import JobState
+
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -127,9 +129,24 @@ class GridSpec(BaseModel):
 # ---------------------------------------------------------------------------
 
 class PatientRef(BaseModel):
-    """Points the Geometry Service at a specific CT + RTSTRUCT pair."""
+    """Points the Geometry Service at a specific CT + RTSTRUCT pair.
 
-    dicom_study_uid: str = Field(..., description="DICOM Study Instance UID")
+    Two mutually-compatible ways to identify the source data:
+
+    * ``dicom_study_uid`` (+ optional series UIDs) — pulls from a PACS
+      via the configured Orthanc/DICOMweb adapter, or from the
+      ``opentps_data_root`` fallback in dev mode.
+    * ``upload_id`` — points at a previously-uploaded DICOM bundle
+      sitting under ``{settings.upload_dir}/{upload_id}/``. Takes
+      precedence when both are present.
+
+    At least one of the two MUST be provided.
+    """
+
+    dicom_study_uid: Optional[str] = Field(
+        default=None,
+        description="DICOM Study Instance UID. Required unless upload_id is set.",
+    )
     ct_series_uid: Optional[str] = Field(
         default=None,
         description="CT Series Instance UID. Null = auto-detect the primary CT.",
@@ -138,6 +155,22 @@ class PatientRef(BaseModel):
         default=None,
         description="RTSTRUCT Series Instance UID. Null = auto-detect.",
     )
+    upload_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Upload id returned by POST /uploads/dicom. When set, the "
+            "geometry build reads CT + RTSTRUCT from the extracted upload "
+            "directory instead of going to PACS."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _require_one_source(self) -> "PatientRef":
+        if not self.dicom_study_uid and not self.upload_id:
+            raise ValueError(
+                "PatientRef requires either dicom_study_uid or upload_id."
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -180,6 +213,7 @@ class GeometryBuildRequest(BaseModel):
             "study": self.patient_ref.dicom_study_uid,
             "ct": self.patient_ref.ct_series_uid,
             "rts": self.patient_ref.rtstruct_uid,
+            "upload": self.patient_ref.upload_id,
             "grid": self.grid_spec.model_dump() if self.grid_spec else None,
             "hu_model": self.hu_to_density_model.value,
             "name_map": self._normalized_name_map(),
@@ -236,3 +270,46 @@ class GeometryResult(BaseModel):
         if len(set(self.structure_index.values())) != len(self.structure_index):
             raise ValueError("structure_index labels must be unique")
         return self
+
+
+# ---------------------------------------------------------------------------
+# Async job tracking
+# ---------------------------------------------------------------------------
+
+class GeometryStage(str, Enum):
+    """Stages a :class:`GeometryService.build` call passes through.
+
+    Reported via the ``stage`` field on ``GeometryJobStatus`` so clients
+    polling ``GET /geometry/jobs/{job_id}`` can render a progress UI
+    without waiting for the final result.
+    """
+
+    queued = "queued"
+    loading_dicom = "loading_dicom"
+    converting_hu = "converting_hu"
+    rasterizing_contours = "rasterizing_contours"
+    resampling = "resampling"
+    persisting = "persisting"
+    done = "done"
+
+
+class GeometryJobStatus(BaseModel):
+    """Tracks an async ``POST /geometry/build`` invocation.
+
+    Unlike plan jobs this has no parent — it's identified by its own
+    ``id`` and carries the ``cache_key`` so a second request for the same
+    inputs can short-circuit to the cached geometry or reuse the
+    in-flight job.
+    """
+
+    id: str
+    cache_key: str
+    state: JobState = JobState.queued
+    progress: float = 0.0
+    stage: Optional[GeometryStage] = GeometryStage.queued
+    message: Optional[str] = None
+    geometry_id: Optional[str] = None  # populated when state == succeeded
+    eta_seconds: Optional[float] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
