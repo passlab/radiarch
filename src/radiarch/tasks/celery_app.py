@@ -15,7 +15,11 @@ celery_app = Celery(
     "radiarch",
     broker=settings.broker_url,
     backend=settings.result_backend,
-    include=["radiarch.tasks.plan_tasks"],
+    include=[
+        "radiarch.tasks.plan_tasks",
+        "radiarch.tasks.geometry_tasks",
+        "radiarch.tasks.beam_model_tasks",
+    ],
 )
 
 celery_app.conf.update(

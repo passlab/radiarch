@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     # Database and artifact storage
     database_url: str = Field(default="", description="Leave empty to use InMemoryStore; set to sqlite:///./radiarch.db or postgresql+psycopg://... for persistence")
     artifact_dir: str = Field(default="./data/artifacts")
+    upload_dir: str = Field(
+        default="",
+        description=(
+            "Where uploaded DICOM ZIPs get extracted to. "
+            "Empty (the default) resolves to {artifact_dir}/uploads at runtime."
+        ),
+    )
 
     # Session TTL
     session_ttl: int = Field(default=3600, description="Session expiration in seconds")

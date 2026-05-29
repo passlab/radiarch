@@ -80,6 +80,13 @@ def load_ct_and_patient(data_root: Optional[str] = None):
 # ---------------------------------------------------------------------------
 # Calibration & BDL
 # ---------------------------------------------------------------------------
+#
+# These two helpers used to load the BDL and MCsquare calibration directly.
+# Service 2 (Beam Model) introduced ``ProtonMachineModel`` — a pluggable
+# abstraction for per-machine calibration data — so both helpers are now
+# thin shims that delegate to the canonical loader. Their public signatures
+# are unchanged so legacy workflow modules (planner, dose, contour) keep
+# working without modification.
 
 def setup_calibration():
     """Load the default MCsquare CT calibration.
@@ -87,17 +94,10 @@ def setup_calibration():
     Returns:
         (calibration, mcsquare_path) tuple
     """
-    import opentps.core.processing.doseCalculation.protons.MCsquare as MCsquareModule
-    from opentps.core.data.CTCalibrations.MCsquareCalibration._mcsquareCTCalibration import MCsquareCTCalibration
+    from ...services.machine_model import ProtonMachineModel
 
-    mcsquare_path = str(MCsquareModule.__path__[0])
-    scanner_path = os.path.join(mcsquare_path, "Scanners", "UCL_Toshiba")
-    calibration = MCsquareCTCalibration.fromFiles(
-        huDensityFile=os.path.join(scanner_path, "HU_Density_Conversion.txt"),
-        huMaterialFile=os.path.join(scanner_path, "HU_Material_Conversion.txt"),
-        materialsPath=os.path.join(mcsquare_path, "Materials"),
-    )
-    return calibration, mcsquare_path
+    mm = ProtonMachineModel.from_default()
+    return mm.calibration, mm.mcsquare_path
 
 
 def load_bdl():
@@ -106,21 +106,9 @@ def load_bdl():
     Returns:
         BDL object from mcsquareIO.readBDL
     """
-    import opentps
-    import opentps.core.processing.doseCalculation.protons.MCsquare as MCsquareModule
-    from opentps.core.io import mcsquareIO
+    from ...services.machine_model import ProtonMachineModel
 
-    base_path = os.path.dirname(opentps.__file__)
-    bdl_path = os.path.join(
-        base_path, "core", "processing", "doseCalculation",
-        "protons", "MCsquare", "BDL", "BDL_default_DN_RangeShifter.txt",
-    )
-    if not os.path.exists(bdl_path):
-        bdl_path = os.path.join(
-            os.path.dirname(MCsquareModule.__file__),
-            "BDL", "BDL_default_DN_RangeShifter.txt",
-        )
-    return mcsquareIO.readBDL(bdl_path)
+    return ProtonMachineModel.from_default().bdl
 
 
 # ---------------------------------------------------------------------------
