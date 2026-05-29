@@ -87,12 +87,22 @@ Stop everything: `docker compose down` (add `-v` to remove volumes).
 ## Quick Start — Local Development
 
 ```bash
-cd service
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+python3 -m venv src/.venv
+source src/.venv/bin/activate
+./scripts/install-dev.sh         # editable install + sanity check
 uvicorn radiarch.app:create_app --factory --reload
 ```
+
+The `install-dev.sh` helper purges stale build artifacts before
+calling `pip install -e ./src`. Use it instead of a bare `pip install
+-e` whenever the vendored OpenTPS tree gains a new subpackage —
+modern setuptools' *strict* editable install snapshots the package
+list at install time, so old finders can mask freshly added
+`__init__.py` files and break imports like
+`opentps.core.processing.doseCalculation.protons.MCsquare`. The test
+suite's `tests/conftest.py` also prepends `src/` to `sys.path` as a
+belt-and-suspenders guard so `pytest` works even if the install is
+stale.
 
 Open <http://localhost:8000/api/v1/docs> to inspect the OpenAPI schema.
 
