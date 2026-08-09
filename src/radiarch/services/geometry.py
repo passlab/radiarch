@@ -158,6 +158,11 @@ class GeometryService:
     # -----------------------------------------------------------------
 
     def _load(self, request: GeometryBuildRequest) -> _LoadedCT:
+        # 0. NRRD path — an explicit local file reference (dev/testing on real
+        # 3D data before DICOM). Highest priority: the caller named a file.
+        if request.patient_ref.nrrd_ct_path:
+            return self._load_from_nrrd(request.patient_ref)
+
         # 1. Upload path — highest priority. The client explicitly
         # uploaded files; we should read those, never silently fall
         # through to anything else.
@@ -211,6 +216,23 @@ class GeometryService:
                 "POST a ZIP to /api/v1/uploads/dicom first."
             )
         return path
+
+    # ---- NRRD path ----------------------------------------------------
+
+    @staticmethod
+    def _load_from_nrrd(ref) -> _LoadedCT:
+        """Load a CT (+ optional segmentation) from NRRD/ITK files.
+
+        Produces the same ``_LoadedCT`` bundle as the DICOM paths: a real
+        ``CTImage`` and a list of ``ContourLike`` segment adapters, so the
+        rest of the pipeline runs unchanged.
+        """
+        from ..adapters.nrrd_ingest import load_nrrd_case  # lazy
+
+        ct, patient, contours = load_nrrd_case(
+            ref.nrrd_ct_path, ref.nrrd_seg_path
+        )
+        return _LoadedCT(ct=ct, patient=patient, contours=contours)
 
     # ---- Disk path ----------------------------------------------------
 

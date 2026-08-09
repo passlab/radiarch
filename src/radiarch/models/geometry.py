@@ -163,12 +163,32 @@ class PatientRef(BaseModel):
             "directory instead of going to PACS."
         ),
     )
+    nrrd_ct_path: Optional[str] = Field(
+        default=None,
+        description=(
+            "Path to a CT volume in NRRD/ITK format (dev/testing on real 3D "
+            "data before DICOM). When set, the geometry build reads this file "
+            "directly instead of going to PACS/upload."
+        ),
+    )
+    nrrd_seg_path: Optional[str] = Field(
+        default=None,
+        description=(
+            "Optional path to a Slicer .seg.nrrd label volume paired with "
+            "nrrd_ct_path. Its grid must match the CT grid."
+        ),
+    )
 
     @model_validator(mode="after")
     def _require_one_source(self) -> "PatientRef":
-        if not self.dicom_study_uid and not self.upload_id:
+        if not (self.dicom_study_uid or self.upload_id or self.nrrd_ct_path):
             raise ValueError(
-                "PatientRef requires either dicom_study_uid or upload_id."
+                "PatientRef requires one of: dicom_study_uid, upload_id, "
+                "or nrrd_ct_path."
+            )
+        if self.nrrd_seg_path and not self.nrrd_ct_path:
+            raise ValueError(
+                "nrrd_seg_path requires nrrd_ct_path to be set."
             )
         return self
 
@@ -218,6 +238,11 @@ class GeometryBuildRequest(BaseModel):
             "hu_model": self.hu_to_density_model.value,
             "name_map": self._normalized_name_map(),
         }
+        # NRRD source is content-addressed by path; only added when used so
+        # existing DICOM/upload cache keys are unchanged.
+        if self.patient_ref.nrrd_ct_path:
+            payload["nrrd_ct"] = self.patient_ref.nrrd_ct_path
+            payload["nrrd_seg"] = self.patient_ref.nrrd_seg_path
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
