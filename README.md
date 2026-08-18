@@ -59,6 +59,21 @@ docker compose up -d        # Starts all 5 services
 curl http://localhost:8000/api/v1/info
 ```
 
+### Smoke test (recommended)
+
+After the stack is up, run an end-to-end API smoke test (plan → job → artifacts):
+
+```bash
+chmod +x scripts/smoke_test.sh
+./scripts/smoke_test.sh
+```
+
+To target a different API base URL:
+
+```bash
+API_BASE_URL="http://127.0.0.1:8000/api/v1" ./scripts/smoke_test.sh
+```
+
 | Service | Port | Description |
 |---|---|---|
 | `api` | 8000 | Radiarch FastAPI server |
@@ -72,12 +87,22 @@ Stop everything: `docker compose down` (add `-v` to remove volumes).
 ## Quick Start — Local Development
 
 ```bash
-cd service
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+python3 -m venv src/.venv
+source src/.venv/bin/activate
+./scripts/install-dev.sh         # editable install + sanity check
 uvicorn radiarch.app:create_app --factory --reload
 ```
+
+The `install-dev.sh` helper purges stale build artifacts before
+calling `pip install -e ./src`. Use it instead of a bare `pip install
+-e` whenever the vendored OpenTPS tree gains a new subpackage —
+modern setuptools' *strict* editable install snapshots the package
+list at install time, so old finders can mask freshly added
+`__init__.py` files and break imports like
+`opentps.core.processing.doseCalculation.protons.MCsquare`. The test
+suite's `tests/conftest.py` also prepends `src/` to `sys.path` as a
+belt-and-suspenders guard so `pytest` works even if the install is
+stale.
 
 Open <http://localhost:8000/api/v1/docs> to inspect the OpenAPI schema.
 
@@ -186,6 +211,84 @@ plan = client.create_plan(
     beam_count=3,
 )
 job = client.poll_job(plan["job_id"], timeout=300)
+```
+
+## Optimization Service (`/api/v1/optimize`)
+
+Service 4 solves the inverse-planning problem: given a built geometry, beam
+model, and dose engine, find the fluence-element weights `w*` minimizing a
+composite objective. It is engine-agnostic — the only engine interaction during
+the solver loop is the `Dij·w` matvec — and content-addressable, so identical
+requests reuse the cached result.
+
+| Method & path | Purpose |
+|---|---|
+| `POST /api/v1/optimize/run` | Run (200 cache hit / 202 async dispatch / 422 / 401). |
+| `GET /api/v1/optimize/jobs/{job_id}` | Poll an async run. |
+| `GET /api/v1/optimize/{opt_id}` | Retrieve the `OptimizationResult`. |
+| `GET /api/v1/optimize/{opt_id}/weights` | Stream the optimal weights (`.npy`). |
+| `GET /api/v1/optimize/{opt_id}/checkpoints` | List checkpoint snapshots. |
+| `DELETE /api/v1/optimize/{opt_id}` | Drop from cache. |
+
+**Objectives:** `DMin`, `DMax`, `DUniform`, `DVHMin`, `DVHMax`, `EUD`, plus hard
+constraints and fluence-smoothness / total-variation regularizers.
+**Solvers:** `L-BFGS-B` (default), `Adam`, `ProjectedGradient` — see
+[`docs/adr/0002-optimization-solver-choice.md`](docs/adr/0002-optimization-solver-choice.md).
+**Robust optimization:** scenario aggregation `WORST_CASE` / `EXPECTED` / `CVaR`.
+
+```bash
+# End-to-end demo on the bundled SimpleFantom (analytic engine, no MCsquare):
+python demo/show_optimization.py
+python demo/show_optimization.py --objectives ptv_dmin=60,oar_dmax=20
+python demo/show_optimization.py --robust 9 --aggregation WORST_CASE
+python demo/show_optimization.py --solver Adam --max-iters 500 --show
+```
+
+See `docs/PRODUCTION.md` → "Optimization Service" for worker sizing and settings.
+
+## BAO Service (`/api/v1/bao`)
+
+Service 5 (Beam Angle Optimization) selects which beam directions a plan should
+use, *before* fluence optimization. It sits on top of Service 4: each candidate
+angle set is scored by building a beam model for it and running a short fluence
+optimization — the achieved composite cost is the score (lower is better) — then
+a search strategy selects the best `n_beams`.
+
+| Method & path | Purpose |
+|---|---|
+| `POST /api/v1/bao/run` | Run (200 cache hit / 202 async / 422 / 401). |
+| `GET /api/v1/bao/jobs/{job_id}` | Poll an async run. |
+| `GET /api/v1/bao/{bao_id}` | Retrieve the `BAOResult` (selected angles + scores). |
+| `DELETE /api/v1/bao/{bao_id}` | Drop from cache. |
+
+**Search strategies:** `greedy` (forward selection, captures beam interplay) and
+`top_k` (rank candidates individually) — see
+[`docs/adr/0003-bao-search-strategy.md`](docs/adr/0003-bao-search-strategy.md).
+
+```bash
+python demo/show_bao.py --n-beams 3 --angle-step 45 --search greedy
+```
+
+## Evaluation Service (`/api/v1/evaluate`)
+
+Service 6 is the read-only end of the pipeline: it turns a computed dose volume
+(from Service 3 or the final dose of Service 4) plus the geometry's structure
+masks into a clinician report — per-structure DVHs, target plan-quality indices
+(Paddick conformity, ICRU-83 homogeneity, coverage), and an optional gamma
+comparison against a reference dose.
+
+| Method & path | Purpose |
+|---|---|
+| `POST /api/v1/evaluate/run` | Run (200 cache hit / 202 async / 422 / 401). |
+| `GET /api/v1/evaluate/jobs/{job_id}` | Poll an async run. |
+| `GET /api/v1/evaluate/{evaluation_id}` | Retrieve the report. |
+| `DELETE /api/v1/evaluate/{evaluation_id}` | Drop from cache. |
+
+Metrics and their definitions are documented in
+[`docs/adr/0004-evaluation-metrics.md`](docs/adr/0004-evaluation-metrics.md).
+
+```bash
+python demo/show_evaluation.py --prescription 20 --gamma --show
 ```
 
 ## Architecture

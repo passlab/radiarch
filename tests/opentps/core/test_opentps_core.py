@@ -6,11 +6,22 @@ data loading, plan construction, MCsquare dose calculation, and DVH computation.
 
 Requires: vendored opentps.core at src/opentps/core/
 Test data: tests/opentps/core/opentps-testData/SimpleFantomWithStruct/
+
+Note: MCsquare dose-calculation tests require the Linux MCsquare binary,
+which is the only variant shipped with the vendored OpenTPS copy (Darwin
+and Windows binaries are stripped — see README § "About OpenTPS").
+Those tests skip automatically on macOS.
 """
 
 import os
+import sys
 import pytest
 import numpy as np
+
+requires_mcsquare = pytest.mark.skipif(
+    sys.platform == "darwin",
+    reason="MCsquare binary not shipped for Darwin; vendored OpenTPS is Linux-only.",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -136,6 +147,7 @@ class TestMCsquareDoseCalculation:
         print("MCsquareDoseCalculator configured successfully")
 
     @pytest.mark.slow
+    @requires_mcsquare
     def test_dose_computation_basic(self, simple_fantom_dir):
         """Run MCsquare dose calc with low primaries; verify dose is non-zero.
 
@@ -233,6 +245,7 @@ class TestDVH:
     """Test Dose-Volume Histogram computation."""
 
     @pytest.mark.slow
+    @requires_mcsquare
     def test_dvh_from_dose(self, simple_fantom_dir):
         """Compute DVH from dose + contour; verify dose stats are positive.
 

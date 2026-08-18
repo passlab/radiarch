@@ -6,12 +6,21 @@ patient data loading, contour extraction, MCsquare simulation,
 DVH, DICE, and WET/SPR computation.
 
 Test data: tests/opentps/core/MCsquare-python_interface/data/
+
+Note: ``test_mcsquare_simulation`` requires a Linux MCsquare binary and
+is skipped on macOS (the vendored OpenTPS strips Darwin binaries — see
+README § "About OpenTPS").
 """
 
 import os
 import sys
 import pytest
 import numpy as np
+
+requires_mcsquare = pytest.mark.skipif(
+    sys.platform == "darwin",
+    reason="MCsquare binary not shipped for Darwin; vendored OpenTPS is Linux-only.",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -197,6 +206,7 @@ class TestMCsquareSimulation:
     """Test MCsquare dose calculation through the python_interface."""
 
     @pytest.mark.slow
+    @requires_mcsquare
     def test_mcsquare_simulation(self, mcsquare_sample_data_dir, mcsquare_interface_dir, tmp_path):
         """Run MCsquare simulation; verify dose output exists.
 
