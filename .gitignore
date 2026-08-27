@@ -33,6 +33,9 @@ build/
 # Test output
 test_output.txt
 
+# Reproducibility run logs (Charter §6 — provenance, regenerated per run)
+runs/
+
 # Test data — include DICOM, exclude large unused pickles
 !tests/opentps/
 !tests/opentps/core/MCsquare-python_interface/data/
