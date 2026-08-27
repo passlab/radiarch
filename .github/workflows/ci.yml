@@ -5,10 +5,12 @@ on:
     branches: [master]
   pull_request:
     branches: [master]
-  # Allow the MCsquare validation job to be run on demand from the Actions tab.
+  # Allow every job (fast, full, MCsquare validation) to be run on demand
+  # from the Actions tab.
   workflow_dispatch:
-  # Nightly real-MCsquare validation (03:17 UTC) — keeps the V4 physics gate
-  # exercised regularly without making it block every PR.
+  # Nightly run (03:17 UTC): the full CI matrix — fast tests, full tests, and
+  # the real-MCsquare V4 physics gate — so a regression in any of the three
+  # is caught overnight even when no PR touched it.
   schedule:
     - cron: "17 3 * * *"
 
@@ -17,7 +19,10 @@ jobs:
     name: Fast Tests (API + Backend)
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    # Runs on PRs, pushes, and the nightly schedule / manual dispatch.
+    if: >-
+      github.event_name == 'push' || github.event_name == 'pull_request'
+      || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout (sparse — skip large binaries and test data)
@@ -52,7 +57,10 @@ jobs:
     name: Full Tests (Services 1-6, analytic engine)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    # Runs on PRs, pushes, and the nightly schedule / manual dispatch.
+    if: >-
+      github.event_name == 'push' || github.event_name == 'pull_request'
+      || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Checkout (full — includes MCsquare binaries and DICOM test data)

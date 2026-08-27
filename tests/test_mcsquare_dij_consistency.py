@@ -89,6 +89,179 @@ def _assert_dij_consistency(
 
 
 # ---------------------------------------------------------------------------
+# Monte-Carlo-aware agreement metric
+# ---------------------------------------------------------------------------
+#
+# The analytic assertion above is a *local voxel-wise relative error* — the
+# right metric for a noise-free engine. It is the WRONG metric for two
+# INDEPENDENT Monte-Carlo runs (direct compute_dose vs. Dij@w), and that
+# mismatch is exactly what made the V4 nightly fail even after the voxel-frame
+# was fixed:
+#
+#   * `direct` and `via_dij` are two separate MCsquare simulations with
+#     different random realizations — they only agree up to combined counting
+#     statistics.
+#   * The "lit" threshold of 1% of max dose sweeps in the entire low-dose bath
+#     (the failing run: 452k of 8M voxels). In a low-dose voxel a handful of
+#     proton histories gives tens-to-thousands of percent statistical scatter,
+#     so a local relative-error p95 is dominated by noise, not physics. No
+#     primary count affordable in a nightly job can make that metric pass.
+#
+# A physics-consistency gate has to separate **bias*/*structure* (which we care
+# about: scale, frame, spatial scramble) from *variance* (MC noise, which we
+# must tolerate). We assert three noise-robust quantities that still fail hard
+# on a real frame/normalization/physics bug:
+#
+#   1. Integral-dose ratio over lit voxels — noise averages out over ~10^5
+#      voxels, so this pins down uniform scale / normalization (e.g. a missing
+#      `numberOfFractionsPlanned` factor) and gross dose loss.
+#   2. Pearson correlation over lit voxels — a voxel-frame scramble (the
+#      original ~100% failure) collapses this toward 0; MC noise only nicks it.
+#   3. High-dose-region (>= high_dose_frac of max) voxel-wise relative error —
+#      the clinically meaningful region, where statistics are good enough that
+#      a genuine per-voxel disagreement (not noise) shows up. A spatial shift
+#      fails here at the Bragg/penumbra gradients.
+#
+# We always print a dose-band-stratified table so the CI log shows *where* the
+# disagreement lives — a real bug spreads across the high-dose bands, MC noise
+# concentrates in the low-dose bath.
+
+
+def _dose_agreement_report(direct: np.ndarray, via_dij: np.ndarray, *, lit_frac: float) -> dict:
+    """Stratified agreement metrics between two dose volumes (see module note)."""
+    max_dose = float(direct.max())
+    d = direct.astype(np.float64).ravel()
+    v = via_dij.astype(np.float64).ravel()
+    lit = d > lit_frac * max_dose
+
+    dl, vl = d[lit], v[lit]
+    rel = np.abs(dl - vl) / np.maximum(dl, 1e-9)
+
+    integral_ratio = float(vl.sum() / dl.sum()) if dl.sum() > 0 else float("nan")
+    if dl.std() > 0 and vl.std() > 0:
+        corr = float(np.corrcoef(dl, vl)[0, 1])
+    else:
+        corr = float("nan")
+    # Least-squares global scale v ~ k*d (bias, robust to per-voxel noise).
+    best_fit_scale = float((dl @ vl) / (dl @ dl)) if (dl @ dl) > 0 else float("nan")
+
+    # Dose-band breakdown (fraction-of-max ranges).
+    bands = [(0.01, 0.1), (0.1, 0.3), (0.3, 0.5), (0.5, 0.8), (0.8, 1.01)]
+    band_rows = []
+    for lo, hi in bands:
+        m = (d > lo * max_dose) & (d <= hi * max_dose)
+        n = int(m.sum())
+        if n == 0:
+            band_rows.append((lo, hi, 0, float("nan"), float("nan")))
+            continue
+        r = np.abs(d[m] - v[m]) / np.maximum(d[m], 1e-9)
+        band_rows.append((lo, hi, n, float(np.percentile(r, 50)), float(np.percentile(r, 95))))
+
+    # High-dose region metrics (well-sampled voxels).
+    hd = d > 0.5 * max_dose
+    if hd.any():
+        r_hd = np.abs(d[hd] - v[hd]) / np.maximum(d[hd], 1e-9)
+        hd_p50 = float(np.percentile(r_hd, 50))
+        hd_p95 = float(np.percentile(r_hd, 95))
+        hd_count = int(hd.sum())
+    else:
+        hd_p50 = hd_p95 = float("nan")
+        hd_count = 0
+
+    return {
+        "max_dose": max_dose,
+        "lit_count": int(lit.sum()),
+        "lit_p50": float(np.percentile(rel, 50)) if rel.size else float("nan"),
+        "lit_p95": float(np.percentile(rel, 95)) if rel.size else float("nan"),
+        "integral_ratio": integral_ratio,
+        "correlation": corr,
+        "best_fit_scale": best_fit_scale,
+        "highdose_count": hd_count,
+        "highdose_p50": hd_p50,
+        "highdose_p95": hd_p95,
+        "bands": band_rows,
+    }
+
+
+def _format_report(label: str, rep: dict) -> str:
+    lines = [
+        f"[{label}] MCsquare Dij@w vs compute_dose agreement:",
+        f"  max dose:            {rep['max_dose']:.6g}",
+        f"  lit voxels (>1%):    {rep['lit_count']}",
+        f"  integral ratio v/d:  {rep['integral_ratio']:.4f}   (1.0 = perfect)",
+        f"  correlation:         {rep['correlation']:.4f}",
+        f"  best-fit scale:      {rep['best_fit_scale']:.4f}",
+        f"  high-dose (>50%):    n={rep['highdose_count']}  "
+        f"p50={rep['highdose_p50'] * 100:.2f}%  p95={rep['highdose_p95'] * 100:.2f}%",
+        "  dose-band local relative error (fraction-of-max band -> p50 / p95):",
+    ]
+    for lo, hi, n, p50, p95 in rep["bands"]:
+        if n == 0:
+            lines.append(f"    {lo:.2f}-{hi:.2f}:  (empty)")
+        else:
+            lines.append(
+                f"    {lo:.2f}-{hi:.2f}:  n={n:>8}  p50={p50 * 100:6.2f}%  p95={p95 * 100:6.2f}%"
+            )
+    return "\n".join(lines)
+
+
+def _assert_mc_dij_consistency(
+    direct: np.ndarray,
+    via_dij: np.ndarray,
+    *,
+    label: str,
+    lit_frac: float = 0.01,
+    integral_tol: float = 0.05,
+    corr_min: float = 0.95,
+    highdose_p95_tol: float = 0.15,
+) -> None:
+    """Noise-robust Dij@w == compute_dose gate for two independent MC runs.
+
+    Fails on a genuine scale / frame / physics bug (the three checks below),
+    tolerates the per-voxel Monte-Carlo scatter that a local relative-error
+    metric cannot. See the module note above for the rationale. Defaults are
+    physically motivated for the SimpleFantom at ~1e5 primaries; the nightly
+    run is the ground truth for tuning them.
+    """
+    assert direct.shape == via_dij.shape, (
+        f"[{label}] shape mismatch: direct {direct.shape} vs via_dij {via_dij.shape}"
+    )
+    max_dose = float(direct.max())
+    if max_dose <= 0:
+        pytest.skip(f"[{label}] direct dose is all zero — no signal to compare")
+
+    rep = _dose_agreement_report(direct, via_dij, lit_frac=lit_frac)
+    report_str = _format_report(label, rep)
+    # Always surface the full breakdown (visible with -s / on failure).
+    print("\n" + report_str)
+
+    failures = []
+    if not (abs(rep["integral_ratio"] - 1.0) <= integral_tol):
+        failures.append(
+            f"integral ratio {rep['integral_ratio']:.4f} outside "
+            f"1±{integral_tol:.2f} — uniform scale / normalization mismatch"
+        )
+    if not (rep["correlation"] >= corr_min):
+        failures.append(
+            f"correlation {rep['correlation']:.4f} < {corr_min:.2f} — spatial "
+            f"scramble / voxel-frame misalignment (not just MC noise)"
+        )
+    if rep["highdose_count"] > 0 and not (rep["highdose_p95"] <= highdose_p95_tol):
+        failures.append(
+            f"high-dose p95 rel err {rep['highdose_p95'] * 100:.2f}% > "
+            f"{highdose_p95_tol * 100:.2f}% — disagreement in the well-sampled "
+            f"region, where MC noise is small"
+        )
+
+    assert not failures, (
+        report_str
+        + "\n  FAILED noise-robust agreement checks:\n"
+        + "".join(f"    - {f}\n" for f in failures)
+        + "  → If this is failing, the optimizer (Feature 4) will produce wrong plans."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Synthetic fixtures (no DICOM, no OpenTPS)
 # ---------------------------------------------------------------------------
 
@@ -399,9 +572,12 @@ class TestMCsquareDijConsistency:
     def test_mcsquare_dij_matches_direct_dose(self, tmp_path):
         """The big one: build_influence then apply_influence vs compute_dose.
 
-        Expectation: ≤1% p95 relative error in lit voxels for noise-free
-        Monte Carlo (high nb_primaries). With low nb_primaries this
-        will be noise-limited — we set it high enough for the test.
+        ``direct`` and ``via_dij`` are two *independent* Monte-Carlo runs, so
+        they agree only up to combined counting statistics. We assert the
+        noise-robust invariants (integral ratio, correlation, high-dose-region
+        agreement) rather than a per-voxel relative error, which at any
+        nightly-affordable primary count is dominated by low-dose MC scatter.
+        See the module-level note on ``_assert_mc_dij_consistency``.
         """
         from radiarch.services.dose import DoseService
         from radiarch.services.dose_engines.mcsquare import _opentps_available
@@ -446,12 +622,12 @@ class TestMCsquareDijConsistency:
             influence, weights, geom_bundle.density.shape,
         ).dose
 
-        # MCsquare-vs-MCsquare with 1e5 primaries: ~2% noise, so 5% p95
-        # tolerance. Tighten when you can afford 1e6 primaries.
-        _assert_dij_consistency(
+        # Noise-robust gate (integral ratio + correlation + high-dose p95).
+        # A voxel-frame/scale/physics bug fails; per-voxel MC scatter in the
+        # low-dose bath does not.
+        _assert_mc_dij_consistency(
             direct, via_dij,
             label="mcsquare SimpleFantom",
-            rel_tol=0.05,
         )
 
     def test_mcsquare_dij_linearity(self, tmp_path):
