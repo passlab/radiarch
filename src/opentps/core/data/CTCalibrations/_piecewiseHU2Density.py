@@ -5,7 +5,7 @@ __all__ = ['PiecewiseHU2Density']
 import re
 
 import numpy as np
-from scipy.interpolate import interpolate
+from scipy.interpolate import interp1d
 
 
 class PiecewiseHU2Density:
@@ -153,7 +153,7 @@ class PiecewiseHU2Density:
             density_ref, ind = np.unique(density_ref, return_index=True)
             HU_ref = HU_ref[ind]
 
-        hu = interpolate.interp1d(density_ref, HU_ref, kind='linear', fill_value='extrapolate')
+        hu = interp1d(density_ref, HU_ref, kind='linear', fill_value='extrapolate')
 
         # If densities as 0, interpolation returns nan but we must return 0
         res = np.array(hu(densities))
@@ -178,12 +178,29 @@ class PiecewiseHU2Density:
         float or array_like
             The mass density value(s).
         """
-        f = interpolate.interp1d(self.__hu, self.__densities, kind='linear', fill_value='extrapolate')
+        # Use np.interp (safe for large arrays) instead of scipy interp1d
+        # which has a bug in scipy ≥1.14 producing NaN for arrays with ≥8M elements.
+        hu_arr = np.asarray(hu)
+        orig_shape = hu_arr.shape
+        flat = hu_arr.ravel().astype(np.float64)
 
-        density = f(hu)
-        density[density<0] = 0
+        xp = np.asarray(self.__hu, dtype=np.float64)
+        fp = np.asarray(self.__densities, dtype=np.float64)
 
-        return density
+        density = np.interp(flat, xp, fp)
+
+        # Linear extrapolation for values outside the calibration range
+        below = flat < xp[0]
+        if np.any(below):
+            slope = (fp[1] - fp[0]) / (xp[1] - xp[0])
+            density[below] = fp[0] + slope * (flat[below] - xp[0])
+        above = flat > xp[-1]
+        if np.any(above):
+            slope = (fp[-1] - fp[-2]) / (xp[-1] - xp[-2])
+            density[above] = fp[-1] + slope * (flat[above] - xp[-1])
+
+        density[density < 0] = 0
+        return density.reshape(orig_shape)
 
     def getPiecewiseHU2MassDensityConversion(self):
         """

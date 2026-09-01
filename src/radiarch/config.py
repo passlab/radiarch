@@ -47,7 +47,7 @@ class Settings(BaseSettings):
     result_backend: str = Field(default="redis://localhost:6379/1")
 
     # OpenTPS configuration (only needed when force_synthetic=false)
-    opentps_data_root: str = Field(default="/data/opentps/testData")
+    opentps_data_root: str = Field(default="", description="Path to DICOM test data; empty = auto-detect from tests/")
     opentps_beam_library: str = Field(default="/data/opentps/beam-models")
     opentps_venv: str = Field(default="", description="Path to OpenTPS venv site-packages; empty = skip")
 
@@ -226,6 +226,15 @@ def get_settings() -> Settings:
     import site
 
     settings = Settings()
+
+    # Auto-detect opentps_data_root from repo test data if not set
+    if not settings.opentps_data_root:
+        # Walk up from config.py → radiarch/ → src/ → repo root
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
+        test_data = os.path.join(repo_root, "tests", "opentps", "core",
+                                 "opentps-testData", "SimpleFantomWithStruct")
+        if os.path.isdir(test_data):
+            settings.opentps_data_root = test_data
 
     # Add OpenTPS venv site-packages to sys.path if configured
     venv_path = settings.opentps_venv

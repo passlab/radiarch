@@ -3,7 +3,7 @@ __all__ = ['RayStationCTCalibration']
 
 
 import numpy as np
-from scipy.interpolate import interpolate
+from scipy.interpolate import interp1d
 
 from opentps.core.data.CTCalibrations.MCsquareCalibration._mcsquareCTCalibration import MCsquareCTCalibration
 from opentps.core.data.CTCalibrations.RayStationCalibration._rayStationDensity2Material import RayStationDensity2Material
@@ -141,7 +141,7 @@ class RayStationCTCalibration(AbstractCTCalibration, PiecewiseHU2Density, RaySta
         mcsDensities = [material.density for material in self._materials]
         mcsDensities = np.array(mcsDensities)
 
-        fDensity2HU = interpolate.interp1d(np.insert(densities, 0, 0), np.insert(hu, 0, hu[0]), kind='linear', fill_value='extrapolate')
+        fDensity2HU = interp1d(np.insert(densities, 0, 0), np.insert(hu, 0, hu[0]), kind='linear', fill_value='extrapolate')
 
         densityMid = mcsDensities[0:-2] + (mcsDensities[1:-1] - mcsDensities[0:-2]) / 2.0
         huMid = fDensity2HU(densityMid)

@@ -3,7 +3,7 @@ from typing import Sequence, Union
 
 import numpy as np
 
-from scipy.interpolate import interpolate
+from scipy.interpolate import interp1d
 
 from opentps.core.data.CTCalibrations.RayStationCalibration._rayStationMaterial import RayStationMaterial
 
@@ -141,7 +141,7 @@ class RayStationDensity2Material:
         """
         density_ref, rsp_ref = self._getBijectiveMassDensity2RSP(energy=energy)
 
-        density = interpolate.interp1d(rsp_ref, density_ref, kind='linear', fill_value='extrapolate')
+        density = interp1d(rsp_ref, density_ref, kind='linear', fill_value='extrapolate')
 
         return density(rsp)
 

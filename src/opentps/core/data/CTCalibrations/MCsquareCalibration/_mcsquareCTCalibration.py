@@ -5,7 +5,7 @@ from typing import Optional
 import os
 
 import numpy as np
-from scipy.interpolate import interpolate
+from scipy.interpolate import interp1d
 
 from opentps.core.data.CTCalibrations.MCsquareCalibration._mcsquareHU2Material import MCsquareHU2Material
 from opentps.core.data.CTCalibrations.MCsquareCalibration._mcsquareMolecule import MCsquareMolecule
@@ -185,7 +185,7 @@ class MCsquareCTCalibration(AbstractCTCalibration, PiecewiseHU2Density, MCsquare
         hu_ref, _ = self.getPiecewiseHU2MassDensityConversion()
         rsp_ref = self.convertHU2RSP(hu_ref, energy)
 
-        density = interpolate.interp1d(rsp_ref, hu_ref, kind='linear', fill_value='extrapolate')
+        density = interp1d(rsp_ref, hu_ref, kind='linear', fill_value='extrapolate')
 
         return density(rsp)
     

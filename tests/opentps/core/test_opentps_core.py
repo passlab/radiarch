@@ -321,6 +321,56 @@ class TestDVH:
         if hasattr(dvh, 'D5'):
             print(f"DVH D5={dvh.D5:.4f} Gy")
 
+# ---------------------------------------------------------------------------
+# 5. Calibration regression tests
+# ---------------------------------------------------------------------------
+
+class TestCalibrationLargeArray:
+    """Regression: scipy ≥1.14 interp1d produces NaN for arrays with ≥8M elements.
+
+    These tests verify that the np.interp workaround in
+    _piecewiseHU2Density.convertHU2MassDensity keeps working.
+    """
+
+    @pytest.fixture(scope="class")
+    def calibration(self):
+        """Load the UCL_Toshiba MCsquare calibration."""
+        from opentps.core.data.CTCalibrations.MCsquareCalibration._mcsquareCTCalibration import MCsquareCTCalibration
+        import opentps.core.processing.doseCalculation.protons.MCsquare as mc
+
+        mcsquare_path = mc.__path__[0]
+        scanner_path = os.path.join(mcsquare_path, "Scanners", "UCL_Toshiba")
+        return MCsquareCTCalibration.fromFiles(
+            huDensityFile=os.path.join(scanner_path, "HU_Density_Conversion.txt"),
+            huMaterialFile=os.path.join(scanner_path, "HU_Material_Conversion.txt"),
+            materialsPath=os.path.join(mcsquare_path, "Materials"),
+        )
+
+    def test_hu2density_large_float32_no_nan(self, calibration):
+        """convertHU2MassDensity must not produce NaN for a 200³ float32 array."""
+        hu = np.full((200, 200, 200), 100.0, dtype=np.float32)
+        density = calibration.convertHU2MassDensity(hu)
+        assert not np.any(np.isnan(density)), "NaN in density (scipy interp1d large-array bug)"
+        assert density.shape == hu.shape
+        assert np.all(density > 0)
+
+    def test_hu2rsp_large_float32_no_nan(self, calibration):
+        """convertHU2RSP must not produce NaN for a 200³ float32 array."""
+        hu = np.full((200, 200, 200), 100.0, dtype=np.float32)
+        rsp = calibration.convertHU2RSP(hu, energy=100)
+        assert not np.any(np.isnan(rsp)), "NaN in RSP (scipy interp1d large-array bug)"
+        assert rsp.shape == hu.shape
+        assert np.all(rsp > 0)
+
+    def test_hu2density_scalar_matches(self, calibration):
+        """Verify large-array and scalar results are consistent."""
+        hu_val = 150.0
+        scalar_result = calibration.convertHU2MassDensity(np.array([hu_val]))
+        array_result = calibration.convertHU2MassDensity(
+            np.full((200, 200, 200), hu_val, dtype=np.float32)
+        )
+        np.testing.assert_allclose(array_result.ravel()[0], scalar_result[0], rtol=1e-6)
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "--tb=short"])
