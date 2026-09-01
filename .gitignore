@@ -8,6 +8,7 @@ __pycache__/
 venv/
 .env.*
 !.env.example
+!.env.dev
 .DS_Store
 .idea/
 .vscode/

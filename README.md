@@ -118,7 +118,12 @@ When `RADIARCH_FORCE_SYNTHETIC=true`, the planner uses fast synthetic outputs (i
 
 ## Configuration
 
-All settings use `RADIARCH_` prefix. Place them in `.env` or export as env vars. See [`.env.example`](.env.example) for the full list.
+All settings use `RADIARCH_` prefix. Place them in `.env` or export as env vars.
+
+| Template | Use case |
+|---|---|
+| [`.env.example`](.env.example) | Docker Compose / production |
+| [`.env.dev`](.env.dev) | Local development / demo (no Docker needed) |
 
 | Variable | Default | Description |
 |---|---|---|
