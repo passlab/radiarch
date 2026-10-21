@@ -4,20 +4,12 @@ Prepends the in-tree ``src/`` directory to ``sys.path`` so the tests
 always run against the live source tree, regardless of how (or whether)
 ``radiarch`` has been installed into the active environment.
 
-**Why this exists.** The vendored OpenTPS tree
-(``src/opentps/core/processing/doseCalculation/...``) is a deeply nested
-namespace; setuptools' modern *strict* editable install snapshots the
-package list at install time. If anyone adds a new ``__init__.py`` —
-or runs ``pip install -e ./src`` before the full subpackage tree is
-in place — the installed ``__editable___radiarch_*_finder.py`` ends
-up with stale ``NAMESPACES`` entries that route those submodules
-through PEP-420 namespace lookup instead of regular package loading,
-which breaks downstream imports like
-``opentps.core.processing.doseCalculation.protons.MCsquare``.
-
-Putting ``src/`` on ``sys.path`` first sidesteps the editable-install
-finder entirely for test runs. Production (the Docker image) uses a
-proper site-packages install and is unaffected.
+**Why this exists.** setuptools' modern *strict* editable install
+snapshots the package list at install time; a package added after the
+install is routed through PEP-420 namespace lookup by the stale finder
+and may fail to import. Putting ``src/`` on ``sys.path`` first sidesteps
+the editable-install finder entirely for test runs. Production (the
+Docker image) uses a proper site-packages install and is unaffected.
 """
 
 from __future__ import annotations
@@ -42,7 +34,7 @@ if _SRC.is_dir():
 # ---------------------------------------------------------------------------
 # Test-only fake workflow runner
 #
-# Production has no fake path: if OpenTPS is missing or a runner fails, the
+# Production has no fake path: if an engine is missing or a runner fails, the
 # plan job fails. Tests that only exercise the API contract (plans, jobs,
 # artifacts, sessions) swap the real runners for this stand-in so they stay
 # fast and never invoke MCsquare. Opt in per module with
@@ -55,7 +47,7 @@ def _fake_workflow_runner(plan, adapter=None):
 
     Returns only the QA-summary keys the API tests assert on. ``engine`` is
     ``"fake"`` so a result from this runner can never be mistaken for one
-    from OpenTPS.
+    from an engine.
     """
     wf_id = plan.workflow_id.value if hasattr(plan.workflow_id, "value") else str(plan.workflow_id)
     beam_count = getattr(plan, "beam_count", 1) or 1

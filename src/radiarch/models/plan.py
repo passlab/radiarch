@@ -39,18 +39,12 @@ class RobustnessConfig(BaseModel):
     num_scenarios: int = 5
 
 
-class PlanRequest(BaseModel):
-    study_instance_uid: str = Field(..., description="DICOM Study Instance UID")
-    segmentation_uid: Optional[str] = Field(None, description="RTSTRUCT/SEG UID with target contours")
-    workflow_id: PlanWorkflow = Field(default=PlanWorkflow.proton_impt_basic)
-    prescription_gy: float = Field(..., gt=0)
-    fraction_count: int = Field(default=1, gt=0)
-    beam_count: int = Field(default=1, ge=1, le=9, description="Number of beams (1-9)")
-    notes: Optional[str] = None
+class PlanParameters(BaseModel):
+    """The workflow parameters of a plan; carried on the request and on the record."""
 
-    # Phase 8A: Optimization parameters
+    # Optimization parameters
     objectives: Optional[List[DoseObjective]] = None
-    optimization_method: str = "Scipy_L-BFGS-B"
+    optimization_method: str = "L-BFGS-B"
     max_iterations: int = 50
     spot_spacing_mm: float = 5.0
     layer_spacing_mm: float = 5.0
@@ -58,13 +52,26 @@ class PlanRequest(BaseModel):
     nb_primaries_beamlets: float = 1e4    # For beamlet calc
     nb_primaries_final: float = 1e6       # For final dose
 
-    # Phase 8B: Photon parameters
+    # Photon parameters
     mlc_leaf_width_mm: float = 10.0
     jaw_opening_mm: List[float] = [-50.0, 50.0]
     mu_per_beam: float = 5000.0
 
-    # Phase 8C: Robustness
+    # Robustness
     robustness: Optional[RobustnessConfig] = None
+
+    def parameter_dict(self) -> dict:
+        return {name: getattr(self, name) for name in PlanParameters.model_fields}
+
+
+class PlanRequest(PlanParameters):
+    study_instance_uid: str = Field(..., description="DICOM Study Instance UID")
+    segmentation_uid: Optional[str] = Field(None, description="RTSTRUCT/SEG UID with target contours")
+    workflow_id: PlanWorkflow = Field(default=PlanWorkflow.proton_impt_basic)
+    prescription_gy: float = Field(..., gt=0)
+    fraction_count: int = Field(default=1, gt=0)
+    beam_count: int = Field(default=1, ge=1, le=9, description="Number of beams (1-9)")
+    notes: Optional[str] = None
 
 
 class PlanSummary(ResearchArtifact):
@@ -77,7 +84,7 @@ class PlanSummary(ResearchArtifact):
     artifact_ids: List[str] = []
 
 
-class PlanDetail(PlanSummary):
+class PlanDetail(PlanSummary, PlanParameters):
     study_instance_uid: str
     segmentation_uid: Optional[str]
     fraction_count: int
@@ -85,7 +92,3 @@ class PlanDetail(PlanSummary):
     notes: Optional[str] = None
     job_id: Optional[str] = None
     qa_summary: Optional[dict] = None
-    
-    # Return optimization config in detail too
-    objectives: Optional[List[DoseObjective]] = None
-    robustness: Optional[RobustnessConfig] = None

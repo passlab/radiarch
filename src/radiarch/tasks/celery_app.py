@@ -1,7 +1,7 @@
 import sys
 import os
 
-# Ensure /app is in sys.path so vendored packages like opentps can be imported
+# Ensure /app (the image's source root) is in sys.path
 if "/app" not in sys.path:
     sys.path.insert(0, "/app")
 

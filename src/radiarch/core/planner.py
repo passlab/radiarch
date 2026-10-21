@@ -2,11 +2,12 @@
 
 Responsibilities:
   1. Build the dispatch table (`run`)
-  2. Run the workflow, failing loudly if OpenTPS is missing (`_dispatch_workflow`)
+  2. Run the workflow (`_dispatch_workflow`)
   3. Package artifacts (`_package_result`)
 
-All real OpenTPS logic lives in ``core.workflows.*`` modules. There is no
-synthetic fallback: a plan either runs the real engine or its job fails.
+The workflows in ``core.workflows.*`` run on the services (geometry, beam
+model, dose, optimization). There is no synthetic fallback: a plan either
+runs the real engine or its job fails.
 """
 
 from __future__ import annotations
@@ -65,16 +66,6 @@ class RadiarchPlanner:
     def _dispatch_workflow(self, plan: PlanDetail, runner) -> PlanExecutionResult:
         """Run the real runner. Any failure propagates to the task layer,
         which records the job as failed — never a made-up result."""
-        wf_id = plan.workflow_id
-        wf_label = wf_id.value if hasattr(wf_id, "value") else str(wf_id)
-
-        try:
-            import opentps.core  # noqa: F401 – availability check
-        except ImportError as e:
-            raise PlannerError(
-                f"OpenTPS is not importable; cannot run workflow {wf_label}: {e}"
-            ) from e
-
         qa_summary = runner(plan)
         return self._package_result(plan, qa_summary)
 

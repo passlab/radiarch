@@ -257,8 +257,7 @@ class InMemoryStore(StoreBase):
             beam_count=payload.beam_count,
             notes=payload.notes,
             job_id=job_id,
-            objectives=payload.objectives,
-            robustness=payload.robustness,
+            **payload.parameter_dict(),
         )
         job = JobStatus(id=job_id, plan_id=plan_id, state=JobState.queued, progress=0.0)
         self._plans[plan_id] = detail
@@ -714,6 +713,7 @@ class SQLStore(StoreBase):
                 job_id=job_id,
                 objectives=[obj.model_dump() for obj in payload.objectives] if payload.objectives else None,
                 robustness=payload.robustness.model_dump() if payload.robustness else None,
+                parameters={k: v for k, v in payload.parameter_dict().items() if k not in ("objectives", "robustness")},
                 created_at=now,
                 updated_at=now,
             )
@@ -1457,6 +1457,7 @@ class SQLStore(StoreBase):
         robustness = None
         if row.robustness:
             robustness = RobustnessConfig(**row.robustness)
+        parameters = dict(getattr(row, "parameters", None) or {})
 
         return PlanDetail(
             id=row.id,
@@ -1475,6 +1476,7 @@ class SQLStore(StoreBase):
             qa_summary=row.qa_summary,
             objectives=objectives,
             robustness=robustness,
+            **parameters,
         )
 
     @staticmethod

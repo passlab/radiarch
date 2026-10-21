@@ -1,77 +1,62 @@
-"""Proton IMPT Basic workflow — simple MCsquare dose calculation."""
+"""Proton IMPT basic workflow — spots on the target, unit metersets, one MCsquare dose."""
 
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from loguru import logger
 
 from ._helpers import (
-    PlannerError,
-    build_gantry_angles,
-    build_mc_calculator,
-    compute_dvh,
-    export_rtdose,
-    find_target_roi,
-    load_ct_and_patient,
-    setup_calibration,
-    setup_sim_dir,
+    build_beam_model, build_geometry, compute_dvh, ct_provenance, dose_image, dose_summary, export_rtdose,
+    mcsquare_engine, read_dose, read_masks, setup_sim_dir, target_of,
 )
+from ...models.beam_model import Modality
+from ...models.common import RESEARCH_USE_ONLY
+from ...models.dose import DoseComputeRequest, WeightVector
 from ...models.plan import PlanDetail
+
+BASIC_PRIMARIES = 1e4
 
 
 def run(plan: PlanDetail, adapter=None) -> Dict[str, Any]:
-    """Run basic proton IMPT dose calculation (no optimization)."""
+    """Geometry → proton beam model → MCsquare dose with 1 MU per spot (no optimization)."""
+    from ...services.dose import DoseService
+
     logger.info("Initializing basic proton workflow for plan %s", plan.id)
-
-    from opentps.core.data.plan import ProtonPlanDesign
-    from opentps.core.utils.programSettings import ProgramSettings
-
     sim_dir = setup_sim_dir(plan.id)
-    ps = ProgramSettings()
-    ps._config["dir"]["simulationFolder"] = sim_dir
 
-    # 1. Load data
-    ct, patient, _ = load_ct_and_patient()
-    calibration, _ = setup_calibration()
+    geometry = build_geometry(plan)
+    target_name, target_label = target_of(geometry)
+    beam_model = build_beam_model(plan, geometry, Modality.proton_pbs)
+    n = beam_model.fluence_elements.total_count
+    if n < 1:
+        raise RuntimeError("the beam model has no spots")
 
-    # 2. Plan design
-    plan_design = ProtonPlanDesign()
-    plan_design.calibration = calibration
-    plan_design.ct = ct
-    plan_design.patient = patient
-    plan_design.gantryAngles = [0.0]
-    plan_design.couchAngles = [0.0]
+    logger.info("Running MCsquare dose calculation (%d spots, %g primaries)...", n, BASIC_PRIMARIES)
+    dose_result = DoseService().compute_dose(DoseComputeRequest(
+        plan_id=plan.id, geometry_id=geometry.geometry_id, beam_model_id=beam_model.beam_model_id,
+        engine=mcsquare_engine(BASIC_PRIMARIES), weights=WeightVector(length=n, values=[1.0] * n),
+    ))
+    dose = read_dose(dose_result.dose_grid_uri)
 
-    # Find target
-    target_roi = find_target_roi(patient, fallback_to_first=True)
-    if target_roi:
-        logger.info("Using ROI %s as target", target_roi.name)
-        plan_design.defineTargetMaskAndPrescription(target_roi, plan.prescription_gy)
-    else:
-        logger.warning("No ROI found. Plan building might fail.")
-
-    proton_plan = plan_design.buildPlan()
-
-    # 3. Dose calculation
-    logger.info("Running MCsquare dose calculation...")
-    mc_calc = build_mc_calculator(ct, calibration, nb_primaries=1e4)
-    dose_image = mc_calc.computeDose(ct, proton_plan)
-
-    # 4. Export
     rtdose_path = os.path.join(sim_dir, "RTDOSE.dcm")
-    export_rtdose(dose_image, ct, rtdose_path)
-    dvh_data = compute_dvh(dose_image, target_roi, ct) if target_roi else {}
+    export_rtdose(dose_image(dose, geometry), ct_provenance(geometry), rtdose_path)
+    masks = read_masks(geometry)
 
     return {
-        "engine": "opentps",
-        "patientName": patient.name,
-        "beamCount": len(plan_design.gantryAngles),
-        "maxDose": float(dose_image.imageArray.max()),
-        "meanDose": float(dose_image.imageArray.mean()),
+        "engine": "mcsquare",
+        "engineVersion": dose_result.engine_version,
+        "intended_use": RESEARCH_USE_ONLY,
+        "patientName": geometry.ct_metadata.patient_name,
+        "beamCount": len(beam_model.fluence_elements.per_beam),
+        "spots": n,
+        "geometryId": geometry.geometry_id,
+        "beamModelId": beam_model.beam_model_id,
+        "doseId": dose_result.dose_id,
+        **dose_summary(dose),
         "simDir": sim_dir,
         "rtdosePath": rtdose_path,
-        "dvh": dvh_data,
-        "notes": "Success: OpenTPS MCsquare execution",
+        "dvh": compute_dvh(dose, masks == target_label, target_name),
+        "notes": "Success: MCsquare dose through radiarch's driver",
     }

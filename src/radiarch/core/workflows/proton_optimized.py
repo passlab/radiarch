@@ -1,121 +1,92 @@
-"""Proton IMPT Optimized workflow — beamlet computation + L-BFGS-B optimization."""
+"""Proton IMPT optimized workflow — influence matrix, inverse optimization, final MCsquare dose."""
 
 from __future__ import annotations
 
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from loguru import logger
 
 from ._helpers import (
-    PlannerError,
-    build_gantry_angles,
-    build_mc_calculator,
-    build_objectives,
-    compute_dvh,
-    export_rtdose,
-    find_body_roi,
-    find_target_roi,
-    load_ct_and_patient,
-    setup_calibration,
-    setup_sim_dir,
+    build_beam_model, build_geometry, build_objectives, compute_dvh, ct_provenance, dose_image, dose_summary,
+    export_rtdose, mcsquare_engine, read_dose, read_masks, setup_sim_dir, solver_method, target_of,
 )
+from ...models.beam_model import Modality
+from ...models.common import RESEARCH_USE_ONLY
+from ...models.dose import DoseComputeRequest, ScenarioSetSpec, WeightVector
+from ...models.optimization import OptimizationRunRequest, RobustnessSpec, SolverConfig
 from ...models.plan import PlanDetail
 
 
-def run(plan: PlanDetail) -> Dict[str, Any]:
-    """Phase 8A: IMPT optimization pipeline."""
-    logger.info("Starting IMPT optimization for plan %s", plan.id)
-
-    from opentps.core.data.plan import ProtonPlanDesign
-    from opentps.core.utils.programSettings import ProgramSettings
-    from opentps.core.processing.planOptimization.planOptimization import IntensityModulationOptimizer
+def optimize_and_compute(plan: PlanDetail, robustness: Optional[RobustnessSpec] = None,
+                         scenarios: Optional[ScenarioSetSpec] = None) -> Dict[str, Any]:
+    """The shared pipeline of the optimized and robust workflows."""
+    from ...services.dose import DoseService
+    from ...services.optimization import OptimizationService
 
     sim_dir = setup_sim_dir(plan.id)
-    ps = ProgramSettings()
-    ps._config["dir"]["simulationFolder"] = sim_dir
+    geometry = build_geometry(plan)
+    target_name, target_label = target_of(geometry)
+    beam_model = build_beam_model(plan, geometry, Modality.proton_pbs)
+    n = beam_model.fluence_elements.total_count
+    if n < 1:
+        raise RuntimeError("the beam model has no spots")
 
-    # 1. Load data
-    ct, patient, _ = load_ct_and_patient()
-    calibration, _ = setup_calibration()
-
-    # 2. Plan design
-    plan_design = ProtonPlanDesign()
-    plan_design.calibration = calibration
-    plan_design.ct = ct
-    plan_design.patient = patient
-    plan_design.gantryAngles = build_gantry_angles(plan.beam_count)
-    plan_design.spotSpacing = plan.spot_spacing_mm
-    plan_design.layerSpacing = plan.layer_spacing_mm
-
-    target_roi = find_target_roi(patient)
-    if target_roi:
-        plan_design.defineTargetMaskAndPrescription(target_roi, plan.prescription_gy)
-    else:
-        logger.warning("No target ROI found, optimization may fail")
-
-    logger.info("Building initial plan...")
-    proton_plan = plan_design.buildPlan()
-
-    # 3. Beamlets
-    logger.info("Computing interaction matrix (beamlets)...")
-    mc_calc = build_mc_calculator(ct, calibration, nb_primaries=plan.nb_primaries_beamlets)
-
-    rois_for_calc = []
-    if target_roi:
-        rois_for_calc.append(target_roi)
-    body_roi = find_body_roi(patient)
-    if body_roi:
-        rois_for_calc.append(body_roi)
-
-    mc_calc.computeBeamlets(ct, proton_plan, roi=rois_for_calc)
-
-    # 4. Objectives
-    objectives = build_objectives(plan, patient, target_roi)
-    proton_plan.planDesign.objectives = objectives
-
-    # 5. Optimize
-    logger.info("Running optimizer (%s)...", plan.optimization_method)
-    solver = IntensityModulationOptimizer(
-        plan=proton_plan,
-        method=plan.optimization_method,
-        maxiter=plan.max_iterations,
+    method = solver_method(plan.optimization_method)
+    logger.info("Optimizing %d spots with %s (%d iterations max)...", n, method, plan.max_iterations)
+    request = OptimizationRunRequest(
+        plan_id=plan.id, geometry_id=geometry.geometry_id, beam_model_id=beam_model.beam_model_id,
+        dose_engine=mcsquare_engine(plan.nb_primaries_beamlets),
+        objectives=build_objectives(plan, geometry, target_name),
+        solver=SolverConfig(method=method, max_iterations=int(plan.max_iterations)),
+        robustness=robustness or RobustnessSpec(),
     )
-    res = solver.optimize()
-    logger.info("Optimization complete. Success: %s, Message: %s", res.success, res.message)
+    opt = OptimizationService().run(request)
+    logger.info("Optimization complete. Success: %s, cost %.4g", opt.convergence.success, opt.convergence.final_cost)
 
-    # 6. Final dose
-    logger.info("Computing final dose...")
-    mc_calc.nbPrimaries = plan.nb_primaries_final
-    dose_image = mc_calc.computeDose(ct, proton_plan)
-
+    logger.info("Computing final dose (%g primaries)...", plan.nb_primaries_final)
+    dose_result = DoseService().compute_dose(DoseComputeRequest(
+        plan_id=plan.id, geometry_id=geometry.geometry_id, beam_model_id=beam_model.beam_model_id,
+        engine=mcsquare_engine(plan.nb_primaries_final),
+        weights=WeightVector(length=n, weights_uri=opt.weights_ref_uri), scenarios=scenarios,
+    ))
+    dose = read_dose(dose_result.dose_grid_uri)
     rtdose_path = os.path.join(sim_dir, "RTDOSE.dcm")
-    export_rtdose(dose_image, ct, rtdose_path)
+    export_rtdose(dose_image(dose, geometry), ct_provenance(geometry), rtdose_path)
+    masks = read_masks(geometry)
 
-    return {
-        "engine": "opentps_optimized",
-        "beamCount": len(proton_plan.planDesign.gantryAngles),
-        "maxDose": float(dose_image.imageArray.max()),
+    summary: Dict[str, Any] = {
+        "engineVersion": dose_result.engine_version,
+        "intended_use": RESEARCH_USE_ONLY,
+        "beamCount": len(beam_model.fluence_elements.per_beam),
+        "spots": n,
+        "geometryId": geometry.geometry_id,
+        "beamModelId": beam_model.beam_model_id,
+        "optimizationId": opt.optimization_id,
+        "doseId": dose_result.dose_id,
+        **dose_summary(dose),
         "rtdosePath": rtdose_path,
         "simDir": sim_dir,
-        "dvh": compute_dvh(dose_image, target_roi, ct) if target_roi else {},
+        "dvh": compute_dvh(dose, masks == target_label, target_name),
         "optimization": {
-            "success": bool(res.success),
-            "iterations": int(res.nit),
-            "final_cost": float(res.fun),
-            # O18 — surface the solver method in qa_summary so the plan report
-            # records which engine produced the weights, matching the
-            # OptimizationService result contract (convergence + solver_method).
-            "solver_method": plan.optimization_method,
+            "success": bool(opt.convergence.success),
+            "iterations": int(opt.convergence.iterations),
+            "final_cost": float(opt.convergence.final_cost),
+            "solver_method": method,
         },
     }
+    if dose_result.scenario_doses:
+        summary["scenarioDoses"] = [
+            {"name": s.scenario_name, "maxDose": s.statistics.max_gy, "meanDose": s.statistics.mean_gy}
+            for s in dose_result.scenario_doses
+        ]
+    if opt.robust_stats is not None:
+        summary["robustStats"] = opt.robust_stats.model_dump()
+    return summary
 
 
-# O18 note: the legacy plan path above runs OpenTPS' IntensityModulationOptimizer
-# directly on OpenTPS objects (ct/patient/proton_plan). Re-routing it through
-# radiarch.services.optimization.OptimizationService — which is engine-agnostic
-# and keyed on geometry_id/beam_model_id — requires first building Services 1–2
-# (Geometry, Beam Model) inside this workflow under the OpenTPS runtime. That
-# refactor is deferred until the plan path migrates onto the microservice
-# pipeline end-to-end; the OptimizationService is already wired for direct
-# /api/v1/optimize/run use in the meantime.
+def run(plan: PlanDetail) -> Dict[str, Any]:
+    logger.info("Starting IMPT optimization for plan %s", plan.id)
+    summary = optimize_and_compute(plan)
+    summary["engine"] = "mcsquare_optimized"
+    return summary

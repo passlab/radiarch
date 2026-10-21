@@ -1,6 +1,6 @@
 """R0 hygiene: the intended-use statement on every artifact, API-key auth on
-every router, test-only engine gating, the RTDOSE writer's labels, the OpenTPS
-photon plan builder and the robustness translation (roadmap R0)."""
+every router, test-only engine gating, the RTDOSE writer's labels, the photon
+plan builder and the robustness translation (roadmap R0)."""
 
 from __future__ import annotations
 
@@ -10,17 +10,6 @@ import numpy as np
 import pytest
 
 from radiarch.models.common import NOT_FOR_CLINICAL_USE, RESEARCH_USE_ONLY
-
-
-def _opentps_available() -> bool:
-    try:
-        import opentps.core  # noqa: F401
-        return True
-    except Exception:
-        return False
-
-
-needs_opentps = pytest.mark.skipif(not _opentps_available(), reason="vendored OpenTPS not importable")
 
 
 @pytest.fixture
@@ -197,7 +186,7 @@ class TestRtdoseLabels:
 
 
 # ---------------------------------------------------------------------------
-# Geometry bundle (persisted geometry → OpenTPS objects)
+# Geometry bundle (persisted geometry → arrays)
 # ---------------------------------------------------------------------------
 
 class TestGeometryBundle:
@@ -233,32 +222,33 @@ class TestGeometryBundle:
             frame_of_reference_uid="1.2.3.4",
         ), ct_zyx, masks_zyx
 
-    @needs_opentps
-    def test_load_opentps_geometry_uses_the_persisted_volumes(self, tmp_path):
-        from radiarch.services.geometry_bundle import load_opentps_geometry
+    def test_load_geometry_arrays_uses_the_persisted_volumes(self, tmp_path):
+        from radiarch.services.geometry_bundle import load_geometry_arrays
 
         geom, ct_zyx, masks_zyx = self._geom(tmp_path)
-        ct, patient, target = load_opentps_geometry(geom)
+        arrays = load_geometry_arrays(geom)
 
-        assert ct.imageArray.shape == (6, 5, 4)           # (x, y, z)
-        assert np.array_equal(ct.imageArray, np.transpose(ct_zyx, (2, 1, 0)))
-        assert tuple(ct.spacing) == (1.0, 1.5, 2.0)
-        assert tuple(ct.origin) == (-1.0, 0.0, 3.0)
-        assert ct.frameOfReferenceUID == "1.2.3.4"
-        assert target is not None and target.name == "PTV"
-        assert int(target.imageArray.sum()) == int((masks_zyx == 1).sum())
-        assert patient.name == "ANON"
+        assert arrays.ct_hu.shape == (4, 5, 6)                       # (z, y, x)
+        assert arrays.ct_hu_xyz().shape == (6, 5, 4)
+        assert np.array_equal(arrays.ct_hu_xyz(), np.transpose(ct_zyx, (2, 1, 0)))
+        assert arrays.spacing_mm == (1.0, 1.5, 2.0)
+        assert arrays.origin_mm == (-1.0, 0.0, 3.0)
+        assert arrays.frame_of_reference_uid == "1.2.3.4"
+        assert arrays.target() == ("PTV", 1)
+        assert int(arrays.mask_xyz(1).sum()) == int((masks_zyx == 1).sum())
+        assert arrays.label_of("spinalcord") == 2
+        assert arrays.patient_name == "ANON"
 
     def test_missing_ct_grid_is_an_error_not_a_fallback(self, tmp_path):
-        from radiarch.services.geometry_bundle import load_opentps_geometry
+        from radiarch.services.geometry_bundle import load_geometry_arrays
 
         geom, _, _ = self._geom(tmp_path, with_ct=False)
         with pytest.raises(ValueError, match="no CT grid"):
-            load_opentps_geometry(geom)
+            load_geometry_arrays(geom)
 
 
 # ---------------------------------------------------------------------------
-# OpenTPS photon plan builder (defect 1) and robustness translation (defect 2)
+# Photon plan builder (defect 1) and robustness translation (defect 2)
 # ---------------------------------------------------------------------------
 
 class TestPhotonPlanBuilder:
@@ -290,7 +280,7 @@ class TestPhotonPlanBuilder:
         from radiarch.services.photon_beamlets import generate_photon_beamlets
 
         result = generate_photon_beamlets(
-            ct=object(), patient=object(),
+            geometry=object(),
             machine_model=PhotonMachineModel(machine_model_id="default"),
             beam_set=BeamSetSpec(isocenter_mm=(0, 0, 0), beams=[BeamSpec(beam_id="B1", gantry_deg=30.0)]),
             params=DeliveryParams(),
@@ -299,24 +289,26 @@ class TestPhotonPlanBuilder:
         assert result.fluence_elements.per_beam[0].active_beamlets == 1600
 
 
-@needs_opentps
 class TestRobustnessConfig:
-    def test_parameters_reach_opentps(self):
+    def test_parameters_become_scenarios(self):
+        from radiarch.core.workflows._helpers import robust_scenarios
         from radiarch.core.workflows.proton_robust import configure_robustness
         from radiarch.models.plan import RobustnessConfig
 
-        rob = configure_robustness(RobustnessConfig(
-            setup_systematic_error_mm=[3.0, 3.0, 3.0],
-            setup_random_error_mm=[1.0, 1.0, 1.0],
-            range_systematic_error_pct=3.5,
-            selection_strategy="ALL",
-            num_scenarios=9,
-        ))
-        assert rob.setupSystematicError == [3.0, 3.0, 3.0]
-        assert rob.setupRandomError == [1.0, 1.0, 1.0]
-        assert rob.rangeSystematicError == 3.5
-        assert rob.selectionStrategy is type(rob).Strategies.ALL
-        assert rob.numScenarios == 9
+        cfg = RobustnessConfig(setup_systematic_error_mm=[3.0, 3.0, 3.0], setup_random_error_mm=[1.0, 1.0, 1.0],
+                               range_systematic_error_pct=3.5, selection_strategy="ALL", num_scenarios=9)
+        scenarios = robust_scenarios(cfg)
+        assert len(scenarios) == 6 * 3 + 2
+        shifts = {s.setup_shift_mm for s in scenarios if s.setup_shift_mm is not None}
+        assert shifts == {(3.0, 0, 0), (-3.0, 0, 0), (0, 3.0, 0), (0, -3.0, 0), (0, 0, 3.0), (0, 0, -3.0)}
+        assert {s.range_scale for s in scenarios} == {None, 0.965, 1.035}
+        rob = configure_robustness(cfg)
+        assert rob.enabled and rob.aggregation == "WORST_CASE" and len(rob.scenarios) == 20
+
+        reduced = robust_scenarios(RobustnessConfig(selection_strategy="REDUCED_SET"))
+        assert len(reduced) == 8 and all(s.range_scale is None for s in reduced if s.setup_shift_mm)
+        rnd = robust_scenarios(RobustnessConfig(selection_strategy="RANDOM", num_scenarios=4))
+        assert len(rnd) == 4 and rnd == robust_scenarios(RobustnessConfig(selection_strategy="RANDOM", num_scenarios=4))
 
     def test_unknown_strategy_is_an_error(self):
         from radiarch.core.workflows._helpers import PlannerError
@@ -326,17 +318,24 @@ class TestRobustnessConfig:
         with pytest.raises(PlannerError, match="selection_strategy"):
             configure_robustness(RobustnessConfig(selection_strategy="SOMETIMES"))
 
+    def test_legacy_solver_names_map_to_radiarch_solvers(self):
+        from radiarch.core.workflows._helpers import PlannerError, solver_method
+
+        assert solver_method("Scipy_L-BFGS-B") == "L-BFGS-B"
+        assert solver_method("Adam") == "Adam"
+        with pytest.raises(PlannerError, match="optimization_method"):
+            solver_method("Simplex")
+
 
 # ---------------------------------------------------------------------------
 # Beam model on a persisted geometry (defect 3): spots follow the given target
 # ---------------------------------------------------------------------------
 
-@needs_opentps
 class TestBeamModelOnPersistedGeometry:
     def test_proton_spots_are_placed_on_the_persisted_target(self, tmp_path):
         import SimpleITK as sitk
         from radiarch.models.beam_model import BeamSetSpec, BeamSpec, DeliveryParams, Modality
-        from radiarch.services.geometry_bundle import load_opentps_geometry
+        from radiarch.services.geometry_bundle import load_geometry_arrays
         from radiarch.services.machine_model import get_machine_model
         from radiarch.services.proton_spots import generate_proton_spots
 
@@ -362,10 +361,10 @@ class TestBeamModelOnPersistedGeometry:
             frame_of_reference_uid="1.2.3.4",
         )
 
-        ct, patient, target = load_opentps_geometry(geom)
-        assert target is not None
+        arrays = load_geometry_arrays(geom)
+        assert arrays.target() == ("PTV", 1)
         result = generate_proton_spots(
-            ct=ct, patient=patient, target_contour=target,
+            geometry=arrays,
             machine_model=get_machine_model(Modality.proton_pbs, None),
             beam_set=BeamSetSpec(isocenter_mm=(0.0, 0.0, 0.0),
                                  beams=[BeamSpec(beam_id="B1", gantry_deg=0.0)]),
@@ -376,9 +375,9 @@ class TestBeamModelOnPersistedGeometry:
         xs, ys = [], []
         for beam in result.plan.beams:
             for layer in beam.layers:
-                xs.extend(float(v) for v in layer.spotX)
-                ys.extend(float(v) for v in layer.spotY)
-        # Every spot sits within the target radius plus OpenTPS's 5 mm margin and
+                xs.extend(s.x_mm for s in layer.spots)
+                ys.extend(s.y_mm for s in layer.spots)
+        # Every spot sits within the target radius plus the 5 mm placement margin and
         # one 5 mm spot spacing of the isocenter — on the given sphere, not on the
         # default phantom the beam model used to load.
         assert max(abs(v) for v in xs + ys) <= 10.0 + 5.0 + 5.0

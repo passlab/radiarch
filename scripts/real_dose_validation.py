@@ -6,11 +6,9 @@ Radiarch on real clinical CT (LCTSC, BREAST-DIAGNOSIS) and to exercise the real
 MCsquare Monte Carlo proton engine on a real CT.
 
 Unlike ``demo/show_dose.py`` (which hard-codes the bundled fantom path and
-overrides ``RADIARCH_OPENTPS_DATA_ROOT`` at import), this script points every
-stage at a caller-supplied DICOM directory, so it works on any real study —
-and it sets the OpenTPS data root *before* importing radiarch, so the
-beam-model build (which re-reads the patient for its target contour) finds the
-same study the geometry was built from.
+overrides ``RADIARCH_DATA_ROOT`` at import), this script points every stage
+at a caller-supplied DICOM directory, so it works on any real study, and it
+sets the data root *before* importing radiarch.
 
 Engines
 -------
@@ -70,10 +68,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     out = Path(args.out).resolve() if args.out else (data_root.parent / "_validation_artifacts")
 
-    # Set config BEFORE importing radiarch so get_settings() picks it up, and so
-    # the beam-model build (which re-reads patient from opentps_data_root for its
-    # target contour) sees the SAME study as the geometry build.
-    os.environ["RADIARCH_OPENTPS_DATA_ROOT"] = str(data_root)
+    # Set config BEFORE importing radiarch so get_settings() picks it up.
+    os.environ["RADIARCH_DATA_ROOT"] = str(data_root)
     os.environ["RADIARCH_ARTIFACT_DIR"] = str(out)
     os.environ.setdefault("RADIARCH_ORTHANC_USE_MOCK", "true")
 
