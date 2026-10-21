@@ -72,7 +72,8 @@ def default_engine_dir() -> Path:
         configured = ""
     if configured:
         return Path(configured)
-    return Path(__file__).resolve().parents[3] / "opentps" / "core" / "processing" / "doseCalculation" / "photons"
+    from .mcsquare_driver import engine_assets_dir
+    return engine_assets_dir("ccc")
 
 
 # ---------------------------------------------------------------------------

@@ -8,24 +8,27 @@ use. Every result carries that statement (see README.md, "Intended use").
 
 This product includes or runs software developed by others:
 
-- OpenTPS core, https://gitlab.com/openmcsquare/opentps, Apache License 2.0.
-  A copy is vendored under src/opentps/ with radiarch's patches recorded in
-  src/opentps/patches/ and the procedure in src/opentps/ATTRIBUTION.md.
-  Parts of radiarch are adapted from it.
+- OpenTPS core, https://gitlab.com/openmcsquare/opentps, Apache License 2.0,
+  Copyright UCLouvain. Parts of radiarch are ports of it: the contour
+  rasterizer (services/contour_raster.py), the CT calibration and material
+  database reader (services/proton_rsp.py), the spot placement
+  (services/spot_placement.py), the MCsquare file protocol
+  (services/dose_engines/mcsquare_driver.py, the configuration template
+  services/dose_engines/mcsquare_config_template.txt) and the CCC file
+  protocol (services/dose_engines/ccc_driver.py). Nothing of OpenTPS is
+  imported or shipped as code.
 
 - MCsquare, https://gitlab.com/openmcsquare/MCsquare, Apache License 2.0.
-  Binaries, material tables, beam data libraries and scanner calibration
-  tables are shipped under src/opentps/core/processing/doseCalculation/
-  protons/MCsquare/ and are run as separate processes. radiarch's driver
-  for the engine's file protocol (services/dose_engines/mcsquare_driver.py)
-  is a port of OpenTPS's mcsquareIO.py and mcsquareDoseCalculator.py, and
-  services/dose_engines/mcsquare_config_template.txt is the engine's
-  configuration template as shipped with OpenTPS core.
+  The launcher, Linux binaries, material tables, beam data libraries and
+  scanner calibration tables are shipped under engines/mcsquare/ (the copy
+  packaged by OpenTPS core, whose licence is engines/mcsquare/LICENSE-OpenTPS)
+  and are run as separate processes.
 
 - WiscPlan collapsed-cone photon dose engine (CCC_DoseEngine), GNU General
   Public License version 2, shipped as source and a prebuilt Linux binary
-  under src/opentps/core/processing/doseCalculation/photons/. radiarch runs
-  it only as a separate program that exchanges files with it; nothing in
+  under engines/ccc/ (licence: engines/ccc/licenseWiscPlan.txt). radiarch
+  runs it only as a separate program that exchanges files with it; nothing in
   radiarch links to or imports it.
 
-- Test data: the SimpleFantomWithStruct DICOM set from the OpenTPS test data.
+- Test data: the SimpleFantomWithStruct DICOM set from the OpenTPS test data,
+  under tests/data/.

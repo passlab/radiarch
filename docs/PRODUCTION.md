@@ -259,7 +259,7 @@ jq 'select(.event_type=="dose.compute" and .state=="succeeded")
 - `GET /api/v1/info` — liveness (no DB, no Redis, just process up)
 - `GET /api/v1/dose/engines` — engine availability snapshot
 - `GET /api/v1/dose/engines/mcsquare` — MCsquare-specific
-  diagnostics (binary path, OpenTPS importable)
+  diagnostics (assets directory, binaries, launcher, engine fingerprint)
 
 Wire the first into your k8s `livenessProbe`, the second into your
 monitoring (alert when `available: false`).

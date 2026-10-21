@@ -14,7 +14,7 @@ nozzle and a generic 6 MV photon beam).
 - Linux x86-64 (the MCsquare and CCC engine binaries ship for Linux only; a CPU
   with AVX2 is used automatically, SSE4 as a fallback).
 - Python 3.12 or newer, `git`, and about 2 GB of free disk for the artifact cache.
-- The repository with its bundled test data: `tests/opentps/core/opentps-testData/SimpleFantomWithStruct`
+- The repository with its bundled test data: `tests/data/SimpleFantomWithStruct`
   (200 CT slices of a water phantom with one contoured target, `TargetVolume`).
   No download, no Orthanc, no Docker, no GPU.
 
@@ -203,8 +203,8 @@ Public collections rarely ship plans next to their CTs, so the demo stops at the
 |---|---|
 | A photon or gamma step runs for many minutes | Native grid. Add `--spacing 5`. |
 | `--engine analytic` reports hundreds of Gy | By design: the analytic engine is a test fixture with the right shape and the wrong physics. It is refused outside `RADIARCH_ENVIRONMENT=dev` and should not be shown. |
-| `MCsquare engine is not available` | OpenTPS not importable in this venv: run `./scripts/install-dev.sh`; on macOS or Windows there is no engine binary. |
-| `ModuleNotFoundError: opentps.core.processing...` after a `git pull` | Stale editable install; `./scripts/install-dev.sh` again. |
+| `MCsquare engine is not available` | The engine assets are missing or not executable: `ls engines/mcsquare`, `./scripts/fetch-engines.sh`; on macOS or Windows there is no engine binary. |
+| `ModuleNotFoundError: radiarch...` after a `git pull` | Stale editable install; `./scripts/install-dev.sh` again. |
 | `401 Invalid or missing API key` | The server has `RADIARCH_API_KEY` set; send `X-API-Key` (the smoke test reads `X_API_KEY`). |
 | Disk filling under `data/artifacts` | Caches of every dose and Dij; `rm -rf data/artifacts` resets them (the cleanup task evicts old entries in a deployment). |
 | Coverage 0 % in the evaluation | You evaluated an unweighted field (steps 3.2–3.3). Optimize first (3.4). |

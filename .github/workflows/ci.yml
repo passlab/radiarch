@@ -33,8 +33,7 @@ jobs:
             tests/conftest.py
             tests/test_api_e2e.py
             tests/test_client.py
-            tests/opentps/core/conftest.py
-            tests/opentps/core/test_api_backend.py
+            tests/test_api_backend.py
           sparse-checkout-cone-mode: false
 
       - name: Set up Python
@@ -48,7 +47,7 @@ jobs:
           pip install -e ./src[dev]
 
       - name: Run fast tests
-        run: python -m pytest tests/test_api_e2e.py tests/test_client.py tests/opentps/core/test_api_backend.py -v
+        run: python -m pytest tests/test_api_e2e.py tests/test_client.py tests/test_api_backend.py -v
 
   full-tests:
     # The full suite incl. Services 3-6 on the analytic engine. The real-MCsquare
@@ -64,7 +63,7 @@ jobs:
       || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
     steps:
-      - name: Checkout (full — includes MCsquare binaries and DICOM test data)
+      - name: Checkout (full — includes the engine assets and DICOM test data)
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -91,7 +90,7 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
 
     steps:
-      - name: Checkout (full — includes MCsquare binaries and DICOM test data)
+      - name: Checkout (full — includes the engine assets and DICOM test data)
         uses: actions/checkout@v4
 
       - name: Set up Python

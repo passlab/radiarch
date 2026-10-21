@@ -522,3 +522,44 @@ tests/test_api_optimization.py        # ← O14, O16
 ---
 
 *Generated at handoff. If anything here is unclear or stale, check git log on the files referenced — the patterns are recent (last 2 weeks of commits) and the commit messages explain intent.*
+
+## R15 — own core, OpenTPS removed (2026-10-21, uncommitted)
+
+ADR 0008 records the decision, the evidence and the one deliberate deviation.
+
+Done:
+- Own loaders `dicom/{ct,rtstruct,case}.py` (identical arrays and polygons to the OpenTPS
+  loader on SimpleFantom and LCTSC-Test-S1-101); rasterizer `services/contour_raster.py`
+  (masks identical on 4 grids × SimpleFantom and 3 grids × 5 LCTSC structures); calibration
+  `services/proton_rsp.py` (identical HU→density/RSP); spot placement
+  `services/spot_placement.py` (bit-identical on the golden case and the oblique cases;
+  posterior/lateral beams differ by edge spots or a layer shift because tiny direction
+  components no longer make boundary spots crawl in 1 µm steps — 100× faster).
+- Services rewired: `GeometryArrays`/`load_geometry_arrays`, `generate_proton_spots(geometry,
+  machine_model, beam_set, params)`, machine model on the driver assets (`.rsp_model`),
+  `StoichiometricModel` on the scanner table, no `ct_image` on `GeometryBundle`, geometry
+  service and NRRD adapter on the own loaders, validation DVH cross-check on the own reader.
+- Legacy `/plans` workflows rewritten on the services (`core/workflows/*`): basic =
+  unit-MU MCsquare dose; optimized = Dij + inverse optimization + final dose; robust =
+  robust optimization over `_helpers.robust_scenarios` (REDUCED_SET 8, ALL 20, RANDOM n;
+  worst-case aggregation) + scenario doses; photon = open fields on CCC. Fixed on the way:
+  the plan record never stored the workflow parameters the workflows read
+  (`PlanParameters` on `PlanDetail`, `plans.parameters` JSON column, migration
+  `b7e2c4d9a1f0`); legacy solver names map onto radiarch's (`solver_method`); the
+  geometry is built on `scoring_spacing_mm` (2 mm default) instead of always the CT grid.
+- Engine assets moved to `engines/mcsquare` and `engines/ccc` (`engines/README.md`,
+  `scripts/fetch-engines.sh` replaces `vendor-opentps.sh`); `src/opentps` deleted; drivers
+  default to `engines/` (or `/app/engines` in the image); Dockerfile, CI, compose, env
+  templates, `install-dev.sh`, `pyproject` (radiarch* only, nibabel dropped) updated.
+- Settings: `RADIARCH_DATA_ROOT`, `RADIARCH_BEAM_LIBRARY_DIR`; `opentps_venv` gone. Test
+  data at `tests/data/SimpleFantomWithStruct`. `tests/opentps/` and
+  `test_opentps_integration.py` removed; `test_api_backend.py` moved to `tests/`;
+  `test_engine_assets.py` replaces `test_package_layout.py`; OpenTPS parity tests
+  dropped (the goldens are the reference). README, NOTICE, demo.md, ADR 0006 updated.
+- Isocenter: still the target centre of mass; the request's `isocenter_mm` is ignored
+  (as before). Decide in R3.
+
+- pydicom 3.0.2 (pin `pydicom>=3.0,<4`; `enforce_file_format=True`, no
+  `is_little_endian` attributes; the DICOM tests pass with pydicom deprecations as errors).
+- `tests/test_plans_workflows.py`: basic proton on every run; photon, optimized and robust
+  opt-in (`RADIARCH_RUN_MCSQUARE_VALIDATION=1`).

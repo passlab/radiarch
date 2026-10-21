@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/passlab/radiarch/actions/workflows/ci.yml/badge.svg)](https://github.com/passlab/radiarch/actions/workflows/ci.yml)
 
-Radiarch is a FastAPI-based treatment planning service modeled after the MONAILabel server pattern. It vendors [OpenTPS Core](https://gitlab.com/openmcsquare/opentps) directly for proton/photon dose calculation (MCsquare, CCC) and communicates with PACS providers such as Orthanc over DICOMweb. It ships no viewer: SMIS's own OHIF deployment does the viewing against this API.
+Radiarch is a FastAPI-based research treatment-planning service modeled after the MONAILabel server pattern. Its core (DICOM in, contour rasterization, calibration, spot and beamlet placement, optimization, evaluation) is its own; dose comes from two engines run as separate programs over files, [MCsquare](https://gitlab.com/openmcsquare/MCsquare) for protons and the WiscPlan collapsed-cone engine for photons (`engines/`). It communicates with PACS providers such as Orthanc over DICOMweb and ships no viewer: SMIS's own OHIF deployment does the viewing against this API.
 
 ## Intended use
 
@@ -22,18 +22,14 @@ radiarch/
   docker-compose.yml    # Full stack: API + Worker + Redis + Postgres + Orthanc
   .env.example          # Documented env var template
   demo/                 # CLI demos per service (show_*.py) + compare_engines.py; walkthrough in docs/demo.md
+  engines/              # Dose engine assets run as subprocesses (engines/README.md)
+    mcsquare/           # MCsquare launcher + Linux binaries, Materials/, BDL/, Scanners/ (Apache 2.0)
+    ccc/                # WiscPlan collapsed-cone engine + kernels (GPLv2, subprocess only)
+  tests/data/           # SimpleFantomWithStruct: the bundled CT + structure set
   src/
     pyproject.toml
-    opentps/                # Vendored opentps_core (Apache 2.0)
-      ATTRIBUTION.md
-      LICENSE
-      core/                 # 174 Python files — data, IO, processing, utils
-        processing/
-          doseCalculation/
-            protons/MCsquare/   # MCsquare binaries (Linux SSE4/AVX only)
-            photons/            # CCC dose engine
-          planOptimization/     # BFGS, FISTA, gradient descent solvers
     radiarch/
+      dicom/            # CT, RT Structure Set, RT Plan, RT Dose, registration readers (pydicom)
       app.py            # FastAPI factory
       client.py         # RadiarchClient Python library
       config.py         # Pydantic settings
@@ -95,26 +91,24 @@ uvicorn radiarch.app:create_app --factory --reload
 
 The `install-dev.sh` helper purges stale build artifacts before
 calling `pip install -e ./src`. Use it instead of a bare `pip install
--e` whenever the vendored OpenTPS tree gains a new subpackage —
-modern setuptools' *strict* editable install snapshots the package
-list at install time, so old finders can mask freshly added
-`__init__.py` files and break imports like
-`opentps.core.processing.doseCalculation.protons.MCsquare`. The test
+-e` whenever `src/radiarch` gains a new subpackage — modern setuptools'
+*strict* editable install snapshots the package list at install time,
+so old finders can mask freshly added `__init__.py` files. The test
 suite's `tests/conftest.py` also prepends `src/` to `sys.path` as a
 belt-and-suspenders guard so `pytest` works even if the install is
 stale.
 
 Open <http://localhost:8000/api/v1/docs> to inspect the OpenAPI schema.
 
-### About OpenTPS (Vendored)
+### Engines
 
-OpenTPS Core is vendored directly in `src/opentps/` — no separate installation needed. The vendored copy:
-- Includes all 174 Python source files from `opentps_core`
-- Ships with Linux MCsquare binaries (SSE4 + AVX variants, ~7MB)
-- Strips Windows/Mac binaries and pre-compiled `.dll`/`.dylib` files
-- Resolves the upstream `numpy>=2.3.2` incompatibility by using the project's own numpy/scipy versions
+The dose engines are data, not Python: `engines/mcsquare` (launcher, Linux binaries
+for SSE4/AVX/AVX2/AVX-512, material database, beam data library, scanner
+calibrations) and `engines/ccc` (the WiscPlan collapsed-cone engine, its kernels and
+LINAC data). `scripts/fetch-engines.sh <tag>` refreshes them from the OpenTPS
+repository, which packages both; see `engines/README.md`.
 
-There is no synthetic fallback. If OpenTPS cannot be imported, or a workflow runner fails, the plan job is recorded as `failed` with the error in its message — Radiarch never returns invented QA numbers. The API-contract tests inject a test-only fake runner (`tests/conftest.py`) instead of running MCsquare.
+There is no synthetic fallback. If an engine is missing, or a workflow runner fails, the plan job is recorded as `failed` with the error in its message — Radiarch never returns invented QA numbers. The API-contract tests inject a test-only fake runner (`tests/conftest.py`) instead of running an engine.
 
 ## Configuration
 
@@ -135,15 +129,16 @@ All settings use `RADIARCH_` prefix. Place them in `.env` or export as env vars.
 | `RADIARCH_DICOMWEB_URL` | `""` | DICOMweb STOW-RS URL for artifact push; empty = disabled |
 | `RADIARCH_API_KEY` | `""` | `X-API-Key` required on every `/api/v1` route except `/info`; empty disables auth (dev only) |
 | `RADIARCH_ALLOW_TEST_ENGINES` | unset | Permit the test-only `analytic` engine (wrong physics by design). Unset = only when `RADIARCH_ENVIRONMENT=dev` |
+| `RADIARCH_DATA_ROOT` | `""` | DICOM (CT + RTSTRUCT) directory read when no upload or PACS study is given; empty = the bundled `tests/data/SimpleFantomWithStruct` |
+| `RADIARCH_MCSQUARE_DIR`, `RADIARCH_CCC_ENGINE_DIR` | `engines/…` | Engine asset directories |
 
 ## Dose engines
 
 Proton dose comes from **MCsquare** (Apache-2.0) and photon dose from the **WiscPlan collapsed-cone**
 binary (GPLv2), both run as separate processes on files radiarch writes through its own drivers
-(`services/dose_engines/mcsquare_driver.py`, `services/dose_engines/ccc_driver.py`); nothing from
-OpenTPS is imported on those paths (ADR 0005, 0006). Engine assets are read from
-`RADIARCH_MCSQUARE_DIR` / `RADIARCH_CCC_ENGINE_DIR`, defaulting to the copies still vendored under
-`src/opentps`. `RADIARCH_MCSQUARE_SEED` with `RADIARCH_MCSQUARE_N_THREADS=1` makes a proton run
+(`services/dose_engines/mcsquare_driver.py`, `services/dose_engines/ccc_driver.py`; ADR 0005,
+0006). Engine assets are read from `RADIARCH_MCSQUARE_DIR` / `RADIARCH_CCC_ENGINE_DIR`,
+defaulting to `engines/`. `RADIARCH_MCSQUARE_SEED` with `RADIARCH_MCSQUARE_N_THREADS=1` makes a proton run
 reproducible bit for bit. Doses and influence matrices are in radiarch's `(z, y, x)` C-order frame.
 
 ## DICOM RT in
@@ -183,42 +178,42 @@ SMIS repo (`make public-lctsc-validation public-pancreatic-validation public-tg1
 `RADIARCH_VALIDATION_DATA`. A run writes `validation/results/<stamp>-<commit>/summary.md`.
 Statuses are research targets; nothing here is a clinical commissioning.
 
-`tests/golden/` freezes today's engine outputs (CCC beamlet matrix, SimpleFantom geometry,
-proton spots, the MCsquare input files) so the OpenTPS replacements of R14, R2 and R15 are
-checked against them on every push (`tests/test_goldens.py`).
+`tests/golden/` freezes the outputs captured from the vendored OpenTPS code before it was
+replaced (CCC beamlet matrix, SimpleFantom geometry, proton spots, the MCsquare input files);
+radiarch's own loaders, rasterizer, spot placement and drivers reproduce them on every push
+(`tests/test_goldens.py`; ADR 0008).
 
 ## Testing
 
-The suite has **668 tests** covering the API, client SDK, Services 1–6, OpenTPS core, MCsquare dose calculation, and end-to-end integration. Two are opt-in real-MCsquare legs that skip unless `RADIARCH_RUN_MCSQUARE_VALIDATION=1` is set.
+The suite covers the API, client SDK, the DICOM readers, Services 1–6, the engine drivers,
+the legacy workflows and the regression goldens. Two are opt-in real-MCsquare legs that skip
+unless `RADIARCH_RUN_MCSQUARE_VALIDATION=1` is set.
 
 ### Test Suite Overview
 
-| Test File | Tests | What It Covers |
-|-----------|-------|----------------|
-| `tests/opentps/core/test_api_backend.py` | 41 | InMemoryStore CRUD, workflow registry, session helpers, Pydantic models |
-| `tests/opentps/core/test_mcsquare_interface.py` | 10 | Patient data loading, contour extraction, DICE, DVH, MCsquare simulation, SPR/WET |
-| `tests/opentps/core/test_opentps_core.py` | 10 | CT/RTStruct loading, plan design, MCsquare dose calculation, DVH computation |
-| `tests/test_api_e2e.py` | 20 | End-to-end API (plans, jobs, artifacts, sessions, workflows) on the fake runner; runner failure → job failed |
-| `tests/test_client.py` | 5 | RadiarchClient Python SDK |
-| `tests/test_opentps_integration.py` | 1 | Full OpenTPS pipeline with real MCsquare Monte Carlo |
-| `tests/services/`, `tests/test_*_{service,d1,e2e,…}.py` | 581 | Services 1–6 (geometry, beam model, dose engines, optimization, BAO, evaluation), persistence, package layout |
+| Test File | What It Covers |
+|-----------|----------------|
+| `tests/test_api_backend.py` | InMemoryStore CRUD, workflow registry, session helpers, Pydantic models |
+| `tests/test_api_e2e.py` | End-to-end API (plans, jobs, artifacts, sessions, workflows) on the fake runner; runner failure → job failed |
+| `tests/test_client.py` | RadiarchClient Python SDK |
+| `tests/test_dicom_readers.py`, `tests/test_plan_import.py` | RT Plan / Ion Plan / Dose / registration readers, plan import and recalculation |
+| `tests/test_goldens.py`, `tests/test_engine_assets.py` | Regression goldens; the engine asset layout |
+| `tests/test_mcsquare_driver.py`, `tests/test_ccc_engine.py` | The two engine drivers against the real binaries |
+| `tests/services/`, `tests/test_*_{service,d1,e2e,…}.py` | Services 1–6 (geometry, beam model, spot placement, dose engines, optimization, BAO, evaluation), persistence |
 
 ### Running Tests
 
 ```bash
 source .venv/bin/activate
 
-# Full suite (API + Services 1–6 + MCsquare + OpenTPS core)
+# Full suite
 python -m pytest tests/ -v
 
-# Fast tests only (API + client, no MCsquare) — ~2 seconds
-python -m pytest tests/test_api_e2e.py tests/test_client.py tests/opentps/core/test_api_backend.py -v
+# Fast tests only (API + client, no engine) — ~2 seconds
+python -m pytest tests/test_api_e2e.py tests/test_client.py tests/test_api_backend.py -v
 
-# OpenTPS core + MCsquare dose calculation tests
-python -m pytest tests/opentps/core/ -v
-
-# Full OpenTPS integration only
-python -m pytest tests/test_opentps_integration.py -v
+# Engine drivers and goldens only
+python -m pytest tests/test_mcsquare_driver.py tests/test_ccc_engine.py tests/test_goldens.py -v
 ```
 
 ## Python Client Library
@@ -321,7 +316,9 @@ See [`docs/architecture.md`](docs/architecture.md) for the detailed design docum
 ## License & Attribution
 
 Radiarch is licensed under the Apache License 2.0 (`LICENSE`); `NOTICE` lists the third-party
-components. The vendored OpenTPS Core is © UCLouvain, Apache 2.0, with radiarch's patches and the
-vendoring procedure in `src/opentps/ATTRIBUTION.md`. MCsquare is Apache 2.0. The WiscPlan
-collapsed-cone photon engine is GPLv2 and is only ever run as a separate program over files.
-The direction for the engines and the core is recorded in `docs/adr/0005-own-core-engines-as-tools.md`.
+components. MCsquare is Apache 2.0. The WiscPlan collapsed-cone photon engine is GPLv2 and is
+only ever run as a separate program over files. Parts of radiarch's core (the contour
+rasterizer, the CT calibration, the spot placement, the engine file protocols) are ports of
+OpenTPS core (© UCLouvain, Apache 2.0) and say so in their module docstrings. The direction
+for the engines and the core is recorded in `docs/adr/0005-own-core-engines-as-tools.md` and
+its completion in `docs/adr/0008-own-core-complete.md`.

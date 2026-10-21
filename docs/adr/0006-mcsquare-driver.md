@@ -23,8 +23,8 @@ on read. The engine plugin returns `(z, y, x)` doses and influence matrices whos
 rows are the geometry's C-order voxels.
 
 Engine assets (launcher, binaries, `Materials/`, `BDL/`, `Scanners/`) are read from
-`RADIARCH_MCSQUARE_DIR`, defaulting to the copy still vendored with OpenTPS core;
-R15 moves them to `engines/mcsquare/` when the vendored tree goes. Seed, thread
+`RADIARCH_MCSQUARE_DIR`, defaulting to `engines/mcsquare/` (R15 moved them there
+from the vendored OpenTPS tree). Seed, thread
 count, scanner and beam data library are settings and per-request parameters;
 `seed > 0` with one thread is reproducible bit for bit.
 
@@ -46,4 +46,4 @@ count, scanner and beam data library are settings and per-request parameters;
   robustness mode (81/21/random scenarios) is R3's.
 - The validation harness's proton case runs through the driver with the
   water-only calibration, against the NIST PSTAR CSDA ranges entered on 2026-10-21.
-- The legacy `/plans` workflows still use OpenTPS directly until R15 retires them.
+- The legacy `/plans` workflows ran on OpenTPS until R15 rewrote them on the services.

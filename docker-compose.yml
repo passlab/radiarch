@@ -21,9 +21,10 @@ services:
       - RADIARCH_ORTHANC_USERNAME=radiarch
       - RADIARCH_ORTHANC_PASSWORD=radiarch
       - RADIARCH_DICOMWEB_URL=http://orthanc:8042/dicom-web
+      - RADIARCH_DATA_ROOT=/data/radiarch/testData/SimpleFantomWithStruct
     volumes:
       - radiarch-data:/data/artifacts
-      - ./tests/opentps/core/opentps-testData:/data/opentps/testData:ro
+      - ./tests/data:/data/radiarch/testData:ro
     depends_on:
       redis:
         condition: service_started
@@ -59,9 +60,10 @@ services:
       - RADIARCH_ORTHANC_USERNAME=radiarch
       - RADIARCH_ORTHANC_PASSWORD=radiarch
       - RADIARCH_DICOMWEB_URL=http://orthanc:8042/dicom-web
+      - RADIARCH_DATA_ROOT=/data/radiarch/testData/SimpleFantomWithStruct
     volumes:
       - radiarch-data:/data/artifacts
-      - ./tests/opentps/core/opentps-testData:/data/opentps/testData:ro
+      - ./tests/data:/data/radiarch/testData:ro
     depends_on:
       redis:
         condition: service_started

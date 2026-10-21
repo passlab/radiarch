@@ -84,11 +84,10 @@ docker compose down                                # volumes persist
 
 ## Known gaps surfaced during validation
 
-- **`demo/show_dose.py` hard-overrides `RADIARCH_OPENTPS_DATA_ROOT` /
+- **`demo/show_dose.py` hard-overrides `RADIARCH_DATA_ROOT` /
   `RADIARCH_ARTIFACT_DIR` at import** to the bundled fantom paths, so it can't be
   pointed at real data with `-e`. `scripts/real_dose_validation.py` avoids this
   by setting config before import.
-- **`BeamModelService._load_geometry` re-reads the patient from
-  `opentps_data_root`** (for the target contour) instead of reusing the
-  geometry's own source — so the upload/PACS flow needs the data root set too.
-  Worth fixing so the beam model reuses the geometry that was already built.
+- (Fixed in R0.) `BeamModelService._load_geometry` used to re-read the patient
+  from the data root instead of the persisted geometry; it now builds on the
+  geometry's own CT and label volumes.

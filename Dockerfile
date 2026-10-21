@@ -21,20 +21,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy installed Python packages
 COPY --from=builder /install /usr/local
 
-# Copy application source
+# Copy application source and the dose engine assets (engines/README.md)
 COPY src/ ./
+COPY engines/ ./engines/
 
-# Ensure the vendored MCsquare Monte Carlo binaries are executable (COPY can
-# drop the +x bit depending on the build context). The Celery worker invokes
-# MCsquare_linux* for real proton dose; without +x it fails with EACCES.
-RUN chmod +x /app/opentps/core/processing/doseCalculation/protons/MCsquare/MCsquare* \
+# Ensure the engine binaries are executable (COPY can drop the +x bit depending
+# on the build context). The Celery worker invokes MCsquare_linux* and
+# CCC_DoseEngine for real dose; without +x they fail with EACCES.
+RUN chmod +x /app/engines/mcsquare/MCsquare* /app/engines/ccc/CCC_DoseEngine/CCC_DoseEngine \
     2>/dev/null || true
 
 # Create data directories
 RUN mkdir -p /data/artifacts /data/sessions
 
-# Default environment (vendored OpenTPS Core available)
+# Default environment
 ENV RADIARCH_ENVIRONMENT=production \
+    RADIARCH_MCSQUARE_DIR=/app/engines/mcsquare \
+    RADIARCH_CCC_ENGINE_DIR=/app/engines/ccc \
     RADIARCH_DATABASE_URL=postgresql+psycopg://radiarch:radiarch@postgres:5432/radiarch \
     RADIARCH_BROKER_URL=redis://redis:6379/0 \
     RADIARCH_RESULT_BACKEND=redis://redis:6379/1 \

@@ -81,7 +81,18 @@ def default_assets_dir() -> Path:
         configured = ""
     if configured:
         return Path(configured)
-    return Path(__file__).resolve().parents[3] / "opentps" / "core" / "processing" / "doseCalculation" / "protons" / "MCsquare"
+    return engine_assets_dir("mcsquare")
+
+
+def engine_assets_dir(name: str) -> Path:
+    """``engines/<name>`` of the repository (``src/../engines``) or of an installed
+    tree whose source root holds ``engines/`` (the container image: ``/app/engines``)."""
+    here = Path(__file__).resolve()
+    for root in (here.parents[4], here.parents[3]):
+        candidate = root / "engines" / name
+        if candidate.is_dir():
+            return candidate
+    return here.parents[4] / "engines" / name
 
 
 # ---------------------------------------------------------------------------

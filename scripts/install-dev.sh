@@ -3,12 +3,11 @@
 #
 # Purges the stale build artifacts that cause modern setuptools'
 # *strict* editable install to ship a finder with out-of-date
-# NAMESPACES (which breaks vendored OpenTPS submodule imports such as
-# `opentps.core.processing.doseCalculation.protons.MCsquare`).
+# NAMESPACES (which breaks imports of packages added after the install).
 #
 # Use this any time someone adds a new package directory under
-# `src/opentps/` or `src/radiarch/`, or any time `pytest` blows up
-# with `ModuleNotFoundError: No module named 'opentps.core.processing'`.
+# `src/radiarch/`, or any time `pytest` blows up with a
+# `ModuleNotFoundError` for a radiarch subpackage.
 #
 # Usage:
 #   ./scripts/install-dev.sh            # editable install + dev extras
@@ -60,10 +59,13 @@ else
 fi
 
 echo
-echo "==> Sanity check: import opentps.core.processing.doseCalculation.protons.MCsquare"
+echo "==> Sanity check: radiarch imports and the engine assets resolve"
 python3 -c "
-import opentps.core.processing.doseCalculation.protons.MCsquare as M
-print('   OK ->', M.__path__[0])
+import radiarch
+from radiarch.services.dose_engines.mcsquare_driver import MCsquareAssets, default_assets_dir
+a = MCsquareAssets(default_assets_dir())
+print('   radiarch', radiarch.__file__)
+print('   MCsquare assets', a.root, a.availability())
 "
 echo
 echo "Done. You can now run: pytest tests/"

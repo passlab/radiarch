@@ -19,12 +19,10 @@ venv/
 # External dependencies / large folders (root-level)
 MONAILabel/
 Viewers/
-/opentps/
 /matRad/
 
-# Vendored opentps_core — include Python and all binaries
-!src/opentps/
-!src/opentps/core/data/
+# Dose engine assets (engines/README.md) are tracked, binaries included
+!engines/
 
 # Build artifacts
 *.egg-info/
@@ -37,10 +35,8 @@ test_output.txt
 # Reproducibility run logs (Charter §6 — provenance, regenerated per run)
 runs/
 
-# Test data — include DICOM, exclude large unused pickles
-!tests/opentps/
-!tests/opentps/core/MCsquare-python_interface/data/
-tests/opentps/core/opentps-testData/*.p
+# Test data — the bundled DICOM phantom
+!tests/data/
 
 # validation harness outputs (python -m radiarch.validation.run)
 validation/results*/
