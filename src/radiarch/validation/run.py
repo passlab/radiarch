@@ -30,6 +30,8 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
+from ..services.masks import structure_mask
+
 from . import phantoms as ph
 
 HERE = Path(__file__).resolve().parent
@@ -418,7 +420,7 @@ def run_geometry_volumes(spec: dict, ctx: Context) -> CaseResult:
         masks = sitk.GetArrayFromImage(sitk.ReadImage(geom.structure_masks_uri))
         vox_cc = float(np.prod(geom.grid_spec.spacing_mm)) / 1000.0
         for name, label in geom.structure_index.items():
-            ours = float((masks == label).sum()) * vox_cc
+            ours = float(structure_mask(masks, label, getattr(geom, "mask_encoding", "labels")).sum()) * vox_cc
             match = next((v for k, v in polygon.items() if _norm(k) == _norm(name)), None)
             if match is None:
                 res.notes.append(f"{pid}/{name}: no contour match"); continue

@@ -18,6 +18,7 @@ import numpy as np
 import SimpleITK as sitk
 from loguru import logger
 
+from .masks import structure_mask
 from .rasterization import _target_priority
 
 # Names that mean "the target" in phantoms and older structure sets (the
@@ -85,6 +86,7 @@ class GeometryArrays:
     frame_of_reference_uid: str = ""
     patient_name: str = "ANONYMOUS"
     series_instance_uid: str = ""
+    mask_encoding: str = "labels"
 
     @property
     def shape_zyx(self) -> Tuple[int, int, int]:
@@ -100,10 +102,10 @@ class GeometryArrays:
         return np.ascontiguousarray(np.transpose(self.ct_hu, (2, 1, 0)))
 
     def mask_zyx(self, label: int) -> np.ndarray:
-        return self.masks == int(label)
+        return structure_mask(self.masks, label, self.mask_encoding)
 
     def mask_xyz(self, label: int) -> np.ndarray:
-        return np.ascontiguousarray(np.transpose(self.masks == int(label), (2, 1, 0)))
+        return np.ascontiguousarray(np.transpose(self.mask_zyx(label), (2, 1, 0)))
 
     def target(self) -> Optional[Tuple[str, int]]:
         """``(name, label)`` of the planning target, or None."""
@@ -129,7 +131,9 @@ def load_geometry_arrays(geom) -> GeometryArrays:
             f"geometry {geom.geometry_id!r} has no CT grid on disk "
             f"(ct_grid_uri={getattr(geom, 'ct_grid_uri', None)!r}); rebuild the geometry."
         )
-    masks = sitk.GetArrayFromImage(sitk.ReadImage(str(geom.structure_masks_uri))).astype(np.uint16)
+    masks = sitk.GetArrayFromImage(sitk.ReadImage(str(geom.structure_masks_uri)))
+    encoding = str(getattr(geom, "mask_encoding", "labels") or "labels")
+    masks = masks.astype(np.uint64) if encoding == "bitmask" else masks.astype(np.uint16)
     if masks.shape != ct_hu.shape:
         raise ValueError(f"geometry {geom.geometry_id!r}: masks {masks.shape} and CT {ct_hu.shape} differ in shape")
     origin, spacing = _grid_origin_spacing(geom)
@@ -141,6 +145,7 @@ def load_geometry_arrays(geom) -> GeometryArrays:
         frame_of_reference_uid=str(getattr(geom, "frame_of_reference_uid", "") or ""),
         patient_name=str(getattr(meta, "patient_name", "") or "ANONYMOUS"),
         series_instance_uid=str(getattr(meta, "series_instance_uid", "") or ""),
+        mask_encoding=encoding,
     )
     if arrays.target() is None:
         logger.warning(

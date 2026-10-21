@@ -208,7 +208,14 @@ def read_dose(uri: str) -> np.ndarray:
 
 
 def read_masks(geometry: GeometryResult) -> np.ndarray:
-    return sitk.GetArrayFromImage(sitk.ReadImage(geometry.structure_masks_uri)).astype(np.uint16)
+    return sitk.GetArrayFromImage(sitk.ReadImage(geometry.structure_masks_uri))
+
+
+def read_structure(geometry: GeometryResult, label: int) -> np.ndarray:
+    """The boolean (z, y, x) mask of one structure of a persisted geometry."""
+    from ...services.masks import structure_mask
+
+    return structure_mask(read_masks(geometry), label, getattr(geometry, "mask_encoding", "labels"))
 
 
 def compute_dvh(dose_zyx: np.ndarray, mask_zyx: np.ndarray, roi_name: str) -> Dict[str, Any]:
@@ -330,6 +337,6 @@ def dose_summary(dose_zyx: np.ndarray) -> Dict[str, float]:
 
 __all__ = [
     "PlannerError", "setup_sim_dir", "build_geometry", "build_gantry_angles", "build_beam_model", "target_of",
-    "mcsquare_engine", "solver_method", "build_objectives", "robust_scenarios", "read_dose", "read_masks",
+    "mcsquare_engine", "solver_method", "build_objectives", "robust_scenarios", "read_dose", "read_masks", "read_structure",
     "compute_dvh", "dose_image", "ct_provenance", "export_rtdose", "dose_summary",
 ]

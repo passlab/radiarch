@@ -26,6 +26,6 @@
     "max": 1.1933478116989136,
     "sha256": "5d871d65746f7e8b8c92de92617dd69e42ad07966d0c942276ddcd589ba35ee2"
   },
-  "masks_sha256": "d3a37df02ddb62ef953bf7cd0adc165cb2c6d7aa9ad6c3170e0f40d978b9636f",
-  "hu_to_density_model": ""
+  "masks_sha256": "8ee6e9895f6224b86d83a9c5074caa3a18dbcec311cb7f16257a279b3f1bcfe0",
+  "hu_to_density_model": "STOICHIOMETRIC"
 }

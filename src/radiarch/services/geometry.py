@@ -136,6 +136,20 @@ class GeometryService:
         return self._process(request, loaded, cache_key, on_progress)
 
     # -----------------------------------------------------------------
+    # Derived geometries (R4)
+    # -----------------------------------------------------------------
+
+    def derive(self, geometry_id: str, request) -> GeometryResult:
+        """A new geometry from ``geometry_id`` plus structure operations (margins,
+        booleans, rings, density overrides, a couch); cached like a build."""
+        from .geometry_derive import GeometryDeriver  # lazy
+
+        parent = self.store.get_by_id(geometry_id)
+        if parent is None:
+            raise ValueError(f"geometry_id {geometry_id!r} not found")
+        return GeometryDeriver(self.store).derive(parent, request)
+
+    # -----------------------------------------------------------------
     # DICOM loading.
     #
     # Three paths, chosen at request time (in priority order):
@@ -336,10 +350,12 @@ class GeometryService:
             structure_masks_uri=str(paths.masks),
             ct_grid_uri=str(paths.ct),
             structure_index=structure_index,
+            mask_encoding="bitmask",
             grid_spec=target_grid,
             frame_of_reference_uid=self._frame_of_reference(ct),
             ct_metadata=ct_meta,
             cache_key=cache_key,
+            hu_to_density_model=request.hu_to_density_model.value,
         )
 
         self.store.save(

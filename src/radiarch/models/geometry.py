@@ -23,7 +23,7 @@ import hashlib
 import json
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Union, Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -261,6 +261,74 @@ class GeometryBuildRequest(BaseModel):
         }
 
 
+class StructureOperation(BaseModel):
+    """One step of a derived geometry (R4). ``op`` and the fields it reads:
+
+    * ``expand`` / ``erode``: ``source``, ``margin_mm`` (one value or (x, y, z)) → ``name``
+    * ``ring``: ``source``, ``inner_mm``, ``outer_mm`` → ``name``
+    * ``union`` / ``intersection``: ``sources`` → ``name``
+    * ``subtract``: ``source`` minus ``sources`` → ``name``
+    * ``density_override``: the voxels of ``source`` get ``hu`` (the CT and, through the
+      geometry's HU model, the density) or ``density_g_cm3`` (the density only)
+    * ``couch``: a slab ``thickness_mm`` thick from ``y_top_mm`` posteriorly, named ``name``
+      (default ``Couch``) and given ``hu`` (default -700, a carbon-fibre top)
+    """
+
+    op: str = Field(..., description="expand, erode, ring, union, intersection, subtract, density_override, couch")
+    name: Optional[str] = Field(default=None, max_length=128, description="The structure the operation creates (not for density_override).")
+    source: Optional[str] = Field(default=None, max_length=128)
+    sources: List[str] = Field(default_factory=list, max_length=64)
+    margin_mm: Optional[Union[float, Tuple[float, float, float]]] = None
+    inner_mm: Optional[Union[float, Tuple[float, float, float]]] = None
+    outer_mm: Optional[Union[float, Tuple[float, float, float]]] = None
+    hu: Optional[float] = None
+    density_g_cm3: Optional[float] = Field(default=None, ge=0.0)
+    y_top_mm: Optional[float] = None
+    thickness_mm: Optional[float] = Field(default=None, gt=0.0)
+
+    _OPS = ("expand", "erode", "ring", "union", "intersection", "subtract", "density_override", "couch")
+
+    @model_validator(mode="after")
+    def _check(self) -> "StructureOperation":
+        if self.op not in self._OPS:
+            raise ValueError(f"op must be one of {self._OPS}, got {self.op!r}")
+        need_name = self.op != "density_override"
+        if need_name and not self.name and self.op != "couch":
+            raise ValueError(f"{self.op} needs a name for the structure it creates")
+        if self.op in ("expand", "erode"):
+            if not self.source or self.margin_mm is None:
+                raise ValueError(f"{self.op} needs source and margin_mm")
+        elif self.op == "ring":
+            if not self.source or self.inner_mm is None or self.outer_mm is None:
+                raise ValueError("ring needs source, inner_mm and outer_mm")
+        elif self.op in ("union", "intersection"):
+            if len(self.sources) < 1:
+                raise ValueError(f"{self.op} needs sources")
+        elif self.op == "subtract":
+            if not self.source or not self.sources:
+                raise ValueError("subtract needs source and sources")
+        elif self.op == "density_override":
+            if not self.source or (self.hu is None and self.density_g_cm3 is None):
+                raise ValueError("density_override needs source and hu or density_g_cm3")
+        elif self.op == "couch":
+            if self.y_top_mm is None or self.thickness_mm is None:
+                raise ValueError("couch needs y_top_mm and thickness_mm")
+        return self
+
+    def payload(self) -> Dict[str, Any]:
+        return {k: v for k, v in self.model_dump().items() if v is not None and v != []}
+
+
+class GeometryDeriveRequest(BaseModel):
+    """``POST /geometry/{id}/derive``: a new geometry from an existing one and a list of operations."""
+
+    operations: List[StructureOperation] = Field(..., min_length=1, max_length=64)
+
+    def operations_hash(self) -> str:
+        blob = json.dumps([o.payload() for o in self.operations], sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
 class CTMetadata(BaseModel):
     """Minimal CT provenance carried through to downstream services."""
 
@@ -292,10 +360,20 @@ class GeometryResult(ResearchArtifact):
     structure_index: Dict[str, int] = Field(
         ..., description='Canonical name → integer label in the mask volume. 0 = background.'
     )
+    mask_encoding: str = Field(
+        default="labels",
+        description='"labels": uint16 label map (one structure per voxel; before R4); '
+                    '"bitmask": uint64, bit label-1 set per structure (structures overlap).',
+    )
     grid_spec: GridSpec = Field(..., description="Grid the outputs were written on.")
     frame_of_reference_uid: str
     ct_metadata: CTMetadata
     cache_key: str
+    parent_geometry_id: Optional[str] = Field(default=None, description="The geometry this one was derived from (R4).")
+    derived_operations: List[Dict[str, Any]] = Field(
+        default_factory=list, description="The structure operations applied to the parent, in order (R4)."
+    )
+    hu_to_density_model: Optional[str] = Field(default=None, description="The HU → density model the density grid was built with.")
 
     created_at: Optional[datetime] = None
 

@@ -67,18 +67,18 @@ class TestBasicRasterization:
 
         # PTV is a target, so it always sorts first and gets label 1.
         assert index == {"PTV": 1, "SpinalCord": 2}
-        assert int(mask[0, 0, 0]) == 1
-        assert int(mask[3, 3, 3]) == 2
+        assert int(mask[0, 0, 0]) == 1          # bit 0: label 1
+        assert int(mask[3, 3, 3]) == 2          # bit 1: label 2
         # Background is exactly zero everywhere else.
         claimed = np.zeros_like(mask, dtype=bool)
         claimed[0:2, 0:2, 0:2] = True
         claimed[2:4, 2:4, 2:4] = True
         assert np.all(mask[~claimed] == 0)
 
-    def test_returns_uint16(self) -> None:
+    def test_returns_a_uint64_bitmask(self) -> None:
         ptv, _ = _disjoint_masks()
         mask, _ = rasterize_contours([_FakeContour("PTV", ptv)], _grid())
-        assert mask.dtype == np.uint16
+        assert mask.dtype == np.uint64
 
     def test_passes_correct_grid_args_to_contour(self) -> None:
         ptv, _ = _disjoint_masks()
@@ -170,8 +170,10 @@ class TestLabelOrdering:
 # ---------------------------------------------------------------------------
 
 class TestOverlap:
-    def test_first_match_wins_at_voxel_level(self) -> None:
-        """PTV and Brain overlap on (1,1,1). PTV is the target → it wins."""
+    def test_overlapping_structures_both_keep_the_voxel(self) -> None:
+        """PTV and Brain overlap on (1,1,1): both bits are set there (R4; before, the target won)."""
+        from radiarch.services.masks import BITMASK, structure_mask
+
         ptv = np.zeros((4, 4, 4), dtype=bool)
         ptv[0:2, 0:2, 0:2] = True
         brain = np.zeros((4, 4, 4), dtype=bool)
@@ -180,10 +182,10 @@ class TestOverlap:
         mask, index = rasterize_contours(contours, _grid())
 
         assert index == {"PTV": 1, "Brain": 2}
-        # Overlap voxel (1,1,1): PTV claims it.
-        assert int(mask[1, 1, 1]) == 1
-        # Brain-only voxel (2,2,2): Brain still wins.
-        assert int(mask[2, 2, 2]) == 2
+        assert int(mask[1, 1, 1]) == 3                 # both bits
+        assert int(mask[2, 2, 2]) == 2 and int(mask[0, 0, 0]) == 1
+        assert structure_mask(mask, 2, BITMASK).sum() == brain.sum()
+        assert structure_mask(mask, 1, BITMASK).sum() == ptv.sum()
 
 
 # ---------------------------------------------------------------------------

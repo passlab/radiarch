@@ -15,7 +15,7 @@ import numpy as np
 from loguru import logger
 
 from ._helpers import (
-    build_geometry, compute_dvh, ct_provenance, dose_image, dose_summary, export_rtdose, read_masks,
+    build_geometry, compute_dvh, ct_provenance, dose_image, dose_summary, export_rtdose, read_structure,
     setup_sim_dir, target_of,
 )
 from ...models.common import RESEARCH_USE_ONLY
@@ -49,8 +49,7 @@ def run(plan: PlanDetail) -> Dict[str, Any]:
     spacing = tuple(float(v) for v in geometry.grid_spec.spacing_mm)
     origin = tuple(float(v) for v in (geometry.grid_spec.origin_mm or (0.0, 0.0, 0.0)))
     target_name, target_label = target_of(geometry)
-    masks = read_masks(geometry)
-    target = masks == target_label
+    target = read_structure(geometry, target_label)
 
     # 2. Plan: equally spaced gantry angles, one open field each, isocenter on the target
     isocenter = _target_centroid_mm(target, origin, spacing)

@@ -113,8 +113,14 @@ def build_simplefantom(workdir: Path):
 def compute_geometry_golden(geo, geo_svc) -> Dict[str, Any]:
     import SimpleITK as sitk
     density = sitk.GetArrayFromImage(sitk.ReadImage(geo.density_grid_uri)).astype(np.float32)
-    masks = sitk.GetArrayFromImage(sitk.ReadImage(geo.structure_masks_uri)).astype(np.uint16)
-    counts = {name: int((masks == label).sum()) for name, label in geo.structure_index.items()}
+    from ..services.masks import structure_mask
+    masks = sitk.GetArrayFromImage(sitk.ReadImage(geo.structure_masks_uri))
+    encoding = getattr(geo, "mask_encoding", "labels")
+    counts = {name: int(structure_mask(masks, label, encoding).sum()) for name, label in geo.structure_index.items()}
+    # hash the boolean mask of every structure, so the value does not depend on the encoding
+    mask_hash = hashlib.sha256()
+    for name in sorted(geo.structure_index):
+        mask_hash.update(np.ascontiguousarray(structure_mask(masks, geo.structure_index[name], encoding)).tobytes())
     return {
         "structure_index": dict(geo.structure_index),
         "voxel_counts": counts,
@@ -123,7 +129,7 @@ def compute_geometry_golden(geo, geo_svc) -> Dict[str, Any]:
         "origin_mm": [float(v) for v in (geo.grid_spec.origin_mm or (0, 0, 0))],
         "density": {"mean": float(density.mean()), "min": float(density.min()), "max": float(density.max()),
                     "sha256": _sha256(density)},
-        "masks_sha256": _sha256(masks),
+        "masks_sha256": mask_hash.hexdigest(),
         "hu_to_density_model": str(getattr(geo, "hu_to_density_model", "")),
     }
 

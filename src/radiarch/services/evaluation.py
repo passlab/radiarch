@@ -38,6 +38,7 @@ from .dvh import cumulative_dvh, dvh_metrics, dvh_on_bins
 from .evaluation_persistence import EvaluationStore
 from .gamma import gamma_index
 from .indices import dose_indices
+from .masks import structure_mask
 
 EvaluationProgressCallback = Callable[[EvaluationStage, float, str], None]
 
@@ -89,6 +90,10 @@ class EvaluationService:
                 f"dose shape {dose.shape} != geometry mask shape {masks.shape}"
             )
         index = geometry.result.structure_index
+        encoding = getattr(geometry.result, "mask_encoding", "labels")
+
+        def mask_of(name: str) -> np.ndarray:
+            return structure_mask(masks, index[name], encoding)
         voxel_volume_cc = float(np.prod(geometry.spacing_mm)) / 1000.0
 
         # --- DVH per structure ---------------------------------------
@@ -100,7 +105,7 @@ class EvaluationService:
                 raise ValueError(
                     f"structure {name!r} not in geometry (have: {sorted(index)})"
                 )
-            mask = masks == index[name]
+            mask = mask_of(name)
             dose_bins, vol = cumulative_dvh(dose, mask, request.dvh_bins)
             metrics = dvh_metrics(dose, mask, request.prescription_gy, voxel_volume_cc)
             curves.append(DVHCurve(
@@ -117,7 +122,7 @@ class EvaluationService:
         if scenario_doses:
             on_progress(EvaluationStage.computing_dvh, 0.40, f"DVH bands over {len(scenario_doses)} scenarios")
             for name in names:
-                mask = masks == index[name]
+                mask = mask_of(name)
                 top = max([float(dose[mask].max()) if mask.any() else 0.0] +
                           [float(d[mask].max()) if mask.any() else 0.0 for d in scenario_doses.values()])
                 bins = np.linspace(0.0, top, request.dvh_bins) if top > 0 else np.zeros(request.dvh_bins)
@@ -138,7 +143,7 @@ class EvaluationService:
                     per_scenario=per,
                 ))
             if request.target_structure and request.target_structure in index:
-                tgt_mask = masks == index[request.target_structure]
+                tgt_mask = mask_of(request.target_structure)
                 per_idx = {sc: dose_indices(d, tgt_mask, request.target_structure, request.prescription_gy)
                            for sc, d in scenario_doses.items()}
                 per_idx["nominal"] = dose_indices(dose, tgt_mask, request.target_structure, request.prescription_gy)
@@ -166,7 +171,7 @@ class EvaluationService:
                 raise ValueError(
                     f"target_structure {request.target_structure!r} not in geometry"
                 )
-            tgt_mask = masks == index[request.target_structure]
+            tgt_mask = mask_of(request.target_structure)
             indices = dose_indices(dose, tgt_mask, request.target_structure,
                                    request.prescription_gy)
 

@@ -9,7 +9,7 @@ from loguru import logger
 
 from ._helpers import (
     build_beam_model, build_geometry, compute_dvh, ct_provenance, dose_image, dose_summary, export_rtdose,
-    mcsquare_engine, read_dose, read_masks, setup_sim_dir, target_of,
+    mcsquare_engine, read_dose, read_structure, setup_sim_dir, target_of,
 )
 from ...models.beam_model import Modality
 from ...models.common import RESEARCH_USE_ONLY
@@ -42,7 +42,6 @@ def run(plan: PlanDetail, adapter=None) -> Dict[str, Any]:
 
     rtdose_path = os.path.join(sim_dir, "RTDOSE.dcm")
     export_rtdose(dose_image(dose, geometry), ct_provenance(geometry), rtdose_path, rbe=dose_result.rbe_factor)
-    masks = read_masks(geometry)
 
     return {
         "engine": "mcsquare",
@@ -59,6 +58,6 @@ def run(plan: PlanDetail, adapter=None) -> Dict[str, Any]:
         **dose_summary(dose),
         "simDir": sim_dir,
         "rtdosePath": rtdose_path,
-        "dvh": compute_dvh(dose, masks == target_label, target_name),
+        "dvh": compute_dvh(dose, read_structure(geometry, target_label), target_name),
         "notes": "Success: MCsquare dose through radiarch's driver",
     }

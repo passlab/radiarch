@@ -37,6 +37,7 @@ from pydantic import BaseModel
 from ...core.store import store
 from ...models.geometry import (
     GeometryBuildRequest,
+    GeometryDeriveRequest,
     GeometryJobStatus,
     GeometryResult,
 )
@@ -127,6 +128,24 @@ async def get_geometry_job(job_id: str) -> GeometryJobStatus:
 # ---------------------------------------------------------------------------
 # Geometry retrieval + streams
 # ---------------------------------------------------------------------------
+
+@router.post(
+    "/{geometry_id}/derive",
+    response_model=GeometryResult,
+    summary="A new geometry from this one plus structure operations: margins, rings, booleans, density overrides, a couch (R4).",
+    responses={404: {"description": "Geometry not found."}, 422: {"description": "An operation names an unknown structure or is invalid."}},
+)
+async def derive_geometry(geometry_id: str, request: GeometryDeriveRequest) -> GeometryResult:
+    from ...services.geometry_derive import DeriveError
+
+    svc = _service()
+    if svc.store.get_by_id(geometry_id) is None:
+        raise HTTPException(status_code=404, detail=f"Geometry not found: {geometry_id}")
+    try:
+        return svc.derive(geometry_id, request)
+    except (DeriveError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
 
 @router.get(
     "/{geometry_id}",

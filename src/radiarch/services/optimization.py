@@ -48,6 +48,7 @@ from ..models.optimization import (
 )
 from .dose import DoseService
 from .dose_engines import get_engine
+from .masks import structure_mask
 from .dose_engines.registry import ensure_engine_allowed
 from .objectives import (
     ConstraintPenalty,
@@ -316,7 +317,7 @@ class OptimizationService:
                 f"(have: {sorted(index)})"
             )
         label = index[structure_name]
-        mask = (np.asarray(geometry.masks) == label).astype(np.float64)
+        mask = structure_mask(geometry.masks, label, getattr(geometry.result, "mask_encoding", "labels")).astype(np.float64)
         if mask.shape != tuple(grid_shape):
             raise ValueError(
                 f"mask shape {mask.shape} != dose grid {tuple(grid_shape)}"

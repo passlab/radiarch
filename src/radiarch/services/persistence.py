@@ -216,7 +216,10 @@ class GeometryStore:
             tmp_meta = tmp_path / META_FILENAME
 
             _write_nifti(density.astype(np.float32, copy=False), result.grid_spec, tmp_density)
-            _write_nifti(masks.astype(np.uint16, copy=False), result.grid_spec, tmp_masks)
+            masks_arr = np.asarray(masks)
+            if masks_arr.dtype not in (np.uint16, np.uint64):
+                masks_arr = masks_arr.astype(np.uint64 if getattr(result, "mask_encoding", "labels") == "bitmask" else np.uint16)
+            _write_nifti(masks_arr, result.grid_spec, tmp_masks)
             if ct is not None:
                 # Store CT as int16 — it's HU, which fits nicely and halves
                 # the file size vs float32.

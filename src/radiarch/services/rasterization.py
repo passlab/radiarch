@@ -15,10 +15,11 @@ Design
 * **Deterministic label ordering.** Targets (PTV/GTV/CTV) always receive
   the lowest label indices. Everything else sorts alphabetically. This
   keeps mask files reproducible across builds and across machines.
-* **First-match-wins overlap policy.** When two canonical contours
-  overlap in a voxel, the lower-label one (earlier in the ordering)
-  keeps the voxel. OAR rules generally want targets to dominate
-  overlapping OARs in the mask, and our ordering guarantees that.
+* **Structures overlap freely.** The volume is a ``uint64`` bitmask
+  (``services/masks.py``): bit ``label - 1`` is set for every structure
+  containing the voxel, so a spinal cord inside a PTV keeps its voxels
+  (until R4 a label map kept only the lowest label per voxel). At most 64
+  structures fit in one geometry.
 * **0 is reserved for background.** Labels start at 1.
 """
 
@@ -30,6 +31,7 @@ import numpy as np
 from loguru import logger
 
 from ..models.geometry import GridSpec
+from .masks import MAX_BITMASK_STRUCTURES, pack_bitmask
 
 
 # ---------------------------------------------------------------------------
@@ -139,7 +141,7 @@ def rasterize_contours(
     Returns
     -------
     (mask_volume, structure_index)
-        ``mask_volume`` is a uint16 array of shape ``target.size`` with
+        ``mask_volume`` is a uint64 bitmask of shape ``target.size`` with
         0 as background. ``structure_index`` is ``{canonical_name: label}``.
     """
     if not target.is_fully_specified():
@@ -187,19 +189,15 @@ def rasterize_contours(
             continue
         masks_by_canonical[canonical] = mask
 
-    # Second pass: assign labels deterministically and pack.
+    # Second pass: assign labels deterministically and pack the bitmask.
     ordered = _order_canonicals(masks_by_canonical)
-    mask_volume = np.zeros(grid_size, dtype=np.uint16)
-    structure_index: Dict[str, int] = {}
-
-    for label, canonical in enumerate(ordered, start=1):
-        m = masks_by_canonical[canonical]
-        # First-match-wins at voxel level: only paint where current
-        # label is still 0 (unclaimed).
-        paint = m & (mask_volume == 0)
-        mask_volume[paint] = label
-        structure_index[canonical] = label
-
+    if len(ordered) > MAX_BITMASK_STRUCTURES:
+        raise ValueError(
+            f"{len(ordered)} structures; a geometry holds at most {MAX_BITMASK_STRUCTURES}. "
+            "Use structure_name_map to select the structures the plan needs."
+        )
+    structure_index: Dict[str, int] = {canonical: label for label, canonical in enumerate(ordered, start=1)}
+    mask_volume = pack_bitmask({structure_index[c]: masks_by_canonical[c] for c in ordered}, grid_size)
     return mask_volume, structure_index
 
 

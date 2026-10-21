@@ -367,6 +367,8 @@ class DoseService:
             )
         density = sitk.GetArrayFromImage(sitk.ReadImage(geom.density_grid_uri))
         masks = sitk.GetArrayFromImage(sitk.ReadImage(geom.structure_masks_uri))
+        if getattr(geom, "mask_encoding", "labels") != "bitmask":
+            masks = masks.astype(np.uint16)
         spacing = tuple(geom.grid_spec.spacing_mm)
 
         ct_hu = self._maybe_load_ct(geom)
@@ -375,7 +377,7 @@ class DoseService:
         return GeometryBundle(
             result=geom,
             density=density.astype(np.float32),
-            masks=masks.astype(np.uint16),
+            masks=masks,
             spacing_mm=spacing,
             ct_hu=ct_hu,
             origin_mm=None if origin is None else tuple(float(o) for o in origin),
