@@ -21,7 +21,7 @@ radiarch/
   Dockerfile            # Multi-stage container build
   docker-compose.yml    # Full stack: API + Worker + Redis + Postgres + Orthanc
   .env.example          # Documented env var template
-  demo/                 # CLI demos per service (show_*.py) + compare_engines.py
+  demo/                 # CLI demos per service (show_*.py) + compare_engines.py; walkthrough in docs/demo.md
   src/
     pyproject.toml
     opentps/                # Vendored opentps_core (Apache 2.0)
