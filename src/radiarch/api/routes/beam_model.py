@@ -44,6 +44,51 @@ from ...services.beam_persistence import PLAN_FILENAME
 router = APIRouter(prefix="/beam-model", tags=["beam-model"])
 
 
+# ---------------------------------------------------------------------------
+# Machine models (R4)
+# ---------------------------------------------------------------------------
+
+@router.get("/machines", summary="The machine models a beam model can be built for.")
+async def list_machines() -> dict:
+    from ...services.machine_model import DEFAULT_PHOTON_MACHINE, ProtonMachineModel, builtin_photon_machines, load_photon_spec
+
+    photons = []
+    for mid in builtin_photon_machines():
+        spec = load_photon_spec(mid)
+        photons.append({"machine_id": mid, "name": spec.name, "kind": spec.kind, "energies_mv": [e.nominal_mv for e in spec.energies],
+                        "mlc_pairs": spec.mlc.n_pairs, "default": mid == DEFAULT_PHOTON_MACHINE})
+    proton = ProtonMachineModel.from_default()
+    try:
+        pspec = proton.spec
+        protons = [{"machine_id": "default", "bdl": pspec.bdl_name, "energy_range_mev": list(pspec.energy_range_mev),
+                    "range_shifters": [r.shifter_id for r in pspec.range_shifters]}]
+    except Exception as exc:  # engine assets missing
+        protons = [{"machine_id": "default", "error": str(exc)}]
+    return {"photon": photons, "proton": protons}
+
+
+@router.get("/machines/photon/{machine_id}", summary="A photon machine model in full.")
+async def get_photon_machine(machine_id: str) -> dict:
+    from ...services.machine_model import MachineModelError, load_photon_spec
+
+    try:
+        return load_photon_spec(machine_id).model_dump()
+    except MachineModelError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/machines/proton/{machine_id}", summary="A proton machine model (from its beam data library).")
+async def get_proton_machine(machine_id: str) -> dict:
+    from ...services.machine_model import MachineModelError, ProtonMachineModel
+
+    try:
+        model = ProtonMachineModel.from_default() if machine_id == "default" else ProtonMachineModel.from_id(machine_id)
+        return model.spec.model_dump()
+    except MachineModelError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+
 @lru_cache(maxsize=1)
 def _service() -> BeamModelService:
     """Singleton service instance, reused across requests."""

@@ -9,24 +9,32 @@ specifications into deliverable plans:
   driver's own parsers (:mod:`radiarch.services.dose_engines.mcsquare_driver`);
   the HU → relative stopping power model on top of them is
   :class:`radiarch.services.proton_rsp.HUToRSP`.
-* For photons, the MLC leaf width, jaw extents and beam quality.
+* For photons, a :class:`radiarch.models.machine.PhotonMachineSpec`: energies
+  with output calibration, the MLC (leaf boundaries, travel, speed), jaws,
+  gantry and dose-rate limits, deliverability thresholds (R4). Two synthetic
+  machines ship in ``radiarch/machines/``; ``default`` is ``synthetic-120``.
 
 Both are lazy: constructing a model does no disk I/O until a table is used.
 
 Custom machine models load from ``{settings.beam_library_dir}/{machine_model_id}/``
-(``BDL.txt`` and a ``Scanner/`` directory). ``machine_model_id=None`` means
-the project default: the engine's default BDL and ``UCL_Toshiba`` scanner.
+(protons: ``BDL.txt`` and a ``Scanner/`` directory; photons: ``machine.json``).
+``machine_model_id=None`` means the project default.
 """
 
 from __future__ import annotations
 
 import abc
+import json
 import os
 from pathlib import Path
-from typing import Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..config import get_settings
 from ..models.beam_model import Modality
+from ..models.machine import PhotonMachineSpec, ProtonMachineSpec, ProtonRangeShifter
+
+MACHINES_DIR = Path(__file__).resolve().parent.parent / "machines"
+DEFAULT_PHOTON_MACHINE = "synthetic-120"
 
 
 class MachineModelError(RuntimeError):
@@ -156,44 +164,124 @@ class ProtonMachineModel(MachineModelBase):
             pass
         return (70.0, 230.0)
 
+    @property
+    def spec(self) -> ProtonMachineSpec:
+        """What the beam data library says about the system (energies, protons per MU, range shifters, nozzle)."""
+        bdl = self.bdl
+        distances: Dict[str, Optional[float]] = {"Nozzle exit to Isocenter distance": None, "SMX to Isocenter distance": None,
+                                                 "SMY to Isocenter distance": None}
+        lines = [l.strip() for l in bdl.text.splitlines()]
+        for key in list(distances):
+            if key in lines:
+                i = lines.index(key)
+                for cand in lines[i + 1:i + 3]:
+                    try:
+                        distances[key] = float(cand)
+                        break
+                    except ValueError:
+                        continue
+        return ProtonMachineSpec(
+            machine_id=self.machine_model_id, bdl_name=bdl.name,
+            energies_mev=[float(e) for e in bdl.nominal_energy_mev], protons_per_mu=[float(p) for p in bdl.protons_per_mu],
+            range_shifters=[ProtonRangeShifter(shifter_id=k, water_equivalent_thickness_mm=float(v)) for k, v in bdl.range_shifter_wet_mm.items()],
+            nozzle_to_isocenter_mm=distances["Nozzle exit to Isocenter distance"],
+            smx_to_isocenter_mm=distances["SMX to Isocenter distance"], smy_to_isocenter_mm=distances["SMY to Isocenter distance"],
+        )
+
 
 # ---------------------------------------------------------------------------
 # Photon machine model
 # ---------------------------------------------------------------------------
 
+def builtin_photon_machines() -> Dict[str, Path]:
+    """The synthetic machines shipped with radiarch: id → json path."""
+    return {p.stem: p for p in sorted(MACHINES_DIR.glob("*.json"))}
+
+
+def load_photon_spec(machine_model_id: str) -> PhotonMachineSpec:
+    """A photon machine spec: a built-in id, or ``{beam_library_dir}/{id}/machine.json``."""
+    mid = DEFAULT_PHOTON_MACHINE if machine_model_id in (None, "default") else str(machine_model_id)
+    builtin = builtin_photon_machines()
+    path = builtin.get(mid)
+    if path is None:
+        candidate = Path(get_settings().beam_library_dir) / mid / "machine.json"
+        if candidate.is_file():
+            path = candidate
+    if path is None:
+        raise MachineModelError(
+            f"Photon machine model {machine_model_id!r} not found; built-in: {sorted(builtin)}, "
+            f"custom: {get_settings().beam_library_dir}/<id>/machine.json"
+        )
+    try:
+        data = json.loads(Path(path).read_text())
+        spec = PhotonMachineSpec.model_validate(data)
+    except Exception as exc:
+        raise MachineModelError(f"invalid machine file {path}: {exc}") from exc
+    return spec
+
+
 class PhotonMachineModel(MachineModelBase):
-    """MLC + jaw + beam-quality config for a photon LINAC."""
+    """A photon linac: its :class:`PhotonMachineSpec` plus the three legacy numbers
+    (``mlc_leaf_width_mm``, ``max_jaw_opening_mm``, ``beam_quality_mv``) the open-field
+    builder reads, derived from the spec unless given."""
 
     def __init__(
         self,
         machine_model_id: str = "default",
         *,
-        mlc_leaf_width_mm: float = 10.0,
-        max_jaw_opening_mm: float = 200.0,
-        beam_quality_mv: float = 6.0,
+        spec: Optional[PhotonMachineSpec] = None,
+        mlc_leaf_width_mm: Optional[float] = None,
+        max_jaw_opening_mm: Optional[float] = None,
+        beam_quality_mv: Optional[float] = None,
     ) -> None:
         self.machine_model_id = machine_model_id
-        self.mlc_leaf_width_mm = mlc_leaf_width_mm
-        self.max_jaw_opening_mm = max_jaw_opening_mm
-        self.beam_quality_mv = beam_quality_mv
+        self._spec = spec
+        self._mlc_leaf_width_mm = mlc_leaf_width_mm
+        self._max_jaw_opening_mm = max_jaw_opening_mm
+        self._beam_quality_mv = beam_quality_mv
 
     @property
     def modality(self) -> Modality:
         return Modality.photon_imrt
 
+    @property
+    def spec(self) -> PhotonMachineSpec:
+        if self._spec is None:
+            self._spec = load_photon_spec(self.machine_model_id)
+        return self._spec
+
+    @property
+    def mlc_leaf_width_mm(self) -> float:
+        """The width of the central leaves (the smallest width of the bank)."""
+        if self._mlc_leaf_width_mm is not None:
+            return float(self._mlc_leaf_width_mm)
+        return float(min(self.spec.mlc.leaf_widths_mm))
+
+    @property
+    def max_jaw_opening_mm(self) -> float:
+        """The open-field size the beam-model builder uses by default (``spec.default_field_mm``)."""
+        if self._max_jaw_opening_mm is not None:
+            return float(self._max_jaw_opening_mm)
+        return float(self.spec.default_field_mm)
+
+    @property
+    def beam_quality_mv(self) -> float:
+        if self._beam_quality_mv is not None:
+            return float(self._beam_quality_mv)
+        return float(self.spec.default_energy.nominal_mv)
+
     @classmethod
     def from_default(cls) -> "PhotonMachineModel":
-        """The project default — a 6 MV LINAC with a 10 mm MLC."""
+        """The project default: the synthetic 120-leaf 6 MV machine."""
         return cls(machine_model_id="default")
 
     @classmethod
     def from_id(cls, machine_model_id: str) -> "PhotonMachineModel":
-        """Only "default" is recognized; unknown ids raise rather than falling back silently."""
+        """A built-in synthetic machine or a custom ``machine.json``; unknown ids raise."""
         if machine_model_id == "default":
             return cls.from_default()
-        raise MachineModelError(
-            f"Photon machine model {machine_model_id!r} not found. Only 'default' is recognized in v1."
-        )
+        spec = load_photon_spec(machine_model_id)     # raises MachineModelError when unknown
+        return cls(machine_model_id=machine_model_id, spec=spec)
 
 
 # ---------------------------------------------------------------------------
@@ -218,4 +306,5 @@ def get_machine_model(modality: Modality, machine_model_id: Optional[str] = None
     raise MachineModelError(f"Unsupported modality: {modality!r}")
 
 
-__all__ = ["MachineModelBase", "MachineModelError", "PhotonMachineModel", "ProtonMachineModel", "get_machine_model"]
+__all__ = ["MachineModelBase", "MachineModelError", "PhotonMachineModel", "ProtonMachineModel", "get_machine_model",
+           "builtin_photon_machines", "load_photon_spec", "DEFAULT_PHOTON_MACHINE"]
