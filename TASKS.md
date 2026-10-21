@@ -591,4 +591,28 @@ ADR 0009. Done:
   beamlets with the binary, split/template/spots on a synthetic craniospinal target).
 Open: probabilistic robust objectives; clinical-goal pass/fail (R5); 4D scenarios (R9).
 Fraction-wise junction shifts are deliberately not modelled (gradient junctions + robust
-optimization replace them in PBS; ADR 0009).
+optimization replace them in PBS; ADR 0009). Committed 2026-10-21 (c776958..709b533).
+
+## R4 — machine model and apertures (2026-10-21)
+
+ADR 0010. Done:
+- `models/machine.py` (PhotonMachineSpec: energies, MLC, jaws, limits; ProtonMachineSpec from the
+  BDL); `radiarch/machines/synthetic-120.json`, `synthetic-160.json`; `PhotonMachineModel` on the
+  spec (`default` = synthetic-120; custom `{beam_library_dir}/{id}/machine.json`);
+  `GET /beam-model/machines[/photon|proton/{id}]`.
+- Masks as a uint64 bitmask (`services/masks.py`; `GeometryResult.mask_encoding`); overlapping
+  structures keep their voxels; every consumer reads through `structure_mask`. The geometry golden
+  now hashes the per-structure boolean masks (re-captured; spots and MCsquare inputs unchanged).
+- `services/structure_ops.py` (expand/erode by Euclidean distance, per-axis margins, ring,
+  union/intersection/subtract, couch slab), `services/geometry_derive.py`, `GeometryService.derive`,
+  `POST /geometry/{id}/derive` (`StructureOperation`, `GeometryDeriveRequest`); `GeometryResult`
+  gains `parent_geometry_id`, `derived_operations`, `hu_to_density_model`.
+- `services/sequencing.py` (fluence maps on leaf pairs, Bortfeld–Boyer segments, machine limits,
+  coverage matrix, segment-weight optimization with the existing solvers, minimum MU/area,
+  deliverability), `services/apertures.py` (`ApertureService`: aperture plan persisted as a new
+  beam model, segment dose as a dose result, `ApertureStore`), `models/apertures.py`,
+  `POST /optimize/{id}/sequence`, `GET /optimize/sequences/{id}`.
+- Tests: `tests/test_r4_machine_structures.py`, `tests/test_r4_sequencing.py`,
+  `tests/test_r4_apertures_service.py`.
+Open: DAO refinement; leaf transmission / tongue-and-groove in the segment dose; asymmetric
+margins; VMAT (R8); the RT writer on the aperture plan (R6).

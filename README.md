@@ -155,6 +155,16 @@ isocenter and a target z slab; `POST /beam-model/templates/craniospinal` builds 
 posterior fields of a craniospinal plan with overlapping junctions, optionally a
 posterior-oblique pair for the brain (ADR 0009).
 
+## Machines, structures, apertures
+
+Photon machines are data (`radiarch/machines/`, `GET /beam-model/machines`): leaf boundaries,
+travel limits, speeds, dose rates and deliverability thresholds; two synthetic linacs ship,
+custom ones live in `RADIARCH_BEAM_LIBRARY_DIR/<id>/machine.json`. Structures overlap freely
+(a bitmask volume). `POST /geometry/{id}/derive` makes PTVs, rings, booleans, density
+overrides and a couch slab from an existing geometry. `POST /optimize/{id}/sequence` turns a
+photon optimization into step-and-shoot MLC apertures with re-optimized segment MU and a
+deliverability report (ADR 0010).
+
 ## DICOM RT in
 
 `radiarch.dicom` reads RT Plan and RT Ion Plan objects into the plan models, RT Dose objects onto
