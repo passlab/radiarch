@@ -26,7 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from loguru import logger
@@ -200,6 +200,93 @@ class MCsquareEngine:
             logger.exception("MCsquare dose computation failed")
             raise EngineRuntimeError(f"MCsquare failed: {exc}") from exc
         return NominalDose(dose=np.asarray(dose, dtype=np.float32))
+
+    # ----- native scenario sets (R3) -----------------------------------
+
+    @staticmethod
+    def _native(scenario_set) -> dict:
+        from .mcsquare_driver import robustness_config
+        return robustness_config(scenario_set.selection, scenario_set.setup_systematic_mm, scenario_set.setup_random_mm,
+                                 scenario_set.range_error_pct, scenario_set.count, simulate_nominal=True)
+
+    @staticmethod
+    def _record_to_spec(rec) -> ScenarioSpec:
+        if rec.is_nominal:
+            return ScenarioSpec(name="nominal")
+        shift = tuple(float(v) for v in rec.setup_shift_mm)
+        random = tuple(float(v) for v in rec.setup_random_mm)
+        return ScenarioSpec(
+            name=rec.name,
+            setup_shift_mm=shift if any(abs(v) > 0 for v in shift) else None,
+            range_scale=rec.range_scale if abs(rec.range_error_pct) > 0 else None,
+            setup_random_sigma_mm=random if any(abs(v) > 0 for v in random) else None,
+        )
+
+    def compute_scenario_doses(self, geometry: GeometryBundle, beam_model: BeamModelBundle, weights: np.ndarray,
+                               scenario_set, params: Optional[dict] = None) -> List[Tuple[ScenarioSpec, np.ndarray]]:
+        """The engine's own robustness mode: one run, the nominal dose first, then every
+        scenario it sampled, each labelled with the errors it applied."""
+        params = params or {}
+        drv = self.driver(params)
+        ok, reason = drv.availability()
+        if not ok:
+            raise EngineUnavailableError(f"MCsquare is not available: {reason}")
+        expected = beam_model.result.fluence_elements.total_count
+        weights = np.asarray(weights, dtype=np.float32)
+        if weights.shape != (expected,):
+            raise EngineParamError(f"weights shape {weights.shape} != ({expected},)")
+        plan = self._plan(beam_model).with_spot_mus(weights)
+        ct_hu, spacing, origin = self._grid(geometry)
+        try:
+            records = drv.compute_scenario_doses(
+                ct_hu, spacing, origin, plan, self._native(scenario_set),
+                nb_primaries=float(params.get("nb_primaries", 1e4)),
+                stat_uncertainty=float(params.get("stat_uncertainty", 0.0)),
+            )
+        except (EngineParamError, EngineUnavailableError):
+            raise
+        except Exception as exc:
+            logger.exception("MCsquare robustness run failed")
+            raise EngineRuntimeError(f"MCsquare robustness run failed: {exc}") from exc
+        out = [(self._record_to_spec(rec), np.asarray(dose, dtype=np.float32)) for rec, dose in records]
+        if not out or not out[0][0].is_nominal():
+            raise EngineRuntimeError("MCsquare robustness run returned no nominal dose")
+        return out
+
+    def build_scenario_influences(self, geometry: GeometryBundle, beam_model: BeamModelBundle, scenario_set,
+                                  params: Optional[dict] = None) -> List[Tuple[ScenarioSpec, InfluenceData]]:
+        """The engine's robustness mode in beamlet mode: one run, one Dij per scenario (nominal first)."""
+        params = params or {}
+        drv = self.driver(params)
+        ok, reason = drv.availability()
+        if not ok:
+            raise EngineUnavailableError(f"MCsquare is not available: {reason}")
+        plan = self._plan(beam_model)
+        expected = beam_model.result.fluence_elements.total_count
+        if plan.n_spots != expected:
+            raise EngineParamError(f"plan has {plan.n_spots} spots; beam model has {expected} fluence elements")
+        ct_hu, spacing, origin = self._grid(geometry)
+        try:
+            records = drv.compute_scenario_beamlets(
+                ct_hu, spacing, origin, plan, self._native(scenario_set),
+                nb_primaries=float(params.get("nb_primaries", 1e4)),
+            )
+        except (EngineParamError, EngineUnavailableError):
+            raise
+        except Exception as exc:
+            logger.exception("MCsquare robustness beamlet run failed")
+            raise EngineRuntimeError(f"MCsquare robustness beamlet run failed: {exc}") from exc
+        out: List[Tuple[ScenarioSpec, InfluenceData]] = []
+        for rec, csr in records:
+            if csr.shape[1] != expected:
+                raise EngineRuntimeError(f"MCsquare returned Dij with {csr.shape[1]} columns; beam model has {expected} fluence elements.")
+            out.append((self._record_to_spec(rec), InfluenceData(
+                indptr=csr.indptr.astype(np.int64), indices=csr.indices.astype(np.int32),
+                data=csr.data.astype(np.float32), n_voxels=int(csr.shape[0]), n_elements=int(csr.shape[1]),
+            )))
+        if not out or not out[0][0].is_nominal():
+            raise EngineRuntimeError("MCsquare robustness beamlet run returned no nominal Dij")
+        return out
 
     # ----- build_influence ---------------------------------------------
 

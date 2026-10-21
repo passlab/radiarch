@@ -79,6 +79,10 @@ def test_basic_proton_workflow_runs_on_the_phantom(env):
 
     qa = _run(_plan(PlanWorkflow.proton_impt_basic))
     assert qa["engine"] == "mcsquare" and qa["beamCount"] == 1 and 500 < qa["spots"] < 1200   # 846 on the native grid
+    assert qa["doseUnits"] == "Gy(RBE)" and qa["rbe"] == 1.1
+    import pydicom
+    ds = pydicom.dcmread(qa["rtdosePath"])
+    assert ds.DoseType == "EFFECTIVE"
     assert qa["geometryId"] and qa["beamModelId"] and qa["doseId"]
 
 
@@ -101,5 +105,8 @@ def test_optimized_and_robust_workflows_run_on_the_phantom(env):
     qa = _run(_plan(PlanWorkflow.proton_robust, max_iterations=3, nb_primaries_beamlets=2000, nb_primaries_final=5000,
                     robustness=RobustnessConfig(selection_strategy="REDUCED_SET", setup_systematic_error_mm=[2, 2, 2],
                                                 range_systematic_error_pct=3)))
-    assert qa["engine"] == "mcsquare_robust" and qa["robustness"]["scenarios"] == 8
-    assert len(qa["scenarioDoses"]) == 8 and qa["robustStats"]
+    # REDUCED_SET is 21 scenarios; with a zero random setup error MCsquare leaves out the
+    # one that coincides with the nominal plan
+    assert qa["engine"] == "mcsquare_robust" and qa["robustness"]["scenarios"] in (20, 21)
+    assert len(qa["scenarioDoses"]) == qa["robustness"]["scenarios"] and qa["robustStats"]
+    assert qa["doseUnits"] == "Gy(RBE)" and qa["rbe"] == 1.1

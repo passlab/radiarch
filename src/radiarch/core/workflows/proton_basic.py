@@ -41,12 +41,14 @@ def run(plan: PlanDetail, adapter=None) -> Dict[str, Any]:
     dose = read_dose(dose_result.dose_grid_uri)
 
     rtdose_path = os.path.join(sim_dir, "RTDOSE.dcm")
-    export_rtdose(dose_image(dose, geometry), ct_provenance(geometry), rtdose_path)
+    export_rtdose(dose_image(dose, geometry), ct_provenance(geometry), rtdose_path, rbe=dose_result.rbe_factor)
     masks = read_masks(geometry)
 
     return {
         "engine": "mcsquare",
         "engineVersion": dose_result.engine_version,
+        "doseUnits": dose_result.dose_units,
+        "rbe": dose_result.rbe_factor,
         "intended_use": RESEARCH_USE_ONLY,
         "patientName": geometry.ct_metadata.patient_name,
         "beamCount": len(beam_model.fluence_elements.per_beam),

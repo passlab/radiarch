@@ -38,6 +38,8 @@ from ..models.dose import (
     ScenarioDoseEntry,
     ScenarioSpec,
     WeightVector,
+    default_rbe,
+    dose_units_for,
 )
 from .beam_persistence import BeamModelStore
 from .dose_engines import (
@@ -121,35 +123,57 @@ class DoseService:
         weights = self._materialize_weights(request.weights,
                                             beam_model.result.fluence_elements.total_count)
 
-        # Scenario expansion (or nominal-only).
-        if request.scenarios is not None:
-            on_progress(DoseStage.expanding_scenarios, 0.25,
-                        "Expanding scenarios")
-            scenarios = expand_scenarios(request.scenarios)
-        else:
-            scenarios = [ScenarioSpec(name="nominal")]
+        rbe = float(request.rbe) if request.rbe is not None else default_rbe(beam_model.result.modality)
+        native = request.scenarios.engine_native if (request.scenarios is not None and not request.scenarios.scenarios) else None
 
-        # Compute nominal dose (always first scenario).
-        on_progress(DoseStage.computing_dose, 0.40,
-                    f"Computing dose ({len(scenarios)} scenarios)")
-        nominal_scenario = scenarios[0]
-        nominal_result = engine.compute_dose(
-            geometry, beam_model, weights,
-            scenario=nominal_scenario, params=request.engine.params,
-        )
-
-        # Per-scenario doses for the rest.
         scenario_arrays: Dict[str, np.ndarray] = {}
         scenario_entries: List[ScenarioDoseEntry] = []
-        if len(scenarios) > 1:
+        if native is not None:
+            # The engine samples and simulates the set itself (R3).
+            if not hasattr(engine, "compute_scenario_doses"):
+                raise ValueError(f"Engine {request.engine.name} has no native scenario mode; pass explicit scenarios instead.")
+            on_progress(DoseStage.computing_dose, 0.40,
+                        f"Computing dose ({native.selection}: {native.n_scenarios} scenarios in one run)")
+            sampled = engine.compute_scenario_doses(geometry, beam_model, weights, native, params=request.engine.params)
+            nominal_dose = np.asarray(sampled[0][1], dtype=np.float32) * np.float32(rbe)
+            scenarios = [sc for sc, _ in sampled]
+            for sc, arr in sampled[1:]:
+                arr = np.asarray(arr, dtype=np.float32) * np.float32(rbe)
+                h = sc.hash()
+                scenario_arrays[h] = arr
+                scenario_entries.append(ScenarioDoseEntry(
+                    scenario_name=sc.name, scenario_hash=h, dose_grid_uri="", statistics=_summary_stats(arr),
+                    scenario=sc,
+                ))
+        else:
+            # Scenario expansion (or nominal-only).
+            if request.scenarios is not None:
+                on_progress(DoseStage.expanding_scenarios, 0.25,
+                            "Expanding scenarios")
+                scenarios = expand_scenarios(request.scenarios)
+            else:
+                scenarios = [ScenarioSpec(name="nominal")]
+
+            # Compute nominal dose (always first scenario).
+            on_progress(DoseStage.computing_dose, 0.40,
+                        f"Computing dose ({len(scenarios)} scenarios)")
+            nominal_scenario = scenarios[0]
+            nominal_result = engine.compute_dose(
+                geometry, beam_model, weights,
+                scenario=nominal_scenario, params=request.engine.params,
+            )
+            nominal_dose = np.asarray(nominal_result.dose, dtype=np.float32) * np.float32(rbe)
+
+        # Per-scenario doses for the rest.
+        if native is None and len(scenarios) > 1:
             for i, sc in enumerate(scenarios[1:], start=1):
                 frac = 0.40 + 0.4 * (i / max(len(scenarios) - 1, 1))
                 on_progress(DoseStage.computing_dose, frac,
                             f"Scenario {i}/{len(scenarios) - 1}: {sc.name}")
-                arr = engine.compute_dose(
+                arr = np.asarray(engine.compute_dose(
                     geometry, beam_model, weights,
                     scenario=sc, params=request.engine.params,
-                ).dose
+                ).dose, dtype=np.float32) * np.float32(rbe)
                 h = sc.hash()
                 scenario_arrays[h] = arr
                 stats = _summary_stats(arr)
@@ -158,6 +182,7 @@ class DoseService:
                     scenario_hash=h,
                     dose_grid_uri="",  # filled in below once dose_id is known
                     statistics=stats,
+                    scenario=sc,
                 ))
 
         # Persist.
@@ -178,14 +203,16 @@ class DoseService:
             engine_name=engine.name,
             engine_version=engine.version,
             dose_grid_uri=dose_uri,
-            statistics=_summary_stats(nominal_result.dose),
+            statistics=_summary_stats(nominal_dose),
+            rbe_factor=rbe,
+            dose_units=dose_units_for(rbe),
             scenario_doses=scenario_entries or None,
             cache_key=cache_key,
         )
 
         self.dose_store.save(
             dose_id=dose_id, cache_key=cache_key,
-            nominal_dose=nominal_result.dose,
+            nominal_dose=nominal_dose,
             spacing_mm=geometry.spacing_mm,
             scenario_doses=scenario_arrays or None,
             result=result,
@@ -202,6 +229,55 @@ class DoseService:
     # -----------------------------------------------------------------
     # build_influence
     # -----------------------------------------------------------------
+
+    def build_native_influences(self, request: InfluenceBuildRequest, scenario_set) -> List[InfluenceResult]:
+        """The influence matrices of an engine-native scenario set in one engine run (R3).
+
+        Each matrix is stored under the cache key of the equivalent per-scenario
+        :class:`InfluenceBuildRequest` (nominal first), so later requests for a
+        single scenario of the set hit the cache. Cached entries are reused: the
+        engine runs only when a scenario of the set is missing — and since the
+        set is only known after the run, the whole set is rebuilt in that case.
+        """
+        geometry = self._load_geometry(request.geometry_id)
+        beam_model = self._load_beam_model(request.beam_model_id)
+        self._check_modality(request.engine.name, beam_model.result.modality)
+        engine = get_engine(request.engine.name)
+        ensure_engine_allowed(engine)
+        if not hasattr(engine, "build_scenario_influences"):
+            raise ValueError(f"Engine {request.engine.name} has no native scenario mode; pass explicit scenarios instead.")
+        issues = engine.validate(geometry, beam_model, request.engine.params)
+        if issues:
+            raise ValueError(f"Engine {request.engine.name} rejected the request: " + "; ".join(issues))
+        rbe = float(request.rbe) if request.rbe is not None else default_rbe(beam_model.result.modality)
+
+        sampled = engine.build_scenario_influences(geometry, beam_model, scenario_set, params=request.engine.params)
+        results: List[InfluenceResult] = []
+        for sc, inf in sampled:
+            per = InfluenceBuildRequest(
+                plan_id=request.plan_id, geometry_id=request.geometry_id, beam_model_id=request.beam_model_id,
+                engine=request.engine, scenario=None if sc.is_nominal() else sc, rbe=request.rbe,
+            )
+            key = per.compute_cache_key()
+            cached = self.influence_store.lookup_by_cache_key(key)
+            if cached is not None:
+                results.append(cached)
+                continue
+            if rbe != 1.0:
+                inf.data = (np.asarray(inf.data, dtype=np.float32) * np.float32(rbe)).astype(np.float32)
+            influence_id = str(uuid.uuid4())
+            result = InfluenceResult(
+                influence_id=influence_id, plan_id=request.plan_id,
+                geometry_id=geometry.result.geometry_id, beam_model_id=beam_model.result.beam_model_id,
+                modality=beam_model.result.modality, engine_name=engine.name, engine_version=engine.version,
+                scenario=per.scenario, influence_uri=str(self.influence_store.base_dir / influence_id / "dij.npz"),
+                rbe_factor=rbe, dose_units=dose_units_for(rbe),
+                n_voxels=inf.n_voxels, n_elements=inf.n_elements, nnz=inf.nnz, cache_key=key,
+            )
+            self.influence_store.save(influence_id=influence_id, cache_key=key, influence=inf, result=result)
+            results.append(result)
+        logger.info("Native scenario set: %d influence matrices from one %s run", len(results), engine.name)
+        return results
 
     def build_influence(
         self,
@@ -240,6 +316,9 @@ class DoseService:
             geometry, beam_model,
             scenario=request.scenario, params=request.engine.params,
         )
+        rbe = float(request.rbe) if request.rbe is not None else default_rbe(beam_model.result.modality)
+        if rbe != 1.0:
+            inf.data = (np.asarray(inf.data, dtype=np.float32) * np.float32(rbe)).astype(np.float32)
 
         influence_id = str(uuid.uuid4())
         influence_root = self.influence_store.base_dir / influence_id
@@ -253,6 +332,8 @@ class DoseService:
             engine_version=engine.version,
             scenario=request.scenario,
             influence_uri=str(influence_root / "dij.npz"),
+            rbe_factor=rbe,
+            dose_units=dose_units_for(rbe),
             n_voxels=inf.n_voxels,
             n_elements=inf.n_elements,
             nnz=inf.nnz,

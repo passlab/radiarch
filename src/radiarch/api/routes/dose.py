@@ -225,6 +225,7 @@ class DoseRecalculateRequest(BaseModel):
     beam_model_id: str = Field(..., min_length=1, max_length=36, description="An imported plan's beam model.")
     engine: EngineSpec
     scenarios: Optional[ScenarioSetSpec] = None
+    rbe: Optional[float] = Field(default=None, gt=0.0, le=2.0, description="Null = 1.1 for protons, 1.0 for photons.")
 
 
 @router.post(
@@ -259,6 +260,7 @@ async def recalculate_dose(
         engine=request.engine,
         weights=WeightVector(length=bm.fluence_elements.total_count, weights_uri=bm.plan_weights_uri),
         scenarios=request.scenarios,
+        rbe=request.rbe,
     )
     return await compute_dose(compute_request, response, api_key_prefix)
 

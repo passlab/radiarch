@@ -72,8 +72,7 @@ def build_beam_model(plan: PlanDetail, geometry: GeometryResult, modality: Modal
     from ...services.beam_model import BeamModelService
 
     angles = list(gantry_angles) if gantry_angles is not None else build_gantry_angles(plan.beam_count)
-    beam_set = BeamSetSpec(
-        isocenter_mm=(0.0, 0.0, 0.0),       # the proton builder places the isocenter on the target's centre of mass
+    beam_set = BeamSetSpec(       # no isocenter: the builder places it on the target's centre of mass
         beams=[BeamSpec(beam_id=f"B{i + 1}", gantry_deg=float(g) % 360.0) for i, g in enumerate(angles)],
     )
     if delivery is None:
@@ -252,13 +251,14 @@ def ct_provenance(geometry: GeometryResult) -> SimpleNamespace:
     )
 
 
-def export_rtdose(dose_image, ct, output_path: str) -> None:
+def export_rtdose(dose_image, ct, output_path: str, rbe: float = 1.0) -> None:
     """Write a dose volume as a DICOM RTDOSE file.
 
     ``dose_image`` has ``imageArray`` in ``(z, y, x)`` order, ``spacing`` and
     ``origin`` in ``(x, y, z)``; ``ct`` carries ``frameOfReferenceUID``,
-    ``patientName``, ``patientID`` and ``studyInstanceUID``. Every file says
-    it is not for clinical use (R0).
+    ``patientName``, ``patientID`` and ``studyInstanceUID``. With ``rbe`` other
+    than 1 the dose is an RBE-weighted dose (``DoseType EFFECTIVE``). Every
+    file says it is not for clinical use (R0).
     """
     import pydicom
     from pydicom.dataset import FileDataset
@@ -290,7 +290,9 @@ def export_rtdose(dose_image, ct, output_path: str) -> None:
     block.add_new(0x01, "LO", NOT_FOR_CLINICAL_USE)
     ds.Manufacturer = "Radiarch"
     ds.DoseUnits = "GY"
-    ds.DoseType = "PHYSICAL"
+    ds.DoseType = "EFFECTIVE" if abs(float(rbe) - 1.0) > 1e-9 else "PHYSICAL"
+    if abs(float(rbe) - 1.0) > 1e-9:
+        ds.DoseComment = f"{NOT_FOR_CLINICAL_USE}; RBE {float(rbe):g}, Gy(RBE)"
     ds.DoseSummationType = "PLAN"
 
     dose_array = np.asarray(dose_image.imageArray, dtype=np.float32)

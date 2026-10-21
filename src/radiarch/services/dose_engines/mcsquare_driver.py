@@ -575,8 +575,87 @@ def read_sparse_beamlets(header_path: Path) -> Tuple[sp.csc_matrix, Dict[str, An
 
 
 # ---------------------------------------------------------------------------
-# The driver
+# Robustness mode: the engine samples the scenarios and writes one dose
+# (or one beamlet file) per scenario; ``Robustness_scenarios.txt`` lists the
+# errors it applied.
 # ---------------------------------------------------------------------------
+
+_SELECTION = {"ALL": "All", "REDUCED_SET": "ReducedSet", "RANDOM": "Random"}
+
+
+def robustness_config(selection: str, setup_systematic_mm: Vec3, setup_random_mm: Vec3, range_error_pct: float,
+                      count: int = 20, simulate_nominal: bool = True) -> Dict[str, Any]:
+    """Configuration keys of the engine's robustness mode (errors in cm and %)."""
+    sel = str(selection).upper()
+    if sel not in _SELECTION:
+        raise ValueError(f"selection must be one of {sorted(_SELECTION)}, got {selection!r}")
+    return {
+        "Robustness_Mode": True,
+        "Scenario_selection": _SELECTION[sel],
+        "Simulate_nominal_plan": bool(simulate_nominal),
+        "Num_Random_Scenarios": int(count),
+        "Systematic_Setup_Error": [float(v) / 10.0 for v in setup_systematic_mm],
+        "Random_Setup_Error": [float(v) / 10.0 for v in setup_random_mm],
+        "Systematic_Range_Error": float(range_error_pct),
+    }
+
+
+@dataclass
+class ScenarioRecord:
+    """One scenario the engine simulated: its index and the errors it applied."""
+
+    index: int                         # 1-based, 0 = nominal
+    count: int
+    setup_shift_mm: Vec3
+    setup_random_mm: Vec3
+    range_error_pct: float
+
+    @property
+    def is_nominal(self) -> bool:
+        return self.index == 0
+
+    @property
+    def name(self) -> str:
+        return "nominal" if self.is_nominal else f"scenario_{self.index}"
+
+    @property
+    def range_scale(self) -> float:
+        return 1.0 + self.range_error_pct / 100.0
+
+    def dose_file(self) -> str:
+        return "Dose_Nominal.mhd" if self.is_nominal else f"Dose_Scenario_{self.index}-{self.count}.mhd"
+
+    def sparse_file(self) -> str:
+        return "Sparse_Dose_Nominal.txt" if self.is_nominal else f"Sparse_Dose_Scenario_{self.index}-{self.count}.txt"
+
+
+_SCENARIO_LINE = re.compile(
+    r"^(?:Nominal|Scenario \((?P<i>\d+)/(?P<n>\d+)\)):\s*Systematic_Setup\(([^)]*)mm\)\s*Random_Setup\(([^)]*)mm\)"
+    r"\s*Systematic_Range\(([^%]*)%\)"
+)
+
+
+def read_scenarios_file(outputs: Path) -> List[ScenarioRecord]:
+    """Parse ``Outputs/Robustness_scenarios.txt``: the nominal entry (if simulated) first."""
+    path = Path(outputs) / "Robustness_scenarios.txt"
+    records: List[ScenarioRecord] = []
+    for line in path.read_text().splitlines():
+        m = _SCENARIO_LINE.match(line.strip())
+        if not m:
+            continue
+        shift = tuple(float(v) for v in m.group(3).split())
+        random = tuple(float(v) for v in m.group(4).split())
+        rng = float(m.group(5))
+        idx = int(m.group("i")) if m.group("i") else 0
+        n = int(m.group("n")) if m.group("n") else 0
+        records.append(ScenarioRecord(idx, n, shift, random, rng))
+    if not records:
+        raise ValueError(f"{path}: no scenario lines found")
+    n = max(r.count for r in records)
+    for r in records:
+        r.count = n
+    return records
+
 
 @dataclass
 class MCsquareRun:
@@ -595,7 +674,7 @@ class MCsquareDriver:
                  n_threads: int = 0, seed: int = 0, keep_workdir: bool = False,
                  scanner: str = DEFAULT_SCANNER, bdl: str = DEFAULT_BDL) -> None:
         self.assets = assets or MCsquareAssets(default_assets_dir())
-        self.work_root = Path(work_root) if work_root else None
+        self.work_root = Path(work_root).resolve() if work_root else None
         self.n_threads = int(n_threads)
         self.seed = int(seed)
         self.keep_workdir = bool(keep_workdir)
@@ -689,8 +768,8 @@ class MCsquareDriver:
         ok, reason = self.availability()
         if not ok:
             raise RuntimeError(f"MCsquare is not available: {reason}")
-        work = Path(work)
-        config_path = Path(config_path) if config_path else work / "config.txt"
+        work = Path(work).resolve()
+        config_path = Path(config_path).resolve() if config_path else work / "config.txt"
         stdout_path = work / "mcsquare.log"
         env = dict(os.environ)
         env["MCsquare_Materials_Dir"] = str(self.assets.materials_dir)
@@ -721,12 +800,45 @@ class MCsquareDriver:
         scale = self.delivered_protons(plan, bdl) * EV_PER_G_TO_GY * plan.n_fractions
         return (dose.astype(np.float64) * scale).astype(np.float32)
 
+    def read_scenario_doses(self, work: Path, plan: ProtonPlan, bdl: Optional[BeamDataLibrary] = None,
+                            shape_zyx: Optional[Tuple[int, int, int]] = None) -> List[Tuple[ScenarioRecord, np.ndarray]]:
+        """The doses of a robustness-mode run, nominal first when it was simulated."""
+        bdl = bdl or self.bdl()
+        outputs = Path(work) / "Outputs"
+        scale = self.delivered_protons(plan, bdl) * EV_PER_G_TO_GY * plan.n_fractions
+        out: List[Tuple[ScenarioRecord, np.ndarray]] = []
+        for rec in read_scenarios_file(outputs):
+            path = outputs / rec.dose_file()
+            if not path.is_file():
+                if rec.is_nominal:
+                    continue
+                raise FileNotFoundError(f"MCsquare wrote no dose for {rec.name}: {path}")
+            dose, _, _ = read_mhd(path)
+            if shape_zyx is not None and tuple(dose.shape) != tuple(shape_zyx):
+                raise ValueError(f"MCsquare dose grid {dose.shape} differs from the CT grid {tuple(shape_zyx)}")
+            out.append((rec, (dose.astype(np.float64) * scale).astype(np.float32)))
+        return out
+
+    def read_scenario_beamlets(self, work: Path, plan: ProtonPlan, shape_zyx: Tuple[int, int, int],
+                               bdl: Optional[BeamDataLibrary] = None) -> List[Tuple[ScenarioRecord, sp.csr_matrix]]:
+        """The influence matrices of a robustness-mode beamlet run, nominal first when simulated."""
+        outputs = Path(work) / "Outputs"
+        out: List[Tuple[ScenarioRecord, sp.csr_matrix]] = []
+        for rec in read_scenarios_file(outputs):
+            path = outputs / rec.sparse_file()
+            if not path.is_file():
+                if rec.is_nominal:
+                    continue
+                raise FileNotFoundError(f"MCsquare wrote no beamlets for {rec.name}: {path}")
+            out.append((rec, self.read_beamlets(work, plan, shape_zyx, bdl, sparse_path=path)))
+        return out
+
     def read_beamlets(self, work: Path, plan: ProtonPlan, shape_zyx: Tuple[int, int, int],
-                      bdl: Optional[BeamDataLibrary] = None) -> sp.csr_matrix:
+                      bdl: Optional[BeamDataLibrary] = None, sparse_path: Optional[Path] = None) -> sp.csr_matrix:
         """``Outputs/Sparse_Dose.txt`` → CSR ``(n_voxels, n_spots)``: rows in radiarch's
         ``(z, y, x)`` C-order, columns in the plan's fluence-element order, Gy per MU."""
         bdl = bdl or self.bdl()
-        native, header = read_sparse_beamlets(Path(work) / "Outputs" / "Sparse_Dose.txt")
+        native, header = read_sparse_beamlets(Path(sparse_path) if sparse_path else Path(work) / "Outputs" / "Sparse_Dose.txt")
         nz, ny, nx = (int(v) for v in shape_zyx)
         if tuple(header["ImageSize"]) != (nx, ny, nz):
             raise ValueError(f"MCsquare beamlet grid {header['ImageSize']} differs from the CT grid (x, y, z) {(nx, ny, nz)}")
@@ -750,6 +862,39 @@ class MCsquareDriver:
                                config_overrides=config_overrides)
             self.run(work, cfg)
             return self.read_dose(work, plan, shape_zyx=tuple(np.asarray(ct_hu_zyx).shape))
+        finally:
+            self.cleanup(work)
+
+    def compute_scenario_doses(self, ct_hu_zyx: np.ndarray, spacing_mm: Vec3, origin_mm: Vec3, plan: ProtonPlan,
+                               robustness: Dict[str, Any], *, nb_primaries: float, stat_uncertainty: float = 0.0,
+                               calibration: Optional[CalibrationTables] = None,
+                               config_overrides: Optional[Dict[str, Any]] = None) -> List[Tuple[ScenarioRecord, np.ndarray]]:
+        """One robustness-mode run: the nominal dose and one dose per sampled scenario."""
+        work = self.new_workdir()
+        try:
+            overrides = dict(robustness)
+            overrides.update(config_overrides or {})
+            cfg = self.prepare(work, ct_hu_zyx, spacing_mm, origin_mm, plan, nb_primaries=nb_primaries,
+                               stat_uncertainty=stat_uncertainty, calibration=calibration, config_overrides=overrides)
+            self.run(work, cfg)
+            return self.read_scenario_doses(work, plan, shape_zyx=tuple(np.asarray(ct_hu_zyx).shape))
+        finally:
+            self.cleanup(work)
+
+    def compute_scenario_beamlets(self, ct_hu_zyx: np.ndarray, spacing_mm: Vec3, origin_mm: Vec3, plan: ProtonPlan,
+                                  robustness: Dict[str, Any], *, nb_primaries: float,
+                                  calibration: Optional[CalibrationTables] = None,
+                                  config_overrides: Optional[Dict[str, Any]] = None) -> List[Tuple[ScenarioRecord, sp.csr_matrix]]:
+        """One robustness-mode beamlet run: the nominal Dij and one Dij per sampled scenario."""
+        unit = plan.with_spot_mus(np.ones(plan.n_spots))
+        work = self.new_workdir()
+        try:
+            overrides = dict(robustness)
+            overrides.update(config_overrides or {})
+            cfg = self.prepare(work, ct_hu_zyx, spacing_mm, origin_mm, unit, nb_primaries=nb_primaries, beamlets=True,
+                               calibration=calibration, config_overrides=overrides)
+            self.run(work, cfg)
+            return self.read_scenario_beamlets(work, unit, tuple(np.asarray(ct_hu_zyx).shape))
         finally:
             self.cleanup(work)
 

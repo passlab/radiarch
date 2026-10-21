@@ -303,7 +303,13 @@ class TestRobustnessConfig:
         assert shifts == {(3.0, 0, 0), (-3.0, 0, 0), (0, 3.0, 0), (0, -3.0, 0), (0, 0, 3.0), (0, 0, -3.0)}
         assert {s.range_scale for s in scenarios} == {None, 0.965, 1.035}
         rob = configure_robustness(cfg)
-        assert rob.enabled and rob.aggregation == "WORST_CASE" and len(rob.scenarios) == 20
+        assert rob.enabled and rob.aggregation == "WORST_CASE" and rob.engine_native is not None
+        assert rob.engine_native.selection == "ALL" and rob.engine_native.n_scenarios == 81
+        assert rob.engine_native.setup_systematic_mm == (3.0, 3.0, 3.0) and rob.engine_native.setup_random_mm == (1.0, 1.0, 1.0)
+        assert rob.engine_native.range_error_pct == 3.5
+        reduced_native = configure_robustness(RobustnessConfig(selection_strategy="REDUCED_SET"))
+        assert reduced_native.engine_native.n_scenarios == 21
+        assert configure_robustness(RobustnessConfig(selection_strategy="RANDOM", num_scenarios=4)).engine_native.n_scenarios == 4
 
         reduced = robust_scenarios(RobustnessConfig(selection_strategy="REDUCED_SET"))
         assert len(reduced) == 8 and all(s.range_scale is None for s in reduced if s.setup_shift_mm)

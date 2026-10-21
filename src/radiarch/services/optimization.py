@@ -36,7 +36,7 @@ from loguru import logger
 from scipy.sparse import csr_matrix
 
 from ..config import get_settings
-from ..models.dose import InfluenceBuildRequest, ScenarioSpec
+from ..models.dose import InfluenceBuildRequest, ScenarioSpec, default_rbe, dose_units_for
 from ..models.optimization import (
     CheckpointInfo,
     ConstraintSpec,
@@ -95,6 +95,7 @@ class _Problem:
     cost_and_grad: Callable[[np.ndarray], Tuple[float, np.ndarray]]
     eval_dose_terms: Callable[[np.ndarray], Tuple[float, np.ndarray]]
     w0: np.ndarray
+    rbe: float = 1.0
 
 
 class OptimizationService:
@@ -185,6 +186,8 @@ class OptimizationService:
             dose_ref_uri=str(paths.dose),
             convergence=convergence,
             robust_stats=robust_stats,
+            rbe_factor=prob.rbe,
+            dose_units=dose_units_for(prob.rbe),
             compute_time_s=round(time.monotonic() - t0, 4),
             checkpoints=checkpoints,
             geometry_id=prob.geometry.result.geometry_id,
@@ -237,6 +240,7 @@ class OptimizationService:
 
         grid_shape = tuple(geometry.density.shape)
         n_elements = int(beam_model.result.fluence_elements.total_count)
+        rbe = float(request.rbe) if request.rbe is not None else default_rbe(beam_model.result.modality)
 
         on_progress(OptimizationStage.building_objective, 0.20, "Building objective")
         obj_terms = self._build_objective_terms(
@@ -295,7 +299,7 @@ class OptimizationService:
             obj_terms=obj_terms, constraint_terms=constraint_terms,
             regularizers=regularizers, aggregation=aggregation,
             cost_and_grad=cost_and_grad, eval_dose_terms=eval_dose_terms,
-            w0=w0,
+            w0=w0, rbe=rbe,
         )
 
     # -----------------------------------------------------------------
@@ -356,9 +360,13 @@ class OptimizationService:
     # -----------------------------------------------------------------
 
     def _resolve_scenarios(self, request: OptimizationRunRequest) -> List[ScenarioSpec]:
-        """Nominal first, then the robustness scenarios (deduped on nominal)."""
+        """Nominal first, then the robustness scenarios (deduped on nominal).
+
+        An engine-native set is only known once the engine has sampled it:
+        :meth:`_build_scenario_dij` then returns the sampled scenarios too.
+        """
         scenarios: List[ScenarioSpec] = [ScenarioSpec(name="nominal")]
-        if request.robustness.enabled:
+        if request.robustness.enabled and request.robustness.engine_native is None:
             for sc in request.robustness.scenarios:
                 if not sc.is_nominal():
                     scenarios.append(sc)
@@ -372,19 +380,33 @@ class OptimizationService:
         Delegates to :meth:`DoseService.build_influence` so the influence cache
         is shared with the Dose Service. The CSR matrix is reused for both the
         forward matvec (via ``engine.apply_influence``) and the transpose used
-        in the gradient (O10).
+        in the gradient (O10). With an engine-native robustness set the engine
+        builds every scenario's Dij in one run and ``scenarios`` is extended
+        with what it sampled.
         """
         out: Dict[str, Tuple[object, csr_matrix]] = {}
-        for sc in scenarios:
-            scenario_arg = None if sc.is_nominal() else sc
-            inf_req = InfluenceBuildRequest(
-                plan_id=request.plan_id,
-                geometry_id=request.geometry_id,
-                beam_model_id=request.beam_model_id,
-                engine=request.dose_engine,
-                scenario=scenario_arg,
+        inf_results = []
+        if request.robustness.enabled and request.robustness.engine_native is not None:
+            base = InfluenceBuildRequest(
+                plan_id=request.plan_id, geometry_id=request.geometry_id, beam_model_id=request.beam_model_id,
+                engine=request.dose_engine, scenario=None, rbe=request.rbe,
             )
-            inf_result = self.dose_service.build_influence(inf_req)
+            inf_results = self.dose_service.build_native_influences(base, request.robustness.engine_native)
+            sampled = [r.scenario if r.scenario is not None else ScenarioSpec(name="nominal") for r in inf_results]
+            scenarios[:] = [sampled[0]] + [sc for sc in sampled[1:] if not sc.is_nominal()]
+        else:
+            for sc in scenarios:
+                scenario_arg = None if sc.is_nominal() else sc
+                inf_req = InfluenceBuildRequest(
+                    plan_id=request.plan_id,
+                    geometry_id=request.geometry_id,
+                    beam_model_id=request.beam_model_id,
+                    engine=request.dose_engine,
+                    scenario=scenario_arg,
+                    rbe=request.rbe,
+                )
+                inf_results.append(self.dose_service.build_influence(inf_req))
+        for sc, inf_result in zip(scenarios, inf_results):
             inf = self.dose_service.influence_store.load_influence(
                 inf_result.influence_id
             )

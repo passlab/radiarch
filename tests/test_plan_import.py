@@ -199,4 +199,7 @@ class TestImportAndRecalculateApi:
         direct = MCsquareDriver(work_root=work / "direct", n_threads=1, seed=7).compute_dose(
             ct_hu, tuple(geo.grid_spec.spacing_mm), tuple(geo.grid_spec.origin_mm), plan, nb_primaries=3000)
         assert recalculated.shape == direct.shape
-        np.testing.assert_allclose(recalculated, direct, rtol=1e-5, atol=1e-6 * direct.max())
+        # the service stores proton dose in Gy(RBE) with RBE 1.1 (R3); the driver returns physical Gy
+        result = client.get(f"/api/v1/dose/{dose_id}", headers={"X-API-Key": "k"}).json()
+        assert result["dose_units"] == "Gy(RBE)" and result["rbe_factor"] == 1.1
+        np.testing.assert_allclose(recalculated, 1.1 * direct, rtol=1e-5, atol=1e-6 * direct.max())

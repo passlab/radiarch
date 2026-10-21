@@ -73,6 +73,7 @@ def run(plan: PlanDetail) -> Dict[str, Any]:
     return {
         "engine": "ccc",
         "engineVersion": engine.version,
+        "doseUnits": "Gy",
         "intended_use": RESEARCH_USE_ONLY,
         "beamCount": beam_count,
         "beamlets": photon_plan.n_beamlets,

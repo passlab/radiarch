@@ -38,7 +38,7 @@ from pydantic import BaseModel, Field, model_validator
 
 # Reuse the exact engine + scenario contracts from the Dose Service so the
 # two services agree on engine pinning and robustness semantics.
-from .dose import EngineSpec, ScenarioSpec
+from .dose import EngineScenarioSet, EngineSpec, ScenarioSpec
 from .job import JobState
 from .common import ResearchArtifact
 
@@ -251,7 +251,11 @@ class RobustnessSpec(BaseModel):
     """
 
     enabled: bool = Field(default=False)
-    scenarios: List[ScenarioSpec] = Field(default_factory=list, max_length=64)
+    scenarios: List[ScenarioSpec] = Field(default_factory=list, max_length=256)
+    engine_native: Optional[EngineScenarioSet] = Field(
+        default=None,
+        description="A scenario set the engine samples in one run (R3); used instead of ``scenarios`` when set.",
+    )
     aggregation: str = Field(
         default="EXPECTED",
         description='One of "WORST_CASE", "EXPECTED", "CVAR".',
@@ -266,9 +270,9 @@ class RobustnessSpec(BaseModel):
                 f"aggregation must be one of {sorted(self._ALLOWED_AGG)}, "
                 f"got {self.aggregation!r}"
             )
-        if self.enabled and not self.scenarios:
+        if self.enabled and not self.scenarios and self.engine_native is None:
             raise ValueError(
-                "robustness.enabled=True requires a non-empty scenarios list"
+                "robustness.enabled=True requires a non-empty scenarios list or an engine_native set"
             )
         return self
 
@@ -277,6 +281,7 @@ class RobustnessSpec(BaseModel):
             "enabled": self.enabled,
             "aggregation": self.aggregation,
             "scenarios": [s.hash() for s in self.scenarios],
+            "engine_native": self.engine_native.hash() if self.engine_native is not None else None,
         }
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
@@ -331,6 +336,11 @@ class OptimizationRunRequest(BaseModel):
         default=None, ge=1,
         description="Snapshot weights every N iterations (None = no checkpoints).",
     )
+    rbe: Optional[float] = Field(
+        default=None, gt=0.0, le=2.0,
+        description="RBE applied to the influence matrices (and so to the optimized dose); "
+                    "null = 1.1 for protons, 1.0 for photons. Objectives are then in Gy(RBE).",
+    )
 
     def compute_cache_key(self) -> str:
         """SHA256 of a normalized JSON view of the optimization problem.
@@ -354,6 +364,7 @@ class OptimizationRunRequest(BaseModel):
             "solver_config_hash": self.solver.hash(),
             "init_weights_hash": self.init_weights_uri,
             "robustness_hash": self.robustness.hash(),
+            "rbe": self.rbe,
         }
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()
@@ -413,6 +424,8 @@ class OptimizationResult(ResearchArtifact):
     )
     convergence: ConvergenceInfo
     robust_stats: Optional[RobustStats] = None
+    rbe_factor: float = Field(default=1.0, description="RBE in the influence matrices and the final dose.")
+    dose_units: str = Field(default="Gy")
     compute_time_s: float = Field(..., ge=0.0)
     checkpoints: List[CheckpointInfo] = Field(default_factory=list)
     geometry_id: str
