@@ -74,7 +74,7 @@ def _minimal_dicom(modality: str, sop_class_uid: str) -> bytes:
         ds.PixelData = (np.zeros((2, 2), dtype=np.int16)).tobytes()
 
     buf = io.BytesIO()
-    ds.save_as(buf, write_like_original=False)
+    ds.save_as(buf, enforce_file_format=True)
     return buf.getvalue()
 
 

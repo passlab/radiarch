@@ -23,7 +23,7 @@ def _base(sop_class: str, modality: str, for_uid: str) -> Dataset:
     meta.MediaStorageSOPClassUID = sop_class
     meta.MediaStorageSOPInstanceUID = generate_uid()
     meta.TransferSyntaxUID = ExplicitVRLittleEndian
-    ds = FileDataset(None, {}, file_meta=meta, preamble=b"\0" * 128, is_implicit_VR=False, is_little_endian=True)
+    ds = FileDataset(None, {}, file_meta=meta, preamble=b"\0" * 128)
     ds.SOPClassUID = sop_class
     ds.SOPInstanceUID = meta.MediaStorageSOPInstanceUID
     ds.Modality = modality
@@ -205,5 +205,5 @@ def deformable_registration(for_uid: str, src_for: str, displacement_zyx: np.nda
 
 
 def save(ds: Dataset, path) -> str:
-    ds.save_as(str(path), write_like_original=False)
+    ds.save_as(str(path), enforce_file_format=True)
     return str(path)

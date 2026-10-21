@@ -48,8 +48,6 @@ def _make_instance(
     ds.Modality = modality
     ds.PatientName = "TEST^PATIENT"
     ds.PatientID = "PID_001"
-    ds.is_little_endian = True
-    ds.is_implicit_VR = False
     return ds
 
 
