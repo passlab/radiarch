@@ -219,6 +219,23 @@ class TestCustomGrid:
         assert result.grid_spec.origin_mm == (5.0, 5.0, 5.0)
         assert result.grid_spec.size == ct_array.shape
 
+    def test_spacing_only_resamples_to_cover_the_source_extent(self, tmp_path: Path, monkeypatch) -> None:
+        """Spacing only, coarser than the CT → size shrinks to cover the same extent.
+
+        Inheriting the source voxel count here would turn a 1 mm → 5 mm
+        resample into a grid five times the patient's size.
+        """
+        ct_array = _water_ct()
+        loaded = _build_loaded_ct(ct_array, spacing=(1.0, 1.0, 1.0), origin=(0.0, 0.0, 0.0))
+        service = GeometryService(base_dir=tmp_path)
+        monkeypatch.setattr(service, "_load", lambda _req: loaded)
+
+        result = service.build(_simple_request(grid_spec=GridSpec(spacing_mm=(2.0, 2.0, 2.0))))
+
+        assert result.grid_spec.spacing_mm == (2.0, 2.0, 2.0)
+        assert result.grid_spec.origin_mm == (0.0, 0.0, 0.0)
+        assert result.grid_spec.size == tuple(int(np.ceil(n / 2)) for n in ct_array.shape)
+
 
 # ---------------------------------------------------------------------------
 # Validation

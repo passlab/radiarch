@@ -411,10 +411,19 @@ class GeometryService:
             return inherited
 
         # Partial inheritance: user gave spacing but left origin / size
-        # null → adopt them from the source grid.
+        # null → origin comes from the source grid; size is whatever covers
+        # the source extent at the requested spacing (a 200 mm phantom at
+        # 5 mm is 40 voxels, not the source's 200 — inheriting the voxel
+        # count would silently turn a resample into a 1 m grid).
         spec = request.grid_spec
         origin = spec.origin_mm if spec.origin_mm is not None else source.origin_mm
-        size = spec.size if spec.size is not None else source.size
+        if spec.size is not None:
+            size = spec.size
+        else:
+            size = tuple(
+                max(1, int(np.ceil(n * s_src / s_tgt)))
+                for n, s_src, s_tgt in zip(source.size, source.spacing_mm, spec.spacing_mm)
+            )
 
         completed = GridSpec(
             spacing_mm=spec.spacing_mm,
