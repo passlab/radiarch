@@ -155,6 +155,16 @@ isocenter and a target z slab; `POST /beam-model/templates/craniospinal` builds 
 posterior fields of a craniospinal plan with overlapping junctions, optionally a
 posterior-oblique pair for the brain (ADR 0009).
 
+## Clinical goals, radiobiology, gamma, comparisons
+
+An evaluation grades clinical goals (TG-263 DVH statements with priorities; templates for
+RTOG 0617, QUANTEC, TG-101 SBRT, NCCN head and neck and a provisional PENTEC set under
+`radiarch/goals/`, listed by `GET /evaluate/goal-templates`), reports LKB NTCP and Poisson TCP
+with published parameter sets (`GET /evaluate/models`), converts to EQD2 when the fractions are
+given, and computes a gamma with sub-voxel interpolation. `POST /evaluate/compare` gives the
+dose impact between two evaluations: DVH metric and index differences and the goals that
+changed state (ADR 0011).
+
 ## Machines, structures, apertures
 
 Photon machines are data (`radiarch/machines/`, `GET /beam-model/machines`): leaf boundaries,

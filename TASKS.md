@@ -615,4 +615,24 @@ ADR 0010. Done:
 - Tests: `tests/test_r4_machine_structures.py`, `tests/test_r4_sequencing.py`,
   `tests/test_r4_apertures_service.py`.
 Open: DAO refinement; leaf transmission / tongue-and-groove in the segment dose; asymmetric
-margins; VMAT (R8); the RT writer on the aperture plan (R6).
+margins; VMAT (R8); the RT writer on the aperture plan (R6). Committed 2026-10-21
+(f906c51..a3c0b89).
+
+## R5 — evaluation: clinical goals, radiobiology, gamma, comparisons (2026-10-21)
+
+ADR 0011. Done:
+- `services/clinical_goals.py` (TG-263 metric parser and evaluator, templates, structure
+  resolution), `radiarch/goals/*.json` (rtog-0617, quantec, tg101-sbrt-3fx, tg101-sbrt-5fx,
+  nccn-head-neck, pentec-pediatric [provisional]); `GoalSetSpec`, `GoalsReport` on the evaluation
+  request/result; `GET /evaluate/goal-templates[/{id}]`.
+- `services/radiobiology.py` (EQD2, BED, gEUD, LKB NTCP with 12 parameter sets, Poisson TCP with 3,
+  default α/β); `NTCPSpec`/`TCPSpec` on the request, results with per-scenario values;
+  `GET /evaluate/models`; `EvaluationRequest.fractions`.
+- `services/gamma.py` rewritten: reference points, evaluated dose interpolated (5 steps per DTA),
+  early-stopping vectorized search; 56.2 % on the harness's borderline case (pymedphys 56 %).
+- `services/dose_compare.py` + `POST /evaluate/compare` (dvh_impact: metric/index deltas, goal state
+  changes; by request or by evaluation id).
+- Tests: `tests/test_r5_evaluation.py`.
+Open: the goal tables need a physicist's check against the sources before answer-key use
+(PENTEC marked provisional); relative-seriality NTCP; LQ-L for SBRT; structure-set comparison
+metrics (Dice, HD95) belong to A2.
