@@ -3,7 +3,6 @@ import time
 import numpy as np
 import concurrent
 
-# from timeit import repeat
 logger = logging.getLogger(__name__)
 
 def multiProcDeform(deformationList, dynMod, GTVMask, ncore=None, GPUNumber=0):
@@ -28,10 +27,10 @@ def multiProcDeform(deformationList, dynMod, GTVMask, ncore=None, GPUNumber=0):
     resultDeformImageAndMask : list of CTImage and ROIMask objects
         List of deformed CTImage and ROIMask objects.
     """
-    imgList = [dynMod.midp for i in range(len(deformationList))]
-    maskList = [GTVMask for i in range(len(deformationList))]
-    tryGPUList = [True for i in range(len(deformationList))]
-    GPUNumberList = [GPUNumber for i in range(len(deformationList))]
+    imgList = [dynMod.midp for _ in range(len(deformationList))]
+    maskList = [GTVMask for _ in range(len(deformationList))]
+    tryGPUList = [True for _ in range(len(deformationList))]
+    GPUNumberList = [GPUNumber for _ in range(len(deformationList))]
     
     import multiprocessing
     multiprocessing.set_start_method('spawn', force=True)

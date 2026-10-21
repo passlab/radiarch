@@ -176,7 +176,7 @@ def exportPlan(plan:RTPlan, folderPath:str, planConfig:ExportTypes):
     else:
         raise NotImplementedError
     
-def exportContours(contours:RTStruct, folderPath:str, contoursConfig:ExportTypes):
+def exportContours(contours:RTStruct, folderPath:str, contoursConfig:ExportTypes, ct=None):
     """
     Exports the plan to the given folder path.
 
@@ -188,9 +188,13 @@ def exportContours(contours:RTStruct, folderPath:str, contoursConfig:ExportTypes
         The folder path to export to
     contoursConfig:ExportTypes
         The export configuration
+    ct: CTImage, optional
+        The reference CT image (mandatory if contoursConfig == ExportTypes.DICOM)
     """
     if contoursConfig == ExportTypes.DICOM:
-        dicomIO.writeRTStruct(contours, folderPath)
+        if ct is None:
+            raise ValueError("Error: A reference CT is required as input to export a DICOM RTSTRUCT.")      
+        dicomIO.writeRTStruct(contours, ct, folderPath)
     elif contoursConfig == ExportTypes.MCSQUARE:
         writeContours(contours, folderPath)
     elif contoursConfig == ExportTypes.PICKLE:
@@ -200,7 +204,7 @@ def exportContours(contours:RTStruct, folderPath:str, contoursConfig:ExportTypes
         filePath = _checkAndRenameFile(folderPath, contours.__class__.__name__ + '_' + contours.name)
         mhdIO.exportImageMHD(os.path.join(folderPath, filePath), contours)
     else:
-        raise NotImplementedError    
+        raise NotImplementedError   
 
 def exportPatientAsDicom(patient:Patient, folderPath:str):
     """

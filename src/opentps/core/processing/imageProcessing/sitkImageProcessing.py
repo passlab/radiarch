@@ -222,7 +222,7 @@ def extremePoints(image: Image3D):
         The image to get the extreme points of
 
     returns
-    -------
+    ------- 
     list
         The extreme points coordinates of the image
     """
@@ -410,16 +410,19 @@ def applyTransform3DToImage3D(image: Image3D, tformMatrix: np.ndarray, fillValue
     rotCenter = parseRotCenter(rotCenter, image)
     transform.SetCenter(rotCenter)
 
-    if outputBox == 'keepAll':
-        min_x, max_x, min_y, max_y, min_z, max_z = extremePointsAfterTransform(image, tformMatrix, rotCenter=rotCenter,
-                                                                               translation=translation)
+    if type(outputBox) is str:
+        if outputBox == 'keepAll':
+            min_x, max_x, min_y, max_y, min_z, max_z = extremePointsAfterTransform(image, tformMatrix, rotCenter=rotCenter,
+                                                                                translation=translation)
 
-        output_origin = [min_x, min_y, min_z]
-        output_size = [int((max_x - min_x) / image.spacing[0]) + 1, int((max_y - min_y) / image.spacing[1]) + 1,
-                       int((max_z - min_z) / image.spacing[2]) + 1]
-    elif outputBox == 'same':
-        output_origin = image.origin.tolist()
-        output_size = image.gridSize.astype(int).tolist()
+            output_origin = [min_x, min_y, min_z]
+            output_size = [int((max_x - min_x) / image.spacing[0]) + 1, int((max_y - min_y) / image.spacing[1]) + 1,
+                        int((max_z - min_z) / image.spacing[2]) + 1]
+        elif outputBox == 'same':
+            output_origin = image.origin.tolist()
+            output_size = image.gridSize.astype(int).tolist()
+        else:
+            raise ValueError("outputBox is either a sequence of floats or string 'keepAll' or 'same'")
     else:
         min_x = outputBox[0]
         max_x = outputBox[1]
@@ -715,6 +718,118 @@ def erodeMask(image: Image3D, radius: Union[float, Sequence[float]]):
     outData = outData.astype(imgType)
     outData = np.swapaxes(outData, 0, 2)
     image.imageArray = outData
+
+
+def REGSITK(staticPath, movingPath, transform, movingID):
+    """
+    Register a moving image to a static image using a given transformation matrix.
+
+    parameters
+    ----------
+    staticPath: str
+        Path to the folder containing the static (reference) DICOM series
+    movingPath: str
+        Path to the folder containing the moving DICOM series to be registered
+    transform: np.ndarray
+        4x4 affine transformation matrix to apply to the moving image
+    movingID: str
+        Series instance UID of the moving image to identify and load it correctly in case of multiple series in the folder
+    
+    returns
+    -------
+    Image3D
+        The registered moving image in the static image's frame of reference
+    """
+    from opentps.core.io.dataLoader import readSingleData
+    print('Registering with SimpleITK...')
+    static, _ = read_dicom_series_as_sitk(staticPath)
+    moving, _ = read_dicom_series_as_sitk(movingPath)
+
+    sitkTransform = numpy_4x4_to_sitk_affine(transform)
+    resampler = sitk.ResampleImageFilter()
+    resampler.SetReferenceImage(static)  
+    resampler.SetTransform(sitkTransform)
+    resampler.SetInterpolator(sitk.sitkLinear)
+    resampler.SetDefaultPixelValue(0)
+
+    movingSITK = resampler.Execute(moving)
+    moving = readSingleData(movingPath, pathdict = {}, target=movingID)
+    static  = readSingleData(staticPath, pathdict = {})
+   
+    moving.gridSize = moving.imageArray.shape
+    moving.imageArray = sitk.GetArrayFromImage(movingSITK).swapaxes(0, 2)
+    moving.spacing = movingSITK.GetSpacing()
+    moving.origin = movingSITK.GetOrigin()
+    moving.frameOfReferenceUID= static.frameOfReferenceUID
+    moving.sliceLocation = static.sliceLocation
+    moving.spacingBetweenSlices = static.spacing[2]
+    if hasattr(static, 'SliceThickness'):
+        moving.sliceThickness = static.sliceThickness
+    
+    return moving 
+
+
+def read_dicom_series_as_sitk(folder):
+    """
+    Read a DICOM series from a folder into a SimpleITK Image.
+
+    parameters
+    ----------
+    folder: str
+        Path to the folder containing the DICOM series
+
+    returns
+    -------
+    sitk.Image
+        The DICOM series as a SimpleITK image
+    list
+        List of DICOM file names in the series
+    """
+    reader = sitk.ImageSeriesReader()
+    ids = reader.GetGDCMSeriesIDs(folder)
+    if not ids:
+        raise ValueError(f"No DICOM series found in {folder}")
+    fnames = reader.GetGDCMSeriesFileNames(folder, ids[0])
+    reader.SetFileNames(fnames)
+    img = reader.Execute()
+    return img, fnames
+
+def numpy_4x4_to_sitk_affine(T):
+    """
+    Convert a numpy 4x4 affine matrix to a SimpleITK AffineTransform.
+
+    parameters
+    ----------
+    T: np.ndarray
+        4x4 affine transformation matrix (upper-left 3x3 rotation/scale, last column translation)
+
+    returns
+    -------
+    sitk.AffineTransform
+        The SimpleITK affine transform
+    """
+    T = np.asarray(T).reshape(4,4)
+    R = T[:3,:3].flatten().tolist()   # row-major flatten of 3x3
+    t = T[:3,3].tolist()
+    aff = sitk.AffineTransform(3)
+    aff.SetMatrix(R)
+    aff.SetTranslation(t)
+    return aff
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == "__main__":

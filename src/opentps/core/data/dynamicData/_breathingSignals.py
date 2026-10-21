@@ -1,15 +1,8 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Feb 23 09:09:09 2022
-
-@author: grotsartdehe
-"""
 import numpy as np
 from opentps.core.data._patientData import PatientData
 from opentps.core.processing.deformableDataAugmentationToolBox.BreathingSignalGeneration import signalGeneration, signal2DGeneration, signal3DGeneration
 
 
-#real breathing data 
 class BreathingSignal(PatientData):
     """
     Breathing signal class. Inherits from PatientData.
@@ -27,7 +20,6 @@ class BreathingSignal(PatientData):
         super().__init__(name=name)
         self.timestamps = None
         self.breathingSignal = None
-        # TODO
 
 
 # synthetic breathing data
@@ -65,18 +57,18 @@ class SyntheticBreathingSignal(BreathingSignal):
                  varianceNoise=1, samplingPeriod=0.2, simulationTime=100, coeffMin = 0.10, coeffMax = 0.15, meanEvent = 1/60, meanEventApnea=0/120, name="Breathing Signal"):
         super().__init__(name=name)
 
-        self.amplitude = amplitude  # amplitude (mm)
-        self.breathingPeriod = breathingPeriod  # periode respiratoire (s)
+
+        self.amplitude = amplitude  # amplitude mm
+        self.breathingPeriod = breathingPeriod  # breathing period s
         self.meanNoise = meanNoise
         self.varianceNoise = varianceNoise
-        self.samplingPeriod = samplingPeriod  # periode d echantillonnage
-        self.simulationTime = simulationTime  # temps de simulation
-        self.coeffMin = coeffMin #coefficient minimal pour le changement d amplitude
-        self.coeffMax = coeffMax #coefficient maximal pour le changement d amplitude
-        self.meanEvent = meanEvent #nombre moyen d evenements
-        self.meanEventApnea = meanEventApnea #nombre moyen d apnees
+        self.samplingPeriod = samplingPeriod  # sampling period
+        self.simulationTime = simulationTime  # simulation time
+        self.coeffMin = coeffMin  # minimal coefficient for amplitude change
+        self.coeffMax = coeffMax  # maximal coefficient for amplitude change
+        self.meanEvent = meanEvent  # average number of events
+        self.meanEventApnea = meanEventApnea  # average number of apnea events
         self.isNormalized = False
-
 
     def generate1DBreathingSignal(self):
         """

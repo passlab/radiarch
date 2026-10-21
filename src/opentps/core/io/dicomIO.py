@@ -6,23 +6,21 @@ import numpy as np
 import logging
 
 from opentps.core.data import Patient
-from opentps.core.data.plan._rangeShifter import RangeShifter
-
-from opentps.core.data.plan._rtPlan import RTPlan
-from opentps.core.data.plan._protonPlan import ProtonPlan
-from opentps.core.data.plan._planProtonBeam import PlanProtonBeam
-from opentps.core.data.plan._planProtonLayer import PlanProtonLayer
-from opentps.core.data.images._ctImage import CTImage
-from opentps.core.data.images._mrImage import MRImage
-from opentps.core.data.images._petImage import PETImage
-from opentps.core.data.images._doseImage import DoseImage
-from opentps.core.data._rtStruct import RTStruct
-from opentps.core.data._roiContour import ROIContour
-from opentps.core.data.images._vectorField3D import VectorField3D
-from opentps.core.data._transform3D import Transform3D
+from opentps.core.data import RTStruct
+from opentps.core.data import ROIContour
+from opentps.core.data import Transform3D
+from opentps.core.data.plan import RangeShifter
+from opentps.core.data.plan import RTPlan
+from opentps.core.data.plan import ProtonPlan
+from opentps.core.data.plan import PlanProtonBeam
+from opentps.core.data.plan import PlanProtonLayer
 from opentps.core.data.plan import PhotonPlan
-from opentps.core.data.plan._planPhotonBeam import PlanPhotonBeam
-import pydicom
+from opentps.core.data.plan import PlanPhotonBeam
+from opentps.core.data.images import CTImage
+from opentps.core.data.images import MRImage
+from opentps.core.data.images import PETImage
+from opentps.core.data.images import DoseImage
+from opentps.core.data.images import VectorField3D
 from pydicom.dataset import Dataset, FileDataset
 
 
@@ -78,18 +76,23 @@ def readDicomCT(dcmFiles):
 
     # verify reconstructed volume
     if imageData.shape[0:2] != (dcm.Columns, dcm.Rows):
-        logging.warning("WARNING: GridSize " + str(imageData.shape[0:2]) + " different from Dicom Columns (" + str(
+        logger.warning("WARNING: GridSize " + str(imageData.shape[0:2]) + " different from Dicom Columns (" + str(
             dcm.Columns) + ") and Rows (" + str(dcm.Rows) + ")")
 
     # collect image information
-    meanSliceDistance = (sliceLocation[-1] - sliceLocation[0]) / (len(images) - 1)
-    if (hasattr(dcm, 'SliceThickness') and (
-            type(dcm.SliceThickness) == int or type(dcm.SliceThickness) == float) and abs(
-            meanSliceDistance - dcm.SliceThickness) > 0.001):
+    if hasattr(dcm, 'SpacingBetweenSlices') and hasattr(dcm, 'SliceThickness'):
+        if abs(float(dcm.SpacingBetweenSlices) - float(dcm.SliceThickness)) > 0.001:
+            logging.warning(
+                "WARNING: Spacing Between Slices (" + str(float(dcm.SpacingBetweenSlices)) + ") is different from Slice Thickness (" + str(
+                    float(dcm.SliceThickness)) + ") SpacingBetweenSlices is used as slice spacing.")
+        meanSliceDistance = float(dcm.SpacingBetweenSlices)
+    elif hasattr(dcm, 'SliceThickness'):
+        meanSliceDistance = float(dcm.SliceThickness)
+    else:
+        meanSliceDistance = (sliceLocation[-1] - sliceLocation[0]) / (len(images) - 1)
         logging.warning(
-            "WARNING: Mean Slice Distance (" + str(meanSliceDistance) + ") is different from Slice Thickness (" + str(
-                dcm.SliceThickness) + ")")
-
+            "WARNING: No Slice Thickness or Spacing Between Slices information. Mean Slice Distance (" + str(meanSliceDistance) + ") is used as slice spacing.")
+    
     if (hasattr(dcm, 'SeriesDescription') and dcm.SeriesDescription != ""):
         imgName = dcm.SeriesDescription
     else:
@@ -145,7 +148,15 @@ def readDicomCT(dcmFiles):
     image.sopInstanceUID = dcm.SOPInstanceUID if hasattr(dcm, 'SOPInstanceUID') else ""
     image.referringPhysicianName = dcm.ReferringPhysicianName if hasattr(dcm, 'ReferringPhysicianName') else ""
     image.acquisitionNumber = dcm.AcquisitionNumber if hasattr(dcm, 'AcquisitionNumber') else "3"
-
+    
+    if dcm.ImageOrientationPatient != [1,0,0,0,1,0]:
+        print(dcm.ImageOrientationPatient)
+        logger.warning("WARNING: Image Orientation Patient is not standard (1,0,0,0,1,0). Check if image is correctly oriented in space.")
+        if dcm.ImageOrientationPatient == [-1,0,0,0,-1,0]:
+            logger.warning("Image Orientation Patient corresponds to HeadFirstProne. Image is flipped in x and y direction.")
+            image.imageArray = np.flip(image.imageArray, axis=(0,1))
+            image.origin = (image.origin[0] - image.spacing[0]*(image.gridSize[0]-1), image.origin[1] - image.spacing[1]*(image.gridSize[1]-1), image.origin[2])
+            image.imageOrientationPatient = [1,0,0,0,1,0]
     return image
 
 
@@ -396,7 +407,7 @@ def readDicomMRI(dcmFiles):
     images = []
     sopInstanceUIDs = []
     sliceLocation = np.zeros(len(dcmFiles), dtype='float')
-    firstdcm = dcmFiles[0]
+    firstdcm = pydicom.dcmread(dcmFiles[0])
     
     if hasattr(firstdcm,'RescaleSlope') == False:
         logging.warning('no RescaleSlope, image could be wrong')
@@ -424,15 +435,19 @@ def readDicomMRI(dcmFiles):
         logging.warning("WARNING: GridSize " + str(imageData.shape[0:2]) + " different from Dicom Columns (" + str(
             dcm.Columns) + ") and Rows (" + str(dcm.Rows) + ")")
 
-    # collect image information
-    meanSliceDistance = (sliceLocation[-1] - sliceLocation[0]) / (len(images) - 1)
-    if (hasattr(dcm, 'SliceThickness') and (
-            type(dcm.SliceThickness) == int or type(dcm.SliceThickness) == float) and abs(
-            meanSliceDistance - dcm.SliceThickness) > 0.001):
+    if hasattr(dcm, 'SpacingBetweenSlices') and hasattr(dcm, 'SliceThickness'):
+        if abs(float(dcm.SpacingBetweenSlices) - float(dcm.SliceThickness)) > 0.001:
+            logging.warning(
+                "WARNING: Spacing Between Slices (" + str(float(dcm.SpacingBetweenSlices)) + ") is different from Slice Thickness (" + str(
+                    float(dcm.SliceThickness)) + ") SpacingBetweenSlices is used as slice spacing.")
+        meanSliceDistance = float(dcm.SpacingBetweenSlices)
+    elif hasattr(dcm, 'SliceThickness'):
+        meanSliceDistance = float(dcm.SliceThickness)
+    else:
+        meanSliceDistance = (sliceLocation[-1] - sliceLocation[0]) / (len(images) - 1)
         logging.warning(
-            "WARNING: Mean Slice Distance (" + str(meanSliceDistance) + ") is different from Slice Thickness (" + str(
-                dcm.SliceThickness) + ")")
-
+            "WARNING: No Slice Thickness or Spacing Between Slices information. Mean Slice Distance (" + str(meanSliceDistance) + ") is used as slice spacing.")
+    
     if (hasattr(dcm, 'SeriesDescription') and dcm.SeriesDescription != ""):
         imgName = dcm.SeriesDescription
     else:
@@ -504,6 +519,10 @@ def readDicomMRI(dcmFiles):
         image.patientPosition = dcm.PatientPosition
     if hasattr(dcm, 'SeriesNumber'):
         image.seriesNumber = dcm.SeriesNumber
+    if hasattr(dcm, 'SliceThickness'):
+        image.sliceThickness = float(dcm.SliceThickness)
+    if hasattr(dcm, 'SOPClassUID'):
+        image.sopClassUID = dcm.SOPClassUID
     image.imageOrientationPatient = dcm.ImageOrientationPatient if hasattr(dcm, 'ImageOrientationPatient') else ""
     image.studyInstanceUID = dcm.StudyInstanceUID if hasattr(dcm, 'StudyInstanceUID') else pydicom.uid.generate_uid()
     image.bitsAllocated = dcm.BitsAllocated if hasattr(dcm, 'BitsAllocated') else "16"
@@ -789,6 +808,15 @@ def readDicomDose(dcmFile):
     image.mediaStorageSOPInstanceUID = dcm.MediaStorageSOPInstanceUID if hasattr(dcm, 'MediaStorageSOPInstanceUID') else ""
     image.softwareVersions = dcm.SoftwareVersions if hasattr(dcm, 'SoftwareVersions') else "10.0.100.1 (Dicom Export)"
 
+    if dcm.ImageOrientationPatient != [1,0,0,0,1,0]:
+        print(dcm.ImageOrientationPatient)
+        logger.warning("WARNING: Dose Image Orientation Patient is not standard (1,0,0,0,1,0). Check if image is correctly oriented in space.")
+        if dcm.ImageOrientationPatient == [-1,0,0,0,-1,0]:
+            logger.warning("Dose Image Orientation Patient corresponds to HeadFirstProne. Image is flipped in x and y direction.")
+            image.imageArray = np.flip(image.imageArray, axis=(0,1))
+            image.origin = (image.origin[0] - image.spacing[0]*(image.gridSize[0]-1), image.origin[1] - image.spacing[1]*(image.gridSize[1]-1), image.origin[2])
+            image.imageOrientationPatient = [1,0,0,0,1,0]
+    
     return image
 
 def writeRTDose(dose:DoseImage, outputFolder:str, outputFilename:str = None):
@@ -930,9 +958,9 @@ def writeRTDose(dose:DoseImage, outputFolder:str, outputFilename:str = None):
     dcm_file.PixelRepresentation = 0  # 0=unsigned, 1=signed
     dcm_file.DoseGridScaling = floatToDS(dose.imageArray.max() / (2 ** dcm_file.BitDepth - 1) )
     if (len(dose.imageArray.shape) > 2):
-        dcm_file.PixelData = (dose.imageArray / dcm_file.DoseGridScaling).astype(np.uint16).transpose(2, 1, 0).tostring()
+        dcm_file.PixelData = (dose.imageArray / dcm_file.DoseGridScaling).astype(np.uint16).transpose(2, 1, 0).tobytes()
     else:
-        dcm_file.PixelData = (dose.imageArray / dcm_file.DoseGridScaling).astype(np.uint16).transpose(1, 0).tostring()
+        dcm_file.PixelData = (dose.imageArray / dcm_file.DoseGridScaling).astype(np.uint16).transpose(1, 0).tobytes()
 
     # save dicom file
     if outputFilename:
@@ -1002,7 +1030,7 @@ def readDicomStruct(dcmFile):
         dcmContour = dcm.ROIContourSequence[referencedRoiId]
 
         if not hasattr(dcmContour, 'ContourSequence'):
-            logging.warning("This structure [ ", dcmStruct.ROIName ," ]has no attribute ContourSequence. Skipping ...")
+            logging.warning(f"This structure [ {dcmStruct.ROIName} ] has no attribute ContourSequence. Skipping ...")
             continue
 
         # Create ROIContour object
@@ -1057,172 +1085,294 @@ def readDicomStruct(dcmFile):
             
     return struct
 
-def writeRTStruct(struct: RTStruct, outputFolder: str, outputFilename:str = None):
+def writeRTStruct(struct, refCT, outputFolder: str, creator_name="OpenTPS team", outputFilename:str = "RTSTRUCT", series_desc = "OpenTPS exported"):
     """
-    Export of TR structure data as a Dicom dose file.
+    Export RT structure data as a DICOM RTSTRUCT file.
+
+    This updated version ensures strict DICOM compliance by linking the RTSTRUCT 
+    directly to a Reference CT (refCT), inheriting its spatial metadata, and 
+    mapping each contour to the exact CT slice it belongs to.
 
     Parameters
     ----------
     struct: RTStruct
-        The RTStruct object
-
-    ctSeriesInstanceUID: str
-        The serial instance UID of the CT associated with this RT structure.
-
+        The RTStruct object containing the AI-predicted or manually drawn contours.
+    refCT: CTImage
+        The reference CT image object (from OpenTPS) used to extract Patient, Study, 
+        and spatial mapping tags.
     outputFolder: str
-        The output folder path
-
-    NOTE: Get the CT serial instance UID by calling the 'writeDicomCT' function.
+        The exact absolute path where the .dcm file will be saved.
+    creator_name: str
+        Name of the manufacturer or operator generating the file.
+    outputFilename: str
+        Base name for the output file (without extension).
+    series_desc: str
+        Description for the RTSTRUCT series.
     """
-    
-    # meta data
+    os.makedirs(outputFolder, exist_ok=True)
+    OutputPath = os.path.join(outputFolder, outputFilename)
+
+    ################
+    #### HEADER ####
+    ################
+
+    ### METADATA ###
     meta = pydicom.dataset.FileMetaDataset()
-    meta.MediaStorageSOPClassUID = '1.2.840.10008.5.1.4.1.1.481.3'
+    meta.MediaStorageSOPClassUID = '1.2.840.10008.5.1.4.1.1.481.3' # UID class for RTSTRUCT
+
+    # Assign SOP Instance UID securely
     if (hasattr(struct, 'mediaStorageSOPInstanceUID') and struct.mediaStorageSOPInstanceUID != "" and struct.mediaStorageSOPInstanceUID is not None):
         meta.MediaStorageSOPInstanceUID = struct.mediaStorageSOPInstanceUID
     else:
         meta.MediaStorageSOPInstanceUID = struct.sopInstanceUID if hasattr(struct, 'sopInstanceUID') and struct.sopInstanceUID != "" and not struct.sopInstanceUID is None else pydicom.uid.generate_uid()
-    meta.ImplementationClassUID = struct.implementationClassUID if hasattr(struct, 'implementationClassUID') else "1.2.826.0.1.3680043.1.2.100.6.40.0.76"
-    #'1.2.826.0.1.3680043.5.5.100.5.7.0.03'
-    meta.TransferSyntaxUID = '1.2.840.10008.1.2'
-    meta.ImplementationVersionName = struct.implementationVersionName if hasattr(struct, 'implementationVersionName') else "DicomObjects.NET"
-    # NOTE: Don't modify this value
-    meta.FileMetaInformationGroupLength = 0
-    meta.FileMetaInformationVersion = struct.fileMetaInformationVersion if hasattr(struct, 'fileMetaInformationVersion') else bytes([0,1])
-            
-    # dicom dataset
-    dcm_file = pydicom.dataset.FileDataset(outputFolder, {}, file_meta=meta, preamble=b"\0" * 128)
-    dcm_file.SOPClassUID = '1.2.840.10008.5.1.4.1.1.481.3'
-    dcm_file.SOPInstanceUID = meta.MediaStorageSOPInstanceUID
 
-    # patient information
-    if hasattr(struct, 'patient') and struct.patient is not None:
-        dcm_file.PatientName = "exported_" + struct.patient.name if hasattr(struct.patient, 'name') else "exported_simple_patient"
-        dcm_file.PatientID = struct.patient.id if hasattr(struct.patient, 'id') else ""
-        dcm_file.PatientBirthDate = struct.patient.birthDate if hasattr(struct.patient, 'birthDate') else ""
-        dcm_file.PatientSex = struct.patient.sex if hasattr(struct.patient, 'sex') else ""
+    meta.ImplementationClassUID = struct.implementationClassUID if hasattr(struct, 'implementationClassUID') else "1.2.826.0.1.3680043.1.2.100.6.40.0.76" # from OpenREGGUI
+    meta.TransferSyntaxUID = '1.2.840.10008.1.2' # from  OpenREGGUI
+    meta.ImplementationVersionName = struct.implementationVersionName if hasattr(struct, 'implementationVersionName') else "DicomObjects.NET"
+    meta.FileMetaInformationVersion = struct.fileMetaInformationVersion if hasattr(struct, 'fileMetaInformationVersion') else bytes([0,1])
+    meta.FileMetaInformationGroupLength = 0 # Automatically calculated by pydicom
+
+    # Initialize the main DICOM dataset with the meta header
+    dcm_file = pydicom.dataset.FileDataset(OutputPath, {}, file_meta=meta, preamble=b"\0" * 128) 
+ 
+    ### PATIENT INFORMATION ###
+    # Inherit critical patient demographics directly from the Reference CT    
+    if hasattr(refCT, 'patient') and refCT.patient is not None:
+        dcm_file.PatientName = refCT.patient.name if hasattr(refCT.patient, 'name') else "simple_patient"
+        dcm_file.PatientID = refCT.patient.id if hasattr(refCT.patient, 'id') else ""
+        dcm_file.PatientBirthDate = refCT.patient.birthDate if hasattr(refCT.patient, 'birthDate') else ""
+        dcm_file.PatientSex = refCT.patient.sex if hasattr(refCT.patient, 'sex') else ""
     else:
-        dcm_file.PatientName = "exported_simple_patient" 
-        dcm_file.PatientID = "exported_simple_patient" 
+        dcm_file.PatientName = "simple_patient" 
+        dcm_file.PatientID = "simple_patient" 
         dcm_file.PatientBirthDate = ""
         dcm_file.PatientSex = ""
     
-    # content information
+    ### GENERAL STUDY AND SERIES ###
     dt = datetime.datetime.now()
+
+    # Dates & Times
+    # Timestamps for creation and structural definitions
     dcm_file.ContentDate = dt.strftime('%Y%m%d')
     dcm_file.ContentTime = dt.strftime('%H%M%S.%f')
+    dcm_file.StructureSetDate = dt.strftime('%Y%m%d')
+    dcm_file.StructureSetTime = dt.strftime('%H%M%S.%f')
     dcm_file.InstanceCreationDate = dt.strftime('%Y%m%d')
     dcm_file.InstanceCreationTime = dt.strftime('%H%M%S.%f')
-    dcm_file.Modality = struct.modality if hasattr(struct, 'modality') else 'RTDOSE'
-    dcm_file.Manufacturer = 'OpenMCsquare'
-    dcm_file.ManufacturerModelName = 'OpenTPS'
-    dcm_file.SeriesDescription = struct.name if hasattr(struct, 'name') else ""
-    dcm_file.ReferringPhysicianName = struct.referringPhysicianName if hasattr(struct, 'referringPhysicianName') else ""
-    dcm_file.OperatorsName = struct.OperatorsName if hasattr(struct, 'OperatorsName') else ""
 
-    dcm_file.StudyInstanceUID = struct.studyInstanceUID + "1" if hasattr(struct, 'studyInstanceUID') else pydicom.uid.generate_uid()
-    dcm_file.SeriesInstanceUID = struct.seriesInstanceUID if hasattr(struct, 'seriesInstanceUID') else pydicom.uid.generate_uid()
+    # Study and Series level dates (inherited from CT if possible)
+    dcm_file.StudyDate = refCT.studyDate if hasattr(refCT, 'studyDate') else dt.strftime('%Y%m%d')
+    dcm_file.StudyTime = refCT.studyTime if hasattr(refCT, 'studyTime') else dt.strftime('%H%M%S.%f')
+    dcm_file.SeriesDate = refCT.seriesDate if hasattr(refCT, 'seriesDate') else dt.strftime('%Y%m%d')
+    dcm_file.SeriesTime = refCT.seriesTime if hasattr(refCT, 'seriesTime') else dt.strftime('%H%M%S.%f')
+
+    # Essential UIDs to link this RTSTRUCT to the original CT Study    
+    dcm_file.StudyID = refCT.studyID if hasattr(refCT, 'studyID') else ""
+    dcm_file.AccessionNumber = refCT.accessionNumber if hasattr(refCT, 'accessionNumber') else ""
+    dcm_file.StudyInstanceUID = refCT.studyInstanceUID if hasattr(refCT, 'studyInstanceUID') else pydicom.uid.generate_uid()
+    dcm_file.SeriesInstanceUID = refCT.seriesInstanceUID if hasattr(refCT, 'seriesInstanceUID') else pydicom.uid.generate_uid()
+    
     dcm_file.SeriesNumber = "2"
     dcm_file.InstanceNumber = "1"
+    dcm_file.SOPClassUID = meta.MediaStorageSOPClassUID
+    dcm_file.SOPInstanceUID = meta.MediaStorageSOPInstanceUID
 
-    dcm_file.StudyTime = struct.studyTime if hasattr(struct, 'studyTime') else dt.strftime('%H%M%S.%f')
-    dcm_file.SeriesTime = struct.seriesTime if hasattr(struct, 'seriesTime') else dt.strftime('%H%M%S.%f')
-    # dcm_file.FrameOfReferenceUID = struct.frameOfReferenceUID if hasattr(struct, 'frameOfReferenceUID') else pydicom.uid.generate_uid()
-    dcm_file.StructureSetDate = struct.structureSetDate if hasattr(struct, 'structureSetDate') else dt.strftime('%Y%m%d')
-    dcm_file.StructureSetTime = struct.structureSetTime if hasattr(struct, 'structureSetTime') else dt.strftime('%H%M%S.%f')
-    dcm_file.SOPClassUID = struct.sopClassUID if hasattr(struct, 'sopClassUID') else meta.MediaStorageSOPClassUID
-    dcm_file.StudyDate = struct.studyDate if hasattr(struct, 'studyDate') else dt.strftime('%Y%m%d')
-    dcm_file.SeriesDate = struct.seriesDate if hasattr(struct, 'seriesDate') else dt.strftime('%Y%m%d')
-    dcm_file.StructureSetLabel = struct.structureSetLabel if hasattr(struct, 'structureSetLabel') else ""
-    
-    if hasattr(struct, 'referencedFrameOfReferenceSequence'):
-        dcm_file.ReferencedFrameOfReferenceSequence = []
-        for item in struct.referencedFrameOfReferenceSequence:
-            refFrameRef = pydicom.Dataset()
-            if hasattr(item, 'FrameOfReferenceUID'):
-                refFrameRef.FrameOfReferenceUID = item.FrameOfReferenceUID
-            rtRefSub1 = []
-            if hasattr(item, 'RTReferencedStudySequence'):
-                for subItem1 in item.RTReferencedStudySequence:
-                    rtRefSubObj1=pydicom.Dataset()
-                    rtRefSubObj1.ReferencedSOPClassUID = subItem1.ReferencedSOPClassUID if hasattr(subItem1, 'ReferencedSOPClassUID') else '1.2.840.10008.3.1.2.3.1'
-                    rtRefSubObj1.ReferencedSOPInstanceUID = subItem1.ReferencedSOPInstanceUID if hasattr(subItem1, 'ReferencedSOPInstanceUID') else pydicom.uid.generate_uid()
-                    rtRefSub2 = []
-                    for subItem2 in subItem1.RTReferencedSeriesSequence:
-                        rtRefSubObject2 = pydicom.Dataset()
-                        rtRefSubObject2.SeriesInstanceUID = subItem2.SeriesInstanceUID
-                        contourSeq = []
-                        for subItem3 in subItem2.ContourImageSequence:
-                            contourSeqObj=pydicom.dataset.Dataset()
-                            contourSeqObj.ReferencedSOPClassUID = '1.2.840.10008.5.1.4.1.1.2'
-                            contourSeqObj.ReferencedSOPInstanceUID = subItem3.ReferencedSOPInstanceUID if hasattr(subItem3, 'ReferencedSOPInstanceUID') else pydicom.uid.generate_uid()
-                            contourSeq.append(contourSeqObj)
-                        rtRefSubObject2.ContourImageSequence = contourSeq
-                    rtRefSub2.append(rtRefSubObject2)
-                    rtRefSubObj1.RTReferencedSeriesSequence = rtRefSub2
-                rtRefSub1.append(rtRefSubObj1)
-            refFrameRef.RTReferencedStudySequence = rtRefSub1
-        dcm_file.ReferencedFrameOfReferenceSequence.append(refFrameRef)
+    # Descriptive Attributes
+    dcm_file.Modality = 'RTSTRUCT'                                                   
+    dcm_file.Manufacturer = creator_name 
+    dcm_file.ManufacturerModelName = 'OpenTPS'
+    dcm_file.SeriesDescription = struct.name if hasattr(struct, 'name') else ""
+    dcm_file.StructureSetLabel = struct.structureSetLabel if hasattr(struct, 'structureSetLabel') else str(series_desc)
+    dcm_file.OperatorsName = creator_name 
+    dcm_file.ReferringPhysicianName = refCT.referringPhysicianName if hasattr(refCT, 'referringPhysicianName') else ""
 
-    dcm_file.SamplesPerPixel = 1
-    dcm_file.PhotometricInterpretation = 'MONOCHROME2'
-    dcm_file.AccessionNumber = struct.accessionNumber if hasattr(struct, 'accessionNumber') else ""
-    dcm_file.StudyID = struct.studyID if hasattr(struct, 'studyID') else ""
+    ### FRAME OF REFERENCE ###
+    # Ensure the spatial grid matches the Reference CT
+    dcm_file.FrameOfReferenceUID = refCT.frameOfReferenceUID if hasattr(refCT, 'frameOfReferenceUID') else pydicom.uid.generate_uid()
+    dcm_file.PositionReferenceIndicator = ''
     
-    dcm_file.RTROIObservationsSequence = []
-    if hasattr(struct, 'rtROIObservationsSequence'):
+    ### REFERENCED FRAME OF REFERENCE SEQUENCE  ###
+    # Use pydicom.Sequence() strictly to maintain valid DICOM hierarchy
+    dcm_file.ReferencedFrameOfReferenceSequence = pydicom.Sequence()
+    
+    dssr = pydicom.Dataset()
+    dssr.FrameOfReferenceUID = refCT.frameOfReferenceUID if hasattr(refCT, 'frameOfReferenceUID') else dcm_file.FrameOfReferenceUID
+    dssr.RTReferencedStudySequence = pydicom.Sequence()
+    
+    dssr_refStudy = pydicom.Dataset()
+    dssr_refStudy.ReferencedSOPClassUID = '1.2.840.10008.5.1.4.1.1.2' # CT Image Storage
+    dssr_refStudy.ReferencedSOPInstanceUID = refCT.studyInstanceUID if hasattr(refCT, 'studyInstanceUID') else pydicom.uid.generate_uid()
+    dssr_refStudy.RTReferencedSeriesSequence = pydicom.Sequence()
+    
+    series = pydicom.Dataset()
+    series.SeriesInstanceUID = refCT.seriesInstanceUID if hasattr(refCT, 'seriesInstanceUID') else pydicom.uid.generate_uid()
+    series.ContourImageSequence = pydicom.Sequence()
+    
+    # Register all CT slices in the ContourImageSequence so the TPS knows the exact volume
+    if hasattr(refCT, 'sopInstanceUIDs') and refCT.sopInstanceUIDs:
+        for sop_uid in refCT.sopInstanceUIDs:
+            slc = pydicom.Dataset()
+            slc.ReferencedSOPClassUID = refCT.sopClassUID if hasattr(refCT, 'sopClassUID') else '1.2.840.10008.5.1.4.1.1.2'
+            slc.ReferencedSOPInstanceUID = sop_uid
+            series.ContourImageSequence.append(slc)
+                
+    # Build the sequence tree
+    dssr_refStudy.RTReferencedSeriesSequence.append(series)
+    dssr.RTReferencedStudySequence.append(dssr_refStudy)
+    dcm_file.ReferencedFrameOfReferenceSequence.append(dssr)
+
+    #########################
+    #### DATA CONVERSION ####
+    #########################
+
+    # Pre-calculate CT slice spatial coordinates (Z-axis) for contour mapping
+    z_origin = refCT.origin[2]
+    z_spacing = refCT.spacing[2]
+    ct_sop_uids = refCT.sopInstanceUIDs 
+    num_slices = len(ct_sop_uids)
+    z_coords = [z_origin + (i * z_spacing) for i in range(num_slices)]
+   
+    dcm_file.StructureSetROISequence = pydicom.Sequence()
+    dcm_file.ROIContourSequence = pydicom.Sequence()
+    dcm_file.RTROIObservationsSequence = pydicom.Sequence()
+
+    # RT ROI OBSERVATIONS
+    # Define clinical observation metadata for each structure (e.g., ORGAN vs PTV)
+    if hasattr(struct, 'rtROIObservationsSequence') and struct.rtROIObservationsSequence:
         for cidx, item in enumerate(struct.rtROIObservationsSequence, start=1):
             roiObs = pydicom.Dataset()
-            roiObs.ObservationNumber = item.ObservationNumber if hasattr(item, 'ObservationNumber') else ''
-            roiObs.ReferencedROINumber = item.ReferencedROINumber if hasattr(item, 'ReferencedROINumber') else ''
-            roiObs.ROIObservationLabel = item.ROIObservationLabel if hasattr(item, 'ROIObservationLabel') else ''
-            roiObs.RTROIInterpretedType = item.RTROIInterpretedType if hasattr(item, 'RTROIInterpretedType') else 'NONE'
-            roiObs.ROIInterpreter = item.ROIInterpreter if hasattr(item, 'ROIInterpreter') else 'None'
+            # Enforce integers for Observation and Referenced ROI Numbers to prevent clinical TPS import failures
+            roiObs.ObservationNumber = int(item.ObservationNumber) if hasattr(item, 'ObservationNumber') and str(item.ObservationNumber).isdigit() else cidx
+            roiObs.ReferencedROINumber = int(item.ReferencedROINumber) if hasattr(item, 'ReferencedROINumber') and str(item.ReferencedROINumber).isdigit() else cidx
+            roiObs.ROIObservationLabel = item.ROIObservationLabel if hasattr(item, 'ROIObservationLabel') else f"ROI_{cidx}"
+            roiObs.RTROIInterpretedType = item.RTROIInterpretedType if hasattr(item, 'RTROIInterpretedType') else 'ORGAN'
+            roiObs.ROIInterpreter = item.ROIInterpreter if hasattr(item, 'ROIInterpreter') else ''
+            dcm_file.RTROIObservationsSequence.append(roiObs)
+    else:
+        # Fallback generation if no pre-defined observations exist
+        for cidx, contour in enumerate(struct.contours, start=1):
+            roiObs = pydicom.Dataset()
+            roiObs.ObservationNumber = cidx
+            roiObs.ReferencedROINumber = cidx
+            roiObs.ROIObservationLabel = getattr(contour, 'name', f"ROI_{cidx}")
+            roiObs.RTROIInterpretedType = 'ORGAN'
+            roiObs.ROIInterpreter = ''
             dcm_file.RTROIObservationsSequence.append(roiObs)
 
-    dcm_file.StructureSetROISequence = []
-    dcm_file.ROIContourSequence = []
-
-    for cidx,contour in enumerate(struct.contours, start=1):
-        # StructureSetROISequence
+    # --- STRUCTURE SET ROI & ROI CONTOUR MAPING ---
+    for cidx, contour in enumerate(struct.contours, start=1):
+        
+        # 1. StructureSetROISequence (Defines the ROI name and Frame of Reference)
         roi = pydicom.Dataset()
         roi.ROINumber = cidx
-        roi.ROIName = contour.name
-        roi.ReferencedFrameOfReferenceUID = contour.referencedFrameOfReferenceUID
+        roi.ROIName = getattr(contour, 'name', f"ROI_{cidx}")
+        
+        roi.ReferencedFrameOfReferenceUID = getattr(contour, 'referencedFrameOfReferenceUID', dcm_file.FrameOfReferenceUID)
         roi.ROIGenerationAlgorithm = "AUTOMATIC"
         dcm_file.StructureSetROISequence.append(roi)
 
-        # ROIContourSequence
+        # 2. ROIContourSequence (Holds the actual geometric polygon data and color)
         con = pydicom.Dataset()
         con.ReferencedROINumber = cidx
-        con.ROIDisplayColor = str(contour.color[0])+"\\"+str(contour.color[1])+"\\"+str(contour.color[2])
-        con.ContourSequence = []
-        for midx,mesh in enumerate(contour.polygonMesh):
+        
+        # Safely handle color extraction to prevent index out-of-bounds errors
+        color = getattr(contour, 'color', [255, 0, 0])
+        con.ROIDisplayColor = "\\".join(map(str, [int(c) for c in color[:3]]))
+        con.ContourSequence = pydicom.Sequence()
+        
+        for mesh in contour.polygonMesh:
+            # Flatten the mesh data into a 1D array 
+            polygon = [float(coord) for coord in mesh]
+            # A valid DICOM triangle requires at least 3 points (9 coordinates)
+            if len(polygon) < 9:
+                continue
+
+            # Optional: Apply Taubin smoothing to reduce pixelated/jagged edges from AI predictions
+            xy_array = np.transpose(np.array([polygon[0::3], polygon[1::3]]))
+            smoothed_array_2D = Taubin_smoothing(xy_array)
+            polygon[0::3] = smoothed_array_2D[:, 0]
+            polygon[1::3] = smoothed_array_2D[:, 1]
+
             slc = pydicom.Dataset()
-            slc.ContourData = mesh
             slc.ContourGeometricType = "CLOSED_PLANAR"
-            slc.NumberOfContourPoints = len(mesh) // 3
+            slc.NumberOfContourPoints = len(polygon) // 3
+            slc.ContourData = polygon
+            
+            # Layer-by-Layer Z-mapping to Link to the Reference CT
+            # Finds the CT slice SOPInstanceUID whose Z-coordinate is closest to the contour's Z-coordinate
+            polygon_z = polygon[2]
+            closest_idx = min(range(num_slices), key=lambda i: abs(z_coords[i] - polygon_z))
+            
+            slc.ContourImageSequence = pydicom.Sequence()
+            slc_ref = pydicom.Dataset()
+            slc_ref.ReferencedSOPClassUID = getattr(refCT, 'sopClassUID', '1.2.840.10008.5.1.4.1.1.2')
+            slc_ref.ReferencedSOPInstanceUID = ct_sop_uids[closest_idx] # Crucial for clinical TPS import
+            slc.ContourImageSequence.append(slc_ref)
+            
             con.ContourSequence.append(slc)
+            
         dcm_file.ROIContourSequence.append(con)
- 
-    # save rt struct dicom file
+
+    ### SAVING
+    dcm_file.ApprovalStatus = 'UNAPPROVED'
+    dcm_file.SpecificCharacterSet = 'ISO_IR 100'
+
+    # Secure filename generation
     if outputFilename:
         contourFilename = ''.join(letter for letter in outputFilename if letter.isalnum())
         filename = contourFilename + '.dcm'
     elif hasattr(dcm_file, 'SOPInstanceUID'):
         filename = f'RS{dcm_file.SOPInstanceUID}.dcm'
-    else : 
-        filename = f'RS.dcm'
+    else: 
+        filename = 'RS.dcm'
 
+    # Prevent file overwriting
     file_root, file_ext = os.path.splitext(filename)
     newFilename = filename
     counter = 1
+    
     while os.path.exists(os.path.join(outputFolder, newFilename)):
         newFilename = f"{file_root}_{counter}{file_ext}"
         counter += 1
 
     dcm_file.save_as(os.path.join(outputFolder, newFilename))
-    logger.info("Export dicom RTSTRUCT: " + newFilename + ' in ' +  outputFolder)
+    
+    try:
+        logger.info("Export dicom RTSTRUCT: " + newFilename + ' in ' + outputFolder)
+    except NameError:
+        print("Export dicom RTSTRUCT: " + newFilename + ' in ' + outputFolder)    
+
+    print(f"Export successful. RTSTRUCT saved as: {newFilename}")
+
+
+def Taubin_smoothing(contour):
+    """ Here, we do smoothing in 2D contours!
+        Parameters:
+            a Nx2 numpy array containing the contour to smooth
+        Returns:
+            a Nx2 numpy array containing the smoothed contour """
+    smoothingloops = 5
+    smoothed = [np.empty_like(contour) for i in range(smoothingloops+1)]
+    smoothed[0] = contour
+    for i in range(smoothingloops):
+        # loop over all elements in the contour
+        for vertex_i in range(smoothed[0].shape[0]):
+            if vertex_i == 0:
+                vertex_prev = smoothed[i].shape[0]-1
+                vertex_next = vertex_i+1
+            elif vertex_i == smoothed[i].shape[0]-1:
+                vertex_prev = vertex_i-1
+                vertex_next = 0
+            else:
+                vertex_prev = vertex_i -1
+                vertex_next = vertex_i +1
+            neighbours_x = np.array([smoothed[i][vertex_prev,0], smoothed[i][vertex_next,0]])
+            neighbours_y = np.array([smoothed[i][vertex_prev,1], smoothed[i][vertex_next,1]])
+            smoothed[i+1][vertex_i,0] = smoothed[i][vertex_i,0] - 0.3*(smoothed[i][vertex_i,0] - np.mean(neighbours_x))
+            smoothed[i+1][vertex_i,1] = smoothed[i][vertex_i,1] - 0.3*(smoothed[i][vertex_i,1] - np.mean(neighbours_y))
+
+    return np.round(smoothed[smoothingloops],3)
+
 
 ################### Plan Image ############################################
 def readDicomPlan(dcmFile) -> RTPlan:
@@ -1258,10 +1408,10 @@ def readDicomPlan(dcmFile) -> RTPlan:
    
     #### PHOTON PLAN
     if dcm.SOPClassUID == "1.2.840.10008.5.1.4.1.1.481.5":
-        plan.modality = "RT Plan IOD"
-        dcm = pydicom.dcmread(dcmFile)
         plan = PhotonPlan(name=name, patient = patient)
         plan.patient = patient
+        plan.modality = "RT Plan IOD"
+        dcm = pydicom.dcmread(dcmFile)
 
         if dcm.BeamSequence[0].RadiationType == "PHOTON": ### Filter also by modality, this TPS doesnt support wedges
             plan.radiationType = "Photon"
@@ -2319,20 +2469,38 @@ def readDicomRigidTransform(dcmFile):
 
     Returns
     -------
-    transform: Transform3D object
-        The function returns the imported transform
+    transforms: list of Transform3D objects
+        The function returns a list of 3D transforms, which can be used for registration.
     """
-
+    
     dcm = pydicom.dcmread(dcmFile)
-
+    print("RegistrationSequence length: ", len(dcm.RegistrationSequence))
+    print("StudiesContainingOtherReferencedInstancesSequence length: ", len(dcm.StudiesContainingOtherReferencedInstancesSequence))
     for i in range(len(dcm.RegistrationSequence)):
         if hasattr(dcm.RegistrationSequence[i], 'MatrixRegistrationSequence'):
             reg_matrix = dcm.RegistrationSequence[i].MatrixRegistrationSequence[0].MatrixSequence[0].FrameOfReferenceTransformationMatrix
 
     tformMatrix = np.array(reg_matrix).reshape(4, 4)
     tformMatrix_1 = np.linalg.inv(tformMatrix) # get inverse
-    transform3D = Transform3D()
-    transform3D.setCenter('dicomOrigin')
-    transform3D.setMatrix4x4(tformMatrix_1)
 
-    return transform3D
+    moving = []
+
+    for i in range(len(dcm.StudiesContainingOtherReferencedInstancesSequence[0].ReferencedSeriesSequence)):
+        moving.append(dcm.StudiesContainingOtherReferencedInstancesSequence[0].ReferencedSeriesSequence[i].SeriesInstanceUID)
+    
+    for seq in dcm.RegistrationSequence:
+        if seq.MatrixRegistrationSequence[0].MatrixSequence[0].FrameOfReferenceTransformationMatrix != [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]:
+           target_FOR_UID = seq.FrameOfReferenceUID
+           print("Target FOR UID: ", target_FOR_UID)
+
+    print("Moving image series: ", moving)
+    transforms = []
+    for i in range(len(moving)):
+        transform3D = Transform3D()
+        transform3D.setCenter('dicomOrigin') #origin does not really matter as it is not used in REGSITK function, but set to dicom origin for consistency with other transforms
+        transform3D.setMatrix4x4(tformMatrix_1)
+        transform3D.setStaticImageSeriesID(dcm.ReferencedSeriesSequence[0].SeriesInstanceUID)
+        transform3D.setMovingImageSeriesID(moving[i])
+        transform3D.setFORUID(target_FOR_UID)
+        transforms.append(transform3D)
+    return transforms

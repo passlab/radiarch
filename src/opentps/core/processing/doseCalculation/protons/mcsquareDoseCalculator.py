@@ -10,7 +10,8 @@ import subprocess
 from pathlib import Path
 from typing import Optional, Sequence, Union, Tuple
 import matplotlib.pyplot as plt
-
+import time
+import stat
 import numpy as np
 
 from opentps.core.data.MCsquare import MCsquareConfig
@@ -472,8 +473,7 @@ class MCsquareDoseCalculator(AbstractMCDoseCalculator, AbstractDoseInfluenceCalc
 
         self._writeFilesToSimuDir()
         self._cleanDir(self._workDir)
-
-        if platform.system() == "Linux2":
+        if platform.system() == "Linux":
             beamletDose = self._computeBeamletsLinux()
         else:
             self._startMCsquare()
@@ -672,17 +672,47 @@ class MCsquareDoseCalculator(AbstractMCDoseCalculator, AbstractDoseInfluenceCalc
 
         return doseImage
 
-    def _cleanDir(self, dirPath):
+    def _cleanDir(self, dirPath, retries=10, delay=0.5):
+
         """
-        Clean given directory
+        Robust directory deletion that retries when locked.
 
         Parameters
         ----------
         dirPath : str
-            Path to the directory to clean
+            Path to the directory to clean.
+        retries : int
+            Number of retry attempts if deletion fails.
+        delay : float
+            Delay (in seconds) between retries.
         """
-        if os.path.isdir(dirPath):
-            shutil.rmtree(dirPath)
+        def handle_exception(exc, path, info):
+            # Called when rmtree hits an error.
+            # We fix read-only attributes so retry may succeed.
+            if isinstance(exc, PermissionError):
+                try:
+                    os.chmod(path, stat.S_IWRITE)
+                except Exception:
+                    pass  # if chmod fails, ignore and let retry handle it
+
+        if not os.path.isdir(dirPath):
+            return
+
+        for attempt in range(retries):
+            try:
+                shutil.rmtree(
+                    dirPath,
+                    onexc=handle_exception  # MUST take 3 args in Python 3.12+
+                )
+                return  # success
+            except PermissionError:
+                # Directory still locked — wait and retry
+                if attempt < retries - 1:
+                    time.sleep(delay)
+                    delay *= 1.5  # exponential backoff
+                else:
+                    raise
+
 
     def _writeRangeShifters(self):
         """

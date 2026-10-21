@@ -26,14 +26,23 @@ class Transform3D(PatientData):
         name of the transformation.
     rotCenter : string
         center of rotation, can be 'imgCenter' or 'origin'.
+    staticImageSeriesID : string
+        series ID of the static image.
+    movingImageSeriesID : string
+        series ID of the moving image.
+    FORUID : string
+        target frame of reference UID.
     """
 
-    def __init__(self, tformMatrix=None, name="Transform", rotCenter='imgCenter'):
+    def __init__(self, tformMatrix=None, name="Transform", rotCenter='imgCenter', static_image_series_id=None, moving_image_series_id=None, FORUID=None):
         super().__init__(name=name)
 
         self.tformMatrix = tformMatrix
         self.name = name
         self.rotCenter = rotCenter
+        self.staticImageSeriesID = static_image_series_id
+        self.movingImageSeriesID = moving_image_series_id
+        self.FORUID = FORUID
 
     def copy(self):
         """
@@ -44,7 +53,7 @@ class Transform3D(PatientData):
         Transform3D
             Copy of the Transform3D object.
         """
-        return Transform3D(tformMatrix=copy.deepcopy(self.tformMatrix), name=self.name + '_copy', rotCenter=self.rotCenter)
+        return Transform3D(tformMatrix=copy.deepcopy(self.tformMatrix), name=self.name + '_copy', rotCenter=self.rotCenter, static_image_series_id=self.staticImageSeriesID, moving_image_series_id=self.movingImageSeriesID, FORUID=self.FORUID)
 
     def setMatrix4x4(self, tformMatrix):
         """
@@ -57,7 +66,25 @@ class Transform3D(PatientData):
         Sets the center of rotation.
         """
         self.rotCenter = center
+    
+    def setStaticImageSeriesID(self, static_image_series_id):
+        """
+        Sets the static image series ID.
+        """
+        self.staticImageSeriesID = static_image_series_id
+    
+    def setMovingImageSeriesID(self, moving_image_series_id):
+        """
+        Sets the moving image series ID.
+        """
+        self.movingImageSeriesID = moving_image_series_id
 
+    def setFORUID(self, FORUID):
+        """
+        Sets the frame of reference UID.
+        """
+        self.FORUID = FORUID
+        
     def deformImage(self, data, fillValue=0, outputBox='keepAll', tryGPU=False):
         """
         Transform 3D image using linear interpolation.

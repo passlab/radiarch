@@ -667,10 +667,8 @@ class BoundConstraintsOptimizer(PlanOptimizer):
             ind_to_keep[x0 >= self.bounds[0]] = True
             x0 = x0[ind_to_keep]
 
-            self.functions = [] # to avoid a beamlet copy with different size
             self.plan.planDesign.beamlets.setUnitaryBeamlets(self.plan.planDesign.beamlets._sparseBeamlets[:, ind_to_keep])
-            objectiveFunction = DoseFidelity(self.plan.planDesign.beamlets, self.xSquared)
-            self.functions.append(objectiveFunction)
+            self.functions[0].beamlets = self.plan.planDesign.beamlets.toSparseMatrix()
 
             # second optimization with lower bound = self.bounds[0]
             self.solver.params['maxiter'] = nit2

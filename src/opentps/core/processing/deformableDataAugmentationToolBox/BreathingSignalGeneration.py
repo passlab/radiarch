@@ -1,14 +1,5 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Feb 16 08:43:30 2022
+import numpy as np
 
-@author: grotsartdehe
-"""
-import numpy as np 
-import matplotlib.pyplot as plt 
-
-#genere des variables suivant une loi de exponentielle
-#Un timestamp correspond le debut ou la fin d un event
 def events(L,meanDurationEvents,varianceDurationEvents,Tend):
     """
     Generate the timestamps of the events.
@@ -46,8 +37,7 @@ def events(L,meanDurationEvents,varianceDurationEvents,Tend):
             t1 += -np.log(U)/L
         return timestamp
 
-#entre deux timestamps successifs, un event est cree
-#Un event correspond a une fonction echellon 
+
 def vectorSimulation(coeffMin,coeffMax,amplitude,frequency,timestamps,listOfEvents):
     """
     Generate the amplitude and the frequency of the signal.
@@ -91,7 +81,7 @@ def vectorSimulation(coeffMin,coeffMax,amplitude,frequency,timestamps,listOfEven
         i+=2
     return y_amplitude,y_frequency
 
-#creation des donnees respiratoires
+
 def signalGeneration(amplitude=10, period=4.0, mean=0, sigma=3, step=0.5, signalDuration=100, coeffMin = 0.10, coeffMax = 0.15, meanEvent = 1/20, meanEventApnea=1/120):
     """
     Generate the breathing signal.
@@ -129,8 +119,7 @@ def signalGeneration(amplitude=10, period=4.0, mean=0, sigma=3, step=0.5, signal
     amp = amplitude
     freq = 1 / period
     timestamps = np.arange(0,signalDuration,step)
-    #creation des events
-    #s il y a un changement d amplitude, alors il y a un changement de frequence
+
     meanDurationEvents = 10
     varianceDurationEvents = 5
     meanDurationEventsApnea = 15
@@ -146,9 +135,7 @@ def signalGeneration(amplitude=10, period=4.0, mean=0, sigma=3, step=0.5, signal
     phi = np.random.uniform(0,2*np.pi)
     signal = (amplitude / 2) * np.sin(2 * np.pi * freq * (timestamps % (1 / freq))+phi) ## we talk about breathing amplitude in mm so its more the total amplitude than the half one, meaning it must be divided by two here
     signal += noise
-    
-    #pour chaque event, la valeur min de tout le signal doit rester identique, meme s il y a un changement
-    #d amplitude 
+
     i = 0
     while i < len(listOfEvents):
         if i+2 < len(listOfEvents):
@@ -157,8 +144,7 @@ def signalGeneration(amplitude=10, period=4.0, mean=0, sigma=3, step=0.5, signal
             newAmplitude = amplitude[int(((t1+t2)/2)/step)]
             signal[(timestamps>=t1) & (timestamps<=t2)] += (-amp/2+newAmplitude/2) 
         i+= 2
-    
-    #pendant une apnea, le signal respiratoire ne varie quasi pas
+
     timeApnea = []
     i = 0
     while i < len(listOfEventsApnea):
@@ -180,8 +166,7 @@ def signalGeneration(amplitude=10, period=4.0, mean=0, sigma=3, step=0.5, signal
             signal[np.argmin(np.abs(timestamps-t1)):np.argmin(np.abs(timestamps-t2))] = -timeDec/(t2-t1)+a + noiseApnea
             timeApnea.append(np.argmin(np.abs(timestamps-t2)))
         i+=2
-    
-    #apres une apnee, le signal a une amplitude plus grande car le patient doit reprendre son souffle
+
     for timeIndex in timeApnea:
         timeAfterApnea = np.arange(0,np.random.normal(15,5),step)
         cst = np.random.uniform(1.4,2.0)
@@ -244,12 +229,6 @@ def signal3DGeneration(amplitude=20, period=4.0, mean=0, sigma=3, step=0.5, sign
     signal3D = np.vstack((mainMotionSignal, secondMotionSignal, thirdMotionSignal))
     signal3D = signal3D.transpose(1, 0)
 
-    # plt.figure()
-    # plt.plot(signal3D[:, 0])
-    # plt.plot(signal3D[:, 1])
-    # plt.plot(signal3D[:, 2])
-    # plt.show()
-
     return timestamps, signal3D
 
 def signal2DGeneration(amplitude=20, period=4.0, mean=0, sigma=3, step=0.5, signalDuration=100, coeffMin = 0.10, coeffMax = 0.45, meanEvent = 1/20, meanEventApnea=1/120, otherDimensionsRatio = [0.3, 0.4], otherDimensionsNoiseVar = [0.1, 0.05]):
@@ -297,25 +276,5 @@ def signal2DGeneration(amplitude=20, period=4.0, mean=0, sigma=3, step=0.5, sign
     signal2D = np.vstack((mainMotionSignal, secondMotionSignal))
     signal2D = signal2D.transpose(1, 0)
 
-    # plt.figure()
-    # plt.plot(signal3D[:, 0])
-    # plt.plot(signal3D[:, 1])
-    # plt.show()
-
     return timestamps, signal2D
-
-
-
-
-# for i in range(1):
-#     time,samples = signalGeneration()
-#     time = np.arange(0,100,0.5)
-#     plt.figure(figsize=(15,10))
-#     plt.plot(time,samples)
-#     plt.xlabel("Time [s]")
-#     plt.ylabel("Amplitude [mm]")
-#     plt.title("Breathing signal part 1")
-#     plt.xlim((0,100))
-#     plt.ylim((-30,30))
-
 
