@@ -2,19 +2,23 @@
 set -euo pipefail
 
 API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:8000/api/v1}"
+# Every route but /info needs the API key once RADIARCH_API_KEY is set on the server.
+X_API_KEY="${X_API_KEY:-}"
+AUTH=()
+[ -n "${X_API_KEY}" ] && AUTH=(-H "X-API-Key: ${X_API_KEY}")
 
 echo "Radiarch smoke test"
 echo "API_BASE_URL=${API_BASE_URL}"
 echo
 
 echo "1) GET /info"
-curl -fsS "${API_BASE_URL}/info" | python3 -m json.tool >/dev/null
+curl -fsS "${AUTH[@]}" "${API_BASE_URL}/info" | python3 -m json.tool >/dev/null
 echo "   OK"
 echo
 
 echo "2) POST /plans (create a minimal plan)"
 CREATE_RESP="$(
-  curl -fsS "${API_BASE_URL}/plans" \
+  curl -fsS "${AUTH[@]}" "${API_BASE_URL}/plans" \
     -H "Content-Type: application/json" \
     -d '{
       "workflow_id": "proton-impt-basic",
@@ -51,7 +55,7 @@ echo "3) Poll /jobs/${JOB_ID} until terminal state"
 terminal="succeeded failed cancelled"
 state=""
 for i in $(seq 1 180); do
-  JOB_JSON="$(curl -fsS "${API_BASE_URL}/jobs/${JOB_ID}")"
+  JOB_JSON="$(curl -fsS "${AUTH[@]}" "${API_BASE_URL}/jobs/${JOB_ID}")"
   export JOB_JSON
   state="$(python3 - <<'PY'
 import json, os
@@ -81,7 +85,7 @@ if [[ "${state}" != "succeeded" ]]; then
 fi
 
 echo "4) GET /plans/${PLAN_ID} and check artifacts + qa_summary"
-PLAN_JSON="$(curl -fsS "${API_BASE_URL}/plans/${PLAN_ID}")"
+PLAN_JSON="$(curl -fsS "${AUTH[@]}" "${API_BASE_URL}/plans/${PLAN_ID}")"
 export PLAN_JSON
 ARTIFACT_COUNT="$(python3 - <<'PY'
 import json, os
@@ -114,7 +118,7 @@ PY
 )"
 echo "5) GET /artifacts/${ARTIFACT_ID} (download first artifact)"
 TMP_OUT="$(mktemp -t radiarch_artifact.XXXXXX)"
-curl -fsS "${API_BASE_URL}/artifacts/${ARTIFACT_ID}" -o "${TMP_OUT}"
+curl -fsS "${AUTH[@]}" "${API_BASE_URL}/artifacts/${ARTIFACT_ID}" -o "${TMP_OUT}"
 echo "   downloaded=$(wc -c < "${TMP_OUT}") bytes to ${TMP_OUT}"
 echo
 
