@@ -664,3 +664,20 @@ Open: view the objects in OHIF and 3D Slicer by hand on the next fixture load (c
 the geometry grid, not the CT grid, when the geometry was resampled); arcs as VMAT control points
 (R8); wedges, compensators, blocks and bolus; DVH sequence in the dose; RT Beams Delivery
 Instruction and UPS belong to smis-ois (F5.4).
+
+## R12 — versions, lineage, attribution and states (2026-10-21)
+
+ADR 0013. Done:
+- `models/lineage.py` (`VersionRef`, `Attribution` with `DatasetRef`, `StateRecord`, `VersionStatus`,
+  `LineageGraph`, `DerivationRecord`; states draft/approved/superseded/retired and their transitions).
+- `services/lineage.py` (`LineageService`: nodes with parents per kind over the existing stores,
+  `lineage`, `descendants`, `attribution`, `status`/`transition` with the JSON state store and audit,
+  `locked_keys`/`assert_deletable` (ever-approved versions and their ancestors), `derivation_record`
+  in the SMIS manifest shape, `capability` declaration).
+- `api/routes/lineage.py` (`/lineage/capability`, `/lineage/{kind}/{id}[/descendants|/attribution|
+  /derivation|/state]`); `api/routes/_lineage_guard.py` on every delete route (409 when locked).
+- The RT export manifest carries `attribution`; the DICOM private block names the engine and machine.
+- Tests: `tests/test_r12_lineage.py` (service, API, schema validation of the derivation record when
+  the SMIS schema is on the machine).
+Open: the engine binary's container digest in the attribution (with F3.3); the state route's
+caller will be smis-ois (F5.4); lineage across radiarch instances; audit-trail immutability.

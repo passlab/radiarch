@@ -73,3 +73,24 @@ def fake_workflow_runners():
         for wf_id in list(RUNNERS):
             mp.setitem(RUNNERS, wf_id, _fake_workflow_runner)
         yield
+
+
+# ---------------------------------------------------------------------------
+# Router service caches
+#
+# Every router keeps its service in an ``lru_cache`` (``_service()``), and a
+# service binds the artifact directory it was created with. Test modules give
+# each test its own artifact directory, so a service cached by an earlier test
+# answers "not found" for everything a later test builds. Clearing the caches
+# before every test removes that order coupling. Only modules already imported
+# are touched: nothing new is imported here.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _clear_router_service_caches():
+    for name, module in list(sys.modules.items()):
+        if name.startswith("radiarch.api.routes.") and module is not None:
+            svc = getattr(module, "_service", None)
+            if svc is not None and hasattr(svc, "cache_clear"):
+                svc.cache_clear()
+    yield

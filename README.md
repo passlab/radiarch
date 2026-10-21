@@ -216,6 +216,28 @@ object type validates clean against the DICOM standard (`dicom-validator` in the
 `dciodvfy` in CI); `RADIARCH_TEST_DICOMWEB_URL=http://host:8042/dicom-web` opts a test into a round
 trip through a DICOMweb server.
 
+## Versions, lineage and states
+
+Every stored result is a version with parents, read from the stores by `services/lineage.py`
+(ADR 0013): `GET /lineage/{kind}/{id}` walks a version back to the geometry it started from,
+`/descendants` forward, `/attribution` names the capability (radiarch, engine and version, machine
+model, HU model) and the dataset (patient, study, CT series, frame of reference), and
+`/derivation?dataset_id=&version=` renders the version as the SMIS manifest's `derivation` record.
+Kinds: `geometry`, `beam_model`, `influence`, `dose`, `optimization`, `sequence`, `bao`,
+`evaluation`, `rt_export`, `plan`. `GET /lineage/capability` is radiarch's declaration to a
+capability registry.
+
+States are recorded, not decided: `POST /lineage/{kind}/{id}/state` records `approved` (with the
+deciding authority, actor and reference), `superseded` (with the successor) or `retired`; an
+approval under the authority `radiarch` is refused. A version that was ever approved, and every
+version it derives from, cannot be deleted (409):
+
+```bash
+curl -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{"state": "approved", "actor": "physicist:ab", "authority": "smis-ois", "reference": "Task/42"}' \
+  $API/lineage/dose/<id>/state
+```
+
 ## Validation harness
 
 `src/radiarch/validation/` holds the physics and cross-check cases that go beyond unit
