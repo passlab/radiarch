@@ -48,6 +48,7 @@ from ..models.optimization import (
 )
 from .dose import DoseService
 from .dose_engines import get_engine
+from .dose_engines.registry import ensure_engine_allowed
 from .objectives import (
     ConstraintPenalty,
     DMax,
@@ -226,6 +227,7 @@ class OptimizationService:
             request.dose_engine.name, beam_model.result.modality
         )
         engine = get_engine(request.dose_engine.name)
+        ensure_engine_allowed(engine)
         issues = engine.validate(geometry, beam_model, request.dose_engine.params)
         if issues:
             raise ValueError(

@@ -29,6 +29,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .job import JobState
+from .common import ResearchArtifact
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +262,7 @@ class FluenceElementSet(BaseModel):
         return self
 
 
-class BeamModelResult(BaseModel):
+class BeamModelResult(ResearchArtifact):
     """Output of a completed beam-model build."""
 
     beam_model_id: str

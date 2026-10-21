@@ -29,6 +29,7 @@ import numpy as np
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .job import JobState
+from .common import ResearchArtifact
 
 
 # ---------------------------------------------------------------------------
@@ -270,7 +271,7 @@ class CTMetadata(BaseModel):
     series_instance_uid: Optional[str] = None
 
 
-class GeometryResult(BaseModel):
+class GeometryResult(ResearchArtifact):
     """Output of a completed geometry build."""
 
     geometry_id: str

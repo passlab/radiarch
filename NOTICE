@@ -1,0 +1,27 @@
+radiarch
+Copyright 2026 The SMIS Project
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Intended use: research only. Nothing radiarch produces is for clinical
+use. Every result carries that statement (see README.md, "Intended use").
+
+This product includes or runs software developed by others:
+
+- OpenTPS core, https://gitlab.com/openmcsquare/opentps, Apache License 2.0.
+  A copy is vendored under src/opentps/ with radiarch's patches recorded in
+  src/opentps/patches/ and the procedure in src/opentps/ATTRIBUTION.md.
+  Parts of radiarch are adapted from it.
+
+- MCsquare, https://gitlab.com/openmcsquare/MCsquare, Apache License 2.0.
+  Binaries, material tables, beam data libraries and scanner calibration
+  tables are shipped under src/opentps/core/processing/doseCalculation/
+  protons/MCsquare/ and are run as separate processes.
+
+- WiscPlan collapsed-cone photon dose engine (CCC_DoseEngine), GNU General
+  Public License version 2, shipped as source and a prebuilt Linux binary
+  under src/opentps/core/processing/doseCalculation/photons/. radiarch runs
+  it only as a separate program that exchanges files with it; nothing in
+  radiarch links to or imports it.
+
+- Test data: the SimpleFantomWithStruct DICOM set from the OpenTPS test data.

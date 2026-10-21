@@ -23,6 +23,7 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field, model_validator
 
 from .job import JobState
+from .common import ResearchArtifact
 
 
 class GammaSpec(BaseModel):
@@ -164,7 +165,7 @@ class GammaResult(BaseModel):
     evaluated_voxels: int
 
 
-class EvaluationResult(BaseModel):
+class EvaluationResult(ResearchArtifact):
     """Output of a completed evaluation."""
 
     evaluation_id: str

@@ -40,6 +40,7 @@ from pydantic import BaseModel, Field, model_validator
 # two services agree on engine pinning and robustness semantics.
 from .dose import EngineSpec, ScenarioSpec
 from .job import JobState
+from .common import ResearchArtifact
 
 
 # ---------------------------------------------------------------------------
@@ -399,7 +400,7 @@ class CheckpointInfo(BaseModel):
     cost: float = Field(..., description="Composite cost at this iteration.")
 
 
-class OptimizationResult(BaseModel):
+class OptimizationResult(ResearchArtifact):
     """Output of a completed optimization run."""
 
     optimization_id: str

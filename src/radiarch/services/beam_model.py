@@ -6,13 +6,11 @@ This is the public entry point for Service 2. One method, one contract:
 Pipeline
 --------
 1. Compute ``cache_key`` and short-circuit if already built.
-2. Load the geometry — verify it exists in the Geometry Service's store
-   (404 → 422 to the API caller). Then load OpenTPS objects we'll
-   need to feed the modality builder. v1: re-uses the existing
-   ``load_ct_and_patient`` helper (which is fast on subsequent calls
-   thanks to OS file cache + the Geometry Service's NIfTI cache for the
-   density grid). Future work (B5) eliminates this re-load entirely by
-   wiring workflows to consume geometries by id.
+2. Load the geometry — look it up in the Geometry Service's store (404 →
+   422 to the API caller) and rebuild the OpenTPS CT, patient and target
+   mask from the persisted NIfTI volumes (``geometry_bundle``). Nothing
+   is re-read from DICOM, so the beam model is built on exactly the
+   geometry the caller named.
 3. Resolve the machine model.
 4. Dispatch to ``_build_proton`` or ``_build_photon`` based on modality.
 5. Persist the OpenTPS plan + meta.json atomically.
@@ -120,35 +118,24 @@ class BeamModelService:
     # -----------------------------------------------------------------
 
     def _load_geometry(self, geometry_id: str) -> _LoadedGeometry:
-        """Verify the geometry exists, then load CT + patient via OpenTPS.
+        """Rebuild the OpenTPS objects the builders need from the persisted geometry.
 
-        v1 simplification: we don't reconstruct an OpenTPS ``Patient``
-        from the persisted NIfTI artifacts. Instead we look up the
-        ``GeometryResult`` to confirm the id is valid, then call the
-        existing ``load_ct_and_patient`` helper (which reads from the
-        configured ``opentps_data_root`` or the request's source DICOM,
-        depending on adapter mode). This matches what the four legacy
-        workflows do today.
-
-        Future work (B5): wire ``load_ct_and_patient`` to fetch by
-        ``geometry_id`` so we share Geometry Service's DicomFetcher and
-        eliminate the second DICOM load.
+        The Geometry Service wrote the CT grid, the structure masks and the
+        structure index for ``geometry_id``; the beam model is built on
+        exactly those. (It used to re-read ``opentps_data_root`` whatever
+        the id was, so every beam model came out of the default phantom.)
         """
         from .geometry import GeometryService  # lazy
-        from ..core.workflows._helpers import (  # lazy
-            find_target_roi,
-            load_ct_and_patient,
-        )
+        from .geometry_bundle import load_opentps_geometry  # lazy
 
-        geom_store = GeometryService().store
-        if geom_store.get_by_id(geometry_id) is None:
+        geom = GeometryService().store.get_by_id(geometry_id)
+        if geom is None:
             raise ValueError(
                 f"geometry_id {geometry_id!r} not found — build the geometry "
                 "first via POST /api/v1/geometry/build."
             )
 
-        ct, patient, _ = load_ct_and_patient(data_root=None)
-        target = find_target_roi(patient, fallback_to_first=True)
+        ct, patient, target = load_opentps_geometry(geom)
         return _LoadedGeometry(
             geometry_id=geometry_id,
             ct=ct,

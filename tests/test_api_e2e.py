@@ -173,7 +173,7 @@ def test_info_has_models(client):
     assert "proton-mcsquare" in models
     assert models["proton-mcsquare"]["status"] == "available"
     assert "photon-ccc" in models
-    assert models["photon-ccc"]["status"] == "planned"
+    assert models["photon-ccc"]["status"] == "unavailable"  # stub until R1 wires the CCC driver
 
 
 # ---- Phase 4: Sessions CRUD ----

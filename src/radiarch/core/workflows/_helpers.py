@@ -13,6 +13,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import numpy as np
 from loguru import logger
 
+from ...models.common import NOT_FOR_CLINICAL_USE
+
 from ...config import get_settings
 from ...models.plan import PlanDetail
 
@@ -240,7 +242,12 @@ def export_rtdose(dose_image, ct, output_path: str):
     file_meta.MediaStorageSOPInstanceUID = pydicom.uid.generate_uid()
     file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
 
-    ds = FileDataset(output_path, {}, file_meta=file_meta, preamble=b"\x00" * 128)
+    # Explicit VR little endian, matching file_meta; FileDataset defaults to
+    # implicit VR, which would make private tags read back as UN.
+    ds = FileDataset(
+        output_path, {}, file_meta=file_meta, preamble=b"\x00" * 128,
+        is_implicit_VR=False, is_little_endian=True,
+    )
 
     ds.PatientName = getattr(ct, "patientName", "ANONYMOUS")
     ds.PatientID = getattr(ct, "patientID", "UNKNOWN")
@@ -249,6 +256,13 @@ def export_rtdose(dose_image, ct, output_path: str):
     ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
     ds.SOPClassUID = file_meta.MediaStorageSOPClassUID
     ds.Modality = "RTDOSE"
+    ds.FrameOfReferenceUID = getattr(ct, "frameOfReferenceUID", "") or pydicom.uid.generate_uid()
+    # Intended-use statement in the public text attributes and in a private
+    # block, so it survives tools that rewrite descriptions.
+    ds.SeriesDescription = "RESEARCH - " + NOT_FOR_CLINICAL_USE
+    ds.DoseComment = NOT_FOR_CLINICAL_USE
+    block = ds.private_block(0x7779, "RADIARCH", create=True)
+    block.add_new(0x01, "LO", NOT_FOR_CLINICAL_USE)
     ds.Manufacturer = "Radiarch/OpenTPS"
     ds.DoseUnits = "GY"
     ds.DoseType = "PHYSICAL"

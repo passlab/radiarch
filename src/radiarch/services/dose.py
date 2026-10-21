@@ -58,6 +58,8 @@ from .dose_persistence import (
     InfluenceStore,
 )
 from .geometry import GeometryService
+from .geometry_bundle import wrap_ct_image as _wrap_ct_image  # shared with the beam model
+from .dose_engines.registry import ensure_engine_allowed
 from .scenarios import expand_scenarios
 
 
@@ -109,6 +111,7 @@ class DoseService:
 
         on_progress(DoseStage.validating_engine, 0.20, f"Validating engine {request.engine.name}")
         engine = get_engine(request.engine.name)
+        ensure_engine_allowed(engine)
         issues = engine.validate(geometry, beam_model, request.engine.params)
         if issues:
             raise ValueError(
@@ -225,6 +228,7 @@ class DoseService:
         on_progress(DoseStage.validating_engine, 0.20,
                     f"Validating engine {request.engine.name}")
         engine = get_engine(request.engine.name)
+        ensure_engine_allowed(engine)
         issues = engine.validate(geometry, beam_model, request.engine.params)
         if issues:
             raise ValueError(
@@ -404,47 +408,6 @@ def _noop_progress(stage: DoseStage, fraction: float, message: str) -> None:
     del stage, fraction, message
 
 
-def _wrap_ct_image(ct_hu: np.ndarray, geom) -> Optional[Any]:
-    """Wrap a HU array in an OpenTPS ``CTImage``, or return None.
-
-    Returns None when OpenTPS isn't importable in this environment — the
-    bundle still carries the raw ``ct_hu`` so non-OpenTPS engines (the
-    analytic test engine, a future pure-numpy CCC) can use the HU
-    directly. OpenTPS uses (x, y, z) array order; SimpleITK gave us
-    (z, y, x), so we transpose on the way out.
-
-    Provenance fields (frameOfReferenceUID, seriesInstanceUID) are
-    pulled from the persisted GeometryResult.ct_metadata so the resulting
-    CTImage matches the original DICOM series.
-    """
-    try:
-        from opentps.core.data.images import CTImage
-    except Exception:  # pragma: no cover — exercised on import-failure machines
-        return None
-
-    # SimpleITK → (z, y, x); OpenTPS expects (x, y, z).
-    arr_ijk = np.transpose(np.asarray(ct_hu), (2, 1, 0)).astype(np.int16, copy=False)
-
-    grid = geom.grid_spec
-    spacing = tuple(float(s) for s in grid.spacing_mm)
-    origin = tuple(float(o) for o in (grid.origin_mm or (0.0, 0.0, 0.0)))
-
-    series_uid = ""
-    try:
-        series_uid = str(geom.ct_metadata.series_instance_uid or "")
-    except Exception:  # pragma: no cover
-        pass
-
-    for_uid = str(getattr(geom, "frame_of_reference_uid", "") or "")
-
-    return CTImage(
-        imageArray=arr_ijk,
-        name=f"CT[{geom.geometry_id}]",
-        origin=origin,
-        spacing=spacing,
-        seriesInstanceUID=series_uid,
-        frameOfReferenceUID=for_uid,
-    )
 
 
 __all__ = ["DoseService", "ProgressCallback"]

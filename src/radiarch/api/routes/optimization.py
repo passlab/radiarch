@@ -40,7 +40,6 @@ from ..security import api_key_auth
 router = APIRouter(
     prefix="/optimize",
     tags=["optimization"],
-    dependencies=[Depends(api_key_auth)],
 )
 
 

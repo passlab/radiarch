@@ -20,6 +20,10 @@ class EngineRegistryError(KeyError):
     """Raised when a requested engine isn't registered."""
 
 
+class TestOnlyEngineError(ValueError):
+    """Raised when a test-only engine is requested outside development."""
+
+
 _REGISTRY: Dict[str, DoseEnginePlugin] = {}
 
 
@@ -38,6 +42,27 @@ def get_engine(name: str) -> DoseEnginePlugin:
             f"Available: {sorted(_REGISTRY.keys())}"
         )
     return _REGISTRY[name]
+
+
+def ensure_engine_allowed(engine: DoseEnginePlugin) -> None:
+    """Refuse engines flagged ``test_only`` unless the deployment allows them.
+
+    The analytic engine has the right shape and the wrong physics by design;
+    it exists for the test suite. ``RADIARCH_ALLOW_TEST_ENGINES`` defaults to
+    true only when ``RADIARCH_ENVIRONMENT=dev``.
+    """
+    if not getattr(engine, "test_only", False):
+        return
+    from ...config import get_settings  # lazy — the registry imports without settings
+
+    settings = get_settings()
+    if settings.allow_test_engines:
+        return
+    raise TestOnlyEngineError(
+        f"Engine {engine.name!r} is a test-only engine (wrong physics by design) "
+        f"and is refused when RADIARCH_ENVIRONMENT={settings.environment!r}. "
+        "Set RADIARCH_ALLOW_TEST_ENGINES=1 only for development."
+    )
 
 
 def list_engines() -> List[str]:
@@ -85,6 +110,7 @@ def engine_health(name: str) -> dict:
             "available": True,
         }
     payload["registered"] = True
+    payload.setdefault("test_only", bool(getattr(engine, "test_only", False)))
     return payload
 
 
@@ -95,6 +121,8 @@ def reset_registry() -> None:
 
 __all__ = [
     "EngineRegistryError",
+    "TestOnlyEngineError",
+    "ensure_engine_allowed",
     "register_engine",
     "get_engine",
     "get_all_engines",

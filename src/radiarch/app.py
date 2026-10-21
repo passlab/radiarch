@@ -1,11 +1,12 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
 from .api.routes import info, plans, jobs, artifacts, workflows, sessions, geometry, beam_model, uploads, dose, optimization, bao, evaluation
 from .adapters import build_orthanc_adapter
+from .api.security import api_key_auth
 from .core.database import init_db
 
 settings = get_settings()
@@ -34,19 +35,25 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # /info stays open: service identity and the intended-use statement.
+    # Everything else needs the API key once RADIARCH_API_KEY is set.
     app.include_router(info.router, prefix=settings.api_prefix)
-    app.include_router(workflows.router, prefix=settings.api_prefix)
-    app.include_router(plans.router, prefix=settings.api_prefix)
-    app.include_router(jobs.router, prefix=settings.api_prefix)
-    app.include_router(artifacts.router, prefix=settings.api_prefix)
-    app.include_router(sessions.router, prefix=settings.api_prefix)
-    app.include_router(geometry.router, prefix=settings.api_prefix)
-    app.include_router(beam_model.router, prefix=settings.api_prefix)
-    app.include_router(uploads.router, prefix=settings.api_prefix)
-    app.include_router(dose.router, prefix=settings.api_prefix)
-    app.include_router(optimization.router, prefix=settings.api_prefix)
-    app.include_router(bao.router, prefix=settings.api_prefix)
-    app.include_router(evaluation.router, prefix=settings.api_prefix)
+    protected = [Depends(api_key_auth)]
+    for router in (
+        workflows.router,
+        plans.router,
+        jobs.router,
+        artifacts.router,
+        sessions.router,
+        geometry.router,
+        beam_model.router,
+        uploads.router,
+        dose.router,
+        optimization.router,
+        bao.router,
+        evaluation.router,
+    ):
+        app.include_router(router, prefix=settings.api_prefix, dependencies=protected)
 
     @app.get("/")
     async def root():

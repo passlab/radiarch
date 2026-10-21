@@ -20,6 +20,7 @@ from loguru import logger
 
 from ..adapters import OrthancAdapterBase, build_orthanc_adapter
 from ..config import get_settings
+from ..models.common import RESEARCH_USE_ONLY
 from ..models.plan import PlanDetail
 from .workflows import RUNNERS
 from .workflows._helpers import PlannerError
@@ -81,6 +82,7 @@ class RadiarchPlanner:
         """JSON artifact + disk persistence."""
         wf_id = plan.workflow_id.value if hasattr(plan.workflow_id, "value") else str(plan.workflow_id)
         artifact_doc = {
+            "intended_use": RESEARCH_USE_ONLY,
             "planId": plan.id,
             "workflowId": wf_id,
             "studyInstanceUID": plan.study_instance_uid,

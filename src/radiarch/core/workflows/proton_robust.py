@@ -22,6 +22,33 @@ from ._helpers import (
 from ...models.plan import PlanDetail
 
 
+
+def configure_robustness(rob_cfg):
+    """Translate a :class:`RobustnessConfig` into an OpenTPS ``RobustnessProton``.
+
+    OpenTPS reads ``setupSystematicError`` / ``setupRandomError`` (singular);
+    any other spelling is silently ignored and the 1.6 / 1.4 mm defaults
+    apply, which is what happened before this helper existed.
+    """
+    from opentps.core.data.plan._robustnessProton import RobustnessProton
+
+    robustness = RobustnessProton()
+    if rob_cfg is None:
+        return robustness
+    try:
+        strategy = RobustnessProton.Strategies[rob_cfg.selection_strategy]
+    except KeyError:
+        raise PlannerError(
+            f"Unknown robustness selection_strategy {rob_cfg.selection_strategy!r}; "
+            f"expected one of {[s.name for s in RobustnessProton.Strategies]}"
+        ) from None
+    robustness.selectionStrategy = strategy
+    robustness.setupSystematicError = [float(v) for v in rob_cfg.setup_systematic_error_mm]
+    robustness.setupRandomError = [float(v) for v in rob_cfg.setup_random_error_mm]
+    robustness.rangeSystematicError = float(rob_cfg.range_systematic_error_pct)
+    robustness.numScenarios = int(rob_cfg.num_scenarios)
+    return robustness
+
 def run(plan: PlanDetail) -> Dict[str, Any]:
     """Phase 8C: Robust proton optimization with error scenarios."""
     logger.info("Starting robust proton optimization for plan %s", plan.id)
@@ -53,15 +80,7 @@ def run(plan: PlanDetail) -> Dict[str, Any]:
         plan_design.defineTargetMaskAndPrescription(target_roi, plan.prescription_gy)
 
     # 3. Robustness configuration
-    robustness = RobustnessProton()
-    rob_cfg = plan.robustness
-    if rob_cfg:
-        robustness.setupSystematicErrors = rob_cfg.setup_systematic_error_mm
-        robustness.setupRandomErrors = rob_cfg.setup_random_error_mm
-        robustness.rangeSystematicError = rob_cfg.range_systematic_error_pct
-        robustness.selectionStrategy = rob_cfg.selection_strategy
-        robustness.numScenarios = rob_cfg.num_scenarios
-    plan_design.robustness = robustness
+    plan_design.robustness = configure_robustness(plan.robustness)
 
     logger.info("Building robust plan...")
     proton_plan = plan_design.buildPlan()

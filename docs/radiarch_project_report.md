@@ -1,5 +1,7 @@
 # Radiarch — Full Project Report
 
+> **Historical record (February 2026).** This report describes the project as it stood after its first eleven phases. For the current state see `TASKS.md`; for the direction see `docs/adr/0005-own-core-engines-as-tools.md` and the evaluation in the SMIS repo (`docs/reports/Radiarch TPS evaluation and roadmap.md`).
+
 *Building a Cloud-Native Treatment Planning Service with AI-Assisted Development*
 
 > **Author**: yyan7, with [Antigravity](https://deepmind.google) (Google DeepMind agentic coding assistant)

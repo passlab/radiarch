@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .beam_model import Modality
 from .job import JobState
+from .common import ResearchArtifact
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +318,7 @@ class DoseStatistics(BaseModel):
     nonzero_voxel_count: int = Field(..., ge=0)
 
 
-class DoseResult(BaseModel):
+class DoseResult(ResearchArtifact):
     """Output of a completed nominal dose compute."""
 
     dose_id: str
@@ -348,7 +349,7 @@ class ScenarioDoseEntry(BaseModel):
     statistics: DoseStatistics
 
 
-class InfluenceResult(BaseModel):
+class InfluenceResult(ResearchArtifact):
     """Output of a completed influence-matrix build.
 
     The matrix itself is too large to inline — it lives on disk in a

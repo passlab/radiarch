@@ -59,7 +59,6 @@ from ..security import api_key_auth
 router = APIRouter(
     prefix="/dose",
     tags=["dose"],
-    dependencies=[Depends(api_key_auth)],
 )
 
 
@@ -97,6 +96,7 @@ class EngineSummary(BaseModel):
     modalities: List[str] = []
     available: bool = False
     registered: bool = True
+    test_only: bool = False
 
 
 @router.get(
@@ -115,6 +115,7 @@ async def get_engines() -> List[EngineSummary]:
             modalities=h.get("modalities", []),
             available=bool(h.get("available", False)),
             registered=bool(h.get("registered", True)),
+            test_only=bool(h.get("test_only", False)),
         ))
     return out
 

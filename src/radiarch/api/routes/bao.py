@@ -29,7 +29,6 @@ from ..security import api_key_auth
 router = APIRouter(
     prefix="/bao",
     tags=["bao"],
-    dependencies=[Depends(api_key_auth)],
 )
 
 

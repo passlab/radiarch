@@ -7,6 +7,7 @@ classes with simple stand-ins so the test exercises the adapter math
 
 from __future__ import annotations
 
+import math
 import sys
 import types
 from dataclasses import dataclass, field
@@ -26,22 +27,71 @@ from radiarch.services.machine_model import PhotonMachineModel
 # OpenTPS stand-ins
 # ---------------------------------------------------------------------------
 
-@dataclass
 class _FakeSegment:
-    monitorUnits: float = 0.0
-    jawOpeningMM: list = field(default_factory=list)
+    """Mirrors the OpenTPS ``PlanPhotonSegment`` attributes ``build_photon_plan`` sets."""
+
+    def __init__(self):
+        self.x_jaw_mm = []
+        self.y_jaw_mm = []
+        self.Xmlc_mm = []
+        self.mu = None
+        self.gantryAngle_degree = 0.0
+        self.couchAngle_degree = 0.0
+        self.isocenterPosition_mm = [0, 0, 0]
+        self.xBeamletSpacing_mm = 1
+        self.yBeamletSpacing_mm = 1
+        self.controlPointIndex = 0
+        self._beamlets = []
+
+    def createBeamletsFromSegments(self):
+        nx = math.ceil((self.x_jaw_mm[1] - self.x_jaw_mm[0]) / self.xBeamletSpacing_mm)
+        ny = math.ceil((self.y_jaw_mm[1] - self.y_jaw_mm[0]) / self.yBeamletSpacing_mm)
+        self._beamlets = [None] * (nx * ny)
+
+    def __len__(self):
+        return len(self._beamlets)
 
 
-@dataclass
 class _FakeBeam:
-    gantryAngle: float = 0.0
-    couchAngle: float = 0.0
-    segments: list = field(default_factory=list)
+    def __init__(self):
+        self._beamSegments = []
+        self.id = 0
+        self.name = ""
+        self.isocenterPosition_mm = [0, 0, 0]
+        self.gantryAngle_degree = 0.0
+        self.couchAngle_degree = 0.0
+        self.xBeamletSpacing_mm = 1
+        self.yBeamletSpacing_mm = 1
+
+    def appendBeamSegment(self, segment):
+        self._beamSegments.append(segment)
+
+    @property
+    def beamSegments(self):
+        return list(self._beamSegments)
+
+    @property
+    def numberOfBeamlets(self):
+        return sum(len(s) for s in self._beamSegments)
 
 
-@dataclass
 class _FakePlan:
-    beams: list = field(default_factory=list)
+    """``beams`` returns a copy, exactly like OpenTPS: appending to it is a no-op."""
+
+    def __init__(self, name="PhotonPlan", patient=None):
+        self.name = name
+        self._beams = []
+
+    def appendBeam(self, beam):
+        self._beams.append(beam)
+
+    @property
+    def beams(self):
+        return list(self._beams)
+
+    @property
+    def numberOfBeamlets(self):
+        return sum(b.numberOfBeamlets for b in self._beams)
 
 
 @pytest.fixture(autouse=True)
@@ -165,7 +215,7 @@ class TestPlanConstruction:
             ),
             params=DeliveryParams(),
         )
-        assert [b.gantryAngle for b in result.plan.beams] == [72.0, 144.0]
+        assert [b.gantryAngle_degree for b in result.plan.beams] == [72.0, 144.0]
 
     def test_segment_jaw_centered_on_isocenter(self):
         from radiarch.services.photon_beamlets import generate_photon_beamlets
@@ -177,5 +227,5 @@ class TestPlanConstruction:
             beam_set=_beam_set(1),
             params=DeliveryParams(jaw_opening_mm=(80.0, 80.0)),
         )
-        seg = result.plan.beams[0].segments[0]
-        assert seg.jawOpeningMM == [-40.0, 40.0]
+        seg = result.plan.beams[0].beamSegments[0]
+        assert seg.x_jaw_mm == [-40.0, 40.0]

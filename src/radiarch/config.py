@@ -215,6 +215,15 @@ class Settings(BaseSettings):
         description="Header name carrying the API key.",
     )
 
+    # Test-only dose engines (the analytic engine: right shape, wrong physics)
+    allow_test_engines: Optional[bool] = Field(
+        default=None,
+        description=(
+            "Permit test-only dose engines. Unset = allowed only when "
+            "environment is 'dev'; never enable in a deployment."
+        ),
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -223,6 +232,9 @@ def get_settings() -> Settings:
     import site
 
     settings = Settings()
+
+    if settings.allow_test_engines is None:
+        settings.allow_test_engines = settings.environment == "dev"
 
     # Auto-detect opentps_data_root from repo test data if not set
     if not settings.opentps_data_root:

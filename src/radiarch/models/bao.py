@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from .dose import EngineSpec
 from .job import JobState
+from .common import ResearchArtifact
 from .optimization import ObjectiveSpec
 
 
@@ -171,7 +172,7 @@ class BAOSelectionStep(BaseModel):
     combined_score: float
 
 
-class BAOResult(BaseModel):
+class BAOResult(ResearchArtifact):
     """Output of a completed beam-angle optimization."""
 
     bao_id: str

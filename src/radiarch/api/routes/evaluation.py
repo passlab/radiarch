@@ -32,7 +32,6 @@ from ..security import api_key_auth
 router = APIRouter(
     prefix="/evaluate",
     tags=["evaluation"],
-    dependencies=[Depends(api_key_auth)],
 )
 
 

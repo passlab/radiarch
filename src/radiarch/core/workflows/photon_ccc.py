@@ -24,29 +24,25 @@ def run(plan: PlanDetail) -> Dict[str, Any]:
     logger.info("Starting Photon CCC workflow for plan %s", plan.id)
 
     from opentps.core.processing.doseCalculation.photons.cccDoseCalculator import CCCDoseCalculator
-    from opentps.core.data.plan._photonPlan import PhotonPlan
-    from opentps.core.data.plan._planPhotonBeam import PlanPhotonBeam
-    from opentps.core.data.plan._planPhotonSegment import PlanPhotonSegment
-
     sim_dir = setup_sim_dir(plan.id)
 
     # 1. Load CT
     ct, patient, _ = load_ct_and_patient()
     calibration, _ = setup_calibration()
 
-    # 2. Build photon plan
-    photon_plan = PhotonPlan()
+    # 2. Build photon plan: equally spaced gantry angles, one open field each
+    from ...services.photon_beamlets import build_photon_plan
+
     beam_count = plan.beam_count
-    for i in range(beam_count):
-        gantry = i * (360.0 / beam_count)
-        beam = PlanPhotonBeam()
-        beam.gantryAngle = gantry
-        beam.couchAngle = 0.0
-        segment = PlanPhotonSegment()
-        segment.monitorUnits = plan.mu_per_beam
-        segment.jawOpeningMM = plan.jaw_opening_mm
-        beam.segments = [segment]
-        photon_plan.beams.append(beam)
+    jaw = (float(plan.jaw_opening_mm[0]), float(plan.jaw_opening_mm[1]))
+    photon_plan = build_photon_plan(
+        beams=[(i * (360.0 / beam_count), 0.0) for i in range(beam_count)],
+        jaw_x_mm=jaw,
+        jaw_y_mm=jaw,
+        leaf_width_mm=plan.mlc_leaf_width_mm,
+        mu_per_beam=plan.mu_per_beam,
+        name=f"photon-ccc-{plan.id}",
+    )
 
     # 3. CCC dose
     logger.info("Running CCC dose calculation...")

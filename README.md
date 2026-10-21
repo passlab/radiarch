@@ -4,6 +4,16 @@
 
 Radiarch is a FastAPI-based treatment planning service modeled after the MONAILabel server pattern. It vendors [OpenTPS Core](https://gitlab.com/openmcsquare/opentps) directly for proton/photon dose calculation (MCsquare, CCC) and communicates with PACS providers such as Orthanc over DICOMweb. It ships no viewer: SMIS's own OHIF deployment does the viewing against this API.
 
+## Intended use
+
+**Research use only. Not for clinical use.** Radiarch is a research treatment-planning
+system: its plans, doses and evaluations must never be used to treat patients. Every
+result the API returns carries a `disclaimer` field with that statement, `/api/v1/info`
+reports it as `intended_use`, and every DICOM object radiarch writes carries
+`NOT FOR CLINICAL USE` in its description, comment and a private `RADIARCH` block.
+The dose engines are research engines with no site commissioning; see
+`docs/REAL_DATA_VALIDATION.md` for what has and has not been checked.
+
 ## Layout
 
 ```
@@ -123,6 +133,8 @@ All settings use `RADIARCH_` prefix. Place them in `.env` or export as env vars.
 | `RADIARCH_ORTHANC_BASE_URL` | `http://localhost:8042` | Orthanc REST/DICOMweb URL |
 | `RADIARCH_BROKER_URL` | `redis://localhost:6379/0` | Celery broker (Redis) |
 | `RADIARCH_DICOMWEB_URL` | `""` | DICOMweb STOW-RS URL for artifact push; empty = disabled |
+| `RADIARCH_API_KEY` | `""` | `X-API-Key` required on every `/api/v1` route except `/info`; empty disables auth (dev only) |
+| `RADIARCH_ALLOW_TEST_ENGINES` | unset | Permit the test-only `analytic` engine (wrong physics by design). Unset = only when `RADIARCH_ENVIRONMENT=dev` |
 
 ## Testing
 
@@ -257,4 +269,8 @@ See [`docs/architecture.md`](docs/architecture.md) for the detailed design docum
 
 ## License & Attribution
 
-Radiarch is developed by the Radiarch Team. The vendored OpenTPS Core is © UCLouvain, licensed under Apache 2.0. See `src/opentps/ATTRIBUTION.md` for full citation and modification details.
+Radiarch is licensed under the Apache License 2.0 (`LICENSE`); `NOTICE` lists the third-party
+components. The vendored OpenTPS Core is © UCLouvain, Apache 2.0, with radiarch's patches and the
+vendoring procedure in `src/opentps/ATTRIBUTION.md`. MCsquare is Apache 2.0. The WiscPlan
+collapsed-cone photon engine is GPLv2 and is only ever run as a separate program over files.
+The direction for the engines and the core is recorded in `docs/adr/0005-own-core-engines-as-tools.md`.

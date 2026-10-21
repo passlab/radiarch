@@ -8,6 +8,8 @@
 
 > **Direction 2026-10-20:** the evaluation and roadmap live in the smis repo, `docs/reports/Radiarch TPS evaluation and roadmap.md` (R0–R15). Decisions: the core (data model, DICOM in/out, plan model, optimizer, evaluation, writers) is radiarch's own code; MCsquare and the CCC binary are run as subprocess tools behind radiarch drivers; **OpenTPS is reference code, not a dependency** — the vendored 3.0.1 copy (`scripts/vendor-opentps.sh`, `src/opentps/patches/`) stays only until R1, R14, R2 and R15 replace what is still imported, then `src/opentps` goes and `engines/` keeps binaries, data and licences. pyRadPlan and matRad are offline cross-checks only. Work order: R0 hygiene → R1 CCC driver → R14 MCsquare driver → R2 DICOM RT readers → R15 own core → R3 … (see the report).
 
+> **R0 done 2026-10-20:** photon plans are assembled with OpenTPS's real API (`build_photon_plan`; they used to end up with no beams), the robust workflow's setup errors reach OpenTPS (`configure_robustness`), the beam model is built on the persisted geometry (`geometry_bundle.load_opentps_geometry`) instead of re-reading the default phantom, the analytic engine is flagged `test_only` and refused outside `RADIARCH_ENVIRONMENT=dev`, the API key guards every router except `/info`, `LICENSE` (Apache-2.0) and `NOTICE` exist, and every result model, `/info` and every RTDOSE carry "not for clinical use". ADR 0005 records the direction. Tests: `tests/test_r0_hygiene.py`.
+
 > **Read this top-to-bottom before starting.** Sections "Conventions to follow" and "Module map" tell you the patterns already established — match them. The implementation tasks assume you'll mirror Feature 3's structure rather than invent new ones.
 
 ---

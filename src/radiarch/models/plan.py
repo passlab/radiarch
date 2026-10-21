@@ -3,6 +3,7 @@ from enum import Enum
 from typing import List, Optional
 
 from pydantic import BaseModel, Field
+from .common import ResearchArtifact
 
 
 
@@ -66,7 +67,7 @@ class PlanRequest(BaseModel):
     robustness: Optional[RobustnessConfig] = None
 
 
-class PlanSummary(BaseModel):
+class PlanSummary(ResearchArtifact):
     id: str
     workflow_id: PlanWorkflow
     status: str

@@ -53,6 +53,8 @@ class AnalyticEngine:
     name: str = "analytic"
     version: str = "0.1.0"
     modalities: List[str] = field(default_factory=lambda: ["PROTON_PBS", "PHOTON_IMRT"])
+    #: Wrong physics by design — refused outside development (see registry.ensure_engine_allowed).
+    test_only: bool = True
 
     # -----------------------------------------------------------------
     # validation

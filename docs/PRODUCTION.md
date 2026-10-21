@@ -71,6 +71,7 @@ full list; what follows is what *must* change from defaults.
 |---|---|---|
 | `RADIARCH_ENVIRONMENT` | `production` | Disables Celery eager mode. Required. |
 | `RADIARCH_API_KEY` | High-entropy secret (e.g. `openssl rand -hex 32`) | D8.2. Empty disables auth — DO NOT ship empty. |
+| `RADIARCH_ALLOW_TEST_ENGINES` | unset (or `false`) | Keeps the test-only `analytic` engine refused. It is only allowed by default when `RADIARCH_ENVIRONMENT=dev`. |
 | `RADIARCH_DATABASE_URL` | `postgresql+psycopg://user:pass@host:5432/radiarch` | InMemoryStore loses every job on restart. |
 | `RADIARCH_BROKER_URL` | `redis://redis-host:6379/0` (or RabbitMQ) | Same. |
 | `RADIARCH_RESULT_BACKEND` | `redis://redis-host:6379/1` | Same. |
@@ -192,10 +193,11 @@ jq 'select(.event_type == "cleanup.swept")' < audit.jsonl | tail -1
 ## Auth (D8.2)
 
 Static API key in the `X-API-Key` header, configured via
-`RADIARCH_API_KEY`. Auth applies to all `/api/v1/dose/*` routes
-when the key is configured. Other services (geometry, beam model)
-are currently unprotected — front them with the reverse-proxy SSO
-or add `Depends(api_key_auth)` to their routers.
+`RADIARCH_API_KEY`. Once the key is set, every `/api/v1` route
+requires it except `/api/v1/info` (service identity and the
+intended-use statement) and `/` (liveness). The dependency is
+attached in `app.py` when the routers are included, so a new router
+is protected by default.
 
 Rotation: set the new key in the env, restart the API workers. The
 audit log records the first six chars of the presented key so you
