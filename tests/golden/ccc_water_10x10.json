@@ -1,0 +1,13 @@
+{
+  "spec": {
+    "half_width_mm": 60.0,
+    "depth_mm": 120.0,
+    "spacing_mm": 10.0,
+    "field_mm": 60.0,
+    "leaf_mm": 10.0,
+    "beamlet_mm": 10.0
+  },
+  "engine_version": "1.0.0",
+  "kernel_fingerprint": "647e20e3531ffcd1",
+  "n_beamlets": 36
+}

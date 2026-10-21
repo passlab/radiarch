@@ -1,0 +1,7 @@
+name: dvh_crosscheck_pancreatic
+kind: dvh_crosscheck
+description: DVH statistics of a clinical RTDOSE (Pancreatic-CT-CBCT-SEG) for every structure, radiarch (dose grid, radiarch rasterization and DVH) against dicompyler-core.
+data: data/public/pancreatic-ct-cbct-seg
+patients: [Pancreas-CT-CB_001, Pancreas-CT-CB_002, Pancreas-CT-CB_003, Pancreas-CT-CB_004, Pancreas-CT-CB_005]
+tolerance_percent: {mean: 3.0, d95: 5.0, max: 3.0}
+graded: [mean, max]   # d95 stays informative (DVH tail of low-dose structures)

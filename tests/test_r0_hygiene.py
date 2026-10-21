@@ -206,6 +206,8 @@ class TestGeometryBundle:
 
         assert target_structure({"Lung_L": 3, "GTV": 2, "PTV_60": 1}) == ("PTV_60", 1)
         assert target_structure({"Lung_L": 3, "CTV": 2, "GTV_p": 5}) == ("GTV_p", 5)
+        assert target_structure({"Body": 1, "TargetVolume": 2}) == ("TargetVolume", 2)   # the OpenTPS phantom
+        assert target_structure({"PTV": 1, "Target": 2}) == ("PTV", 1)
         assert target_structure({"Lung_L": 3}) is None
 
     @staticmethod

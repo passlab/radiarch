@@ -41,3 +41,10 @@ runs/
 !tests/opentps/
 !tests/opentps/core/MCsquare-python_interface/data/
 tests/opentps/core/opentps-testData/*.p
+
+# validation harness outputs (python -m radiarch.validation.run)
+validation/results*/
+validation/*.log
+
+# MCsquare scratch output when an engine is run from the repo root
+/Outputs/

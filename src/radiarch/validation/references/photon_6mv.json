@@ -1,0 +1,51 @@
+{
+  "_about": "Reference values for a generic flattened 6 MV photon beam, 10 x 10 cm2 at SSD 100 cm, used as research targets by the validation harness. Every entry carries its source. Radiarch's CCC engine has generic kernels and no linac head model, so head-scatter dependent quantities are informative only.",
+  "pdd10_percent": {
+    "value": 66.1,
+    "tolerance_abs": 1.5,
+    "pass_fail": true,
+    "source": "Beyer GP, JACMP 14(1):4077, 2013: three TrueBeam linacs, 10 x 10 cm2, SSD 100 cm, PDD10 66.1-66.2 %; Chang et al. 2019 (PMC6370991) representative beam data within 1 %"
+  },
+  "dmax_mm": {
+    "min": 12.0,
+    "max": 25.0,
+    "pass_fail": true,
+    "source": "Beyer 2013: d_max about 1.41 cm for a measured 6 MV 10 x 10 field. The CCC engine transports photons only: without contamination electrons the build-up is longer (a pure-photon 6 MV beam peaks at 17-20 mm), and the harness reads d_max on a 2.5-5 mm grid, so the research target is 12-25 mm."
+  },
+  "pdd20_over_pdd10": {
+    "value": 0.58,
+    "tolerance_abs": 0.02,
+    "pass_fail": false,
+    "source": "typical flattened 6 MV: PDD20/PDD10 about 0.58 (TPR20,10 about 0.67); informative"
+  },
+  "penumbra_80_20_mm_at_10cm": {
+    "value": 7.0,
+    "tolerance_abs": 3.0,
+    "pass_fail": false,
+    "source": "Beyer 2013: 7.0 mm (80-20 %) at 10 cm depth for 10 x 10 on TrueBeam; informative because the beamlet grid (5 mm) and the kernels broaden the computed penumbra"
+  },
+  "flatness_percent_at_10cm": {
+    "max": 3.0,
+    "pass_fail": true,
+    "source": "MPPG 5.a Table 5 / TG-142: profile flatness within 3 % over the central 80 % of the field at 10 cm depth"
+  },
+  "symmetry_percent_at_10cm": {
+    "max": 2.0,
+    "pass_fail": true,
+    "source": "TG-142 symmetry tolerance 2 %"
+  },
+  "output_factor_vs_10x10": {
+    "values": {
+      "4x4": 0.904,
+      "20x20": 1.067,
+      "30x30": 1.102,
+      "40x40": 1.115
+    },
+    "pass_fail": false,
+    "source": "Beyer 2013 Table 2, relative output factors at 95 cm SAD on TrueBeam; informative: radiarch has no head-scatter model, so computed factors reflect phantom scatter only"
+  },
+  "_engine_limits": {
+    "dose_mask_radius": "the WiscPlan binary computes each beamlet's dose only inside a cylinder of the beamlet's aperture radius plus RSAFE = 2.0 cm (defs.h). Phantom scatter from farther away is dropped: output factors are flat above 4 x 4, PDD20/PDD10 is slightly low and out-of-field dose is truncated. Found by the harness on 2026-10-21; see the validation report.",
+    "electron_contamination": "not modelled; build-up region not comparable with measurements (MPPG build-up tests excluded)."
+  }
+}

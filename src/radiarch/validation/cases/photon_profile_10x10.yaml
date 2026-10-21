@@ -1,0 +1,8 @@
+name: photon_profile_10x10
+kind: photon_profile
+description: lateral profile at 10 cm depth for the 10 x 10 cm2 field; flatness, symmetry, 80-20 % penumbra.
+engine: ccc
+phantom: {type: water_box, half_width_mm: 150, depth_mm: 300, spacing_mm: 2.5}
+field: {jaw_mm: 100, leaf_width_mm: 10, beamlet_mm: 5, gantry_deg: 0, mu: 1}
+depth_mm: 100
+references: photon_6mv

@@ -108,3 +108,37 @@ jobs:
         env:
           RADIARCH_RUN_MCSQUARE_VALIDATION: "1"
         run: python -m pytest tests/test_mcsquare_dij_consistency.py -v --tb=short
+
+  validation-harness:
+    # R7a: the validation harness in fast mode (coarser grids, fewer primaries) on the
+    # cases that need no external data: photon physics on water and slab phantoms,
+    # the proton range case, the synthetic gamma cross-check. Cases that need
+    # data/public of the SMIS repo skip here and run on the workstation. Results are
+    # research targets against the commissioning literature, never a commissioning.
+    name: Validation harness (nightly / manual, fast mode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout (full — engine binaries and kernels)
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -e ./src[dev,validation]
+      - name: Install uv (pymedphys runs in its own Python 3.12 environment)
+        uses: astral-sh/setup-uv@v5
+      - name: Run the harness (fast mode)
+        run: python -m radiarch.validation.run --all --fast --out validation/results
+      - name: Regression goldens
+        run: python -m pytest tests/test_goldens.py -v --tb=short
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-results
+          path: validation/results

@@ -1,0 +1,11 @@
+name: gamma_crosscheck_synthetic
+kind: gamma_crosscheck
+description: radiarch's gamma against pymedphys (run with uv in a Python 3.12 environment) on synthetic dose pairs with known shifts and scalings; TG-218 criteria.
+grid: {shape: [40, 60, 60], spacing_mm: 2.0}
+criteria: {dose_percent: 3.0, dta_mm: 2.0, threshold_percent: 10.0}
+perturbations:
+  - {name: identical, shift_mm: [0, 0, 0], scale: 1.0}
+  - {name: scaled_2pct, shift_mm: [0, 0, 0], scale: 1.02}
+  - {name: shifted_1mm, shift_mm: [0, 0, 1.0], scale: 1.0}
+  - {name: shifted_3mm_scaled_4pct, shift_mm: [0, 3.0, 0], scale: 1.04}
+tolerance_pass_rate_points: 2.0

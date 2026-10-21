@@ -1,0 +1,9 @@
+name: photon_heterogeneity_slabs
+kind: photon_slab
+description: 10 x 10 cm2 field through a lung slab (3 cm water, 8 cm lung, water) and a bone slab (3 cm water, 3 cm bone, water); central-axis dose beyond the slab against the water depth dose at the radiological depth. Informative until the Monte Carlo references of R7 exist.
+engine: ccc
+spacing_mm: 2.5
+field: {jaw_mm: 100, leaf_width_mm: 10, beamlet_mm: 5, gantry_deg: 0, mu: 1}
+probe_depths_mm: [150, 200, 250]
+tolerance_percent: 5.0
+pass_fail: false

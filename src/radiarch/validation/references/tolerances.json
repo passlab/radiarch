@@ -1,0 +1,37 @@
+{
+  "_about": "Tolerance sets quoted from the commissioning guidance. The harness reports pass/fail against them as research targets; radiarch is not commissioned for clinical use.",
+  "mppg5": {
+    "source": "AAPM MPPG 5.a (Smilowitz et al., JACMP 2015) and 5.b (Geurts et al., JACMP 2022); implementation in Jacqmin et al., JACMP 2017 (PMC5689890)",
+    "basic_photon_in_field_percent": 2.0,
+    "basic_photon_penumbra_and_heterogeneity_percent": 3.0,
+    "low_dose_region_note": "3 %/3 mm when evaluating low-dose and high-gradient regions",
+    "imrt_vmat_gamma": [{"dose_percent": 2.0, "dta_mm": 2.0}, {"dose_percent": 3.0, "dta_mm": 3.0}],
+    "imrt_vmat_pass_rate_percent": 95.0
+  },
+  "tg218": {
+    "source": "AAPM TG-218 (Miften et al., Med Phys 2018): IMRT QA gamma criteria",
+    "dose_percent": 3.0, "dta_mm": 2.0, "threshold_percent": 10.0,
+    "universal_tolerance_pass_percent": 95.0, "universal_action_pass_percent": 90.0
+  },
+  "tg119": {
+    "source": "AAPM TG-119 (Ezzell et al., Med Phys 2009) and the instructions (Zenodo 8037934)",
+    "gamma": {"dose_percent": 3.0, "dta_mm": 3.0, "threshold_percent": 10.0},
+    "point_dose_confidence_limit": "CL = |mean| + 1.96 sigma of (measured - planned)/prescribed",
+    "published_confidence_limits": {"high_dose_points_percent": 4.5, "low_dose_points_percent": 4.7, "film_gamma_pass_percent": 88.0, "per_field_gamma_pass_percent": 93.0},
+    "published_note": "multi-institution results in the TG-119 report, 3 %/3 mm"
+  },
+  "tecdoc1583": {
+    "source": "IAEA TECDOC-1583 (2008), criteria after Venselaar et al. 2001; CIRS 002LFC thorax phantom, eight test cases",
+    "delta1_central_beam_percent": 2.0,
+    "delta2_inhomogeneity_wedge_percent": 3.0,
+    "delta3_high_dose_gradient_percent_or_mm": [3.0, 2.0],
+    "delta4_low_dose_outside_field_percent_of_central": 3.0,
+    "note": "delta values are of the local dose except delta4 (percent of the central-axis dose)"
+  },
+  "proton": {
+    "source": "AAPM TG-185 (IMPT commissioning) and TG-224; MCsquare validation literature (Huang et al. 2018; TOPAS within 1.8 % on dose indices)",
+    "range_r80_tolerance_mm": 1.0, "range_r80_tolerance_percent": 1.0,
+    "dij_vs_direct_p95_percent": 5.0,
+    "gamma": {"dose_percent": 3.0, "dta_mm": 3.0, "pass_percent": 95.0}
+  }
+}

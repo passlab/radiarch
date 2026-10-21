@@ -136,6 +136,31 @@ All settings use `RADIARCH_` prefix. Place them in `.env` or export as env vars.
 | `RADIARCH_API_KEY` | `""` | `X-API-Key` required on every `/api/v1` route except `/info`; empty disables auth (dev only) |
 | `RADIARCH_ALLOW_TEST_ENGINES` | unset | Permit the test-only `analytic` engine (wrong physics by design). Unset = only when `RADIARCH_ENVIRONMENT=dev` |
 
+## Validation harness
+
+`src/radiarch/validation/` holds the physics and cross-check cases that go beyond unit
+tests (roadmap R7a; see the SMIS report *Radiarch validation data and test plan*):
+
+```bash
+python -m radiarch.validation.run --list                  # the cases
+python -m radiarch.validation.run --all --fast            # smoke run: coarser grids, fewer primaries
+python -m radiarch.validation.run --cases photon_pdd_10x10 photon_profile_10x10
+python -m radiarch.validation.goldens --capture           # refreeze tests/golden (only when a change is intended)
+```
+
+Cases compare radiarch against reference tables with citations (`validation/references/`:
+6 MV representative beam data, proton ranges, TG-119 goals, the MPPG 5.a/5.b, TG-218 and
+TECDOC-1583 tolerance sets) and against independent tools (dicompyler-core for DVHs;
+pymedphys for gamma, run through `uv run --python 3.12` because it needs Python < 3.13).
+Cases on public data expect `../data/public/{lctsc,pancreatic-ct-cbct-seg,tg119}` from the
+SMIS repo (`make public-lctsc-validation public-pancreatic-validation public-tg119` there) or
+`RADIARCH_VALIDATION_DATA`. A run writes `validation/results/<stamp>-<commit>/summary.md`.
+Statuses are research targets; nothing here is a clinical commissioning.
+
+`tests/golden/` freezes today's engine outputs (CCC beamlet matrix, SimpleFantom geometry,
+proton spots, the MCsquare input files) so the OpenTPS replacements of R14, R2 and R15 are
+checked against them on every push (`tests/test_goldens.py`).
+
 ## Testing
 
 The suite has **668 tests** covering the API, client SDK, Services 1–6, OpenTPS core, MCsquare dose calculation, and end-to-end integration. Two are opt-in real-MCsquare legs that skip unless `RADIARCH_RUN_MCSQUARE_VALIDATION=1` is set.

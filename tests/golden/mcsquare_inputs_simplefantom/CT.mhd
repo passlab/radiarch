@@ -1,0 +1,11 @@
+ObjectType = Image
+NDims = 3
+ElementNumberOfChannels = 1
+DimSize = 200 200 200 
+ElementSpacing = 1.0 1.0 1.0 
+Offset = -0.5 -199.5 -0.5 
+BinaryData = True
+CompressedData = False
+ElementByteOrderMSB = False
+ElementType = MET_FLOAT
+ElementDataFile = CT.raw

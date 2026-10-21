@@ -1,0 +1,6 @@
+name: geometry_volumes_lctsc
+kind: geometry_volumes
+description: structure volumes from radiarch's rasterization on six LCTSC patients against the polygon volumes of the RTSTRUCT contours (shoelace area x slice spacing).
+data: data/public/lctsc
+patients: [LCTSC-Test-S1-101, LCTSC-Test-S1-102, LCTSC-Test-S2-101, LCTSC-Test-S2-102, LCTSC-Test-S3-101, LCTSC-Test-S3-102]
+tolerance_percent: 5.0

@@ -1,0 +1,8 @@
+name: proton_range_water
+kind: proton_range
+description: single pencil-beam spots in water at several nominal energies; distal 80 % range R80 of the laterally integrated depth dose against the NIST PSTAR CSDA range (projected range differs by a fraction of a millimetre at these energies). Runs through the vendored OpenTPS MCsquare path until R14 provides radiarch's own driver.
+engine: mcsquare
+energies_mev: [100, 150, 200, 225]
+phantom: {half_width_mm: 60, depth_mm: 350, spacing_mm: 2.0}
+nb_primaries: 200000
+references: proton_water

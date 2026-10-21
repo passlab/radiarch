@@ -1,0 +1,31 @@
+{
+  "structure_index": {
+    "TargetVolume": 1
+  },
+  "voxel_counts": {
+    "TargetVolume": 32323
+  },
+  "shape_zyx": [
+    200,
+    200,
+    200
+  ],
+  "spacing_mm": [
+    1.0,
+    1.0,
+    1.0
+  ],
+  "origin_mm": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "density": {
+    "mean": 1.113348364830017,
+    "min": 1.0812857151031494,
+    "max": 1.1933478116989136,
+    "sha256": "5d871d65746f7e8b8c92de92617dd69e42ad07966d0c942276ddcd589ba35ee2"
+  },
+  "masks_sha256": "d3a37df02ddb62ef953bf7cd0adc165cb2c6d7aa9ad6c3170e0f40d978b9636f",
+  "hu_to_density_model": ""
+}

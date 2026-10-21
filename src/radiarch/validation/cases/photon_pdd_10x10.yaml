@@ -1,0 +1,7 @@
+name: photon_pdd_10x10
+kind: photon_pdd
+description: 6 MV 10 x 10 cm2 open field on water at SSD 100 cm; central-axis depth dose (d_max, PDD10, PDD20/PDD10).
+engine: ccc
+phantom: {type: water_box, half_width_mm: 150, depth_mm: 300, spacing_mm: 2.5}
+field: {jaw_mm: 100, leaf_width_mm: 10, beamlet_mm: 5, gantry_deg: 0, mu: 1}
+references: photon_6mv
