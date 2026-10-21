@@ -2,6 +2,12 @@
 
 **Status as of handoff:** Features 1–3 complete and production-hardened. Features 4–6 not started. 25 active tasks tracked here: 4 validation (V1–V4) + 21 implementation (O1–O21) for the Optimization Service.
 
+> **Update 2026-10-20:** this list predates the work below; keep it as the record of the handoff plan, not of current state. Features 4–6 (Optimization, BAO, Evaluation) have since landed (`cbf097d`, merged in PR #4): services, routes, Celery tasks, demos and ADRs 0002–0004 exist, and the full suite is **674 passed, 2 skipped** (the skips are the opt-in real-MCsquare V4 legs; set `RADIARCH_RUN_MCSQUARE_VALIDATION=1` to run them). Still open: V1–V4 sign-off on a machine with MCsquare and real CT, and the photon CCC engine, which remains a stub (ADR 0001).
+
+> **Removed 2026-10-20:** the 4D delivery simulator (`core/simulator.py`, `/simulations`), the synthetic planner fallback (`RADIARCH_FORCE_SYNTHETIC`, `_run_synthetic`) and the OHIF extension + `demo/index.html`. The first two returned invented numbers (random QA/gamma; the simulator's OpenTPS branch called methods that do not exist), and viewing belongs to SMIS's own OHIF deployment, not to this repo. A plan job now fails with the error on the job when OpenTPS is missing or a runner raises; API-contract tests inject a test-only fake runner from `tests/conftest.py`. Suite after removal: 666 passed, 2 skipped (668 collected).
+
+> **Direction 2026-10-20:** the evaluation and roadmap live in the smis repo, `docs/reports/Radiarch TPS evaluation and roadmap.md` (R0–R15). Decisions: the core (data model, DICOM in/out, plan model, optimizer, evaluation, writers) is radiarch's own code; MCsquare and the CCC binary are run as subprocess tools behind radiarch drivers; **OpenTPS is reference code, not a dependency** — the vendored 3.0.1 copy (`scripts/vendor-opentps.sh`, `src/opentps/patches/`) stays only until R1, R14, R2 and R15 replace what is still imported, then `src/opentps` goes and `engines/` keeps binaries, data and licences. pyRadPlan and matRad are offline cross-checks only. Work order: R0 hygiene → R1 CCC driver → R14 MCsquare driver → R2 DICOM RT readers → R15 own core → R3 … (see the report).
+
 > **Read this top-to-bottom before starting.** Sections "Conventions to follow" and "Module map" tell you the patterns already established — match them. The implementation tasks assume you'll mirror Feature 3's structure rather than invent new ones.
 
 ---
@@ -15,9 +21,9 @@
 | 1 | Geometry (DICOM → CT bundle + masks) | ✅ done |
 | 2 | Beam Model (proton spots / photon beamlets) | ✅ done |
 | 3 | Dose (engine-agnostic compute + Dij + scenarios) | ✅ done, production-hardened |
-| 4 | **Optimization** (inverse plan, this handoff) | ⏳ pending |
-| 5 | BAO (beam angle optimization) | ⏳ pending |
-| 6 | Evaluation (DVH, indices, gamma, reports) | ⏳ pending |
+| 4 | **Optimization** (inverse plan, this handoff) | ✅ done (`cbf097d`) |
+| 5 | BAO (beam angle optimization) | ✅ done (`cbf097d`) |
+| 6 | Evaluation (DVH, indices, gamma, reports) | ✅ done (`cbf097d`) |
 
 **Where the action happens:**
 - `src/radiarch/services/` — one file per service, plus `dose_engines/` plugin subdir
@@ -29,15 +35,15 @@
 - `docs/` — `PRODUCTION.md`, `adr/`
 - `src/opentps/` — vendored OpenTPS Core, do not edit
 
-**Existing test count:** 175 tests across 17 files, all green pre-handoff.
+**Existing test count:** 175 tests across 17 files, all green pre-handoff (674 passed, 2 skipped as of 2026-10-20).
 
 ---
 
 ## 2. How to run
 
 ```bash
-cd /Users/vidyuthashok/Desktop/radiarch-VAK/radiarch
-source src/.venv/bin/activate
+cd radiarch          # repo root
+source .venv/bin/activate
 
 # Install / reinstall (regenerates editable-install finder cleanly)
 ./scripts/install-dev.sh
