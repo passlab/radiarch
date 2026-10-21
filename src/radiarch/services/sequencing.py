@@ -80,22 +80,30 @@ def fluence_maps(plan: PhotonPlan, weights: np.ndarray, mlc: MLCSpec) -> List[Fl
         cols = np.rint((bl[:, 0] - bl[:, 2] / 2.0 - x_lo) / dx).astype(int)
         n_cols = int(cols.max()) + 1
         x_edges = x_lo + dx * np.arange(n_cols + 1)
-        pairs = []
-        for y in bl[:, 1]:
+        # a beamlet covers every leaf pair its y extent overlaps (a 10 mm beamlet
+        # spans two 5 mm pairs); its centre pair is its cell
+        bounds = np.asarray(mlc.leaf_boundaries_mm, dtype=float)
+        centre_pairs = []
+        hits: List[Tuple[int, int, float]] = []          # (pair, beamlet, weight)
+        for i, (y, dy) in enumerate(zip(bl[:, 1], bl[:, 3])):
             p = mlc.pair_index(float(y))
             if p is None:
                 raise ValueError(f"beam {beam.beam_id}: beamlet at y={y:.1f} mm lies outside the MLC bank {mlc.extent_mm}")
-            pairs.append(p)
-        pairs_arr = np.asarray(pairs)
-        pair_list = sorted(set(pairs))
+            centre_pairs.append(p)
+            lo, hi = float(y) - float(dy) / 2.0 + 1e-9, float(y) + float(dy) / 2.0 - 1e-9
+            for q in np.flatnonzero((bounds[:-1] < hi) & (bounds[1:] > lo)):
+                hits.append((int(q), i, float(w[i])))
+        pair_list = sorted({q for q, _, _ in hits})
         row_of = {p: r for r, p in enumerate(pair_list)}
-        rows = np.asarray([row_of[p] for p in pairs])
+        rows = np.asarray([row_of[q] for q, _, _ in hits])
+        hit_cols = np.asarray([cols[i] for _, i, _ in hits])
         values = np.zeros((len(pair_list), n_cols))
         counts = np.zeros_like(values)
-        np.add.at(values, (rows, cols), w)
-        np.add.at(counts, (rows, cols), 1.0)
+        np.add.at(values, (rows, hit_cols), np.asarray([ww for _, _, ww in hits]))
+        np.add.at(counts, (rows, hit_cols), 1.0)
         values = np.where(counts > 0, values / np.maximum(counts, 1), 0.0)
-        maps.append(FluenceMap(b, beam.beam_id, pair_list, x_edges, values, {i: (int(rows[i]), int(cols[i])) for i in range(n)}))
+        cells = {i: (int(row_of[centre_pairs[i]]), int(cols[i])) for i in range(n)}
+        maps.append(FluenceMap(b, beam.beam_id, pair_list, x_edges, values, cells))
     return maps
 
 
@@ -194,7 +202,13 @@ def apply_machine_limits(aperture: Aperture, mlc: MLCSpec, pair_indices: Sequenc
 # ---------------------------------------------------------------------------
 
 def coverage_matrix(plan: PhotonPlan, maps: List[FluenceMap], apertures: List[Aperture], mlc: MLCSpec) -> sp.csc_matrix:
-    """``(n_beamlets, n_segments)``: the fraction of every open-field beamlet inside each aperture."""
+    """``(n_beamlets, n_segments)``: the fraction of every open-field beamlet inside each aperture.
+
+    A beamlet wider than a leaf pair spans several pairs; its coverage is the
+    sum over every pair it overlaps of (its share of y in that pair) × (the
+    share of its x inside that pair's leaves), so a fully open aperture
+    covers every beamlet exactly once whatever the beamlet-to-leaf ratio.
+    """
     rows, cols, vals = [], [], []
     offsets = np.cumsum([0] + [b.n_beamlets for b in plan.beams])
     bounds = np.asarray(mlc.leaf_boundaries_mm, dtype=float)
@@ -202,14 +216,13 @@ def coverage_matrix(plan: PhotonPlan, maps: List[FluenceMap], apertures: List[Ap
         fmap = maps[[m.beam_index for m in maps].index(ap.beam_index)]
         beam = plan.beams[ap.beam_index]
         bl = beam.beamlets()
+        pair_lo = bounds[np.asarray(fmap.pair_indices)]
+        pair_hi = bounds[np.asarray(fmap.pair_indices) + 1]
         for i in range(bl.shape[0]):
             x, y, dx, dy = bl[i]
-            r, _ = fmap.beamlet_cells[i]
-            pair = fmap.pair_indices[r]
-            y0, y1 = bounds[pair], bounds[pair + 1]
-            oy = max(0.0, min(y + dy / 2, y1) - max(y - dy / 2, y0)) / dy
-            ox = max(0.0, min(x + dx / 2, ap.right_mm[r]) - max(x - dx / 2, ap.left_mm[r])) / dx
-            c = ox * oy
+            oy = np.clip(np.minimum(y + dy / 2, pair_hi) - np.maximum(y - dy / 2, pair_lo), 0.0, None) / dy
+            ox = np.clip(np.minimum(x + dx / 2, ap.right_mm) - np.maximum(x - dx / 2, ap.left_mm), 0.0, None) / dx
+            c = float(np.sum(ox * oy))
             if c > 1e-9:
                 rows.append(offsets[ap.beam_index] + i); cols.append(k); vals.append(c)
     return sp.csc_matrix((vals, (rows, cols)), shape=(int(offsets[-1]), len(apertures)), dtype=np.float64)
