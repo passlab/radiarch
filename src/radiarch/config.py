@@ -14,9 +14,6 @@ class Settings(BaseSettings):
     api_prefix: str = Field(default="/api/v1")
     environment: str = Field(default="dev")
 
-    # Force synthetic planner (skips OpenTPS/MCsquare)
-    force_synthetic: bool = Field(default=False, description="Use synthetic planner instead of OpenTPS")
-
     # Orthanc / PACS configuration
     orthanc_base_url: AnyUrl | str = Field(default="http://localhost:8042")
     orthanc_username: Optional[str] = Field(default=None)
@@ -46,7 +43,7 @@ class Settings(BaseSettings):
     broker_url: str = Field(default="redis://localhost:6379/0")
     result_backend: str = Field(default="redis://localhost:6379/1")
 
-    # OpenTPS configuration (only needed when force_synthetic=false)
+    # OpenTPS configuration
     opentps_data_root: str = Field(default="", description="Path to DICOM test data; empty = auto-detect from tests/")
     opentps_beam_library: str = Field(default="/data/opentps/beam-models")
     opentps_venv: str = Field(default="", description="Path to OpenTPS venv site-packages; empty = skip")

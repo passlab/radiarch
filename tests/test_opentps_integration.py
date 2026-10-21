@@ -50,10 +50,6 @@ def test_opentps_integration():
         pytest.skip("opentps-testData/SimpleFantomWithStruct not found")
 
     settings = get_settings()
-
-    # Override force_synthetic so real OpenTPS planner runs
-    os.environ.pop("RADIARCH_FORCE_SYNTHETIC", None)
-    settings.force_synthetic = False
     settings.opentps_data_root = _test_data_root
 
     # Check if OpenTPS is importable

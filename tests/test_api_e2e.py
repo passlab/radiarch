@@ -6,6 +6,8 @@ Exercises the full data flow:
 
 Uses Celery eager mode (task_always_eager) so no Redis/broker is needed.
 Uses FakeOrthancAdapter so no Orthanc is needed.
+Uses the test-only fake workflow runner (tests/conftest.py) so no
+OpenTPS/MCsquare run is needed — this file tests the API contract only.
 """
 
 import sys
@@ -14,11 +16,10 @@ import os
 # Ensure src package is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-# Force dev/mock mode and synthetic planner (skip real MCsquare)
+# Force dev/mock mode
 # Override Docker-internal hostnames from .env to use local/in-memory stores
 os.environ["RADIARCH_ENVIRONMENT"] = "dev"
 os.environ["RADIARCH_ORTHANC_USE_MOCK"] = "true"
-os.environ["RADIARCH_FORCE_SYNTHETIC"] = "true"
 os.environ["RADIARCH_DATABASE_URL"] = ""          # → InMemoryStore
 os.environ["RADIARCH_BROKER_URL"] = "memory://"   # Celery in-memory broker
 os.environ["RADIARCH_RESULT_BACKEND"] = "cache+memory://"
@@ -32,6 +33,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from radiarch.app import create_app
+
+pytestmark = pytest.mark.usefixtures("fake_workflow_runners")
 
 
 @pytest.fixture(scope="module")
@@ -110,7 +113,7 @@ def test_create_and_get_plan(client):
     assert resp.status_code == 200
     detail = resp.json()
     assert detail["qa_summary"] is not None
-    assert detail["qa_summary"]["engine"] in ("opentps", "synthetic")
+    assert detail["qa_summary"]["engine"] == "fake"
 
     # If artifacts were registered, test artifact download
     if detail["artifact_ids"]:
@@ -306,19 +309,19 @@ def test_create_optimized_plan(client):
     assert plan["workflow_id"] == "proton-impt-optimized"
     assert len(plan["objectives"]) == 2
     
-    # Verify job execution (synthetic fallback expected)
+    # Verify job execution (fake runner)
     job = client.get(f"/api/v1/jobs/{plan['job_id']}").json()
     assert job["state"] == "succeeded"
-    
+
     # Verify QA summary
     detail = client.get(f"/api/v1/plans/{plan['id']}").json()
     qa = detail["qa_summary"]
-    assert qa["engine"] == "synthetic"  # Unless real OpenTPS is present
+    assert qa["engine"] == "fake"
     assert "proton-impt-optimized" in qa["notes"]
 
 
 def test_create_photon_ccc_plan(client):
-    """Verify photon-ccc workflow submission and synthetic fallback."""
+    """Verify photon-ccc workflow submission and dispatch."""
     payload = {
         "study_instance_uid": "1.2.840.113619.2.55.3.604688321.783.1459769131.467",
         "workflow_id": "photon-ccc",
@@ -336,7 +339,7 @@ def test_create_photon_ccc_plan(client):
 
     detail = client.get(f"/api/v1/plans/{plan['id']}").json()
     qa = detail["qa_summary"]
-    assert qa["engine"] == "synthetic"
+    assert qa["engine"] == "fake"
     assert "photon-ccc" in qa["notes"]
 
 
@@ -373,7 +376,7 @@ def test_create_robust_proton_plan(client):
 
     detail = client.get(f"/api/v1/plans/{plan['id']}").json()
     qa = detail["qa_summary"]
-    assert qa["engine"] == "synthetic"
+    assert qa["engine"] == "fake"
     assert "proton-robust" in qa["notes"]
 
 
@@ -390,66 +393,39 @@ def test_list_workflows_includes_new(client):
     assert len(workflows) == 4
 
 
-# ---- Phase 8D: Delivery Simulation ----
+def test_simulations_endpoint_removed(client):
+    """The 4D delivery simulator was removed (2026-10-20); its route must be gone."""
+    assert client.get("/api/v1/simulations").status_code == 404
 
-def test_create_simulation(client):
-    """
-    Submit a delivery simulation against a completed plan.
-    Verifies the synthetic simulator returns valid gamma/dose metrics.
-    """
-    # First, create a plan that will have a qa_summary
-    plan_payload = {
+
+# ---- Runner failure is recorded on the job, never papered over ----
+
+def test_runner_failure_marks_job_failed(client, monkeypatch):
+    """A runner that raises must leave the job ``failed`` with the error in
+    its message — there is no synthetic fallback to hide it."""
+    from radiarch.core.workflows import RUNNERS
+
+    def _broken_runner(plan, adapter=None):
+        raise RuntimeError("MCsquare exploded")
+
+    monkeypatch.setitem(RUNNERS, "proton-impt-basic", _broken_runner)
+
+    payload = {
         "study_instance_uid": "1.2.840.113619.2.55.3.604688321.783.1459769131.467",
         "workflow_id": "proton-impt-basic",
         "prescription_gy": 2.0,
     }
-    resp = client.post("/api/v1/plans", json=plan_payload)
+    resp = client.post("/api/v1/plans", json=payload)
     assert resp.status_code == 201
-    plan_id = resp.json()["id"]
+    plan = resp.json()
 
-    # Verify plan has QA summary
-    detail = client.get(f"/api/v1/plans/{plan_id}").json()
-    assert detail["qa_summary"] is not None
+    job = client.get(f"/api/v1/jobs/{plan['job_id']}").json()
+    assert job["state"] == "failed"
+    assert job["stage"] == "error"
+    assert "MCsquare exploded" in job["message"]
 
-    # Submit simulation
-    sim_payload = {
-        "plan_id": plan_id,
-        "motion_amplitude_mm": [3.0, 0.0, 5.0],
-        "motion_period_s": 4.0,
-        "num_fractions": 3,
-    }
-    resp = client.post("/api/v1/simulations", json=sim_payload)
-    assert resp.status_code == 201
-    sim = resp.json()
-    assert sim["plan_id"] == plan_id
-    assert sim["status"] == "succeeded"
-
-    # Get full simulation result
-    resp = client.get(f"/api/v1/simulations/{sim['id']}")
-    assert resp.status_code == 200
-    result = resp.json()
-    assert result["gamma_pass_rate"] is not None
-    assert result["gamma_pass_rate"] > 0
-    assert result["delivered_dose_max_gy"] is not None
-    assert result["motion_amplitude_mm"] == [3.0, 0.0, 5.0]
-    assert result["qa_metrics"]["engine"] == "synthetic_simulation"
-
-
-def test_simulation_requires_completed_plan(client):
-    """Simulation should fail if plan doesn't exist."""
-    resp = client.post("/api/v1/simulations", json={
-        "plan_id": "nonexistent-plan",
-        "motion_amplitude_mm": [0.0, 0.0, 0.0],
-    })
-    assert resp.status_code == 404
-
-
-def test_list_simulations(client):
-    """Verify list endpoint returns simulation summaries."""
-    resp = client.get("/api/v1/simulations")
-    assert resp.status_code == 200
-    sims = resp.json()
-    assert isinstance(sims, list)
+    detail = client.get(f"/api/v1/plans/{plan['id']}").json()
+    assert detail["qa_summary"] is None
 
 
 if __name__ == "__main__":

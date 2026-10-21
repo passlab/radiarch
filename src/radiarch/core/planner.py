@@ -2,22 +2,20 @@
 
 Responsibilities:
   1. Build the dispatch table (`run`)
-  2. Handle synthetic fallback (`_dispatch_workflow`)
+  2. Run the workflow, failing loudly if OpenTPS is missing (`_dispatch_workflow`)
   3. Package artifacts (`_package_result`)
-  4. Provide the synthetic QA fallback (`_run_synthetic`)
 
-All real OpenTPS logic lives in ``core.workflows.*`` modules.
+All real OpenTPS logic lives in ``core.workflows.*`` modules. There is no
+synthetic fallback: a plan either runs the real engine or its job fails.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import random
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-import numpy as np
 from loguru import logger
 
 from ..adapters import OrthancAdapterBase, build_orthanc_adapter
@@ -43,11 +41,8 @@ class PlanExecutionResult:
 
 
 class RadiarchPlanner:
-    def __init__(self, adapter: Optional[OrthancAdapterBase] = None, force_synthetic: bool = False):
+    def __init__(self, adapter: Optional[OrthancAdapterBase] = None):
         self.adapter = adapter or _default_adapter()
-        self._force_synthetic = force_synthetic or os.environ.get(
-            "RADIARCH_FORCE_SYNTHETIC", ""
-        ).lower() in ("1", "true", "yes")
 
     # ------------------------------------------------------------------
     # Public API
@@ -67,23 +62,19 @@ class RadiarchPlanner:
     # ------------------------------------------------------------------
 
     def _dispatch_workflow(self, plan: PlanDetail, runner) -> PlanExecutionResult:
-        """Try the real runner; fall back to synthetic if OpenTPS is missing."""
+        """Run the real runner. Any failure propagates to the task layer,
+        which records the job as failed — never a made-up result."""
         wf_id = plan.workflow_id
         wf_label = wf_id.value if hasattr(wf_id, "value") else str(wf_id)
 
-        if self._force_synthetic:
-            logger.info("force_synthetic enabled — skipping %s", wf_label)
-            qa_summary = self._run_synthetic(plan, None)
-            qa_summary["notes"] = f"Synthetic result ({wf_label} skipped)"
-        else:
-            try:
-                import opentps.core  # noqa: F401 – availability check
-                qa_summary = runner(plan)
-            except ImportError as e:
-                logger.exception("OpenTPS not found or failed to load. Falling back to synthetic. Exception: %s", e)
-                qa_summary = self._run_synthetic(plan, None)
-                qa_summary["notes"] = f"OpenTPS missing ({wf_label} skipped)"
+        try:
+            import opentps.core  # noqa: F401 – availability check
+        except ImportError as e:
+            raise PlannerError(
+                f"OpenTPS is not importable; cannot run workflow {wf_label}: {e}"
+            ) from e
 
+        qa_summary = runner(plan)
         return self._package_result(plan, qa_summary)
 
     def _package_result(self, plan: PlanDetail, qa_summary: dict) -> PlanExecutionResult:
@@ -113,27 +104,3 @@ class RadiarchPlanner:
             qa_summary=qa_summary,
             artifact_path=summary_path,
         )
-
-    @staticmethod
-    def _run_synthetic(plan: PlanDetail, segmentation: Optional[dict]) -> Dict[str, Any]:
-        beam_count = getattr(plan, "beam_count", 1) or 1
-        spot_count = random.randint(200, 400) * beam_count
-        coverage = max(0.7, min(0.99, 0.8 + 0.05 * random.random()))
-        hot_spot = max(1.00, 1.10 + 0.05 * random.random())
-        dvh_dose = np.linspace(0, plan.prescription_gy * 1.2, 50)
-        dvh_volume = np.exp(-((dvh_dose / plan.prescription_gy) ** 2) * 2) * 100
-        gantry_angles = [round(i * (360.0 / beam_count), 1) for i in range(beam_count)]
-
-        return {
-            "engine": "synthetic",
-            "beamCount": beam_count,
-            "gantryAngles": gantry_angles,
-            "spotCount": spot_count,
-            "targetCoverage": round(coverage, 3),
-            "maxDoseRatio": round(hot_spot, 3),
-            "dvh": {
-                "dose": dvh_dose.tolist(),
-                "volume": dvh_volume.tolist(),
-            },
-            "notes": "OpenTPS modules unavailable; generated synthetic QA",
-        }

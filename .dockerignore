@@ -14,7 +14,6 @@ Viewers
 opentps
 data
 docs
-ohif-extension
 *.md
 !service/README.md
 service/.venv

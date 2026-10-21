@@ -46,7 +46,7 @@ class Workflow(BaseModel):
     description: str
     modality: str           # "proton" | "photon"
     engine: str             # "mcsquare" | "ccc"
-    category: str = "dose"  # "dose" | "optimization" | "robust" | "simulation"
+    category: str = "dose"  # "dose" | "optimization" | "robust"
     default_parameters: List[WorkflowParameter] = []
 
 

@@ -4,7 +4,6 @@ Unit tests for backend functions that serve the Radiarch API routes.
 Tests the core backend modules directly (not via HTTP):
   - InMemoryStore: plan/job/artifact CRUD
   - WorkflowRegistry: register/get/list/contains
-  - DeliverySimulator: synthetic simulation results
   - Session helpers: lifecycle, cleanup, expiry
   - Pydantic models: serialization, validation, enums
 """
@@ -24,7 +23,6 @@ if _src_dir not in sys.path:
 
 # Force dev mode env vars BEFORE any radiarch import
 os.environ["RADIARCH_ENVIRONMENT"] = "dev"
-os.environ["RADIARCH_FORCE_SYNTHETIC"] = "true"
 os.environ["RADIARCH_ORTHANC_USE_MOCK"] = "true"
 os.environ["RADIARCH_DATABASE_URL"] = ""
 os.environ["RADIARCH_BROKER_URL"] = "memory://"
@@ -37,7 +35,7 @@ os.environ["RADIARCH_ARTIFACT_DIR"] = _tmpdir
 # ── Import radiarch submodules BYPASSING __init__.py ──────────────
 # radiarch/__init__.py eagerly imports create_app → database → sqlalchemy,
 # pulling in the entire dependency tree.  We only need the models, store,
-# simulator, sessions, and workflows — none of which require sqlalchemy.
+# sessions, and workflows — none of which require sqlalchemy.
 import importlib
 
 # Swap out _src_dir/radiarch/__init__.py temporarily so Python doesn't
@@ -54,11 +52,7 @@ from radiarch.models.plan import (  # noqa: E402
 )
 from radiarch.models.job import JobState, JobStatus  # noqa: E402
 from radiarch.models.artifact import ArtifactRecord  # noqa: E402
-from radiarch.models.simulation import (  # noqa: E402
-    SimulationRequest, SimulationResult, SimulationStatus,
-)
 from radiarch.core.store import InMemoryStore  # noqa: E402
-from radiarch.core.simulator import DeliverySimulator  # noqa: E402
 from radiarch.api.routes.workflows import (  # noqa: E402
     WorkflowRegistry, Workflow, WorkflowParameter, ParameterType,
     registry as builtin_registry,
@@ -326,65 +320,7 @@ class TestWorkflowRegistry:
 
 
 # ===========================================================================
-# 3. DeliverySimulator — synthetic mode
-# ===========================================================================
-
-class TestDeliverySimulator:
-    """Unit tests for DeliverySimulator (synthetic mode only)."""
-
-    def test_synthetic_mode_forced(self):
-        sim = DeliverySimulator(force_synthetic=True)
-        assert sim._force_synthetic is True
-
-    def test_run_synthetic_returns_expected_fields(self):
-        sim = DeliverySimulator(force_synthetic=True)
-        request = SimulationRequest(
-            plan_id="test-plan",
-            motion_amplitude_mm=[2.0, 0.0, 5.0],
-            motion_period_s=4.0,
-            delivery_time_per_spot_ms=5.0,
-            num_fractions=3,
-        )
-
-        result = sim.run(request, plan_qa={"engine": "synthetic"})
-
-        assert result["engine"] == "synthetic_simulation"
-        assert "delivered_dose_max_gy" in result
-        assert "delivered_dose_mean_gy" in result
-        assert "gamma_pass_rate" in result
-        assert "dose_difference_pct" in result
-        assert result["num_fractions"] == 3
-
-    def test_synthetic_gamma_degrades_with_motion(self):
-        """Higher motion amplitude should produce lower gamma on average."""
-        sim = DeliverySimulator(force_synthetic=True)
-
-        req_low = SimulationRequest(
-            plan_id="low", motion_amplitude_mm=[0.0, 0.0, 0.0],
-        )
-        req_high = SimulationRequest(
-            plan_id="high", motion_amplitude_mm=[10.0, 10.0, 10.0],
-        )
-
-        gammas_low = [sim.run(req_low, {})["gamma_pass_rate"] for _ in range(10)]
-        gammas_high = [sim.run(req_high, {})["gamma_pass_rate"] for _ in range(10)]
-
-        avg_low = sum(gammas_low) / len(gammas_low)
-        avg_high = sum(gammas_high) / len(gammas_high)
-
-        assert avg_low > avg_high, \
-            f"Low-motion gamma ({avg_low:.1f}) should beat high-motion ({avg_high:.1f})"
-
-    def test_synthetic_dose_values_positive(self):
-        sim = DeliverySimulator(force_synthetic=True)
-        request = SimulationRequest(plan_id="ptest")
-        result = sim.run(request, plan_qa={})
-        assert result["delivered_dose_max_gy"] > 0
-        assert result["delivered_dose_mean_gy"] > 0
-
-
-# ===========================================================================
-# 4. Session helpers (unit-level)
+# 3. Session helpers (unit-level)
 # ===========================================================================
 
 class TestSessionHelpers:
@@ -441,7 +377,7 @@ class TestSessionHelpers:
 
 
 # ===========================================================================
-# 5. Pydantic models — serialization & validation
+# 4. Pydantic models — serialization & validation
 # ===========================================================================
 
 class TestPydanticModels:
@@ -464,16 +400,6 @@ class TestPydanticModels:
         assert JobState.queued == "queued"
         assert JobState.succeeded == "succeeded"
         assert len(JobState) == 5
-
-    def test_simulation_request_defaults(self):
-        req = SimulationRequest(plan_id="p1")
-        assert req.motion_amplitude_mm == [0.0, 0.0, 0.0]
-        assert req.motion_period_s == 4.0
-        assert req.num_fractions == 1
-
-    def test_simulation_request_invalid_fractions(self):
-        with pytest.raises(Exception):
-            SimulationRequest(plan_id="p1", num_fractions=0)
 
     def test_dose_objective_model(self):
         obj = DoseObjective(
@@ -509,11 +435,6 @@ class TestPydanticModels:
         )
         assert ar.content_type == "application/dicom"
         assert ar.file_name == ""
-
-    def test_simulation_status_enum(self):
-        assert SimulationStatus.queued == "queued"
-        assert SimulationStatus.succeeded == "succeeded"
-        assert len(SimulationStatus) == 5
 
     def test_plan_request_with_objectives(self):
         req = PlanRequest(

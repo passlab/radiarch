@@ -30,6 +30,7 @@ jobs:
         with:
           sparse-checkout: |
             src/
+            tests/conftest.py
             tests/test_api_e2e.py
             tests/test_client.py
             tests/opentps/core/conftest.py

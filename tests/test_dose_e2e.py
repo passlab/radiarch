@@ -53,7 +53,6 @@ def _reset_settings(monkeypatch, tmp_path):
     monkeypatch.setenv("RADIARCH_BROKER_URL", "memory://")
     monkeypatch.setenv("RADIARCH_RESULT_BACKEND", "cache+memory://")
     monkeypatch.setenv("RADIARCH_ORTHANC_USE_MOCK", "true")
-    monkeypatch.setenv("RADIARCH_FORCE_SYNTHETIC", "true")
     from radiarch.config import get_settings
     get_settings.cache_clear()
     yield

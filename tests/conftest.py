@@ -25,6 +25,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 _SRC = Path(__file__).resolve().parent.parent / "src"
 if _SRC.is_dir():
     src_str = str(_SRC)
@@ -35,3 +37,47 @@ if _SRC.is_dir():
     elif sys.path.index(src_str) != 0:
         sys.path.remove(src_str)
         sys.path.insert(0, src_str)
+
+
+# ---------------------------------------------------------------------------
+# Test-only fake workflow runner
+#
+# Production has no fake path: if OpenTPS is missing or a runner fails, the
+# plan job fails. Tests that only exercise the API contract (plans, jobs,
+# artifacts, sessions) swap the real runners for this stand-in so they stay
+# fast and never invoke MCsquare. Opt in per module with
+# ``pytestmark = pytest.mark.usefixtures("fake_workflow_runners")``; tests
+# that need the real pipeline must not use it.
+# ---------------------------------------------------------------------------
+
+def _fake_workflow_runner(plan, adapter=None):
+    """Deterministic stand-in for a ``core.workflows`` runner.
+
+    Returns only the QA-summary keys the API tests assert on. ``engine`` is
+    ``"fake"`` so a result from this runner can never be mistaken for one
+    from OpenTPS.
+    """
+    wf_id = plan.workflow_id.value if hasattr(plan.workflow_id, "value") else str(plan.workflow_id)
+    beam_count = getattr(plan, "beam_count", 1) or 1
+    return {
+        "engine": "fake",
+        "beamCount": beam_count,
+        "gantryAngles": [round(i * (360.0 / beam_count), 1) for i in range(beam_count)],
+        "notes": f"fake runner ({wf_id}); test-only, no dose computed",
+    }
+
+
+@pytest.fixture(scope="module")
+def fake_workflow_runners():
+    """Replace every registered workflow runner with ``_fake_workflow_runner``.
+
+    The planner looks runners up in ``RUNNERS`` at call time, so patching
+    the dict is enough — no planner or task instance needs rebuilding.
+    Restored when the module's tests finish.
+    """
+    from radiarch.core.workflows import RUNNERS
+
+    with pytest.MonkeyPatch.context() as mp:
+        for wf_id in list(RUNNERS):
+            mp.setitem(RUNNERS, wf_id, _fake_workflow_runner)
+        yield

@@ -76,7 +76,6 @@ def main(argv: list[str] | None = None) -> int:
     os.environ["RADIARCH_OPENTPS_DATA_ROOT"] = str(data_root)
     os.environ["RADIARCH_ARTIFACT_DIR"] = str(out)
     os.environ.setdefault("RADIARCH_ORTHANC_USE_MOCK", "true")
-    os.environ.setdefault("RADIARCH_FORCE_SYNTHETIC", "false")
 
     import numpy as np
 

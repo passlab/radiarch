@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/passlab/radiarch/actions/workflows/ci.yml/badge.svg)](https://github.com/passlab/radiarch/actions/workflows/ci.yml)
 
-Radiarch is a FastAPI-based treatment planning service for OHIF, modeled after the MONAILabel server pattern. It vendors [OpenTPS Core](https://gitlab.com/openmcsquare/opentps) directly for proton/photon dose calculation (MCsquare, CCC) and communicates with PACS providers such as Orthanc over DICOMweb.
+Radiarch is a FastAPI-based treatment planning service modeled after the MONAILabel server pattern. It vendors [OpenTPS Core](https://gitlab.com/openmcsquare/opentps) directly for proton/photon dose calculation (MCsquare, CCC) and communicates with PACS providers such as Orthanc over DICOMweb. It ships no viewer: SMIS's own OHIF deployment does the viewing against this API.
 
 ## Layout
 
@@ -11,19 +11,7 @@ radiarch/
   Dockerfile            # Multi-stage container build
   docker-compose.yml    # Full stack: API + Worker + Redis + Postgres + Orthanc
   .env.example          # Documented env var template
-  demo/
-    index.html          # Standalone browser demo (all 4 panels vs. live API)
-  ohif-extension/       # OHIF v3 extension (8 commands, 4 panels)
-    src/
-      index.ts          # Extension entry point
-      commandsModule.js # 8 commands bridging UI → API
-      services/
-        RadiarchClient.js   # HTTP client (axios)
-      panels/
-        PlanSubmissionPanel.js  # Workflow selection, Rx, objectives
-        DVHPanel.js             # Dose-volume histogram (SVG)
-        DoseOverlayPanel.js     # Opacity, colormap, isodose lines
-        SimulationPanel.js      # Delivery simulation (4D dose)
+  demo/                 # CLI demos per service (show_*.py) + compare_engines.py
   src/
     pyproject.toml
     opentps/                # Vendored opentps_core (Apache 2.0)
@@ -39,14 +27,16 @@ radiarch/
       app.py            # FastAPI factory
       client.py         # RadiarchClient Python library
       config.py         # Pydantic settings
-      api/routes/       # /info, /plans, /jobs, /artifacts, /workflows, /sessions, /simulations
+      api/routes/       # /info, /workflows, /plans, /jobs, /artifacts, /sessions, /uploads,
+                        # /geometry, /beam-model, /dose, /optimize, /bao, /evaluate
       core/
-        planner.py      # Orchestrator — dispatches to workflow modules
-        simulator.py    # 4D delivery simulation engine
+        planner.py      # Orchestrator — dispatches to workflow modules (no fallback)
         store.py        # InMemoryStore + SQLAlchemy persistence
         workflows/      # proton_basic, proton_robust, proton_optimized, photon_ccc
       models/           # Pydantic request/response models
-      tasks/            # Celery workers (plan execution)
+      services/         # Services 1–6: geometry, beam_model, dose (+ dose_engines/),
+                        # optimization, bao, evaluation
+      tasks/            # Celery workers (plan execution + per-service tasks)
 ```
 
 ## Quick Start — Docker Compose
@@ -114,7 +104,7 @@ OpenTPS Core is vendored directly in `src/opentps/` — no separate installation
 - Strips Windows/Mac binaries and pre-compiled `.dll`/`.dylib` files
 - Resolves the upstream `numpy>=2.3.2` incompatibility by using the project's own numpy/scipy versions
 
-When `RADIARCH_FORCE_SYNTHETIC=true`, the planner uses fast synthetic outputs (instant, no MCsquare needed). Set it to `false` (default) to run real Monte Carlo dose calculations.
+There is no synthetic fallback. If OpenTPS cannot be imported, or a workflow runner fails, the plan job is recorded as `failed` with the error in its message — Radiarch never returns invented QA numbers. The API-contract tests inject a test-only fake runner (`tests/conftest.py`) instead of running MCsquare.
 
 ## Configuration
 
@@ -128,69 +118,34 @@ All settings use `RADIARCH_` prefix. Place them in `.env` or export as env vars.
 | Variable | Default | Description |
 |---|---|---|
 | `RADIARCH_ENVIRONMENT` | `dev` | `dev` = Celery eager mode; `production` = async workers |
-| `RADIARCH_FORCE_SYNTHETIC` | `false` | `true` bypasses MCsquare, uses fast synthetic planner |
 | `RADIARCH_DATABASE_URL` | `""` | Empty = InMemoryStore; `postgresql+psycopg://...` for persistence |
 | `RADIARCH_ORTHANC_USE_MOCK` | `true` | `true` = in-memory fake; `false` = real Orthanc |
 | `RADIARCH_ORTHANC_BASE_URL` | `http://localhost:8042` | Orthanc REST/DICOMweb URL |
 | `RADIARCH_BROKER_URL` | `redis://localhost:6379/0` | Celery broker (Redis) |
 | `RADIARCH_DICOMWEB_URL` | `""` | DICOMweb STOW-RS URL for artifact push; empty = disabled |
 
-## OHIF v3 Extension
-
-The `ohif-extension/` directory contains a complete OHIF Viewer v3 extension that connects to the Radiarch API. It provides:
-
-| Panel | Description |
-|---|---|
-| **Plan Submission** | Dynamic workflow selection, prescription dose, beam/fraction config, dose objectives editor, robustness settings |
-| **DVH** | Interactive dose-volume histogram rendered as inline SVG with dose statistics cards |
-| **Dose Overlay** | Controls for dose visibility, opacity, colormap selection, and isodose line toggles |
-| **Simulation** | 4D delivery simulation with motion amplitude, period, and fractionation parameters |
-
-### Standalone Demo
-
-A self-contained browser demo (`demo/index.html`) exercises all 4 panels against the live API without needing OHIF:
-
-```bash
-# 1. Start the API in synthetic mode (no OpenTPS needed)
-cd service && source .venv/bin/activate
-RADIARCH_FORCE_SYNTHETIC=true RADIARCH_DATABASE_URL="" RADIARCH_BROKER_URL="" \
-  python3 -m uvicorn radiarch.app:create_app --factory --port 8000
-
-# 2. Open the demo page in your browser
-open demo/index.html
-# Click "Connect", then "Submit Plan" → observe QA summary + DVH chart
-# Enter the plan ID into the Simulation panel → "Run Simulation"
-```
-
-### Installing in OHIF
-
-```bash
-cd ohif-extension
-npm install
-# Then register in your OHIF config — see ohif-extension/README.md for details
-```
-
 ## Testing
 
-The project includes **92 tests** covering the API, client SDK, OpenTPS core, MCsquare dose calculation, and end-to-end integration.
+The suite has **668 tests** covering the API, client SDK, Services 1–6, OpenTPS core, MCsquare dose calculation, and end-to-end integration. Two are opt-in real-MCsquare legs that skip unless `RADIARCH_RUN_MCSQUARE_VALIDATION=1` is set.
 
 ### Test Suite Overview
 
 | Test File | Tests | What It Covers |
 |-----------|-------|----------------|
-| `tests/opentps/core/test_api_backend.py` | 48 | InMemoryStore CRUD, workflow registry, delivery simulator, session helpers, Pydantic models |
-| `tests/opentps/core/test_mcsquare_interface.py` | 8 | Patient data loading, contour extraction, DICE, DVH, MCsquare simulation, SPR/WET |
-| `tests/opentps/core/test_opentps_core.py` | 9 | CT/RTStruct loading, plan design, MCsquare dose calculation, DVH computation |
-| `tests/test_api_e2e.py` | 21 | End-to-end API (plans, jobs, artifacts, sessions, workflows, simulations) |
+| `tests/opentps/core/test_api_backend.py` | 41 | InMemoryStore CRUD, workflow registry, session helpers, Pydantic models |
+| `tests/opentps/core/test_mcsquare_interface.py` | 10 | Patient data loading, contour extraction, DICE, DVH, MCsquare simulation, SPR/WET |
+| `tests/opentps/core/test_opentps_core.py` | 10 | CT/RTStruct loading, plan design, MCsquare dose calculation, DVH computation |
+| `tests/test_api_e2e.py` | 20 | End-to-end API (plans, jobs, artifacts, sessions, workflows) on the fake runner; runner failure → job failed |
 | `tests/test_client.py` | 5 | RadiarchClient Python SDK |
 | `tests/test_opentps_integration.py` | 1 | Full OpenTPS pipeline with real MCsquare Monte Carlo |
+| `tests/services/`, `tests/test_*_{service,d1,e2e,…}.py` | 581 | Services 1–6 (geometry, beam model, dose engines, optimization, BAO, evaluation), persistence, package layout |
 
 ### Running Tests
 
 ```bash
 source .venv/bin/activate
 
-# All 92 tests (API + MCsquare + OpenTPS core)
+# Full suite (API + Services 1–6 + MCsquare + OpenTPS core)
 python -m pytest tests/ -v
 
 # Fast tests only (API + client, no MCsquare) — ~2 seconds

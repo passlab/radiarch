@@ -1,10 +1,13 @@
-"""Tests for RadiarchClient — runs against TestClient in-process."""
+"""Tests for RadiarchClient — runs against TestClient in-process.
+
+Plans are executed by the test-only fake workflow runner (tests/conftest.py);
+this file tests the client's HTTP contract, not dose calculation.
+"""
 
 import os
 import pytest
 
 # Force test environment before importing anything from radiarch
-os.environ["RADIARCH_FORCE_SYNTHETIC"] = "true"
 os.environ["RADIARCH_ENVIRONMENT"] = "dev"
 os.environ["RADIARCH_ORTHANC_USE_MOCK"] = "true"
 os.environ["RADIARCH_DATABASE_URL"] = ""
@@ -16,6 +19,8 @@ import tempfile
 os.environ["RADIARCH_ARTIFACT_DIR"] = tempfile.mkdtemp(prefix="radiarch_test_")
 
 from radiarch.client import RadiarchClient, RadiarchClientError  # noqa: E402
+
+pytestmark = pytest.mark.usefixtures("fake_workflow_runners")
 
 
 class _TestClientWrapper:
