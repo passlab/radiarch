@@ -141,6 +141,20 @@ binary (GPLv2), both run as separate processes on files radiarch writes through 
 defaulting to `engines/`. `RADIARCH_MCSQUARE_SEED` with `RADIARCH_MCSQUARE_N_THREADS=1` makes a proton run
 reproducible bit for bit. Doses and influence matrices are in radiarch's `(z, y, x)` C-order frame.
 
+## Robust protons, Gy(RBE), craniospinal fields
+
+Scenario sets can be explicit (one engine run per scenario) or **engine-native**
+(`engine_native` on a scenario set or on the optimizer's robustness spec): MCsquare then
+samples the set itself in one run — `ALL` (81), `REDUCED_SET` (21) or `RANDOM` (n) scenarios
+of systematic setup, per-fraction random setup and range errors — and every scenario comes
+back labelled with the errors applied. Proton doses, influence matrices and optimized doses
+are in **Gy(RBE)** with RBE 1.1 unless `rbe` is set (results carry `rbe_factor` and
+`dose_units`). An evaluation of a dose with scenarios reports DVH bands, per-scenario DVH
+metrics with their envelope, and worst-case target goals. Beams may carry their own
+isocenter and a target z slab; `POST /beam-model/templates/craniospinal` builds the
+posterior fields of a craniospinal plan with overlapping junctions, optionally a
+posterior-oblique pair for the brain (ADR 0009).
+
 ## DICOM RT in
 
 `radiarch.dicom` reads RT Plan and RT Ion Plan objects into the plan models, RT Dose objects onto

@@ -563,3 +563,32 @@ Done:
   `is_little_endian` attributes; the DICOM tests pass with pydicom deprecations as errors).
 - `tests/test_plans_workflows.py`: basic proton on every run; photon, optimized and robust
   opt-in (`RADIARCH_RUN_MCSQUARE_VALIDATION=1`).
+
+Committed 2026-10-21 (091c0c0..5947ad2) and pushed.
+
+## R3 — robust protons through the engine, Gy(RBE), craniospinal fields (2026-10-21)
+
+ADR 0009. Done:
+- `EngineScenarioSet` (ALL 81 / REDUCED_SET 21 / RANDOM n; systematic, random and range
+  errors) on `ScenarioSetSpec.engine_native` and `RobustnessSpec.engine_native`; the MCsquare
+  driver's robustness mode (`robustness_config`, `read_scenarios_file`, scenario doses and
+  scenario beamlets from one run); `MCsquareEngine.compute_scenario_doses` /
+  `build_scenario_influences`; `DoseService` native path and `build_native_influences`
+  (per-scenario Dij cached under the single-scenario keys); the optimizer takes the set.
+  `ScenarioSpec.setup_random_sigma_mm` records the per-fraction random error.
+- RBE: `rbe` on dose, influence and optimization requests (null = 1.1 protons, 1.0 photons),
+  `rbe_factor`/`dose_units` on results; legacy RTDOSE `DoseType EFFECTIVE`.
+- Evaluation: `dvh_bands`, `robust_metrics` (lowest/highest envelope + per scenario),
+  `robust_indices` (worst coverage, D95, D98, D2, hotspot, HI, CI, worst scenario),
+  `include_scenarios`, `dose_units`.
+- Beam sets: `BeamSpec.isocenter_mm`, `BeamSpec.target_z_range_mm`; `BeamSetSpec.isocenter_mm`
+  optional and honoured (was ignored); `services/plan_templates.craniospinal_template`
+  (posterior fields, optional posterior-oblique brain pair with `brain_oblique_deg`) and
+  `POST /beam-model/templates/craniospinal`; `generate_proton_spots` places each beam on its slab.
+- Legacy `proton-robust` uses the native set (random error now modelled).
+- Tests: `tests/test_r3_robust_rbe_templates.py` (models, RBE through the dose service, native
+  sets with a fake engine + evaluation bands, scenarios-file parser, MCsquare native doses and
+  beamlets with the binary, split/template/spots on a synthetic craniospinal target).
+Open: probabilistic robust objectives; clinical-goal pass/fail (R5); 4D scenarios (R9).
+Fraction-wise junction shifts are deliberately not modelled (gradient junctions + robust
+optimization replace them in PBS; ADR 0009).
