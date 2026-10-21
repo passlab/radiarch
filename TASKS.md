@@ -636,3 +636,31 @@ ADR 0011. Done:
 Open: the goal tables need a physicist's check against the sources before answer-key use
 (PENTEC marked provisional); relative-seriality NTCP; LQ-L for SBRT; structure-set comparison
 metrics (Dice, HD95) belong to A2.
+
+## R6 — RT object writer (2026-10-21)
+
+ADR 0012. Done:
+- `dicom/writers/` — `common.py` (`CaseContext`, dataset skeleton, research labelling, stable UIDs),
+  `rtstruct.py` (masks → contours, interpreted types), `rtplan.py` (RT Plan step-and-shoot, RT Ion
+  Plan, prescription as dose reference, DRR references), `rtdose.py` (PLAN/BEAM, EFFECTIVE for RBE),
+  `rtimage.py` (DRR RT Image), `records.py` (RT (Ion) Beams Treatment Record, RT Treatment Summary
+  Record); `dicom/drr.py` (ray-marched DRR on the spot placer's beam frame).
+- `CTMetadata` carries the CT's DICOM provenance (patient ID/sex/birth date/position, study date and
+  description, slice UIDs); `CTVolume` reads them; old geometries fall back to `RADIARCH_DATA_ROOT`.
+- `services/rt_export.py` + `models/rt_export.py` + `api/routes/rt.py`: `POST /rt/export` (sequence /
+  proton optimization / beam model), manifest and files, `POST /rt/exports/{id}/records`,
+  `POST /rt/exports/{id}/push`; per-beam doses through the dose service; STOW-RS push.
+- `adapters/dicomweb.py` takes datasets, paths or bytes (the legacy push passed bytes to a client
+  that wanted datasets); the legacy `/plans` RT Dose goes through the writer.
+- Validation: `dicom-validator` (dev extra; every object type clean against 2026d) in the suite,
+  `dciodvfy` (dicom3tools) as a CI step; opt-in DICOMweb round trip passed against the research
+  Orthanc (STOW → QIDO → WADO → readers → delete).
+- R4 fix found by the BEAM doses: `sequencing.fluence_maps` binned a beamlet onto the leaf pair of
+  its centre only, so 10 mm beamlets over 5 mm leaves left every other pair out of the apertures (a
+  comb) and `coverage_matrix` credited half the coverage; a beamlet now covers every pair it spans
+  and the coverage sums over them, so beam doses sum to the plan dose.
+- Tests: `tests/test_r6_rt_writers.py`, `tests/test_r6_rt_export_service.py`.
+Open: view the objects in OHIF and 3D Slicer by hand on the next fixture load (contours written on
+the geometry grid, not the CT grid, when the geometry was resampled); arcs as VMAT control points
+(R8); wedges, compensators, blocks and bolus; DVH sequence in the dose; RT Beams Delivery
+Instruction and UPS belong to smis-ois (F5.4).

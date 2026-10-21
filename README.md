@@ -191,6 +191,31 @@ curl -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
 The plan's frame of reference must be the geometry's (a plan from another CT needs a registration,
 roadmap R9). Arcs are discretized per control-point interval at the mid-angle.
 
+## DICOM RT out
+
+`radiarch.dicom.writers` writes the RT objects of a case on one shared context, every one labelled
+research use only (ADR 0012): the RT Structure Set of a geometry (masks → closed planar contours),
+the RT Plan (photon step-and-shoot with MLC control points and MU) or RT Ion Plan (spots per energy
+layer), the RT Dose (PLAN, and BEAM per beam on request), one DRR RT Image per beam
+(`radiarch.dicom.drr`, ray marching), and the RT (Ion) Beams Treatment Record per session plus the
+RT Treatment Summary Record. `POST /rt/export` assembles them from an aperture sequence, a proton
+optimization or a beam model with its own metersets; `POST /rt/exports/{id}/records` adds sessions;
+`push` or `POST /rt/exports/{id}/push` sends them with STOW-RS (`RADIARCH_DICOMWEB_URL`):
+
+```bash
+curl -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{"sequence_id": "<id>", "prescription": {"dose_gy": 60, "fractions": 30, "target_structure": "PTV"}, "per_beam_dose": true, "push": true}' \
+  $API/rt/export
+curl -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{"sessions": [{"fraction_number": 1, "treatment_date": "20261101"}]}' $API/rt/exports/<export id>/records
+curl -H "X-API-Key: $KEY" -o RP.dcm $API/rt/exports/<export id>/files/RP.dcm
+```
+
+A photon optimization is exported through its aperture sequence (a fluence is not a plan). Every
+object type validates clean against the DICOM standard (`dicom-validator` in the test suite,
+`dciodvfy` in CI); `RADIARCH_TEST_DICOMWEB_URL=http://host:8042/dicom-web` opts a test into a round
+trip through a DICOMweb server.
+
 ## Validation harness
 
 `src/radiarch/validation/` holds the physics and cross-check cases that go beyond unit

@@ -76,8 +76,16 @@ jobs:
           pip install --upgrade pip setuptools wheel
           pip install -e ./src[dev]
 
+      - name: Install dicom3tools (dciodvfy for the RT objects radiarch writes)
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq dicom3tools
+
       - name: Run full suite (MCsquare V4 validation auto-skips)
         run: python -m pytest tests/ -v --tb=short
+
+      - name: dciodvfy on the written RT objects
+        run: python -m pytest tests/test_r6_rt_writers.py -v --tb=short -k dciodvfy
+        env:
+          RADIARCH_REQUIRE_DCIODVFY: "1"
 
   mcsquare-validation:
     # Opt-in V4 gate: real MCsquare Monte Carlo on the SimpleFantom (Dij vs dose
