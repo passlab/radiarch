@@ -94,6 +94,10 @@ class EvaluationRequest(BaseModel):
     structures: Optional[List[str]] = Field(default=None, max_length=128)
     dvh_bins: int = Field(default=100, ge=2, le=10_000)
     gamma: Optional[GammaSpec] = Field(default=None)
+    include_scenarios: bool = Field(
+        default=True,
+        description="When the dose carries scenario doses, report DVH bands and worst-case metrics over them (R3).",
+    )
 
     @model_validator(mode="after")
     def _check_dose(self) -> "EvaluationRequest":
@@ -111,6 +115,7 @@ class EvaluationRequest(BaseModel):
             "structures": sorted(self.structures) if self.structures else None,
             "dvh_bins": self.dvh_bins,
             "gamma": self.gamma.hash() if self.gamma else None,
+            "include_scenarios": self.include_scenarios,
         }
         return hashlib.sha256(
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -153,6 +158,43 @@ class DoseIndices(BaseModel):
     hotspot_gy: float = Field(..., description="Global max dose anywhere in the grid.")
 
 
+class DVHBand(BaseModel):
+    """The DVH envelope of one structure over the nominal and scenario doses."""
+
+    structure_name: str
+    dose_bins_gy: List[float]
+    nominal_pct: List[float]
+    min_pct: List[float] = Field(..., description="Lowest volume fraction at each dose over all scenarios.")
+    max_pct: List[float] = Field(..., description="Highest volume fraction at each dose over all scenarios.")
+    n_scenarios: int = Field(..., ge=1, description="Scenario doses in the band, the nominal excluded.")
+
+
+class RobustStructureMetrics(BaseModel):
+    """DVH metrics of one structure under every scenario, with the envelope."""
+
+    structure_name: str
+    nominal: DVHMetrics
+    lowest: DVHMetrics = Field(..., description="Per-metric minimum over the nominal and every scenario.")
+    highest: DVHMetrics = Field(..., description="Per-metric maximum over the nominal and every scenario.")
+    per_scenario: Dict[str, DVHMetrics] = Field(default_factory=dict)
+
+
+class RobustIndices(BaseModel):
+    """Worst-case plan-quality goals of the target over the scenarios."""
+
+    target_structure: str
+    prescription_gy: float
+    n_scenarios: int
+    worst_coverage_pct: float = Field(..., description="Lowest % of the target at or above the prescription.")
+    worst_d95_gy: float
+    worst_d98_gy: float
+    worst_d2_gy: float = Field(..., description="Highest near-maximum dose.")
+    worst_hotspot_gy: float = Field(..., description="Highest global maximum.")
+    worst_homogeneity_index: float = Field(..., description="Highest (D2 − D98) / D50.")
+    worst_conformity_index: float = Field(..., description="Lowest Paddick conformity index.")
+    worst_scenario: Optional[str] = Field(default=None, description="The scenario with the lowest coverage.")
+
+
 class GammaResult(BaseModel):
     """Gamma-analysis summary vs the reference dose."""
 
@@ -173,6 +215,11 @@ class EvaluationResult(ResearchArtifact):
     dvh_curves: List[DVHCurve] = Field(default_factory=list)
     indices: Optional[DoseIndices] = None
     gamma: Optional[GammaResult] = None
+    dvh_bands: List[DVHBand] = Field(default_factory=list, description="Per-structure DVH envelopes when the dose has scenarios.")
+    robust_metrics: List[RobustStructureMetrics] = Field(default_factory=list)
+    robust_indices: Optional[RobustIndices] = None
+    n_scenarios: int = Field(default=0, description="Scenario doses evaluated (the nominal excluded).")
+    dose_units: str = Field(default="Gy", description='"Gy" or "Gy(RBE)", from the dose result when known.')
     dose_id: Optional[str] = None
     geometry_id: str
     compute_time_s: float = Field(..., ge=0.0)

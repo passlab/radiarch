@@ -47,6 +47,19 @@ def cumulative_dvh(dose: np.ndarray, mask: np.ndarray,
     return dose_bins, vol
 
 
+def dvh_on_bins(dose: np.ndarray, mask: np.ndarray, dose_bins: np.ndarray) -> np.ndarray:
+    """Cumulative DVH (% volume at or above each bin) on caller-supplied bins,
+    so curves of several doses share one axis."""
+    doses = _structure_doses(dose, mask)
+    bins = np.asarray(dose_bins, dtype=np.float64)
+    if doses.size == 0:
+        return np.zeros(bins.shape[0])
+    sorted_doses = np.sort(doses)
+    # fraction of voxels >= b: 1 - (number below b) / n
+    below = np.searchsorted(sorted_doses, bins, side="left")
+    return 100.0 * (1.0 - below / float(doses.size))
+
+
 def dose_at_volume(doses: np.ndarray, pct: float) -> float:
     """``Dx``: the dose received by at least ``pct`` % of the volume.
 
@@ -88,6 +101,7 @@ def dvh_metrics(dose: np.ndarray, mask: np.ndarray, prescription_gy: float,
 
 __all__ = [
     "cumulative_dvh",
+    "dvh_on_bins",
     "dose_at_volume",
     "volume_at_dose",
     "dvh_metrics",

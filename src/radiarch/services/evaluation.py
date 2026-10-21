@@ -16,21 +16,25 @@ from __future__ import annotations
 import time
 import uuid
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import numpy as np
 from loguru import logger
 
 from ..config import get_settings
 from ..models.evaluation import (
+    DVHBand,
     DVHCurve,
+    DVHMetrics,
     EvaluationRequest,
     EvaluationResult,
     EvaluationStage,
+    RobustIndices,
+    RobustStructureMetrics,
 )
 from .dose import DoseService
 from .dose_persistence import read_dose_volume
-from .dvh import cumulative_dvh, dvh_metrics
+from .dvh import cumulative_dvh, dvh_metrics, dvh_on_bins
 from .evaluation_persistence import EvaluationStore
 from .gamma import gamma_index
 from .indices import dose_indices
@@ -69,6 +73,15 @@ class EvaluationService:
 
         on_progress(EvaluationStage.loading, 0.05, "Loading dose + geometry")
         dose = self._load_dose(request)
+        dose_units = "Gy"
+        scenario_doses: Dict[str, np.ndarray] = {}
+        if request.dose_id:
+            dose_result = self.dose_service.dose_store.get_by_id(request.dose_id)
+            if dose_result is not None:
+                dose_units = dose_result.dose_units
+                if request.include_scenarios and dose_result.scenario_doses:
+                    for entry in dose_result.scenario_doses:
+                        scenario_doses[entry.scenario_name] = read_dose_volume(Path(entry.dose_grid_uri))
         geometry = self.dose_service._load_geometry(request.geometry_id)
         masks = np.asarray(geometry.masks)
         if dose.shape != masks.shape:
@@ -96,6 +109,54 @@ class EvaluationService:
                 volume_pct=[float(x) for x in vol],
                 metrics=metrics,
             ))
+
+        # --- DVH bands and worst-case metrics over the scenarios (R3) ---
+        bands: List[DVHBand] = []
+        robust_metrics: List[RobustStructureMetrics] = []
+        robust_indices = None
+        if scenario_doses:
+            on_progress(EvaluationStage.computing_dvh, 0.40, f"DVH bands over {len(scenario_doses)} scenarios")
+            for name in names:
+                mask = masks == index[name]
+                top = max([float(dose[mask].max()) if mask.any() else 0.0] +
+                          [float(d[mask].max()) if mask.any() else 0.0 for d in scenario_doses.values()])
+                bins = np.linspace(0.0, top, request.dvh_bins) if top > 0 else np.zeros(request.dvh_bins)
+                nominal_pct = dvh_on_bins(dose, mask, bins)
+                curves_pct = np.stack([nominal_pct] + [dvh_on_bins(d, mask, bins) for d in scenario_doses.values()])
+                bands.append(DVHBand(
+                    structure_name=name, dose_bins_gy=[float(x) for x in bins],
+                    nominal_pct=[float(x) for x in nominal_pct],
+                    min_pct=[float(x) for x in curves_pct.min(axis=0)], max_pct=[float(x) for x in curves_pct.max(axis=0)],
+                    n_scenarios=len(scenario_doses),
+                ))
+                nominal_m = dvh_metrics(dose, mask, request.prescription_gy, voxel_volume_cc)
+                per = {sc: dvh_metrics(d, mask, request.prescription_gy, voxel_volume_cc) for sc, d in scenario_doses.items()}
+                robust_metrics.append(RobustStructureMetrics(
+                    structure_name=name, nominal=nominal_m,
+                    lowest=_envelope([nominal_m] + list(per.values()), min),
+                    highest=_envelope([nominal_m] + list(per.values()), max),
+                    per_scenario=per,
+                ))
+            if request.target_structure and request.target_structure in index:
+                tgt_mask = masks == index[request.target_structure]
+                per_idx = {sc: dose_indices(d, tgt_mask, request.target_structure, request.prescription_gy)
+                           for sc, d in scenario_doses.items()}
+                per_idx["nominal"] = dose_indices(dose, tgt_mask, request.target_structure, request.prescription_gy)
+                per_m = {sc: dvh_metrics(d, tgt_mask, request.prescription_gy, voxel_volume_cc) for sc, d in scenario_doses.items()}
+                per_m["nominal"] = dvh_metrics(dose, tgt_mask, request.prescription_gy, voxel_volume_cc)
+                worst = min(per_idx, key=lambda k: per_idx[k].coverage_pct)
+                robust_indices = RobustIndices(
+                    target_structure=request.target_structure, prescription_gy=request.prescription_gy,
+                    n_scenarios=len(scenario_doses),
+                    worst_coverage_pct=min(i.coverage_pct for i in per_idx.values()),
+                    worst_d95_gy=min(m.d95_gy for m in per_m.values()),
+                    worst_d98_gy=min(m.d98_gy for m in per_m.values()),
+                    worst_d2_gy=max(m.d2_gy for m in per_m.values()),
+                    worst_hotspot_gy=max(i.hotspot_gy for i in per_idx.values()),
+                    worst_homogeneity_index=max(i.homogeneity_index for i in per_idx.values()),
+                    worst_conformity_index=min(i.conformity_index for i in per_idx.values()),
+                    worst_scenario=worst,
+                )
 
         # --- indices (target) ----------------------------------------
         indices = None
@@ -133,6 +194,11 @@ class EvaluationService:
             dvh_curves=curves,
             indices=indices,
             gamma=gamma,
+            dvh_bands=bands,
+            robust_metrics=robust_metrics,
+            robust_indices=robust_indices,
+            n_scenarios=len(scenario_doses),
+            dose_units=dose_units,
             dose_id=request.dose_id,
             geometry_id=request.geometry_id,
             compute_time_s=round(time.monotonic() - t0, 4),
@@ -175,6 +241,12 @@ class EvaluationService:
         if "://" in path:
             raise ValueError(f"unsupported dose URI scheme: {uri!r} (file:// only)")
         return read_dose_volume(Path(path))
+
+
+def _envelope(metrics: List[DVHMetrics], pick) -> DVHMetrics:
+    """Per-field ``min`` or ``max`` over a list of DVH metrics."""
+    fields = {name: pick(getattr(m, name) for m in metrics) for name in DVHMetrics.model_fields}
+    return DVHMetrics(**fields)
 
 
 def _noop_progress(stage: EvaluationStage, fraction: float, message: str) -> None:
