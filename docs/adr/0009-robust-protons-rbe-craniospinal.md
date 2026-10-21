@@ -63,6 +63,10 @@ courses.
    (the gradient-junction technique of pencil-beam-scanning craniospinal
    plans). With `brain_oblique_deg` > 0 the brain slab is treated by a pair
    of posterior-oblique fields at gantry ± that angle sharing one isocenter.
+   Decision of 2026-10-21: the `research` preset (default) keeps one
+   posterior brain field so plans stay simple and symmetric; the `clinical`
+   preset gives the pair at ±15°, the usual proton practice for the cranial
+   part, and is what the Profile 2 planning protocol should name.
    Fraction-wise junction shifts (the feathering of passive-scattering and
    photon craniospinal plans) are deliberately not modelled: with gradient
    junctions and a robust optimization they are unnecessary, and a plan is

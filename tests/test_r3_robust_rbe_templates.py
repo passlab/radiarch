@@ -366,6 +366,11 @@ class TestCraniospinal:
         assert t.beam_set.beams[2].gantry_deg == 180.0
         with pytest.raises(ValueError):
             craniospinal_template(g, brain_oblique_deg=95.0)
+        clinical = craniospinal_template(g, preset="clinical")
+        assert {b.gantry_deg for b in clinical.beam_set.beams[:2]} == {195.0, 165.0} and len(clinical.beam_set.beams) == 3
+        assert len(craniospinal_template(g).beam_set.beams) == 2          # research default: one posterior brain field
+        with pytest.raises(ValueError, match="preset"):
+            craniospinal_template(g, preset="vendor")
 
     def test_spots_follow_the_field_slabs(self):
         from radiarch.services.machine_model import ProtonMachineModel

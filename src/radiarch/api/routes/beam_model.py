@@ -265,8 +265,9 @@ class CraniospinalTemplateRequest(BaseModel):
     overlap_mm: float = Field(default=40.0, ge=0.0, description="Junction length shared by neighbouring fields.")
     gantry_deg: float = Field(default=180.0, ge=0.0, lt=360.0)
     couch_deg: float = Field(default=0.0, ge=-180.0, le=180.0)
-    brain_oblique_deg: float = Field(default=0.0, ge=0.0, lt=90.0,
-                                     description="> 0: the brain slab gets a pair of posterior-oblique fields at gantry ± this angle.")
+    preset: str = Field(default="research", description='"research": one posterior brain field; "clinical": a posterior-oblique pair at ±15°.')
+    brain_oblique_deg: Optional[float] = Field(default=None, ge=0.0, lt=90.0,
+                                               description="Overrides the preset: > 0 gives the brain slab a pair of posterior-oblique fields at gantry ± this angle.")
 
 
 class CraniospinalTemplateResponse(BaseModel):
@@ -295,6 +296,7 @@ async def craniospinal_template_endpoint(request: CraniospinalTemplateRequest) -
             load_geometry_arrays(geom), request.target_structure,
             field_length_mm=request.field_length_mm, overlap_mm=request.overlap_mm,
             gantry_deg=request.gantry_deg, couch_deg=request.couch_deg, brain_oblique_deg=request.brain_oblique_deg,
+            preset=request.preset,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

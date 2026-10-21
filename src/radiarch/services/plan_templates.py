@@ -24,6 +24,14 @@ from .geometry_bundle import GeometryArrays
 
 MAX_FIELD_LENGTH_MM = 400.0      # the field of view of the spot grid (spot_placement.FIELD_OF_VIEW_MM)
 
+# Presets (decision of 2026-10-21, ADR 0009): the research default treats the brain slab with
+# one posterior field; the clinical preset with a posterior-oblique pair at ±15°, the usual
+# proton practice for the cranial part (lens sparing, lower skin dose).
+CRANIOSPINAL_PRESETS = {
+    "research": {"brain_oblique_deg": 0.0},
+    "clinical": {"brain_oblique_deg": 15.0},
+}
+
 
 @dataclass
 class CraniospinalField:
@@ -78,7 +86,8 @@ def craniospinal_template(
     overlap_mm: float = 40.0,
     gantry_deg: float = 180.0,
     couch_deg: float = 0.0,
-    brain_oblique_deg: float = 0.0,
+    brain_oblique_deg: Optional[float] = None,
+    preset: str = "research",
     beam_prefix: str = "CSI",
 ) -> CraniospinalTemplate:
     """Posterior fields along the craniospinal target, superior to inferior.
@@ -90,8 +99,13 @@ def craniospinal_template(
     isocenter. With ``brain_oblique_deg`` > 0 the most superior slab (the
     brain) is treated by a pair of posterior-oblique fields at
     ``gantry_deg ± brain_oblique_deg`` sharing one isocenter instead of a
-    single posterior field.
+    single posterior field; ``preset`` ("research": single field,
+    "clinical": the pair at 15°) sets it when it is not given.
     """
+    if preset not in CRANIOSPINAL_PRESETS:
+        raise ValueError(f"preset must be one of {sorted(CRANIOSPINAL_PRESETS)}, got {preset!r}")
+    if brain_oblique_deg is None:
+        brain_oblique_deg = float(CRANIOSPINAL_PRESETS[preset]["brain_oblique_deg"])
     if not 0.0 <= brain_oblique_deg < 90.0:
         raise ValueError("brain_oblique_deg must be in [0, 90)")
     if not 0.0 < field_length_mm <= MAX_FIELD_LENGTH_MM:
@@ -148,5 +162,5 @@ def craniospinal_template(
     return CraniospinalTemplate(BeamSetSpec(beams=beams), fields, target_name, (z_lo, z_hi), junctions)
 
 
-__all__ = ["MAX_FIELD_LENGTH_MM", "CraniospinalField", "CraniospinalTemplate", "target_z_profile", "split_extent",
+__all__ = ["MAX_FIELD_LENGTH_MM", "CRANIOSPINAL_PRESETS", "CraniospinalField", "CraniospinalTemplate", "target_z_profile", "split_extent",
            "craniospinal_template"]

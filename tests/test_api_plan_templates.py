@@ -94,3 +94,5 @@ def test_craniospinal_template_endpoint(client: TestClient):
     assert r2.status_code == 404
     r3 = client.post("/api/v1/beam-model/templates/craniospinal", json={"geometry_id": geo.geometry_id, "target_structure": "Lung_L"})
     assert r3.status_code == 422
+    r4 = client.post("/api/v1/beam-model/templates/craniospinal", json={"geometry_id": geo.geometry_id, "preset": "clinical"})
+    assert r4.status_code == 200 and [b["beam_id"] for b in r4.json()["beam_set"]["beams"]] == ["CSI1L", "CSI1R", "CSI2"]
