@@ -11,7 +11,7 @@ summary.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -96,6 +96,7 @@ class RTExportResult(ResearchArtifact):
     n_fractions: int = 1
     prescription: Optional[PrescriptionSpec] = None
     machine_name: str = "RADIARCH"
+    attribution: Dict[str, Any] = Field(default_factory=dict, description="Capability, engine, machine model and HU model the objects came from (R12).")
     objects: List[RTObjectRef] = Field(default_factory=list)
     pushed: bool = False
     push_error: Optional[str] = None

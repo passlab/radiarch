@@ -32,6 +32,7 @@ from functools import lru_cache
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from ._lineage_guard import assert_deletable
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -380,6 +381,7 @@ async def delete_dose(dose_id: str):
         raise HTTPException(
             status_code=404, detail=f"Dose not found: {dose_id}"
         )
+    assert_deletable("dose", dose_id)
     svc.dose_store.delete_by_id(dose_id)
     return Response(status_code=204)
 
@@ -437,6 +439,7 @@ async def delete_influence(influence_id: str):
         raise HTTPException(
             status_code=404, detail=f"Influence not found: {influence_id}"
         )
+    assert_deletable("influence", influence_id)
     svc.influence_store.delete_by_id(influence_id)
     return Response(status_code=204)
 

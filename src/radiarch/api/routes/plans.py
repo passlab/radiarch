@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from ._lineage_guard import assert_deletable
 from fastapi.responses import Response
 
 from ...core.store import store
@@ -34,6 +35,7 @@ async def delete_plan(plan_id: str):
     plan = store.get_plan(plan_id)
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
+    assert_deletable("plan", plan_id)
     if plan.job_id:
         store.update_job(plan.job_id, state=JobState.cancelled, message="Cancelled by user")
     store.delete_plan(plan_id)

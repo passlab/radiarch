@@ -31,6 +31,7 @@ from functools import lru_cache
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Response, status
+from ._lineage_guard import assert_deletable
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -172,6 +173,7 @@ async def delete_geometry(geometry_id: str):
     result = svc.store.get_by_id(geometry_id)
     if result is None:
         raise HTTPException(status_code=404, detail=f"Geometry not found: {geometry_id}")
+    assert_deletable("geometry", geometry_id)
 
     svc.store.delete_by_id(geometry_id)
     return Response(status_code=204)

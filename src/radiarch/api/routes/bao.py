@@ -17,6 +17,7 @@ from functools import lru_cache
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from ._lineage_guard import assert_deletable
 from pydantic import BaseModel
 
 from ...core.store import store
@@ -133,5 +134,6 @@ async def delete_bao(bao_id: str):
     svc = _service()
     if svc.store.get_by_id(bao_id) is None:
         raise HTTPException(status_code=404, detail=f"BAO result not found: {bao_id}")
+    assert_deletable("bao", bao_id)
     svc.store.delete_by_id(bao_id)
     return Response(status_code=204)

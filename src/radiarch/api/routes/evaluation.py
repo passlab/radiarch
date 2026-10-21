@@ -17,6 +17,7 @@ from functools import lru_cache
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from ._lineage_guard import assert_deletable
 from pydantic import BaseModel
 
 from ...core.store import store
@@ -201,5 +202,6 @@ async def delete_evaluation(evaluation_id: str):
     if svc.store.get_by_id(evaluation_id) is None:
         raise HTTPException(status_code=404,
                             detail=f"Evaluation not found: {evaluation_id}")
+    assert_deletable("evaluation", evaluation_id)
     svc.store.delete_by_id(evaluation_id)
     return Response(status_code=204)

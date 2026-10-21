@@ -73,6 +73,8 @@ class CaseContext:
     institution_name: str = "Radiarch research"
     station_name: str = "radiarch"
     operator: str = "radiarch"
+    engine: str = ""                   # the dose engine and its version, for the private block
+    machine: str = ""                  # the machine model id
     now: Optional[datetime] = None      # fixed for reproducible files; None = the clock
 
     def __post_init__(self) -> None:
@@ -215,7 +217,7 @@ def new_dataset(ctx: CaseContext, sop_class: str, modality: str, *, series_numbe
     ds.StationName = ctx.station_name
     ds.SoftwareVersions = software_version()
 
-    label_research(ds)
+    label_research(ds, engine=ctx.engine, machine=ctx.machine)
     return ds
 
 
@@ -225,11 +227,16 @@ def with_frame_of_reference(ds: Dataset, ctx: CaseContext) -> Dataset:
     return ds
 
 
-def label_research(ds: Dataset) -> Dataset:
-    """The intended-use statement, where every reader of the file will see it."""
+def label_research(ds: Dataset, engine: str = "", machine: str = "") -> Dataset:
+    """The intended-use statement, where every reader of the file will see it, and the attribution
+    (radiarch version, engine, machine model) in the same private block."""
     block = ds.private_block(PRIVATE_GROUP, PRIVATE_CREATOR, create=True)
     block.add_new(0x01, "LO", NOT_FOR_CLINICAL_USE)
-    block.add_new(0x02, "LO", f"radiarch {software_version()}")
+    block.add_new(0x02, "LO", f"radiarch {software_version()}"[:64])
+    if engine:
+        block.add_new(0x03, "LO", f"engine {engine}"[:64])
+    if machine:
+        block.add_new(0x04, "LO", f"machine {machine}"[:64])
     return ds
 
 

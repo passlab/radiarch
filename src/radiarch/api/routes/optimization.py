@@ -21,6 +21,7 @@ from functools import lru_cache
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from ._lineage_guard import assert_deletable
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -196,6 +197,7 @@ async def delete_optimization(opt_id: str):
     svc = _service()
     if svc.store.get_by_id(opt_id) is None:
         raise HTTPException(status_code=404, detail=f"Optimization not found: {opt_id}")
+    assert_deletable("optimization", opt_id)
     svc.store.delete_by_id(opt_id)
     return Response(status_code=204)
 

@@ -28,7 +28,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import SimpleITK as sitk
@@ -113,7 +113,7 @@ class RTExportService:
     def export(self, request: RTExportRequest) -> RTExportResult:
         src = self._resolve(request)
         arrays = load_geometry_arrays(src.geometry)
-        ctx = self._context(src.geometry)
+        ctx = self._context(src.geometry, src)
         export_id = str(uuid.uuid4())
         out = self.directory(export_id)
         out.mkdir(parents=True, exist_ok=True)
@@ -190,7 +190,7 @@ class RTExportService:
             rtstruct_uid=rtstruct_uid, plan_sop_class_uid=plan_sop_class if "rtplan" in request.objects else None,
             plan_sop_instance_uid=plan_uid if "rtplan" in request.objects else None,
             beam_numbers=beam_numbers, beam_metersets=metersets, n_fractions=int(n_fractions), prescription=request.prescription,
-            machine_name=request.machine_name, objects=objects, created_at=datetime.now(timezone.utc),
+            machine_name=request.machine_name, attribution=self._attribution(src), objects=objects, created_at=datetime.now(timezone.utc),
         )
         if request.push:
             ok, err = self._push([o.path for o in objects])
@@ -390,11 +390,32 @@ class RTExportService:
     # Pieces
     # ------------------------------------------------------------------
 
-    def _context(self, geometry: GeometryResult) -> CaseContext:
+    def _context(self, geometry: GeometryResult, src: Optional[_Source] = None) -> CaseContext:
         ctx = CaseContext.from_geometry(geometry)
         if not ctx.ct_sop_instance_uids:
             ctx.ct_sop_instance_uids = self._ct_slices_from_disk(ctx.ct_series_instance_uid)
+        if src is not None:
+            a = self._attribution(src)
+            ctx.engine = " ".join(v for v in (a.get("engine_name"), a.get("engine_version")) if v)
+            ctx.machine = str(a.get("machine_model_id") or "")
         return ctx
+
+    @staticmethod
+    def _attribution(src: _Source) -> Dict[str, Any]:
+        """Who made what the export writes (R12): the capability, engine, machine model and HU model."""
+        from .lineage import radiarch_version
+
+        engine_name = (src.engine_name or "").split("+")[0] or None
+        engine_version = None
+        if engine_name:
+            try:
+                from .dose_engines.registry import get_engine
+                engine_version = str(getattr(get_engine(engine_name), "version", "") or "") or None
+            except Exception:
+                engine_version = None
+        return {"capability_id": "radiarch", "capability_version": radiarch_version(), "engine_name": engine_name,
+                "engine_version": engine_version, "machine_model_id": src.beam_model.machine_model_id,
+                "hu_model": getattr(src.geometry, "hu_to_density_model", None), "modality": str(getattr(src.beam_model.modality, "value", src.beam_model.modality))}
 
     @staticmethod
     def _ct_slices_from_disk(series_uid: str) -> List[str]:

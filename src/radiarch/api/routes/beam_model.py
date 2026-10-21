@@ -26,6 +26,7 @@ import os
 from functools import lru_cache
 
 from fastapi import APIRouter, HTTPException, Response, status
+from ._lineage_guard import assert_deletable
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from pathlib import Path
@@ -270,6 +271,7 @@ async def delete_beam_model(beam_model_id: str):
         raise HTTPException(
             status_code=404, detail=f"Beam model not found: {beam_model_id}"
         )
+    assert_deletable("beam_model", beam_model_id)
     svc.store.delete_by_id(beam_model_id)
     return Response(status_code=204)
 
