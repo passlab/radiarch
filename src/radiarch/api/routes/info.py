@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from ...config import get_settings
 from ...models.common import RESEARCH_USE_ONLY
+from ...services.dose_engines.registry import engine_health
 
 router = APIRouter(tags=["info"])
 settings = get_settings()
@@ -22,8 +23,8 @@ async def service_info():
                 "type": "dose_calculation",
             },
             "photon-ccc": {
-                "description": "Photon dose via the WiscPlan collapsed-cone engine (stub; wired in roadmap item R1)",
-                "status": "unavailable",
+                "description": "Photon dose via the WiscPlan collapsed-cone engine, run as a subprocess",
+                "status": "available" if engine_health("ccc").get("available") else "unavailable",
                 "type": "dose_calculation",
             },
         },
@@ -36,7 +37,7 @@ async def service_info():
             {
                 "id": "photon-ccc",
                 "name": "Photon 9-field",
-                "description": "Photon plan using the CCC dose engine (not yet producing dose)",
+                "description": "Photon plan of open fields with dose from the CCC engine",
             },
         ],
     }

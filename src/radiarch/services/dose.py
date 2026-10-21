@@ -295,6 +295,7 @@ class DoseService:
 
         ct_hu, ct_image = self._maybe_load_ct(geom)
 
+        origin = getattr(geom.grid_spec, "origin_mm", None)
         return GeometryBundle(
             result=geom,
             density=density.astype(np.float32),
@@ -302,6 +303,7 @@ class DoseService:
             spacing_mm=spacing,
             ct_hu=ct_hu,
             ct_image=ct_image,
+            origin_mm=None if origin is None else tuple(float(o) for o in origin),
         )
 
     @staticmethod

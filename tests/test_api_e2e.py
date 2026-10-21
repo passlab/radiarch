@@ -173,7 +173,9 @@ def test_info_has_models(client):
     assert "proton-mcsquare" in models
     assert models["proton-mcsquare"]["status"] == "available"
     assert "photon-ccc" in models
-    assert models["photon-ccc"]["status"] == "unavailable"  # stub until R1 wires the CCC driver
+    from radiarch.services.dose_engines.registry import engine_health
+    expected = "available" if engine_health("ccc").get("available") else "unavailable"
+    assert models["photon-ccc"]["status"] == expected
 
 
 # ---- Phase 4: Sessions CRUD ----

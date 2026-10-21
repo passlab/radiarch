@@ -1,112 +1,17 @@
-"""Unit tests for radiarch.services.photon_beamlets.
+"""Photon beam-model builder on radiarch's own plan model (R1).
 
-Patches the OpenTPS PhotonPlan / PlanPhotonBeam / PlanPhotonSegment
-classes with simple stand-ins so the test exercises the adapter math
-(grid dim derivation, jaw resolution) without OpenTPS available.
-"""
+No OpenTPS involved: ``build_photon_plan`` returns a ``PhotonPlan`` whose
+beamlets follow the half-pixel grid, so the counts are the ones the
+vendored OpenTPS copy produced (a 200 mm field at 5 mm → 1600)."""
 
 from __future__ import annotations
 
-import math
-import sys
-import types
-from dataclasses import dataclass, field
-from typing import List
-
 import pytest
 
-from radiarch.models.beam_model import (
-    BeamSetSpec,
-    BeamSpec,
-    DeliveryParams,
-)
+from radiarch.models.beam_model import BeamSetSpec, BeamSpec, DeliveryParams
+from radiarch.models.photon_plan import PhotonPlan
 from radiarch.services.machine_model import PhotonMachineModel
-
-
-# ---------------------------------------------------------------------------
-# OpenTPS stand-ins
-# ---------------------------------------------------------------------------
-
-class _FakeSegment:
-    """Mirrors the OpenTPS ``PlanPhotonSegment`` attributes ``build_photon_plan`` sets."""
-
-    def __init__(self):
-        self.x_jaw_mm = []
-        self.y_jaw_mm = []
-        self.Xmlc_mm = []
-        self.mu = None
-        self.gantryAngle_degree = 0.0
-        self.couchAngle_degree = 0.0
-        self.isocenterPosition_mm = [0, 0, 0]
-        self.xBeamletSpacing_mm = 1
-        self.yBeamletSpacing_mm = 1
-        self.controlPointIndex = 0
-        self._beamlets = []
-
-    def createBeamletsFromSegments(self):
-        nx = math.ceil((self.x_jaw_mm[1] - self.x_jaw_mm[0]) / self.xBeamletSpacing_mm)
-        ny = math.ceil((self.y_jaw_mm[1] - self.y_jaw_mm[0]) / self.yBeamletSpacing_mm)
-        self._beamlets = [None] * (nx * ny)
-
-    def __len__(self):
-        return len(self._beamlets)
-
-
-class _FakeBeam:
-    def __init__(self):
-        self._beamSegments = []
-        self.id = 0
-        self.name = ""
-        self.isocenterPosition_mm = [0, 0, 0]
-        self.gantryAngle_degree = 0.0
-        self.couchAngle_degree = 0.0
-        self.xBeamletSpacing_mm = 1
-        self.yBeamletSpacing_mm = 1
-
-    def appendBeamSegment(self, segment):
-        self._beamSegments.append(segment)
-
-    @property
-    def beamSegments(self):
-        return list(self._beamSegments)
-
-    @property
-    def numberOfBeamlets(self):
-        return sum(len(s) for s in self._beamSegments)
-
-
-class _FakePlan:
-    """``beams`` returns a copy, exactly like OpenTPS: appending to it is a no-op."""
-
-    def __init__(self, name="PhotonPlan", patient=None):
-        self.name = name
-        self._beams = []
-
-    def appendBeam(self, beam):
-        self._beams.append(beam)
-
-    @property
-    def beams(self):
-        return list(self._beams)
-
-    @property
-    def numberOfBeamlets(self):
-        return sum(b.numberOfBeamlets for b in self._beams)
-
-
-@pytest.fixture(autouse=True)
-def _patch_opentps_photon(monkeypatch):
-    """Insert fake modules at the import paths used by the lazy imports."""
-    photon_plan_mod = types.SimpleNamespace(PhotonPlan=_FakePlan)
-    plan_beam_mod = types.SimpleNamespace(PlanPhotonBeam=_FakeBeam)
-    plan_seg_mod = types.SimpleNamespace(PlanPhotonSegment=_FakeSegment)
-    monkeypatch.setitem(sys.modules,
-                        "opentps.core.data.plan._photonPlan", photon_plan_mod)
-    monkeypatch.setitem(sys.modules,
-                        "opentps.core.data.plan._planPhotonBeam", plan_beam_mod)
-    monkeypatch.setitem(sys.modules,
-                        "opentps.core.data.plan._planPhotonSegment", plan_seg_mod)
-    yield
+from radiarch.services.photon_beamlets import build_photon_plan, generate_photon_beamlets
 
 
 def _beam_set(n: int = 2) -> BeamSetSpec:
@@ -116,20 +21,13 @@ def _beam_set(n: int = 2) -> BeamSetSpec:
     )
 
 
-# ---------------------------------------------------------------------------
-# Grid math
-# ---------------------------------------------------------------------------
-
 class TestGridMath:
     def test_default_jaw_default_beamlet_yields_expected_grid(self):
-        from radiarch.services.photon_beamlets import generate_photon_beamlets
-
-        # 200 mm jaw / 5 mm beamlets = 40×40 = 1600 elements per beam.
         result = generate_photon_beamlets(
             ct=object(), patient=object(),
             machine_model=PhotonMachineModel(machine_model_id="default"),
             beam_set=_beam_set(1),
-            params=DeliveryParams(),  # default beamlet 5×5
+            params=DeliveryParams(),  # default beamlet 5×5, 200 mm jaws, 10 mm leaves
         )
         pb = result.fluence_elements.per_beam[0]
         assert pb.grid_dims == (40, 40)
@@ -137,27 +35,17 @@ class TestGridMath:
         assert pb.active_beamlets == 1600
 
     def test_custom_jaw_overrides_machine_default(self):
-        from radiarch.services.photon_beamlets import generate_photon_beamlets
-
-        # 100 mm jaw / 10 mm beamlets = 10×10 = 100 per beam.
         result = generate_photon_beamlets(
             ct=object(), patient=object(),
-            machine_model=PhotonMachineModel(
-                machine_model_id="default", max_jaw_opening_mm=300.0,
-            ),
+            machine_model=PhotonMachineModel(machine_model_id="default", max_jaw_opening_mm=300.0),
             beam_set=_beam_set(1),
-            params=DeliveryParams(
-                jaw_opening_mm=(100.0, 100.0),
-                beamlet_size_mm=(10.0, 10.0),
-            ),
+            params=DeliveryParams(jaw_opening_mm=(100.0, 100.0), beamlet_size_mm=(10.0, 10.0)),
         )
         pb = result.fluence_elements.per_beam[0]
         assert pb.grid_dims == (10, 10)
         assert pb.element_count == 100
 
     def test_total_count_is_per_beam_sum(self):
-        from radiarch.services.photon_beamlets import generate_photon_beamlets
-
         result = generate_photon_beamlets(
             ct=object(), patient=object(),
             machine_model=PhotonMachineModel(machine_model_id="default"),
@@ -166,66 +54,54 @@ class TestGridMath:
         )
         assert result.fluence_elements.total_count == 1600 * 3
         assert len(result.fluence_elements.per_beam) == 3
+        assert result.plan.n_beamlets == 1600 * 3
 
-    def test_non_divisible_jaw_rounds_up(self):
-        from radiarch.services.photon_beamlets import generate_photon_beamlets
-
-        # 100 mm / 7 mm = 14.28… → ceil to 15 per axis.
+    def test_leaf_width_from_request_overrides_machine(self):
         result = generate_photon_beamlets(
             ct=object(), patient=object(),
             machine_model=PhotonMachineModel(machine_model_id="default"),
             beam_set=_beam_set(1),
-            params=DeliveryParams(
-                jaw_opening_mm=(100.0, 100.0),
-                beamlet_size_mm=(7.0, 7.0),
-            ),
+            params=DeliveryParams(mlc_leaf_width_mm=5.0),
         )
-        pb = result.fluence_elements.per_beam[0]
-        assert pb.grid_dims == (15, 15)
+        assert len(result.plan.beams[0].segments[0].mlc_rows) == 40   # 200 mm / 5 mm
 
 
-# ---------------------------------------------------------------------------
-# Plan construction
-# ---------------------------------------------------------------------------
-
-class TestPlanConstruction:
-    def test_one_beam_per_request(self):
-        from radiarch.services.photon_beamlets import generate_photon_beamlets
-
+class TestPlanAssembly:
+    def test_one_beam_per_request_with_ids_and_angles(self):
+        beam_set = BeamSetSpec(
+            isocenter_mm=(1.0, 2.0, 3.0),
+            beams=[BeamSpec(beam_id="A", gantry_deg=72.0), BeamSpec(beam_id="B", gantry_deg=144.0, couch_deg=10.0)],
+        )
         result = generate_photon_beamlets(
             ct=object(), patient=object(),
             machine_model=PhotonMachineModel(machine_model_id="default"),
-            beam_set=_beam_set(3),
-            params=DeliveryParams(),
+            beam_set=beam_set, params=DeliveryParams(),
         )
-        assert len(result.plan.beams) == 3
+        plan = result.plan
+        assert isinstance(plan, PhotonPlan)
+        assert [b.beam_id for b in plan.beams] == ["A", "B"]
+        assert [b.gantry_deg for b in plan.beams] == [72.0, 144.0]
+        assert plan.beams[1].couch_deg == 10.0
+        assert plan.isocenter_mm == (1.0, 2.0, 3.0)
 
-    def test_gantry_angles_propagate(self):
-        from radiarch.services.photon_beamlets import generate_photon_beamlets
+    def test_segment_jaws_centred_on_isocenter(self):
+        plan = build_photon_plan([(0.0, 0.0)], (-40.0, 40.0), (-40.0, 40.0), 10.0, 5000.0)
+        seg = plan.beams[0].segments[0]
+        assert seg.x_jaw_mm == (-40.0, 40.0)
+        assert seg.y_jaw_mm == (-40.0, 40.0)
+        assert seg.mu == 5000.0
+        assert len(seg.mlc_rows) == 8
 
-        result = generate_photon_beamlets(
-            ct=object(), patient=object(),
-            machine_model=PhotonMachineModel(machine_model_id="default"),
-            beam_set=BeamSetSpec(
-                isocenter_mm=(0, 0, 0),
-                beams=[
-                    BeamSpec(beam_id="B1", gantry_deg=72),
-                    BeamSpec(beam_id="B2", gantry_deg=144),
-                ],
-            ),
-            params=DeliveryParams(),
-        )
-        assert [b.gantryAngle_degree for b in result.plan.beams] == [72.0, 144.0]
+    def test_plan_round_trips_through_json(self):
+        plan = build_photon_plan([(0.0, 0.0), (180.0, 0.0)], (-50.0, 50.0), (-50.0, 50.0), 10.0, 100.0)
+        again = PhotonPlan.from_json(plan.to_json())
+        assert again == plan
+        assert again.n_beamlets == 2 * 400
 
-    def test_segment_jaw_centered_on_isocenter(self):
-        from radiarch.services.photon_beamlets import generate_photon_beamlets
+    def test_gantry_wraps_to_dicom_range(self):
+        plan = build_photon_plan([(360.0, 0.0)], (-50.0, 50.0), (-50.0, 50.0), 10.0, 1.0)
+        assert plan.beams[0].gantry_deg == 0.0
 
-        # Jaw opening 80 mm should produce [-40, +40] mm jaw bounds.
-        result = generate_photon_beamlets(
-            ct=object(), patient=object(),
-            machine_model=PhotonMachineModel(machine_model_id="default"),
-            beam_set=_beam_set(1),
-            params=DeliveryParams(jaw_opening_mm=(80.0, 80.0)),
-        )
-        seg = result.plan.beams[0].beamSegments[0]
-        assert seg.x_jaw_mm == [-40.0, 40.0]
+    def test_beam_id_count_mismatch_rejected(self):
+        with pytest.raises(ValueError):
+            build_photon_plan([(0.0, 0.0)], (-50.0, 50.0), (-50.0, 50.0), 10.0, 1.0, beam_ids=["a", "b"])

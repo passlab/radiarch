@@ -64,6 +64,7 @@ class GeometryBundle:
     spacing_mm: tuple           # (sx, sy, sz)
     ct_hu: Optional[np.ndarray] = None    # (nz, ny, nx) int16, Hounsfield Units
     ct_image: Optional[Any] = None        # OpenTPS CTImage wrapping ct_hu, when OpenTPS is importable
+    origin_mm: Optional[tuple] = None     # (ox, oy, oz) centre of voxel [0, 0, 0]; engines that place an isocenter need it
 
 
 @dataclass

@@ -68,7 +68,9 @@ class TestDisclaimer:
         assert r.status_code == 200
         body = r.json()
         assert body["intended_use"] == RESEARCH_USE_ONLY
-        assert body["models"]["photon-ccc"]["status"] == "unavailable"
+        from radiarch.services.dose_engines.registry import engine_health
+        expected = "available" if engine_health("ccc").get("available") else "unavailable"
+        assert body["models"]["photon-ccc"]["status"] == expected
 
 
 # ---------------------------------------------------------------------------
@@ -257,8 +259,10 @@ class TestGeometryBundle:
 # OpenTPS photon plan builder (defect 1) and robustness translation (defect 2)
 # ---------------------------------------------------------------------------
 
-@needs_opentps
 class TestPhotonPlanBuilder:
+    """Defect 1 of R0: photon plans used to end up with no beams. The builder
+    now targets radiarch's own plan model (R1); no OpenTPS involved."""
+
     def test_beams_are_attached_and_carry_beamlets(self):
         from radiarch.services.photon_beamlets import build_photon_plan
 
@@ -268,17 +272,17 @@ class TestPhotonPlanBuilder:
             leaf_width_mm=10.0, mu_per_beam=100.0, beamlet_spacing_mm=(5.0, 5.0),
         )
         assert len(plan.beams) == 2
-        assert [b.gantryAngle_degree for b in plan.beams] == [0.0, 90.0]
-        seg = plan.beams[1].beamSegments[0]
-        assert seg.x_jaw_mm == [-100.0, 100.0]
-        assert seg.y_jaw_mm == [-100.0, 100.0]
+        assert [b.gantry_deg for b in plan.beams] == [0.0, 90.0]
+        seg = plan.beams[1].segments[0]
+        assert seg.x_jaw_mm == (-100.0, 100.0)
+        assert seg.y_jaw_mm == (-100.0, 100.0)
         assert seg.mu == 100.0
-        assert seg.Xmlc_mm.shape == (20, 4)
-        n = int(plan.beams[0].numberOfBeamlets)
-        assert n == 1600, n                       # 40 × 40 beamlets of 5 mm in a 200 mm field
-        assert plan.numberOfBeamlets == 2 * n
+        assert len(seg.mlc_rows) == 20
+        n = plan.beams[0].n_beamlets
+        assert n == 1600                          # 40 × 40 beamlets of 5 mm in a 200 mm field
+        assert plan.n_beamlets == 2 * n
 
-    def test_generate_reports_opentps_beamlet_count(self):
+    def test_generate_reports_real_beamlet_count(self):
         from radiarch.models.beam_model import BeamSetSpec, BeamSpec, DeliveryParams
         from radiarch.services.machine_model import PhotonMachineModel
         from radiarch.services.photon_beamlets import generate_photon_beamlets

@@ -193,15 +193,19 @@ class TestCCCGating:
         issues = eng.validate(_geom(), _bm(Modality.proton_pbs), {})
         assert any("PHOTON_IMRT" in i for i in issues)
 
-    def test_compute_dose_always_unavailable_in_v1(self):
+    def test_compute_dose_rejects_a_plan_that_is_not_a_radiarch_photon_plan(self):
+        # R1: the engine is real; a beam model pickled before R1 (an OpenTPS plan, or
+        # this test double) must be rebuilt rather than silently computed.
+        from radiarch.services.dose_engines.protocol import EngineParamError
         eng = CCCEngine()
-        with pytest.raises(EngineUnavailableError):
+        with pytest.raises(EngineParamError, match="PhotonPlan"):
             eng.compute_dose(_geom(), _bm(Modality.photon_imrt),
                              np.ones(4, dtype=np.float32))
 
-    def test_influence_not_implemented(self):
+    def test_influence_rejects_a_plan_that_is_not_a_radiarch_photon_plan(self):
+        from radiarch.services.dose_engines.protocol import EngineParamError
         eng = CCCEngine()
-        with pytest.raises(EngineUnavailableError):
+        with pytest.raises(EngineParamError, match="PhotonPlan"):
             eng.build_influence(_geom(), _bm(Modality.photon_imrt))
 
     def test_grad_not_implemented(self):

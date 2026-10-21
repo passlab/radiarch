@@ -50,6 +50,20 @@ class Settings(BaseSettings):
 
     cors_origins: List[str] = Field(default_factory=lambda: ["*"])
 
+    # CCC photon engine: the WiscPlan binary and its kernels, run as a subprocess
+    ccc_engine_dir: str = Field(
+        default="",
+        description=(
+            "Directory holding CCC_DoseEngine/CCC_DoseEngine and Kernels_differentFluence. "
+            "Empty = the copy vendored with OpenTPS core."
+        ),
+    )
+    ccc_n_jobs: int = Field(default=4, ge=1, description="Parallel CCC processes per dose/Dij build.")
+    ccc_calibration_spacing_mm: float = Field(
+        default=2.5, gt=0,
+        description="Grid spacing of the water phantom used to calibrate the CCC output (reference field).",
+    )
+
     # -------------------------------------------------------------------
     # D7.1 — Celery resource limits (per-task overrides for dose work)
     # -------------------------------------------------------------------
