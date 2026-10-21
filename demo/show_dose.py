@@ -66,6 +66,7 @@ from radiarch.models.dose import (  # noqa: E402
 )
 from radiarch.models.geometry import (  # noqa: E402
     GeometryBuildRequest,
+    GridSpec,
     HUDensityModel,
     PatientRef,
 )
@@ -135,6 +136,10 @@ def main() -> None:
                    help="Number of robustness scenarios to evaluate (0 = nominal only).")
     p.add_argument("--influence", action="store_true",
                    help="Also build the influence matrix Dij.")
+    p.add_argument("--spacing", type=float, default=None,
+                   help="Resample the geometry to this isotropic voxel spacing (mm). "
+                        "Coarse grids (4-5 mm) make the CCC photon engine and gamma demo-fast; "
+                        "default keeps the native CT grid.")
     p.add_argument("--show", action="store_true",
                    help="Render axial dose slice with structure overlay.")
     args = p.parse_args()
@@ -144,6 +149,7 @@ def main() -> None:
     _row("modality:", args.modality)
     _row("scenarios:", args.scenarios)
     _row("influence:", args.influence)
+    _row("spacing (mm):", args.spacing or "native CT grid")
 
     # D6.6 — when the user explicitly asks for mcsquare, surface the
     # availability check up front rather than failing inside the
@@ -173,9 +179,10 @@ def main() -> None:
             sys.exit(1)
         patient_ref = PatientRef(dicom_study_uid="demo-study-001")
 
+    grid_spec = GridSpec(spacing_mm=(args.spacing,) * 3) if args.spacing else None
     geom_req = GeometryBuildRequest(
         patient_ref=patient_ref,
-        grid_spec=None,
+        grid_spec=grid_spec,
         hu_to_density_model=HUDensityModel.stoichiometric,
     )
     _h("Step 1 — Geometry build")

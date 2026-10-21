@@ -63,6 +63,7 @@ os.environ["RADIARCH_OPENTPS_DATA_ROOT"] = str(_TEST_DATA)
 
 from radiarch.config import get_settings  # noqa: E402
 from radiarch.models.geometry import (  # noqa: E402
+    GridSpec,
     GeometryBuildRequest,
     HUDensityModel,
     PatientRef,
@@ -135,6 +136,18 @@ def _parse_upload_arg() -> Optional[Path]:
     return Path(sys.argv[idx + 1]).expanduser().resolve()
 
 
+def _spacing_from_argv():
+    """``--spacing S`` → an isotropic GridSpec covering the CT extent; None otherwise."""
+    if "--spacing" not in sys.argv:
+        return None
+    idx = sys.argv.index("--spacing")
+    if idx + 1 >= len(sys.argv):
+        print("ERROR: --spacing needs a value in mm", file=sys.stderr)
+        sys.exit(2)
+    s = float(sys.argv[idx + 1])
+    return GridSpec(spacing_mm=(s, s, s))
+
+
 def main() -> None:
     upload_zip = _parse_upload_arg()
 
@@ -166,7 +179,7 @@ def main() -> None:
     # Build the request — same shape an HTTP client would send.
     request = GeometryBuildRequest(
         patient_ref=patient_ref,
-        grid_spec=None,                                 # match CT grid
+        grid_spec=_spacing_from_argv(),                 # None = match the CT grid
         hu_to_density_model=HUDensityModel.stoichiometric,
     )
 
@@ -253,7 +266,11 @@ def _show_axial_slices(result) -> None:
         fontsize=11,
     )
     plt.tight_layout()
-    plt.show()
+    out_path = Path(result.density_grid_uri).parent / "preview.png"
+    fig.savefig(out_path, dpi=120, bbox_inches="tight")
+    print(f"\n  Saved preview → {out_path}")
+    if os.environ.get("DISPLAY"):
+        plt.show()
 
 
 if __name__ == "__main__":

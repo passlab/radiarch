@@ -58,6 +58,7 @@ from radiarch.models.beam_model import (  # noqa: E402
 from radiarch.models.dose import EngineSpec, ScenarioSpec  # noqa: E402
 from radiarch.models.geometry import (  # noqa: E402
     GeometryBuildRequest,
+    GridSpec,
     HUDensityModel,
     PatientRef,
 )
@@ -142,7 +143,11 @@ def _parse_objectives(spec: Optional[str], structures: List[str]) -> List[Object
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--upload", type=str, default=None)
-    p.add_argument("--engine", choices=["analytic", "mcsquare"], default="analytic")
+    p.add_argument("--engine", choices=["analytic", "mcsquare", "ccc"], default="analytic")
+    p.add_argument("--modality", choices=["proton", "photon"], default="proton")
+    p.add_argument("--spacing", type=float, default=None,
+                   help="Resample the geometry to this isotropic voxel spacing (mm); "
+                        "4-5 mm keeps MCsquare/CCC influence builds demo-fast.")
     p.add_argument("--objectives", type=str, default=None,
                    help="CSV of name=type:dose_gy, e.g. ptv_dmin=60,oar_dmax=20")
     p.add_argument("--solver", choices=["L-BFGS-B", "Adam", "ProjectedGradient"],
@@ -178,7 +183,8 @@ def main() -> None:
     _h("Step 1 — Geometry build")
     t0 = time.monotonic()
     geom = GeometryService().build(GeometryBuildRequest(
-        patient_ref=patient_ref, grid_spec=None,
+        patient_ref=patient_ref,
+        grid_spec=GridSpec(spacing_mm=(args.spacing,) * 3) if args.spacing else None,
         hu_to_density_model=HUDensityModel.stoichiometric,
     ))
     structures = list(geom.structure_index.keys())
@@ -190,7 +196,8 @@ def main() -> None:
     _h("Step 2 — Beam-model build")
     t0 = time.monotonic()
     bm = BeamModelService().build(BeamModelBuildRequest(
-        geometry_id=geom.geometry_id, modality=Modality.proton_pbs,
+        geometry_id=geom.geometry_id,
+        modality=Modality.proton_pbs if args.modality == "proton" else Modality.photon_imrt,
         beam_set=BeamSetSpec(isocenter_mm=(0.0, 0.0, 0.0),
                              beams=[BeamSpec(beam_id="B1", gantry_deg=0.0)]),
         delivery_params=DeliveryParams(),

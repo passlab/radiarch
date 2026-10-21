@@ -38,6 +38,7 @@ os.environ.setdefault("RADIARCH_OPENTPS_DATA_ROOT", str(_TEST_DATA))
 
 from radiarch.models.dose import EngineSpec  # noqa: E402
 from radiarch.models.geometry import (  # noqa: E402
+    GridSpec,
     GeometryBuildRequest, HUDensityModel, PatientRef,
 )
 from radiarch.models.optimization import ObjectiveSpec  # noqa: E402
@@ -59,6 +60,9 @@ def _row(key: str, value) -> None:
 def main() -> None:
     p = argparse.ArgumentParser()
     p.add_argument("--engine", choices=["analytic", "mcsquare"], default="analytic")
+    p.add_argument("--spacing", type=float, default=None,
+                   help="Resample the geometry to this isotropic voxel spacing (mm); "
+                        "4-5 mm keeps the per-angle MCsquare influence builds demo-fast.")
     p.add_argument("--n-beams", type=int, default=2)
     p.add_argument("--angle-step", type=float, default=90.0)
     p.add_argument("--search", choices=["greedy", "top_k"], default="greedy")
@@ -79,7 +83,8 @@ def main() -> None:
     t0 = time.monotonic()
     geom = GeometryService().build(GeometryBuildRequest(
         patient_ref=PatientRef(dicom_study_uid="demo-study-001"),
-        grid_spec=None, hu_to_density_model=HUDensityModel.stoichiometric,
+        grid_spec=GridSpec(spacing_mm=(args.spacing,) * 3) if args.spacing else None,
+        hu_to_density_model=HUDensityModel.stoichiometric,
     ))
     structures = list(geom.structure_index.keys())
     _row("geometry_id:", geom.geometry_id)

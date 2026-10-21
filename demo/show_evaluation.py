@@ -37,7 +37,7 @@ from radiarch.models.beam_model import (  # noqa: E402
 from radiarch.models.dose import DoseComputeRequest, EngineSpec, WeightVector  # noqa: E402
 from radiarch.models.evaluation import EvaluationRequest, GammaSpec  # noqa: E402
 from radiarch.models.geometry import (  # noqa: E402
-    GeometryBuildRequest, HUDensityModel, PatientRef,
+    GeometryBuildRequest, GridSpec, HUDensityModel, PatientRef,
 )
 from radiarch.services.beam_model import BeamModelService  # noqa: E402
 from radiarch.services.dose import DoseService  # noqa: E402
@@ -57,10 +57,14 @@ def _row(key: str, value) -> None:
 
 def main() -> None:
     p = argparse.ArgumentParser()
-    p.add_argument("--engine", choices=["analytic", "mcsquare"], default="analytic")
+    p.add_argument("--engine", choices=["analytic", "mcsquare", "ccc"], default="analytic")
+    p.add_argument("--modality", choices=["proton", "photon"], default="proton")
+    p.add_argument("--spacing", type=float, default=None,
+                   help="Resample the geometry to this isotropic voxel spacing (mm); "
+                        "4-5 mm keeps the brute-force gamma and the CCC engine demo-fast.")
     p.add_argument("--prescription", type=float, default=2.0)
     p.add_argument("--gamma", action="store_true",
-                   help="Run a gamma comparison vs the same dose (sanity → 100%).")
+                   help="Run a gamma comparison vs the same dose (sanity → 100%%).")
     p.add_argument("--show", action="store_true", help="Render the DVH to preview.png.")
     args = p.parse_args()
 
@@ -75,7 +79,8 @@ def main() -> None:
     _h("Step 1 — Geometry build")
     geom = GeometryService().build(GeometryBuildRequest(
         patient_ref=PatientRef(dicom_study_uid="demo-study-001"),
-        grid_spec=None, hu_to_density_model=HUDensityModel.stoichiometric,
+        grid_spec=GridSpec(spacing_mm=(args.spacing,) * 3) if args.spacing else None,
+        hu_to_density_model=HUDensityModel.stoichiometric,
     ))
     structures = list(geom.structure_index.keys())
     _row("geometry_id:", geom.geometry_id)
@@ -83,7 +88,8 @@ def main() -> None:
 
     _h("Step 2 — Beam-model + dose")
     bm = BeamModelService().build(BeamModelBuildRequest(
-        geometry_id=geom.geometry_id, modality=Modality.proton_pbs,
+        geometry_id=geom.geometry_id,
+        modality=Modality.proton_pbs if args.modality == "proton" else Modality.photon_imrt,
         beam_set=BeamSetSpec(isocenter_mm=(0.0, 0.0, 0.0),
                              beams=[BeamSpec(beam_id="B1", gantry_deg=0.0)]),
         delivery_params=DeliveryParams(),
