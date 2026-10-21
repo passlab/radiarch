@@ -69,6 +69,8 @@ class BeamGeometry:
     name: str = ""
     range_shifter_id: Optional[str] = None
     range_shifter_wet_mm: float = 0.0
+    isocenter_mm: Optional[Sequence[float]] = None     # None = the plan's isocenter, else the target's centre of mass
+    target_xyz: Optional[np.ndarray] = None            # a field-specific target (x, y, z); None = the plan target
 
 
 @dataclass
@@ -378,17 +380,35 @@ def place_spots(rsp_xyz: np.ndarray, target_xyz: np.ndarray, origin: Sequence[fl
     """Build a plan with unit-weight spots on ``target_xyz`` for every beam.
 
     ``rsp_xyz`` is the relative stopping power at 100 MeV and ``target_xyz``
-    the target mask, both ``(x, y, z)`` on the same grid. The isocenter is
-    the target's centre of mass unless given; the target is dilated by the
-    margin before the spots are placed.
+    the target mask, both ``(x, y, z)`` on the same grid. A beam with its own
+    ``target_xyz`` is placed on that instead (a field-specific target); its
+    isocenter is its own, else ``isocenter_mm``, else the centre of mass of
+    its target. Targets are dilated by the margin before the spots are placed.
     """
     params = params or PlacementParams()
     target_xyz = np.asarray(target_xyz, dtype=bool)
     if not target_xyz.any():
         raise ValueError("the target mask is empty")
-    iso = np.asarray(isocenter_mm, dtype=np.float64) if isocenter_mm is not None else center_of_mass_mm(target_xyz, origin, spacing)
-    dilated = dilate_mask(target_xyz, spacing, params.target_margin_mm)
-    plan_beams = [place_beam(rsp_xyz, dilated, origin, spacing, b, iso, params) for b in beams]
+    dilated_cache: Dict[int, np.ndarray] = {}
+
+    def dilated_of(mask: np.ndarray) -> np.ndarray:
+        key = id(mask)
+        if key not in dilated_cache:
+            dilated_cache[key] = dilate_mask(mask, spacing, params.target_margin_mm)
+        return dilated_cache[key]
+
+    plan_beams = []
+    for b in beams:
+        beam_target = target_xyz if b.target_xyz is None else np.asarray(b.target_xyz, dtype=bool)
+        if not beam_target.any():
+            raise ValueError(f"beam {b.beam_id}: its target is empty")
+        if b.isocenter_mm is not None:
+            iso = np.asarray(b.isocenter_mm, dtype=np.float64)
+        elif isocenter_mm is not None:
+            iso = np.asarray(isocenter_mm, dtype=np.float64)
+        else:
+            iso = center_of_mass_mm(beam_target, origin, spacing)
+        plan_beams.append(place_beam(rsp_xyz, dilated_of(beam_target), origin, spacing, b, iso, params))
     n = sum(b.n_spots for b in plan_beams)
     logger.info("placed {} spots in {} beams ({} layers)", n, len(plan_beams), sum(len(b.layers) for b in plan_beams))
     return ProtonPlan(name=name, beams=plan_beams)

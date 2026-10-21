@@ -70,7 +70,13 @@ class BeamModelStage(str, Enum):
 # ---------------------------------------------------------------------------
 
 class BeamSpec(BaseModel):
-    """One beam in a treatment plan — gantry, couch, collimator angles."""
+    """One beam in a treatment plan — gantry, couch, collimator angles.
+
+    A beam may carry its own isocenter and a field-specific target: the slab
+    ``target_z_range_mm`` of the plan target (patient z, mm) that this field
+    covers. Multi-isocenter plans such as craniospinal irradiation use both;
+    overlapping slabs are the junctions, which the optimizer feathers.
+    """
 
     beam_id: str = Field(..., min_length=1, max_length=64)
     gantry_deg: float = Field(..., ge=0.0, lt=360.0,
@@ -79,17 +85,35 @@ class BeamSpec(BaseModel):
                              description="IEC 61217 couch angle, [-180, 180].")
     collimator_deg: float = Field(default=0.0, ge=-180.0, le=180.0,
                                   description="Collimator rotation, [-180, 180].")
+    isocenter_mm: Optional[Tuple[float, float, float]] = Field(
+        default=None,
+        description="This beam's isocenter (patient LPS, mm); null = the beam set's, else the centre of mass of the beam's target.",
+    )
+    target_z_range_mm: Optional[Tuple[float, float]] = Field(
+        default=None,
+        description="Field-specific target: the plan target restricted to this z range (patient z, mm, inclusive).",
+    )
+
+    @field_validator("target_z_range_mm")
+    @classmethod
+    def _ordered_range(cls, v):
+        if v is not None and not v[0] < v[1]:
+            raise ValueError(f"target_z_range_mm must be (low, high) with low < high, got {v}")
+        return v
 
 
 class BeamSetSpec(BaseModel):
     """The geometric beam configuration for a plan.
 
-    ``isocenter_mm`` is in patient LPS coordinates. ``beams`` carries one
-    entry per delivery direction (1–9 beams supported, matching the
-    existing PlanRequest constraint).
+    ``isocenter_mm`` is in patient LPS coordinates; null means the centre of
+    mass of the target (of each beam's own target when beams carry
+    ``target_z_range_mm``). ``beams`` carries one entry per delivery direction
+    (1–9 beams supported, matching the existing PlanRequest constraint).
     """
 
-    isocenter_mm: Tuple[float, float, float]
+    isocenter_mm: Optional[Tuple[float, float, float]] = Field(
+        default=None, description="Isocenter of every beam that has none of its own; null = the target's centre of mass.",
+    )
     beams: List[BeamSpec] = Field(..., min_length=1, max_length=9)
 
     @field_validator("beams")
@@ -189,6 +213,8 @@ class BeamModelBuildRequest(BaseModel):
                     "gantry_deg": b.gantry_deg,
                     "couch_deg": b.couch_deg,
                     "collimator_deg": b.collimator_deg,
+                    "isocenter_mm": list(b.isocenter_mm) if b.isocenter_mm is not None else None,
+                    "target_z_range_mm": list(b.target_z_range_mm) if b.target_z_range_mm is not None else None,
                 }
                 for b in self.beam_set.beams
             ),
@@ -198,7 +224,7 @@ class BeamModelBuildRequest(BaseModel):
             "geometry_id": self.geometry_id,
             "modality": self.modality.value,
             "machine_model_id": self.machine_model_id,
-            "isocenter_mm": list(self.beam_set.isocenter_mm),
+            "isocenter_mm": list(self.beam_set.isocenter_mm) if self.beam_set.isocenter_mm is not None else None,
             "beams": sorted_beams,
             "delivery_params": self.delivery_params.for_modality(self.modality),
         }

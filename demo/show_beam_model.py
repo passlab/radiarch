@@ -100,8 +100,7 @@ def _proton_request(geometry_id: str) -> BeamModelBuildRequest:
         modality=Modality.proton_pbs,
         machine_model_id=None,
         beam_set=BeamSetSpec(
-            isocenter_mm=[0.0, 0.0, 0.0],
-            beams=[
+                        beams=[
                 BeamSpec(beam_id="B1", gantry_deg=0.0, couch_deg=0.0,
                          collimator_deg=0.0),
                 BeamSpec(beam_id="B2", gantry_deg=180.0, couch_deg=0.0,
@@ -122,8 +121,7 @@ def _photon_request(geometry_id: str) -> BeamModelBuildRequest:
         modality=Modality.photon_imrt,
         machine_model_id=None,
         beam_set=BeamSetSpec(
-            isocenter_mm=[0.0, 0.0, 0.0],
-            beams=[
+                        beams=[
                 BeamSpec(beam_id="B1", gantry_deg=0.0),
                 BeamSpec(beam_id="B2", gantry_deg=120.0),
                 BeamSpec(beam_id="B3", gantry_deg=240.0),

@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional
 
+import numpy as np
 from loguru import logger
 
 from ..models.beam_model import BeamSetSpec, DeliveryParams, FluenceElementSet, PerBeamElements
@@ -61,16 +62,35 @@ def generate_proton_spots(
         spot_spacing_mm=float(params.spot_spacing_mm or 5.0),
         layer_spacing_mm=float(params.layer_spacing_mm or 5.0),
     )
-    beams = [BeamGeometry(beam_id=b.beam_id, gantry_deg=float(b.gantry_deg), couch_deg=float(b.couch_deg), name=b.beam_id)
-             for b in beam_set.beams]
+    target_xyz = geometry.mask_xyz(target_label)
+    beams = [
+        BeamGeometry(
+            beam_id=b.beam_id, gantry_deg=float(b.gantry_deg), couch_deg=float(b.couch_deg), name=b.beam_id,
+            isocenter_mm=tuple(float(v) for v in b.isocenter_mm) if b.isocenter_mm is not None else None,
+            target_xyz=(target_slab(target_xyz, geometry.origin_mm, geometry.spacing_mm, b.target_z_range_mm)
+                        if b.target_z_range_mm is not None else None),
+        )
+        for b in beam_set.beams
+    ]
     logger.info(
         "Building proton plan on {}: {} beams, target {!r}, spot_spacing={} mm, layer_spacing={} mm",
         geometry.geometry_id, len(beams), target_name, placement.spot_spacing_mm, placement.layer_spacing_mm,
     )
     rsp = machine_model.rsp_model.rsp(geometry.ct_hu_xyz(), 100.0)
-    plan = place_spots(rsp, geometry.mask_xyz(target_label), geometry.origin_mm, geometry.spacing_mm, beams,
-                       placement, name=f"plan[{geometry.geometry_id}]")
+    plan = place_spots(rsp, target_xyz, geometry.origin_mm, geometry.spacing_mm, beams, placement,
+                       isocenter_mm=beam_set.isocenter_mm, name=f"plan[{geometry.geometry_id}]")
     return ProtonBuildResult(fluence_elements=summarize_proton_plan(plan, beam_set), plan=plan)
+
+
+def target_slab(target_xyz: np.ndarray, origin_mm, spacing_mm, z_range_mm) -> np.ndarray:
+    """The target restricted to the voxels whose z centre lies in ``z_range_mm`` (inclusive)."""
+    z_lo, z_hi = (float(v) for v in z_range_mm)
+    nz = target_xyz.shape[2]
+    z = float(origin_mm[2]) + float(spacing_mm[2]) * np.arange(nz)
+    keep = (z >= z_lo - 1e-6) & (z <= z_hi + 1e-6)
+    out = np.zeros_like(target_xyz, dtype=bool)
+    out[:, :, keep] = target_xyz[:, :, keep]
+    return out
 
 
 def summarize_proton_plan(plan: ProtonPlan, beam_set: BeamSetSpec) -> FluenceElementSet:
@@ -91,4 +111,4 @@ def summarize_proton_plan(plan: ProtonPlan, beam_set: BeamSetSpec) -> FluenceEle
     return FluenceElementSet(total_count=total, per_beam=per_beam)
 
 
-__all__ = ["ProtonBuildResult", "generate_proton_spots", "summarize_proton_plan"]
+__all__ = ["ProtonBuildResult", "generate_proton_spots", "target_slab", "summarize_proton_plan"]

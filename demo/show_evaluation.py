@@ -90,8 +90,7 @@ def main() -> None:
     bm = BeamModelService().build(BeamModelBuildRequest(
         geometry_id=geom.geometry_id,
         modality=Modality.proton_pbs if args.modality == "proton" else Modality.photon_imrt,
-        beam_set=BeamSetSpec(isocenter_mm=(0.0, 0.0, 0.0),
-                             beams=[BeamSpec(beam_id="B1", gantry_deg=0.0)]),
+        beam_set=BeamSetSpec(beams=[BeamSpec(beam_id="B1", gantry_deg=0.0)]),
         delivery_params=DeliveryParams(),
     ))
     n = bm.fluence_elements.total_count

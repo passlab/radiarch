@@ -199,7 +199,6 @@ def main() -> None:
         geometry_id=geom_result.geometry_id,
         modality=modality,
         beam_set=BeamSetSpec(
-            isocenter_mm=(0.0, 0.0, 0.0),
             beams=[BeamSpec(beam_id="B1", gantry_deg=0.0)],
         ),
         delivery_params=DeliveryParams(),

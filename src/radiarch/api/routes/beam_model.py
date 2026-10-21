@@ -36,6 +36,7 @@ from ...models.beam_model import (
     BeamModelBuildRequest,
     BeamModelJobStatus,
     BeamModelResult,
+    BeamSetSpec,
 )
 from ...services.beam_model import BeamModelService
 from ...services.beam_persistence import PLAN_FILENAME
@@ -248,4 +249,58 @@ async def get_beam_model_artifact(beam_model_id: str):
         path=str(plan_path),
         media_type="application/octet-stream",
         filename=PLAN_FILENAME,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Plan templates (R3)
+# ---------------------------------------------------------------------------
+
+class CraniospinalTemplateRequest(BaseModel):
+    """``POST /beam-model/templates/craniospinal``: fields along the craniospinal target."""
+
+    geometry_id: str = Field(..., min_length=1, max_length=36)
+    target_structure: Optional[str] = Field(default=None, description="Null = the geometry's target (PTV/GTV/CTV).")
+    field_length_mm: float = Field(default=300.0, gt=0.0, le=400.0)
+    overlap_mm: float = Field(default=40.0, ge=0.0, description="Junction length shared by neighbouring fields.")
+    gantry_deg: float = Field(default=180.0, ge=0.0, lt=360.0)
+    couch_deg: float = Field(default=0.0, ge=-180.0, le=180.0)
+    brain_oblique_deg: float = Field(default=0.0, ge=0.0, lt=90.0,
+                                     description="> 0: the brain slab gets a pair of posterior-oblique fields at gantry ± this angle.")
+
+
+class CraniospinalTemplateResponse(BaseModel):
+    beam_set: BeamSetSpec
+    target_structure: str
+    target_z_extent_mm: Tuple[float, float]
+    junctions_mm: list
+    fields: list
+
+
+@router.post(
+    "/templates/craniospinal",
+    summary="A beam set for craniospinal irradiation: posterior fields with field-specific target slabs and junction overlaps.",
+    response_model=CraniospinalTemplateResponse,
+)
+async def craniospinal_template_endpoint(request: CraniospinalTemplateRequest) -> CraniospinalTemplateResponse:
+    from ...services.geometry import GeometryService
+    from ...services.geometry_bundle import load_geometry_arrays
+    from ...services.plan_templates import craniospinal_template
+
+    geom = GeometryService().store.get_by_id(request.geometry_id)
+    if geom is None:
+        raise HTTPException(status_code=404, detail=f"geometry {request.geometry_id!r} not found")
+    try:
+        t = craniospinal_template(
+            load_geometry_arrays(geom), request.target_structure,
+            field_length_mm=request.field_length_mm, overlap_mm=request.overlap_mm,
+            gantry_deg=request.gantry_deg, couch_deg=request.couch_deg, brain_oblique_deg=request.brain_oblique_deg,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return CraniospinalTemplateResponse(
+        beam_set=t.beam_set, target_structure=t.target_name, target_z_extent_mm=t.target_z_extent_mm,
+        junctions_mm=[list(j) for j in t.junctions_mm],
+        fields=[{"beam_id": f.beam_id, "z_range_mm": list(f.z_range_mm), "isocenter_mm": list(f.isocenter_mm),
+                 "target_voxels": f.n_target_voxels} for f in t.fields],
     )
