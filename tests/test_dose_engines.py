@@ -120,24 +120,20 @@ class TestMCsquareGating:
         assert not any("PROTON_PBS" in i and "got" in i for i in issues)
 
     def test_compute_dose_without_backend_raises_unavailable(self, monkeypatch):
-        # Force the "no opentps" branch even if it happens to be importable.
-        import radiarch.services.dose_engines.mcsquare as mc
-        monkeypatch.setattr(mc, "_opentps_available", lambda: False)
+        # Force the "engine missing" branch even on a machine that has the binaries.
+        from radiarch.services.dose_engines.mcsquare_driver import MCsquareAssets
+        monkeypatch.setattr(MCsquareAssets, "availability", lambda self: (False, "forced by test"))
 
         eng = MCsquareEngine()
         with pytest.raises(EngineUnavailableError):
             eng.compute_dose(_geom(), _bm(Modality.proton_pbs),
                              np.ones(4, dtype=np.float32))
 
-    def test_influence_unavailable_without_opentps(self, monkeypatch):
-        """D8.1 — build_influence works in principle, but still needs OpenTPS.
-
-        On a machine without OpenTPS importable, MCsquare's
-        beamlet path raises EngineUnavailableError just like
-        compute_dose does — same fail-fast behavior.
-        """
-        from radiarch.services.dose_engines import mcsquare as mc
-        monkeypatch.setattr(mc, "_opentps_available", lambda: False)
+    def test_influence_unavailable_without_engine(self, monkeypatch):
+        """build_influence fails fast like compute_dose when the engine binaries are
+        missing (R14: the check is the driver's asset availability, not an OpenTPS import)."""
+        from radiarch.services.dose_engines.mcsquare_driver import MCsquareAssets
+        monkeypatch.setattr(MCsquareAssets, "availability", lambda self: (False, "forced by test"))
         eng = MCsquareEngine()
         with pytest.raises(EngineUnavailableError):
             eng.build_influence(_geom(), _bm(Modality.proton_pbs))

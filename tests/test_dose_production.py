@@ -368,26 +368,28 @@ class TestMCsquareEngineUnit:
         from radiarch.services.dose_engines.mcsquare import MCsquareEngine
         from types import SimpleNamespace
         engine = MCsquareEngine()
-        geometry = SimpleNamespace(density=__import__("numpy").zeros((4, 4, 4)), ct_image=None)
+        geometry = SimpleNamespace(density=__import__("numpy").zeros((4, 4, 4)), ct_image=None, ct_hu=None)
         modality = SimpleNamespace(value="PROTON_PBS")
         fluence = SimpleNamespace(total_count=10)
         beam_model_result = SimpleNamespace(modality=modality, fluence_elements=fluence)
         beam_model = SimpleNamespace(result=beam_model_result)
         issues = engine.validate(geometry, beam_model, {})
-        assert any("CTImage" in issue for issue in issues)
+        assert any("ct_hu" in issue for issue in issues)
 
-    def test_apply_weights_uses_flat_path_when_available(self):
-        from radiarch.services.dose_engines.mcsquare import MCsquareEngine
+    def test_weights_go_into_the_plan_in_fluence_order(self):
+        """R14: weights are applied through ProtonPlan.with_spot_mus, beam by beam, layer by layer."""
+        from radiarch.models.proton_plan import ProtonBeam, ProtonLayer, ProtonPlan, ProtonSpot
         import numpy as np
-        from types import SimpleNamespace
 
-        # Plan exposes .spotMUs of the right size → flat path
+        plan = ProtonPlan(beams=[ProtonBeam(isocenter_mm=(0, 0, 0), layers=[
+            ProtonLayer(energy_mev=100, spots=[ProtonSpot(x_mm=0, y_mm=0, mu=0), ProtonSpot(x_mm=1, y_mm=0, mu=0)]),
+            ProtonLayer(energy_mev=90, spots=[ProtonSpot(x_mm=0, y_mm=1, mu=0), ProtonSpot(x_mm=1, y_mm=1, mu=0)]),
+        ])])
         weights = np.array([0.1, 0.2, 0.3, 0.4], dtype=np.float32)
-        plan = SimpleNamespace(spotMUs=np.zeros(4, dtype=np.float32))
-        fluence = SimpleNamespace(total_count=4, per_beam=None)
+        out = plan.with_spot_mus(weights)
+        np.testing.assert_allclose(out.spot_mus, weights)
+        assert out.beams[0].layers[1].spots[0].mu == pytest.approx(0.3)
 
-        MCsquareEngine._apply_weights_to_plan(plan, fluence, weights)
-        np.testing.assert_array_equal(plan.spotMUs, weights)
 
 
 # ---------------------------------------------------------------------------

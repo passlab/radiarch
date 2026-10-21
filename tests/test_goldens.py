@@ -85,7 +85,7 @@ def test_mcsquare_input_files_match_golden(simplefantom):
         assert p.name in now, f"{p.name} no longer written"
         if p.name == "config.txt":
             # the primary count and the seed are run parameters, not the protocol
-            strip = lambda t: "\n".join(l for l in t.splitlines() if not l.split()[:1] or l.split()[0] not in ("Num_Primaries", "RNG_Seed"))
+            strip = lambda t: "\n".join(l for l in t.splitlines() if not l.split()[:1] or l.split()[0] not in ("Num_Primaries", "RNG_Seed", "Num_Threads"))
             assert strip(now[p.name]) == strip(p.read_text()), "MCsquare config differs from the golden"
         else:
             assert now[p.name] == p.read_text(), f"{p.name} differs from the golden"

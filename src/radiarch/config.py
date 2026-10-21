@@ -64,6 +64,18 @@ class Settings(BaseSettings):
         description="Grid spacing of the water phantom used to calibrate the CCC output (reference field).",
     )
 
+    # MCsquare proton engine (roadmap R14): the binaries, launcher, Materials, BDL and
+    # Scanners directory, run as a subprocess through radiarch's own driver.
+    mcsquare_dir: str = Field(
+        default="",
+        description="Directory with the MCsquare launcher, binaries, Materials/, BDL/ and Scanners/. Empty = the copy vendored with OpenTPS core.",
+    )
+    mcsquare_n_threads: int = Field(default=0, ge=0, description="Engine threads per run; 0 = all cores.")
+    mcsquare_seed: int = Field(default=0, ge=0, description="RNG seed; 0 = from the clock (deterministic runs need a seed and one thread).")
+    mcsquare_scanner: str = Field(default="UCL_Toshiba", description="Scanner calibration under Scanners/ (or an absolute directory).")
+    mcsquare_bdl: str = Field(default="BDL_default_DN_RangeShifter.txt", description="Beam data library under BDL/ (or an absolute path).")
+    mcsquare_keep_workdir: bool = Field(default=False, description="Keep each run's input and output files under {artifact_dir}/mcsquare for inspection.")
+
     # -------------------------------------------------------------------
     # D7.1 — Celery resource limits (per-task overrides for dose work)
     # -------------------------------------------------------------------

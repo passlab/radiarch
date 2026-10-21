@@ -305,55 +305,35 @@ def run_photon_output_vs_field(spec: dict, ctx: Context) -> CaseResult:
 # Proton range (through the vendored OpenTPS path until R14)
 # ---------------------------------------------------------------------------
 
-def _water_calibration(workdir: Path):
-    """An MCsquare CT calibration that maps every HU to water (material 17) at the
-    density of HU 0 = 1.0 g/cm³. The clinical Schneider tables map HU 0 to an
-    adipose/soft-tissue blend whose stopping power is 1-3 % above water, which
-    shortens ranges; a water range test must see water."""
-    from opentps.core.data.CTCalibrations.MCsquareCalibration._mcsquareCTCalibration import MCsquareCTCalibration
-    d = workdir / "water_scanner"; d.mkdir(parents=True, exist_ok=True)
-    (d / "HU_Density_Conversion.txt").write_text("# HU\tdensity (g/cm3): water everywhere\n-1000\t1.000\n0\t1.000\n3000\t1.000\n")
-    (d / "HU_Material_Conversion.txt").write_text("# HU\tmaterial id: 17 = Water\n-1000\t17\n")
-    return MCsquareCTCalibration.fromFiles(str(d / "HU_Density_Conversion.txt"), str(d / "HU_Material_Conversion.txt"), "default")
-
-
 def run_proton_range(spec: dict, ctx: Context) -> CaseResult:
+    """Single spots in water through radiarch's MCsquare driver (R14), with the water-only
+    calibration: the clinical Schneider tables map HU 0 to an adipose/soft-tissue blend
+    whose stopping power is 1-3 % above water, which shortens ranges; a water range test
+    must see water (material 17 at 1.000 g/cm³)."""
     res = CaseResult(spec["name"], spec["kind"])
     ref = load_reference(spec.get("references", "proton_water"))
-    try:
-        from opentps.core.data.images import CTImage
-        from opentps.core.data.plan import ProtonPlan
-        from opentps.core.data.plan._planProtonBeam import PlanProtonBeam
-        from opentps.core.data.plan._planProtonLayer import PlanProtonLayer
-        from ..core.workflows._helpers import build_mc_calculator
-    except Exception as exc:  # pragma: no cover
-        raise Skip(f"OpenTPS / MCsquare path not importable: {exc}")
-    from ..services.dose_engines.registry import engine_health
-    if not engine_health("mcsquare").get("available"):
-        raise Skip("MCsquare engine not available on this machine")
+    from ..models.proton_plan import ProtonBeam, ProtonLayer, ProtonPlan, ProtonSpot
+    from ..services.dose_engines.mcsquare_driver import CalibrationTables, MCsquareDriver
 
+    drv = MCsquareDriver(work_root=ctx.workdir / "mcsquare", n_threads=0, seed=20261021)
+    ok, reason = drv.availability()
+    if not ok:
+        raise Skip(f"MCsquare engine not available on this machine: {reason}")
     p = spec["phantom"]
     s = ctx.spacing(p.get("spacing_mm", 2.0))
     phantom = ph.water_box(p.get("half_width_mm", 40.0), p.get("depth_mm", 350.0), s)
     hu = np.zeros(phantom.shape, dtype=np.float32)               # water = 0 HU, (z, y, x)
-    ct = CTImage(imageArray=np.ascontiguousarray(hu.transpose(2, 1, 0)), origin=np.array(phantom.origin_mm, dtype=float),
-                 spacing=np.array(phantom.spacing_mm, dtype=float))
-    calibration = _water_calibration(ctx.workdir)
+    water = CalibrationTables.water()
     n_prim = int(spec.get("nb_primaries", 200000) / (4 if ctx.fast else 1))
     tol = ref["tolerance"]
     y = phantom.axis_mm("y")
-    ix, iz = phantom.centre_index("x"), phantom.centre_index("z")
     for energy in spec["energies_mev"]:
-        plan = ProtonPlan()
-        beam = PlanProtonBeam(); beam.gantryAngle = 0.0; beam.couchAngle = 0.0; beam.isocenterPosition = [0.0, 0.0, 0.0]
-        layer = PlanProtonLayer(nominalEnergy=float(energy)); layer.appendSpot(0.0, 0.0, 1.0)
-        beam.appendLayer(layer); plan.appendBeam(beam)
-        calc = build_mc_calculator(ct, calibration, nb_primaries=n_prim)
-        dose = calc.computeDose(ct, plan).imageArray            # (x, y, z)
+        plan = ProtonPlan(beams=[ProtonBeam(isocenter_mm=(0.0, 0.0, 0.0), gantry_deg=0.0,
+                                            layers=[ProtonLayer(energy_mev=float(energy), spots=[ProtonSpot(x_mm=0.0, y_mm=0.0, mu=1.0)])])])
+        dose = drv.compute_dose(hu, phantom.spacing_mm, phantom.origin_mm, plan, nb_primaries=n_prim, calibration=water)   # (z, y, x)
         # A single spot spreads laterally with depth, so its central-axis dose is not a
         # Bragg curve; the laterally integrated depth dose (IDD) is what commissioning uses.
         idd = np.asarray(dose, dtype=float).sum(axis=(0, 2))
-        cax = idd
         k = int(np.argmax(idd))
         beyond = np.where(idd[k:] <= 0.8 * idd[k])[0]
         if beyond.size == 0:
@@ -362,15 +342,16 @@ def run_proton_range(spec: dict, ctx: Context) -> CaseResult:
         r80 = float(np.interp(0.8 * idd[k], [idd[j], idd[j - 1]], [y[j], y[j - 1]]))
         edge = float(np.asarray(dose)[[0, -1], :, :].sum() + np.asarray(dose)[:, :, [0, -1]].sum()) / max(float(np.asarray(dose).sum()), 1e-12)
         res.metrics[f"lateral_edge_fraction_{energy}"] = edge
-        expected = ref.get("pstar_values_mm", {}).get(str(energy)) or ref["csda_range_mm"].get(str(energy))
+        pstar = ref.get("pstar_values_mm", {}).get(str(energy))
+        expected = pstar or ref["csda_range_mm"].get(str(energy))
         if expected is None:
             expected = ref["fit"]["alpha_cm_per_mev_p"] * energy ** ref["fit"]["p"] * 10.0
         tol_mm = tol["abs_mm"] + tol["percent"] / 100.0 * expected
         res.metrics[f"r80_mm_{energy}"] = r80
         res.add(f"R80 at {energy} MeV (mm)", r80, f"{expected:.1f} ± {tol_mm:.1f}", abs(r80 - expected) <= tol_mm,
-                "reference: Bragg–Kleeman fit to PSTAR until the PSTAR table is entered")
-        res.metrics[f"idd_{energy}"] = {"depth_mm": y.tolist(), "dose": cax.tolist()}
-    res.notes.append("runs through the vendored OpenTPS MCsquare wrapper; R14 ports it to radiarch's driver")
+                "reference: NIST PSTAR CSDA range" if pstar else "reference: Bragg–Kleeman fit (no PSTAR entry for this energy)")
+        res.metrics[f"idd_{energy}"] = {"depth_mm": y.tolist(), "dose": idd.tolist()}
+    res.notes.append("radiarch's MCsquare driver (R14) with the water-only calibration; seed fixed, all threads")
     return res
 
 

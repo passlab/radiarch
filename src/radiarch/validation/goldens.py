@@ -150,43 +150,31 @@ def _normalise_paths(text: str, roots: Tuple[str, ...]) -> str:
 
 
 def compute_mcsquare_inputs_golden(geo, bm, geo_svc, bm_svc, workdir: Path) -> Dict[str, str]:
-    """Run one MCsquare dose (few primaries) and collect the input files OpenTPS wrote."""
-    from opentps.core.processing.doseCalculation.protons.mcsquareDoseCalculator import MCsquareDoseCalculator
-    from ..services.dose import DoseService
-    from ..services.dose_engines.registry import get_engine, engine_health
+    """The MCsquare input files radiarch's driver writes for the SimpleFantom plan.
 
-    if not engine_health("mcsquare").get("available"):
-        raise RuntimeError("MCsquare engine not available")
-    ds = DoseService(dose_dir=workdir / "doses", influence_dir=workdir / "influence")
-    # Build the bundles the way the service does, from our stores.
-    from ..services.dose_engines.protocol import BeamModelBundle, GeometryBundle
-    import SimpleITK as sitk
-    from ..services.geometry_bundle import load_ct_hu, wrap_ct_image
-    density = sitk.GetArrayFromImage(sitk.ReadImage(geo.density_grid_uri)).astype(np.float32)
-    masks = sitk.GetArrayFromImage(sitk.ReadImage(geo.structure_masks_uri)).astype(np.uint16)
+    The frozen golden was captured from the vendored OpenTPS wrapper before R14;
+    the driver (``services/dose_engines/mcsquare_driver.py``) must write the same
+    ``config.txt`` (paths normalised; primaries, seed and threads ignored by the
+    test), ``PlanPencil.txt``, ``CT.mhd`` and ``CT.raw``.
+    """
+    from ..models.proton_plan import ProtonPlan
+    from ..services.dose_engines.mcsquare_driver import MCsquareDriver
+    from ..services.geometry_bundle import load_ct_hu
+
     ct_hu = load_ct_hu(geo)
-    geometry = GeometryBundle(result=geo, density=density, masks=masks, spacing_mm=tuple(geo.grid_spec.spacing_mm),
-                              ct_hu=ct_hu, ct_image=wrap_ct_image(ct_hu, geo),
-                              origin_mm=tuple(float(o) for o in (geo.grid_spec.origin_mm or (0, 0, 0))))
-    beam_model = BeamModelBundle(result=bm, plan=bm_svc.store.load_plan(bm.beam_model_id))
-    engine = get_engine("mcsquare")
-    weights = np.ones(bm.fluence_elements.total_count, dtype=np.float32)
-    engine.compute_dose(geometry, beam_model, weights, params={"nb_primaries": 1000})
-    sim_dir = Path(MCsquareDoseCalculator()._mcsquareSimuDir)
-    out: Dict[str, str] = {}
+    if ct_hu is None:
+        raise RuntimeError("geometry has no CT grid on disk")
+    spacing = tuple(float(s) for s in geo.grid_spec.spacing_mm)
+    origin = tuple(float(o) for o in (geo.grid_spec.origin_mm or (0, 0, 0)))
+    plan = ProtonPlan.from_opentps(bm_svc.store.load_plan(bm.beam_model_id))
+    sim_dir = Path(workdir) / "mcsquare_inputs"
+    drv = MCsquareDriver(work_root=Path(workdir) / "runs", n_threads=0, seed=0)
+    drv.prepare(sim_dir, ct_hu, spacing, origin, plan, nb_primaries=1000)
     roots = (str(sim_dir), str(sim_dir.parent), str(Path.home()))
-    for name in ("config.txt", "PlanPencil.txt"):
-        p = sim_dir / name
-        if p.is_file():
-            out[name] = _normalise_paths(p.read_text(), roots)
-    mhd = [p for p in sim_dir.rglob("*.mhd")]
-    if mhd:
-        out[mhd[0].name] = _normalise_paths(mhd[0].read_text(), roots)
-        raw = mhd[0].with_suffix(".raw")
-        if raw.is_file():
-            out[raw.name + ".sha256"] = _sha256(raw.read_bytes())
-    if not out:
-        raise RuntimeError(f"no MCsquare input files found under {sim_dir}")
+    out: Dict[str, str] = {}
+    for name in ("config.txt", "PlanPencil.txt", "CT.mhd"):
+        out[name] = _normalise_paths((sim_dir / name).read_text(), roots)
+    out["CT.raw.sha256"] = _sha256((sim_dir / "CT.raw").read_bytes())
     return out
 
 

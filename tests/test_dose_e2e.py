@@ -312,14 +312,12 @@ class TestDoseErrorPaths:
         assert "PROTON_PBS" in msg
         assert "3D" in msg
         assert "fluence elements" in msg
-        assert "CTImage" in msg
+        assert "ct_hu" in msg
 
     def test_compute_dose_raises_param_error_on_wrong_weight_shape(
         self, synthetic_geometry, synthetic_beam_model,
     ):
-        from radiarch.services.dose_engines.mcsquare import (
-            MCsquareEngine, _opentps_available,
-        )
+        from radiarch.services.dose_engines.mcsquare import MCsquareEngine
         from radiarch.services.dose_engines.protocol import (
             EngineParamError, EngineUnavailableError,
         )
@@ -336,41 +334,34 @@ class TestDoseErrorPaths:
             engine.compute_dose(synthetic_geometry, synthetic_beam_model, weights)
         # Either error path is acceptable; just make sure SOMETHING blew up
 
-    def test_apply_weights_raises_when_plan_lacks_beams_and_spotmus(self):
+    def test_plan_that_is_not_a_proton_plan_is_rejected(self):
+        """R14: a beam model whose plan is neither radiarch's ProtonPlan nor an
+        OpenTPS plan the adapter can read is a parameter error, not a crash."""
         from radiarch.services.dose_engines.mcsquare import MCsquareEngine
         from radiarch.services.dose_engines.protocol import EngineParamError
         from types import SimpleNamespace
 
-        weights = np.ones(4, dtype=np.float32)
-        plan = SimpleNamespace()  # no .spotMUs, no .beams
-        fluence = SimpleNamespace(total_count=4, per_beam=None)
+        beam_model = SimpleNamespace(plan=SimpleNamespace())  # no .beams
+        with pytest.raises(EngineParamError, match="not a proton plan"):
+            MCsquareEngine._plan(beam_model)
 
-        with pytest.raises(EngineParamError, match="neither.*spotMUs.*beams"):
-            MCsquareEngine._apply_weights_to_plan(plan, fluence, weights)
-
-    def test_apply_scenario_rejects_wrong_shape_setup_shift(self):
+    def test_scenario_rejects_wrong_shape_setup_shift(self):
         """When called directly with a non-3-vector shift, raise EngineParamError.
 
-        ScenarioSpec's pydantic schema also enforces 3-tuple at the
-        API boundary (good defense-in-depth) — we test the inner
-        method directly with a fake spec so we know the inner guard
-        works even if a future caller bypasses pydantic.
+        ScenarioSpec's pydantic schema also enforces 3-tuple at the API boundary
+        (defense in depth); the engine's own guard is tested with a fake spec so it
+        holds even if a future caller bypasses pydantic.
         """
+        from radiarch.models.proton_plan import ProtonBeam, ProtonLayer, ProtonPlan, ProtonSpot
         from radiarch.services.dose_engines.mcsquare import MCsquareEngine
+        from radiarch.services.dose_engines.mcsquare_driver import CalibrationTables
         from radiarch.services.dose_engines.protocol import EngineParamError
         from types import SimpleNamespace
 
-        plan = SimpleNamespace(beams=[])
-        # SimpleNamespace bypasses pydantic validation so we can
-        # construct an invalid spec and verify the engine catches it.
-        bad_scenario = SimpleNamespace(
-            name="bad",
-            setup_shift_mm=(1.0, 2.0),  # WRONG: only 2 elements
-            density_scale=None,
-            range_scale=None,
-        )
+        plan = ProtonPlan(beams=[ProtonBeam(isocenter_mm=(0, 0, 0), layers=[ProtonLayer(energy_mev=100, spots=[ProtonSpot(x_mm=0, y_mm=0, mu=1)])])])
+        bad_scenario = SimpleNamespace(name="bad", setup_shift_mm=(1.0, 2.0), density_scale=None, range_scale=None)
         with pytest.raises(EngineParamError, match="setup_shift_mm"):
-            MCsquareEngine._apply_scenario(plan, None, None, bad_scenario)
+            MCsquareEngine._scenario(plan, CalibrationTables.water(), bad_scenario)
 
     def test_scenario_spec_rejects_wrong_shape_at_pydantic_layer(self):
         """The model also rejects bad shifts — defense in depth."""
@@ -619,42 +610,34 @@ class TestEngineRegistrySwap:
 # ---------------------------------------------------------------------------
 
 class TestScenarioIsolation:
-    def test_scenario_does_not_mutate_input_geometry(self, synthetic_geometry, synthetic_beam_model):
-        """A scenario applied by MCsquareEngine must not corrupt the input.
-
-        The previous (pre-D6.4) behavior mutated geometry.density in
-        place, so the second scenario in a robust expansion saw the
-        density already perturbed by the first.
-        """
-        from radiarch.services.dose_engines.mcsquare import MCsquareEngine
+    def test_scenario_does_not_mutate_its_inputs(self):
+        """R14: a scenario yields a shifted plan and a scaled calibration; the
+        originals (and so the cached bundle) are untouched."""
         from radiarch.models.dose import ScenarioSpec
-        from types import SimpleNamespace
-
-        original_density = synthetic_geometry.density.copy()
-        plan = SimpleNamespace(beams=[])
-        scenario = ScenarioSpec(name="s1", density_scale=0.95)
-
-        # Apply scenario to a CLONED CT, not the source bundle.
-        ct_clone = SimpleNamespace(imageArray=synthetic_geometry.density.copy())
-        MCsquareEngine._apply_scenario(plan, ct_clone, None, scenario)
-
-        # Original density must be unchanged
-        np.testing.assert_array_equal(synthetic_geometry.density, original_density)
-        # Cloned CT was actually mutated
-        assert not np.allclose(ct_clone.imageArray, original_density)
-
-    def test_clone_plan_falls_back_to_deepcopy(self):
+        from radiarch.models.proton_plan import ProtonBeam, ProtonLayer, ProtonPlan, ProtonSpot
         from radiarch.services.dose_engines.mcsquare import MCsquareEngine
-        from types import SimpleNamespace
+        from radiarch.services.dose_engines.mcsquare_driver import CalibrationTables
 
-        # No .copy() method → uses copy.deepcopy
-        plan = SimpleNamespace(spotMUs=np.ones(4), beams=[])
-        clone = MCsquareEngine._clone_plan(plan)
-        assert clone is not plan
-        np.testing.assert_array_equal(clone.spotMUs, plan.spotMUs)
-        # Independent storage
-        clone.spotMUs[0] = 99.0
-        assert plan.spotMUs[0] == 1.0
+        plan = ProtonPlan(beams=[ProtonBeam(isocenter_mm=(1.0, 2.0, 3.0), layers=[ProtonLayer(energy_mev=100, spots=[ProtonSpot(x_mm=0, y_mm=0, mu=1)])])])
+        cal = CalibrationTables.water()
+        scenario = ScenarioSpec(name="s1", density_scale=0.95, setup_shift_mm=(1.0, 0.0, 0.0))
+
+        plan2, cal2 = MCsquareEngine._scenario(plan, cal, scenario)
+
+        assert plan.beams[0].isocenter_mm == (1.0, 2.0, 3.0)
+        assert plan2.beams[0].isocenter_mm == (2.0, 2.0, 3.0)
+        assert cal.density_table()[:, 1].tolist() == [1.0, 1.0, 1.0]
+        np.testing.assert_allclose(cal2.density_table()[:, 1], [0.95, 0.95, 0.95])
+
+    def test_with_spot_mus_returns_a_copy(self):
+        from radiarch.models.proton_plan import ProtonBeam, ProtonLayer, ProtonPlan, ProtonSpot
+
+        plan = ProtonPlan(beams=[ProtonBeam(isocenter_mm=(0, 0, 0), layers=[ProtonLayer(energy_mev=100, spots=[ProtonSpot(x_mm=0, y_mm=0, mu=1), ProtonSpot(x_mm=1, y_mm=0, mu=1)])])])
+        other = plan.with_spot_mus([3.0, 4.0])
+        assert plan.spot_mus.tolist() == [1.0, 1.0] and other.spot_mus.tolist() == [3.0, 4.0]
+        with pytest.raises(ValueError):
+            plan.with_spot_mus([1.0])
+
 
 
 # ---------------------------------------------------------------------------

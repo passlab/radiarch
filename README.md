@@ -136,6 +136,16 @@ All settings use `RADIARCH_` prefix. Place them in `.env` or export as env vars.
 | `RADIARCH_API_KEY` | `""` | `X-API-Key` required on every `/api/v1` route except `/info`; empty disables auth (dev only) |
 | `RADIARCH_ALLOW_TEST_ENGINES` | unset | Permit the test-only `analytic` engine (wrong physics by design). Unset = only when `RADIARCH_ENVIRONMENT=dev` |
 
+## Dose engines
+
+Proton dose comes from **MCsquare** (Apache-2.0) and photon dose from the **WiscPlan collapsed-cone**
+binary (GPLv2), both run as separate processes on files radiarch writes through its own drivers
+(`services/dose_engines/mcsquare_driver.py`, `services/dose_engines/ccc_driver.py`); nothing from
+OpenTPS is imported on those paths (ADR 0005, 0006). Engine assets are read from
+`RADIARCH_MCSQUARE_DIR` / `RADIARCH_CCC_ENGINE_DIR`, defaulting to the copies still vendored under
+`src/opentps`. `RADIARCH_MCSQUARE_SEED` with `RADIARCH_MCSQUARE_N_THREADS=1` makes a proton run
+reproducible bit for bit. Doses and influence matrices are in radiarch's `(z, y, x)` C-order frame.
+
 ## Validation harness
 
 `src/radiarch/validation/` holds the physics and cross-check cases that go beyond unit
