@@ -31,6 +31,7 @@ from ...models.optimization import (
     OptimizationResult,
     OptimizationRunRequest,
 )
+from ...models.apertures import SequenceRequest, SequenceResult
 from ...services.audit import emit, make_event
 from ...services.dose_engines import EngineRegistryError
 from ...services.optimization import OptimizationService
@@ -197,3 +198,36 @@ async def delete_optimization(opt_id: str):
         raise HTTPException(status_code=404, detail=f"Optimization not found: {opt_id}")
     svc.store.delete_by_id(opt_id)
     return Response(status_code=204)
+
+
+# ---------------------------------------------------------------------------
+# Apertures (R4)
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/{opt_id}/sequence",
+    response_model=SequenceResult,
+    summary="Sequence an optimization into step-and-shoot MLC apertures with re-optimized segment MU (R4).",
+    responses={404: {"description": "Optimization not found."}, 422: {"description": "Not a photon optimization, or no deliverable aperture."}},
+)
+async def sequence_optimization(opt_id: str, request: SequenceRequest, api_key_prefix: Optional[str] = Depends(api_key_auth)) -> SequenceResult:
+    from ...services.apertures import ApertureService
+    from ...services.machine_model import MachineModelError
+
+    svc = ApertureService(optimization_service=_service())
+    if svc.optimization_service.store.get_by_id(opt_id) is None:
+        raise HTTPException(status_code=404, detail=f"Optimization not found: {opt_id}")
+    try:
+        return svc.sequence(opt_id, request)
+    except (ValueError, MachineModelError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/sequences/{sequence_id}", response_model=SequenceResult, summary="A sequencing result.")
+async def get_sequence(sequence_id: str) -> SequenceResult:
+    from ...services.apertures import ApertureService
+
+    result = ApertureService(optimization_service=_service()).store.get_by_id(sequence_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Sequence not found: {sequence_id}")
+    return result

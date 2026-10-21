@@ -87,10 +87,11 @@ def generate_photon_beamlets(
 ) -> PhotonBuildResult:
     """Build a photon plan of open fields and summarize its beamlets.
 
-    ``geometry`` is kept for symmetry with the proton builder; open-field
-    construction does not need it, dose calculation does.
+    The isocenter is the beam set's; when it has none, the centre of mass of
+    the geometry's target (``geometry`` is a ``GeometryArrays``), else the
+    origin. Photon beams share one isocenter.
     """
-    del geometry
+    isocenter = resolve_isocenter(beam_set, geometry)
     jaw_x, jaw_y = _resolve_jaw_opening(params, machine_model)
     bx, by = params.beamlet_size_mm or (5.0, 5.0)
     leaf_width = float(params.mlc_leaf_width_mm or machine_model.mlc_leaf_width_mm)
@@ -103,7 +104,7 @@ def generate_photon_beamlets(
         leaf_width_mm=leaf_width,
         mu_per_beam=monitor_units_per_beam,
         beamlet_spacing_mm=(float(bx), float(by)),
-        isocenter_mm=tuple(beam_set.isocenter_mm),
+        isocenter_mm=isocenter,
         beam_ids=[b.beam_id for b in beam_set.beams],
     )
     logger.info(
@@ -122,6 +123,27 @@ def generate_photon_beamlets(
     ]
     fluence = FluenceElementSet(total_count=plan.n_beamlets, per_beam=per_beam)
     return PhotonBuildResult(fluence_elements=fluence, plan=plan)
+
+
+def resolve_isocenter(beam_set: BeamSetSpec, geometry: Any) -> Tuple[float, float, float]:
+    """The beam set's isocenter, else the target's centre of mass, else the origin."""
+    if beam_set.isocenter_mm is not None:
+        return tuple(float(v) for v in beam_set.isocenter_mm)
+    per_beam = [b.isocenter_mm for b in beam_set.beams if b.isocenter_mm is not None]
+    if per_beam:
+        return tuple(float(v) for v in per_beam[0])
+    target = getattr(geometry, "target", None)
+    if callable(target):
+        chosen = target()
+        if chosen is not None:
+            import numpy as np
+            mask = geometry.mask_zyx(chosen[1])
+            idx = np.argwhere(mask)
+            if idx.size:
+                origin = np.asarray(geometry.origin_mm, dtype=float)
+                spacing = np.asarray(geometry.spacing_mm, dtype=float)
+                return tuple(float(v) for v in origin + idx.mean(axis=0)[::-1] * spacing)
+    return (0.0, 0.0, 0.0)
 
 
 def _resolve_jaw_opening(
