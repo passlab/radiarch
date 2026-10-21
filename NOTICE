@@ -1,5 +1,5 @@
 radiarch
-Copyright 2026 The SMIS Project
+Copyright 2026 The Radiarch Project
 
 Licensed under the Apache License, Version 2.0 (see LICENSE).
 
@@ -16,7 +16,11 @@ This product includes or runs software developed by others:
 - MCsquare, https://gitlab.com/openmcsquare/MCsquare, Apache License 2.0.
   Binaries, material tables, beam data libraries and scanner calibration
   tables are shipped under src/opentps/core/processing/doseCalculation/
-  protons/MCsquare/ and are run as separate processes.
+  protons/MCsquare/ and are run as separate processes. radiarch's driver
+  for the engine's file protocol (services/dose_engines/mcsquare_driver.py)
+  is a port of OpenTPS's mcsquareIO.py and mcsquareDoseCalculator.py, and
+  services/dose_engines/mcsquare_config_template.txt is the engine's
+  configuration template as shipped with OpenTPS core.
 
 - WiscPlan collapsed-cone photon dose engine (CCC_DoseEngine), GNU General
   Public License version 2, shipped as source and a prebuilt Linux binary

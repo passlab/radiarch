@@ -1,5 +1,5 @@
 {
-  "_about": "Proton range references in liquid water for the MCsquare validation case. Until the NIST PSTAR CSDA table is transcribed (physics.nist.gov PSTAR, material 'Water, Liquid'; the CGI query refused automated access on 2026-10-21), the reference is the Bragg-Kleeman fit R0 = alpha * E^p with Bortfeld's parameters, which reproduces the PSTAR CSDA range to within about 1-2 % between 10 and 250 MeV (Bortfeld, Med Phys 24:2024, 1997; 'Accuracy of parameterized proton range models', arXiv:1704.08854, Table 1). The distal 80 % depth of a pencil beam, R80, lies within a fraction of a millimetre of the CSDA range at these energies (detour factor about 0.998), so one tolerance covers both.",
+  "_about": "Proton range references in liquid water for the MCsquare validation case. The reference is the NIST PSTAR CSDA range (pstar_values_mm, entered 2026-10-21); the fallback for energies not in that table is the Bragg-Kleeman fit R0 = alpha * E^p with Bortfeld's parameters, which reproduces the PSTAR CSDA range to within about 1-2 % between 10 and 250 MeV (Bortfeld, Med Phys 24:2024, 1997; 'Accuracy of parameterized proton range models', arXiv:1704.08854, Table 1). The distal 80 % depth of a pencil beam, R80, lies within a fraction of a millimetre of the CSDA range at these energies (detour factor about 0.998), so one tolerance covers both.",
   "fit": {
     "alpha_cm_per_mev_p": 0.0022,
     "p": 1.77,
@@ -16,12 +16,40 @@
     "230": 333.18
   },
   "tolerance": {
-    "percent": 2.0,
+    "percent": 1.0,
     "abs_mm": 1.0,
-    "note": "replace by 1 % + 1 mm once PSTAR values are entered"
+    "note": "1 % + 1 mm against the PSTAR CSDA range; R80 of a pencil beam sits within a fraction of a millimetre of it (detour factor 0.9987-0.9989)"
   },
   "pstar_values_mm": {
-    "_todo": "enter CSDA ranges (g/cm2 x 10 for water) from the NIST PSTAR form; once present the harness prefers them"
+    "70": 40.8,
+    "100": 77.18,
+    "120": 106.6,
+    "150": 157.7,
+    "180": 216.5,
+    "200": 259.6,
+    "225": 317.4,
+    "250": 379.4
   },
-  "bdl_energies_mev": "the vendored IBA BDL covers 100-225 MeV in 5 MeV steps plus 20 MeV; cases use energies on that grid"
+  "bdl_energies_mev": "the vendored IBA BDL covers 100-225 MeV in 5 MeV steps plus 20 MeV; cases use energies on that grid",
+  "pstar_projected_range_mm": {
+    "70": 40.75,
+    "100": 77.07,
+    "120": 106.5,
+    "150": 157.6,
+    "180": 216.3,
+    "200": 259.3,
+    "225": 317.1,
+    "250": 379.0
+  },
+  "pstar_detour_factor": {
+    "70": 0.9986,
+    "100": 0.9987,
+    "120": 0.9987,
+    "150": 0.9987,
+    "180": 0.9988,
+    "200": 0.9988,
+    "225": 0.9988,
+    "250": 0.9989
+  },
+  "pstar_source": "NIST PSTAR, Stopping-Power and Range Tables for Protons, material 'Water, Liquid' (276), CSDA and projected ranges in g/cm2 converted to mm at 1.000 g/cm3; retrieved from https://physics.nist.gov/PhysRefData/Star/Text/PSTAR.html on 2026-10-21 (table columns: kinetic energy, electronic, nuclear and total stopping power, CSDA range, projected range, detour factor)"
 }
