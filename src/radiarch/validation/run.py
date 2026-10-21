@@ -560,8 +560,8 @@ def run_gamma_crosscheck(spec: dict, ctx: Context) -> CaseResult:
         theirs = json.loads(proc.stdout.strip().splitlines()[-1])["pass_rate_pct"]
         res.metrics[pert["name"]] = {"radiarch_pass_pct": ours, "pymedphys_pass_pct": theirs}
         res.add(f"gamma pass rate, {pert['name']}", round(ours, 2), f"{theirs:.2f} % ± {tol} points (pymedphys)", abs(ours - theirs) <= tol,
-                "radiarch's gamma searches voxel centres only (no sub-voxel interpolation; TG-218 asks for <= 1/3 of the DTA), "
-                "so borderline plans score lower than pymedphys — scheduled for R5")
+                "both search the evaluated dose interpolated at <= 1/5 of the DTA (TG-218 asks for <= 1/3); "
+                "small differences remain from the interpolation grids and search limits")
     return res
 
 

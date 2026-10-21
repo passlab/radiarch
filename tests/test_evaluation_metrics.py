@@ -109,12 +109,17 @@ def test_gamma_self_comparison_passes_fully():
 
 
 def test_gamma_large_difference_fails():
-    ref = np.zeros((6, 6, 6))
-    ref[2:4, 2:4, 2:4] = 10.0
-    ev = ref.copy()
-    ev[2:4, 2:4, 2:4] = 20.0  # +100% dose, well beyond 3%/3mm
+    # a uniform field: no gradient for the distance-to-agreement search to exploit
+    ref = np.full((6, 6, 6), 10.0)
+    ev = np.full((6, 6, 6), 20.0)  # +100% dose, well beyond 3%/3mm
     g = gamma_index(ev, ref, spacing_mm=(2, 2, 2), dose_percent=3.0, distance_mm=3.0)
-    assert g.pass_rate_pct < 50.0
+    assert g.pass_rate_pct == 0.0 and g.mean_gamma > 10.0
+    # a hot cube 16 mm wide: its edge voxels find intermediate interpolated values within the
+    # DTA, but the interior lies farther than 3 mm from any edge and fails
+    ref = np.zeros((14, 14, 14)); ref[3:11, 3:11, 3:11] = 10.0
+    ev = ref.copy(); ev[3:11, 3:11, 3:11] = 20.0
+    g = gamma_index(ev, ref, spacing_mm=(2, 2, 2), dose_percent=3.0, distance_mm=3.0)
+    assert 0.0 < g.pass_rate_pct < 100.0 and g.evaluated_voxels == 512
 
 
 def test_gamma_shape_mismatch_raises():
