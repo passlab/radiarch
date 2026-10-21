@@ -33,15 +33,18 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from ...core.store import store
 from ...models.dose import (
     DoseComputeRequest,
     DoseJobStatus,
     DoseResult,
+    EngineSpec,
     InfluenceBuildRequest,
     InfluenceResult,
+    ScenarioSetSpec,
+    WeightVector,
 )
 from ...services.audit import audit_span, emit, make_event
 from ...services.dose import DoseService
@@ -207,6 +210,57 @@ async def compute_dose(
             api_key_prefix=api_key_prefix,
         ))
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# POST /recalculate — dose from an imported DICOM RT Plan (roadmap R2)
+# ---------------------------------------------------------------------------
+
+class DoseRecalculateRequest(BaseModel):
+    """Recompute the dose of a plan imported with ``POST /beam-model/import``:
+    the same pipeline as ``/compute`` with the plan's own metersets as weights."""
+
+    plan_id: Optional[str] = Field(default=None, max_length=36)
+    geometry_id: str = Field(..., min_length=1, max_length=36)
+    beam_model_id: str = Field(..., min_length=1, max_length=36, description="An imported plan's beam model.")
+    engine: EngineSpec
+    scenarios: Optional[ScenarioSetSpec] = None
+
+
+@router.post(
+    "/recalculate",
+    summary="Compute the dose of an imported RT Plan with the plan's own metersets.",
+    responses={
+        200: {"description": "Cache hit — returned the existing dose inline."},
+        202: {"description": "Cache miss — Celery job dispatched."},
+        422: {"description": "Not an imported plan, or the request is invalid."},
+    },
+)
+async def recalculate_dose(
+    request: DoseRecalculateRequest,
+    response: Response,
+    api_key_prefix: Optional[str] = Depends(api_key_auth),
+):
+    from pathlib import Path as _Path
+    from ...services.beam_persistence import BeamModelStore
+    from ...config import get_settings
+
+    bm = BeamModelStore(_Path(get_settings().artifact_dir) / "beam_models").get_by_id(request.beam_model_id)
+    if bm is None:
+        raise HTTPException(status_code=422, detail=f"beam_model_id {request.beam_model_id!r} not found")
+    if not bm.plan_weights_uri or not _Path(bm.plan_weights_uri).is_file():
+        raise HTTPException(status_code=422, detail="beam model was not imported from an RT Plan (no plan metersets); use /dose/compute with explicit weights")
+    if bm.geometry_id != request.geometry_id:
+        raise HTTPException(status_code=422, detail=f"beam model {request.beam_model_id} belongs to geometry {bm.geometry_id}, not {request.geometry_id}")
+    compute_request = DoseComputeRequest(
+        plan_id=request.plan_id,
+        geometry_id=request.geometry_id,
+        beam_model_id=request.beam_model_id,
+        engine=request.engine,
+        weights=WeightVector(length=bm.fluence_elements.total_count, weights_uri=bm.plan_weights_uri),
+        scenarios=request.scenarios,
+    )
+    return await compute_dose(compute_request, response, api_key_prefix)
 
 
 # ---------------------------------------------------------------------------

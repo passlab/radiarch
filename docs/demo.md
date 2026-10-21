@@ -190,6 +190,13 @@ named PTV, GTV or CTV (prefixes such as `PTV_60` count); map other names with th
 geometry request's `structure_name_map`. Slicer `.seg.nrrd` label maps are accepted
 too (`demo/README_DICOM.md` describes public datasets to try).
 
+### 6.1 A plan you already have
+
+An RT Plan or RT Ion Plan that belongs to the same CT (same frame of reference) can be imported as a
+beam model and its dose recomputed with radiarch's engines, through `POST /api/v1/beam-model/import`
+(an upload id or a server path) and `POST /api/v1/dose/recalculate`; see the README's "DICOM RT in".
+Public collections rarely ship plans next to their CTs, so the demo stops at the phantom here.
+
 ## 7. If something looks wrong
 
 | Symptom | Cause and fix |

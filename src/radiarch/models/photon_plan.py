@@ -26,6 +26,8 @@ from typing import List, Literal, Optional, Sequence, Tuple
 import numpy as np
 from pydantic import BaseModel, Field, model_validator
 
+from .common import DicomPlanProvenance
+
 
 class MLCRow(BaseModel):
     """One leaf pair: its extent along the leaf bank and the two leaf tips."""
@@ -133,6 +135,7 @@ class PhotonBeam(BaseModel):
     couch_deg: float = Field(default=0.0, ge=-180.0, le=180.0)
     isocenter_mm: Tuple[float, float, float] = (0.0, 0.0, 0.0)
     sad_mm: float = Field(default=1000.0, gt=0.0)
+    energy_mv: Optional[float] = Field(default=None, description="Nominal beam energy (MV) when known; the engines use their own beam model.")
     segments: List[PhotonSegment] = Field(..., min_length=1)
 
     def beamlets(self) -> np.ndarray:
@@ -165,6 +168,7 @@ class PhotonPlan(BaseModel):
     name: str = "PhotonPlan"
     modality: Literal["PHOTON_IMRT"] = "PHOTON_IMRT"
     beams: List[PhotonBeam] = Field(..., min_length=1)
+    dicom: Optional[DicomPlanProvenance] = Field(default=None, description="Set when the plan was read from a DICOM RT Plan.")
 
     def beamlets(self) -> np.ndarray:
         return np.concatenate([b.beamlets() for b in self.beams], axis=0)

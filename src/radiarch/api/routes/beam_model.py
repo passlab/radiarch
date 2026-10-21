@@ -17,6 +17,7 @@ Endpoints
 ``GET    /api/v1/beam-model/{id}/artifact``        — stream pickled plan.
 ``DELETE /api/v1/beam-model/{id}``                 — remove from cache.
 ``GET    /api/v1/beam-model/jobs/{job_id}``        — async job status.
+``POST   /api/v1/beam-model/import``               — a DICOM RT Plan as a beam model (R2).
 """
 
 from __future__ import annotations
@@ -26,7 +27,9 @@ from functools import lru_cache
 
 from fastapi import APIRouter, HTTPException, Response, status
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from pathlib import Path
+from typing import Optional, Tuple
 
 from ...core.store import store
 from ...models.beam_model import (
@@ -94,6 +97,83 @@ async def build_beam_model(request: BeamModelBuildRequest, response: Response):
 
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# POST /import — a DICOM RT Plan / RT Ion Plan as a beam model (roadmap R2)
+# ---------------------------------------------------------------------------
+
+class BeamModelImportRequest(BaseModel):
+    """Where the plan is and which geometry it belongs to.
+
+    Exactly one of ``upload_id`` (a bundle from ``POST /uploads/dicom``, which
+    must hold one plan unless ``file_name`` picks it) or ``path`` (a file on the
+    server) names the plan.
+    """
+
+    geometry_id: str = Field(..., min_length=1, max_length=36)
+    upload_id: Optional[str] = Field(default=None, max_length=64)
+    file_name: Optional[str] = Field(default=None, description="File within the upload when it holds several plans.")
+    path: Optional[str] = Field(default=None, description="Server-side path of the RT Plan file.")
+    machine_model_id: str = Field(default="default", max_length=64)
+    beamlet_spacing_mm: Tuple[float, float] = Field(default=(5.0, 5.0), description="Beamlet pixel size for photon apertures.")
+    strict_frame_of_reference: bool = Field(default=True, description="Refuse a plan whose frame of reference is not the geometry's.")
+
+
+def _locate_plan_file(request: BeamModelImportRequest) -> Path:
+    from ...services.plan_import import find_rtplan_files
+    from .uploads import _upload_path
+
+    if bool(request.upload_id) == bool(request.path):
+        raise ValueError("give exactly one of upload_id or path")
+    if request.path:
+        p = Path(request.path).expanduser()
+        if not p.is_file():
+            raise ValueError(f"plan file not found: {p}")
+        return p
+    root = _upload_path(request.upload_id)
+    if not root.is_dir():
+        raise ValueError(f"upload not found: {request.upload_id}")
+    plans = find_rtplan_files(root)
+    if request.file_name:
+        plans = [q for q in plans if q.name == request.file_name or str(q.relative_to(root)) == request.file_name]
+    if not plans:
+        raise ValueError(f"no RT Plan / RT Ion Plan in upload {request.upload_id}")
+    if len(plans) > 1:
+        raise ValueError(f"upload {request.upload_id} holds {len(plans)} plans; name one with file_name: "
+                         + ", ".join(str(q.relative_to(root)) for q in plans))
+    return plans[0]
+
+
+@router.post(
+    "/import",
+    response_model=BeamModelResult,
+    summary="Import a DICOM RT Plan or RT Ion Plan as a beam model of a geometry.",
+    responses={
+        200: {"description": "Plan imported (or an identical earlier import reused)."},
+        404: {"description": "Unknown geometry."},
+        422: {"description": "The plan could not be read or does not fit the geometry."},
+    },
+)
+async def import_plan(request: BeamModelImportRequest) -> BeamModelResult:
+    from ...services.geometry import GeometryService
+    from ...services.plan_import import PlanImportError, import_rtplan
+    from ...dicom.rtplan import RTPlanError
+
+    geometry = GeometryService().store.get_by_id(request.geometry_id)
+    if geometry is None:
+        raise HTTPException(status_code=404, detail=f"Geometry not found: {request.geometry_id}")
+    try:
+        path = _locate_plan_file(request)
+        imported = import_rtplan(
+            path, geometry, _service().store,
+            machine_model_id=request.machine_model_id,
+            beamlet_spacing_mm=request.beamlet_spacing_mm,
+            strict_frame_of_reference=request.strict_frame_of_reference,
+        )
+    except (ValueError, PlanImportError, RTPlanError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return imported.beam_model
 
 
 # ---------------------------------------------------------------------------

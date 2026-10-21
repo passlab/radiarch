@@ -146,6 +146,22 @@ OpenTPS is imported on those paths (ADR 0005, 0006). Engine assets are read from
 `src/opentps`. `RADIARCH_MCSQUARE_SEED` with `RADIARCH_MCSQUARE_N_THREADS=1` makes a proton run
 reproducible bit for bit. Doses and influence matrices are in radiarch's `(z, y, x)` C-order frame.
 
+## DICOM RT in
+
+`radiarch.dicom` reads RT Plan and RT Ion Plan objects into the plan models, RT Dose objects onto
+the `(z, y, x)` grid, and registration objects (ADR 0007). A plan becomes a beam model with its own
+metersets, and its dose is recomputed with the ordinary pipeline:
+
+```bash
+curl -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{"geometry_id": "<id>", "path": "/data/plans/RTPLAN.dcm"}' $API/beam-model/import
+curl -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{"geometry_id": "<id>", "beam_model_id": "<imported id>", "engine": {"name": "mcsquare"}}' $API/dose/recalculate
+```
+
+The plan's frame of reference must be the geometry's (a plan from another CT needs a registration,
+roadmap R9). Arcs are discretized per control-point interval at the mid-angle.
+
 ## Validation harness
 
 `src/radiarch/validation/` holds the physics and cross-check cases that go beyond unit

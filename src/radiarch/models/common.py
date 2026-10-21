@@ -30,4 +30,21 @@ class ResearchArtifact(BaseModel):
     )
 
 
-__all__ = ["RESEARCH_USE_ONLY", "NOT_FOR_CLINICAL_USE", "ResearchArtifact"]
+class DicomPlanProvenance(BaseModel):
+    """Where an imported plan came from (roadmap R2): the DICOM identifiers a
+    recomputed dose must reference and the frame of reference it must share."""
+
+    sop_class: str = Field(default="", description='"RTPLAN" or "RTIONPLAN".')
+    sop_instance_uid: str = ""
+    series_instance_uid: str = ""
+    study_instance_uid: str = ""
+    frame_of_reference_uid: str = ""
+    structure_set_uid: str = Field(default="", description="ReferencedStructureSetSequence SOP Instance UID.")
+    plan_label: str = ""
+    plan_name: str = ""
+    approval_status: str = ""
+    n_fractions: int = 1
+    source_path: str = Field(default="", description="File the plan was read from, when known.")
+
+
+__all__ = ["RESEARCH_USE_ONLY", "NOT_FOR_CLINICAL_USE", "ResearchArtifact", "DicomPlanProvenance"]

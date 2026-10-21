@@ -25,6 +25,8 @@ from typing import Any, Iterator, List, Optional, Sequence, Tuple
 import numpy as np
 from pydantic import BaseModel, Field, model_validator
 
+from .common import DicomPlanProvenance
+
 
 class ProtonSpot(BaseModel):
     """One scanned spot: BEV position at isocenter and its meterset."""
@@ -101,6 +103,7 @@ class ProtonPlan(BaseModel):
     name: str = "ProtonPlan"
     n_fractions: int = Field(default=1, ge=1)
     beams: List[ProtonBeam] = Field(default_factory=list)
+    dicom: Optional[DicomPlanProvenance] = Field(default=None, description="Set when the plan was read from a DICOM RT Ion Plan.")
 
     @model_validator(mode="after")
     def _needs_one_spot(self) -> "ProtonPlan":

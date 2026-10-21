@@ -29,7 +29,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .job import JobState
-from .common import ResearchArtifact
+from .common import DicomPlanProvenance, ResearchArtifact
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +276,8 @@ class BeamModelResult(ResearchArtifact):
         ..., description="Resolved machine model id (never None on output)."
     )
     cache_key: str
+    plan_weights_uri: Optional[str] = Field(default=None, description="For an imported RT Plan: the plan's own metersets per fluence element (.npy), the weights a dose recalculation uses.")
+    imported_plan: Optional[DicomPlanProvenance] = Field(default=None, description="Set when the beam model was imported from a DICOM RT Plan (R2).")
     created_at: Optional[datetime] = None
 
 
