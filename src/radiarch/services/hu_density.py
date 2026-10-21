@@ -15,10 +15,10 @@ Three models behind a common ``HUToDensity`` interface:
   Values are interpolated linearly between breakpoints and clamped at
   the endpoints.
 
-* :class:`StoichiometricModel` — wraps the vendored MCsquare CT calibration
-  (``opentps.core.data.CTCalibrations.MCsquareCalibration``). The MCsquare
-  calibration is the gold-standard for proton dose in this project; this
-  model delegates to it for density lookup.
+* :class:`StoichiometricModel` — the scanner's HU → mass density table of the
+  MCsquare engine assets (``Scanners/<name>/HU_Density_Conversion.txt``, the
+  stoichiometric calibration the proton engine itself uses), interpolated
+  piecewise-linearly with linear extrapolation beyond the table.
 
 * :class:`LinearModel` — ρ = max(0, 1 + HU/1000). Used for synthetic / test
   modes where we just need a smooth density surrogate.
@@ -95,41 +95,30 @@ class SchneiderModel(HUToDensity):
 # ---------------------------------------------------------------------------
 
 class StoichiometricModel(HUToDensity):
-    """HU → density via the vendored MCsquare CT calibration.
+    """HU → density via the scanner calibration of the proton engine assets.
 
-    The MCsquare calibration stores an HU→density table derived from tissue
-    stoichiometry. We defer the actual math to OpenTPS's
-    ``MCsquareCTCalibration.convertHU2MassDensity``; this class is a thin,
-    cache-friendly adapter so the rest of the service stays decoupled from
-    OpenTPS internals.
-
-    Constructed lazily: loading the calibration pulls in the vendored
-    MCsquare package, which we don't want to import at module-load time
-    when callers only need the Linear/Schneider variants.
+    ``table`` is an ``(HU, density)`` array; by default the density table of
+    the default machine model's scanner (``UCL_Toshiba``), read on first use so
+    that callers of the Linear/Schneider variants never touch the engine
+    assets.
     """
 
     name = HUDensityModel.stoichiometric.value
 
-    def __init__(self, calibration: Optional[object] = None) -> None:
-        # ``calibration`` is an MCsquareCTCalibration; typed loosely to
-        # avoid importing opentps here. Loaded on demand if not supplied.
-        self._calibration = calibration
+    def __init__(self, table: Optional[np.ndarray] = None) -> None:
+        self._table = None if table is None else np.asarray(table, dtype=np.float64)
 
-    def _ensure_calibration(self):
-        if self._calibration is None:
-            # Deferred import — keeps module-load cheap and lets us unit-test
-            # Schneider/Linear without the opentps tree on sys.path.
-            from ..core.workflows._helpers import setup_calibration
+    def _ensure_table(self) -> np.ndarray:
+        if self._table is None:
+            from .machine_model import ProtonMachineModel  # lazy
 
-            calibration, _ = setup_calibration()
-            self._calibration = calibration
-        return self._calibration
+            self._table = np.asarray(ProtonMachineModel.from_default().calibration.density_table(), dtype=np.float64)
+        return self._table
 
     def convert(self, hu: np.ndarray) -> np.ndarray:
-        cal = self._ensure_calibration()
-        # MCsquareCTCalibration.convertHU2MassDensity accepts either a
-        # scalar or an array; returns the same shape.
-        rho = np.asarray(cal.convertHU2MassDensity(hu), dtype=np.float32)
+        from .proton_rsp import hu_to_mass_density  # lazy
+
+        rho = hu_to_mass_density(self._ensure_table(), hu).astype(np.float32)
         np.clip(rho, 0.0, None, out=rho)
         return rho
 

@@ -79,8 +79,7 @@ def build_photon_plan(
 
 
 def generate_photon_beamlets(
-    ct: Any,
-    patient: Any,
+    geometry: Any,
     machine_model: PhotonMachineModel,
     beam_set: BeamSetSpec,
     params: DeliveryParams,
@@ -88,10 +87,10 @@ def generate_photon_beamlets(
 ) -> PhotonBuildResult:
     """Build a photon plan of open fields and summarize its beamlets.
 
-    ``ct`` and ``patient`` are kept for symmetry with the proton builder;
-    open-field construction does not need them, dose calculation does.
+    ``geometry`` is kept for symmetry with the proton builder; open-field
+    construction does not need it, dose calculation does.
     """
-    del ct, patient
+    del geometry
     jaw_x, jaw_y = _resolve_jaw_opening(params, machine_model)
     bx, by = params.beamlet_size_mm or (5.0, 5.0)
     leaf_width = float(params.mlc_leaf_width_mm or machine_model.mlc_leaf_width_mm)

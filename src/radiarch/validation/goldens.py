@@ -1,9 +1,8 @@
 """Regression goldens (roadmap R7a).
 
-While the vendored OpenTPS code paths still produce radiarch's outputs, this
-module freezes them under ``tests/golden/`` so that the replacements of R14
-(MCsquare driver), R2 (DICOM readers) and R15 (own loaders, rasterization,
-spot placement) can be checked against today's behaviour:
+These were captured from the vendored OpenTPS code paths before R14, R2 and
+R15 replaced them (MCsquare driver, DICOM readers, own loaders, rasterization
+and spot placement); radiarch's own code must keep reproducing them:
 
 * ``ccc_water_10x10.npz`` — the CCC beamlet matrix (raw engine units) for a
   small water box and a 6 × 6 cm² field: exact, deterministic.
@@ -12,9 +11,9 @@ spot placement) can be checked against today's behaviour:
   SimpleFantom (CT + structure set).
 * ``proton_spots_simplefantom.json`` — energy layers and spot positions of
   the proton beam model built on that geometry.
-* ``mcsquare_inputs_simplefantom/`` — the files OpenTPS writes for MCsquare
+* ``mcsquare_inputs_simplefantom/`` — the files written for MCsquare
   (``config.txt``, ``PlanPencil.txt``, the CT header, the SHA-256 of the CT
-  raw block) with absolute paths normalised. R14's driver must write the same.
+  raw block) with absolute paths normalised.
 
 Capture with ``python -m radiarch.validation.goldens --capture``; the test
 ``tests/test_goldens.py`` regenerates everything and compares.
@@ -37,7 +36,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 RADIARCH_ROOT = HERE.parents[2]
 GOLDEN_DIR = RADIARCH_ROOT / "tests" / "golden"
-SIMPLEFANTOM = RADIARCH_ROOT / "tests" / "opentps" / "core" / "opentps-testData" / "SimpleFantomWithStruct"
+SIMPLEFANTOM = RADIARCH_ROOT / "tests" / "data" / "SimpleFantomWithStruct"
 
 
 def _sha256(arr_or_bytes) -> str:
@@ -134,8 +133,8 @@ def compute_spots_golden(bm, bm_svc) -> Dict[str, Any]:
     layers = []
     for beam in plan.beams:
         for layer in beam.layers:
-            xy = np.asarray(list(layer.spotXY), dtype=float).reshape(-1, 2)
-            layers.append({"energy_mev": round(float(layer.nominalEnergy), 3),
+            xy = np.asarray([(s.x_mm, s.y_mm) for s in layer.spots], dtype=float).reshape(-1, 2)
+            layers.append({"energy_mev": round(float(layer.energy_mev), 3),
                            "spots_xy_mm": np.round(xy, 3).tolist()})
     return {"beams": len(plan.beams), "layers": layers,
             "total_spots": int(sum(len(l["spots_xy_mm"]) for l in layers)),
@@ -166,7 +165,9 @@ def compute_mcsquare_inputs_golden(geo, bm, geo_svc, bm_svc, workdir: Path) -> D
         raise RuntimeError("geometry has no CT grid on disk")
     spacing = tuple(float(s) for s in geo.grid_spec.spacing_mm)
     origin = tuple(float(o) for o in (geo.grid_spec.origin_mm or (0, 0, 0)))
-    plan = ProtonPlan.from_opentps(bm_svc.store.load_plan(bm.beam_model_id))
+    plan = bm_svc.store.load_plan(bm.beam_model_id)
+    if not isinstance(plan, ProtonPlan):
+        plan = ProtonPlan.from_opentps(plan)
     sim_dir = Path(workdir) / "mcsquare_inputs"
     drv = MCsquareDriver(work_root=Path(workdir) / "runs", n_threads=0, seed=0)
     drv.prepare(sim_dir, ct_hu, spacing, origin, plan, nb_primaries=1000)

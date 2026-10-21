@@ -9,7 +9,7 @@ End-to-end coverage of the new CT-persistence + load path:
 3. ``DoseService._load_geometry`` populates ``bundle.ct_hu`` when the CT
    NIfTI exists, and falls back to None (with a logged warning) when
    either the URI is null or the file is missing.
-4. ``DoseService._load_geometry`` populates ``bundle.ct_image`` with an
+4. (removed in R15: the CT image wrapper is gone)
    OpenTPS CTImage when OpenTPS is importable; falls back to None
    otherwise without breaking the bundle.
 
@@ -34,7 +34,7 @@ from radiarch.models.geometry import (
     GeometryResult,
     GridSpec,
 )
-from radiarch.services.dose import DoseService, _wrap_ct_image
+from radiarch.services.dose import DoseService
 from radiarch.services.persistence import (
     CT_FILENAME,
     GeometryPaths,
@@ -165,7 +165,7 @@ class TestGeometryStoreCT:
 
 class TestMaybeLoadCT:
     def test_returns_none_when_uri_missing(self):
-        """No ct_grid_uri on the result → (None, None) bundle fields."""
+        """No ct_grid_uri on the result → no CT."""
         # A minimal fake geom with ct_grid_uri unset.
         class FakeGeom:
             geometry_id = "g-1"
@@ -174,12 +174,10 @@ class TestMaybeLoadCT:
             ct_metadata = CTMetadata(num_slices=4)
             frame_of_reference_uid = "1.2.3"
 
-        ct_hu, ct_image = DoseService._maybe_load_ct(FakeGeom())
-        assert ct_hu is None
-        assert ct_image is None
+        assert DoseService._maybe_load_ct(FakeGeom()) is None
 
     def test_returns_none_when_file_missing(self, tmp_path):
-        """ct_grid_uri set but file deleted under us → warn + (None, None)."""
+        """ct_grid_uri set but file deleted under us → warn + None."""
         class FakeGeom:
             geometry_id = "g-2"
             ct_grid_uri = str(tmp_path / "nonexistent.nii.gz")
@@ -187,9 +185,7 @@ class TestMaybeLoadCT:
             ct_metadata = CTMetadata(num_slices=4)
             frame_of_reference_uid = "1.2.3"
 
-        ct_hu, ct_image = DoseService._maybe_load_ct(FakeGeom())
-        assert ct_hu is None
-        assert ct_image is None
+        assert DoseService._maybe_load_ct(FakeGeom()) is None
 
     def test_loads_ct_when_file_exists(self, tmp_path):
         """Happy path: NIfTI on disk → ct_hu populated as int16."""
@@ -205,45 +201,10 @@ class TestMaybeLoadCT:
         rehydrated = store.get_by_id(geometry_id)
         assert rehydrated is not None
 
-        ct_hu, ct_image = DoseService._maybe_load_ct(rehydrated)
+        ct_hu = DoseService._maybe_load_ct(rehydrated)
         assert ct_hu is not None
         assert ct_hu.dtype == np.int16
         assert ct_hu.shape == ct.shape
-        # CTImage is None if OpenTPS isn't importable; either way it
-        # mustn't crash the load.
-        assert ct_image is None or ct_image is not None  # tautology — both legal
-
-
-# ---------------------------------------------------------------------------
-# 3. _wrap_ct_image — graceful skip when OpenTPS isn't importable.
-# ---------------------------------------------------------------------------
-
-class TestWrapCTImage:
-    def test_returns_none_when_opentps_missing(self):
-        """Simulate OpenTPS import failing — wrapper must return None, not raise."""
-        class FakeGeom:
-            geometry_id = "g-3"
-            grid_spec = GridSpec(spacing_mm=(2, 2, 3), origin_mm=(0, 0, 0), size=(8, 8, 4))
-            ct_metadata = CTMetadata(num_slices=4)
-            frame_of_reference_uid = "1.2.3"
-
-        ct_hu = np.zeros((4, 8, 8), dtype=np.int16)
-        # Force the import path inside _wrap_ct_image to fail by stubbing
-        # out the module before the import runs.
-        import sys
-        sentinel = object()
-        saved = sys.modules.pop("opentps.core.data.images", sentinel)
-        # Insert a poisoned entry so the import inside _wrap_ct_image raises.
-        sys.modules["opentps.core.data.images"] = None  # type: ignore
-        try:
-            wrapped = _wrap_ct_image(ct_hu, FakeGeom())
-        finally:
-            if saved is sentinel:
-                sys.modules.pop("opentps.core.data.images", None)
-            else:
-                sys.modules["opentps.core.data.images"] = saved  # type: ignore
-
-        assert wrapped is None
 
 
 # ---------------------------------------------------------------------------
@@ -252,20 +213,20 @@ class TestWrapCTImage:
 # This is the "does D6.1 actually work?" test. We stub the DICOM-load step
 # only (so we don't need real DICOM on disk), but let everything else run:
 # HU→density, CT resample, NIfTI persistence, cache index, then
-# DoseService._load_geometry pulls it back and wraps it in a CTImage.
+# DoseService._load_geometry pulls it back as (z, y, x) HU.
 #
 # If any of these tests fail, MCsquare (D6.2) won't be able to start.
 # ---------------------------------------------------------------------------
 
 class _FakePatient:
-    """Stands in for opentps.core.data.Patient."""
+    """Stands in for radiarch.dicom.ct.PatientInfo."""
     def __init__(self) -> None:
         self.name = "TEST"
         self.rtStructs: list = []
 
 
 class _FakeCT:
-    """Stands in for opentps.core.data.images.CTImage — only the attrs the
+    """Stands in for radiarch.dicom.ct.CTVolume — only the attrs the
     GeometryService actually reads off the source CT during _process."""
     def __init__(self, imageArray, origin, spacing):
         self.imageArray = imageArray
@@ -379,79 +340,3 @@ class TestGeometryToDoseRoundTrip:
                 f"HU value {expected} from source CT did not survive the "
                 f"persist→load round-trip. Seen values: {sorted(seen_values)}"
             )
-
-    def test_dose_service_load_geometry_builds_ct_image_when_opentps_present(
-        self, tmp_path, monkeypatch,
-    ):
-        """If OpenTPS is importable, ct_image should be a real CTImage."""
-        from radiarch.models.geometry import (
-            GeometryBuildRequest, HUDensityModel, PatientRef,
-        )
-        from radiarch.services.dose import DoseService
-        from radiarch.services.geometry import GeometryService
-
-        opentps_images = pytest.importorskip(
-            "opentps.core.data.images",
-            reason="OpenTPS not installed; ct_image will be None in this env "
-                   "(behaviour already covered by TestMaybeLoadCT).",
-        )
-
-        geom_svc = GeometryService(base_dir=tmp_path / "geom")
-        monkeypatch.setattr(geom_svc, "_load",
-                            lambda _req: _synthetic_loaded_ct())
-        req = GeometryBuildRequest(
-            patient_ref=PatientRef(dicom_study_uid="1.2.3"),
-            grid_spec=None,
-            hu_to_density_model=HUDensityModel.linear,
-        )
-        geom_result = geom_svc.build(req)
-
-        dose_svc = DoseService(
-            dose_dir=tmp_path / "doses",
-            influence_dir=tmp_path / "infl",
-        )
-        monkeypatch.setattr(
-            "radiarch.services.dose.GeometryService",
-            lambda: geom_svc,
-        )
-
-        bundle = dose_svc._load_geometry(geom_result.geometry_id)
-
-        assert bundle.ct_image is not None, \
-            "ct_image should be an OpenTPS CTImage when OpenTPS is importable"
-        # Quack-check: must look like a CTImage. We don't assert isinstance
-        # because the import-protected path may have wrapped it differently
-        # in alternative builds.
-        assert hasattr(bundle.ct_image, "imageArray")
-        assert hasattr(bundle.ct_image, "origin")
-        assert hasattr(bundle.ct_image, "spacing")
-        # Spacing should match the GridSpec we built.
-        assert tuple(float(s) for s in bundle.ct_image.spacing) == (2.0, 2.0, 2.0)
-
-
-# ---------------------------------------------------------------------------
-# 5. Cache-hit path: rebuild same request → same cached ct.nii.gz.
-# ---------------------------------------------------------------------------
-
-class TestCacheHit:
-    def test_repeat_build_reuses_cached_ct(self, tmp_path, monkeypatch):
-        """Two identical builds must produce the same geometry_id AND keep
-        the CT file alive on disk for the second load."""
-        from radiarch.models.geometry import (
-            GeometryBuildRequest, HUDensityModel, PatientRef,
-        )
-        from radiarch.services.geometry import GeometryService
-
-        svc = GeometryService(base_dir=tmp_path)
-        monkeypatch.setattr(svc, "_load", lambda _req: _synthetic_loaded_ct())
-
-        req = GeometryBuildRequest(
-            patient_ref=PatientRef(dicom_study_uid="1.2.3"),
-            grid_spec=None,
-            hu_to_density_model=HUDensityModel.linear,
-        )
-        first = svc.build(req)
-        second = svc.build(req)
-        assert first.geometry_id == second.geometry_id, "Cache hit should return same id"
-        assert first.ct_grid_uri == second.ct_grid_uri
-        assert Path(second.ct_grid_uri).is_file()

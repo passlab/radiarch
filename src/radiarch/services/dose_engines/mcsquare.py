@@ -88,7 +88,6 @@ class MCsquareEngine:
             "scanner": drv.scanner,
             "bdl": drv.bdl_name,
             "reason": reason,
-            "opentps_importable": _opentps_importable(),  # legacy field: nothing here needs it
         }
         if ok:
             diag["engine_fingerprint"] = drv.fingerprint()
@@ -262,15 +261,6 @@ class MCsquareEngine:
             "mcsquare doesn't implement adjoint gradients. Build a Dij via build_influence() "
             "and compute the gradient as Dij.T @ dL_dDose in the optimizer."
         )
-
-
-def _opentps_importable() -> bool:
-    """Reported in the health payload for continuity with earlier diagnostics; nothing depends on it."""
-    try:
-        import opentps.core  # noqa: F401
-        return True
-    except Exception:
-        return False
 
 
 # Register on import — even when the engine binaries are missing, so the registry

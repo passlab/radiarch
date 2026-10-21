@@ -17,14 +17,6 @@ from radiarch.services.plan_import import PlanImportError, find_rtplan_files, im
 FOR = "1.2.826.0.1.3680043.8.498.1"
 
 
-def _opentps_available() -> bool:
-    try:
-        import opentps.core  # noqa: F401
-        return True
-    except Exception:
-        return False
-
-
 def _geometry(for_uid=FOR):
     return types.SimpleNamespace(
         geometry_id="g-1", frame_of_reference_uid=for_uid,
@@ -89,7 +81,6 @@ class TestImportService:
 # The API, end to end on the SimpleFantom geometry
 # ---------------------------------------------------------------------------
 
-@pytest.mark.skipif(not _opentps_available(), reason="SimpleFantom geometry needs the vendored OpenTPS loader until R15")
 class TestImportAndRecalculateApi:
     @pytest.fixture
     def env(self, monkeypatch):

@@ -102,8 +102,7 @@ class TestEngineHealthEndpoints:
         assert r.status_code == 200
         body = r.json()
         assert "diagnostics" in body
-        # The diagnostics dict always has opentps_importable
-        assert "opentps_importable" in body["diagnostics"]
+        assert "assets_dir" in body["diagnostics"]
 
 
 # ---------------------------------------------------------------------------
@@ -356,7 +355,7 @@ class TestMCsquareEngineUnit:
         from types import SimpleNamespace
         engine = MCsquareEngine()
         # Build minimal stubs that satisfy the validate() attribute paths
-        geometry = SimpleNamespace(density=__import__("numpy").zeros((4, 4, 4)), ct_image=object())
+        geometry = SimpleNamespace(density=__import__("numpy").zeros((4, 4, 4)), ct_hu=__import__("numpy").zeros((4, 4, 4)))
         modality = SimpleNamespace(value="PHOTON_IMRT")
         fluence = SimpleNamespace(total_count=10)
         beam_model_result = SimpleNamespace(modality=modality, fluence_elements=fluence)
@@ -364,11 +363,11 @@ class TestMCsquareEngineUnit:
         issues = engine.validate(geometry, beam_model, {})
         assert any("PROTON_PBS" in issue for issue in issues)
 
-    def test_validate_rejects_missing_ct_image(self):
+    def test_validate_rejects_missing_ct(self):
         from radiarch.services.dose_engines.mcsquare import MCsquareEngine
         from types import SimpleNamespace
         engine = MCsquareEngine()
-        geometry = SimpleNamespace(density=__import__("numpy").zeros((4, 4, 4)), ct_image=None, ct_hu=None)
+        geometry = SimpleNamespace(density=__import__("numpy").zeros((4, 4, 4)), ct_hu=None)
         modality = SimpleNamespace(value="PROTON_PBS")
         fluence = SimpleNamespace(total_count=10)
         beam_model_result = SimpleNamespace(modality=modality, fluence_elements=fluence)

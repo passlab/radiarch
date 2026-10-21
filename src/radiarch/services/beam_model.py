@@ -7,20 +7,20 @@ Pipeline
 --------
 1. Compute ``cache_key`` and short-circuit if already built.
 2. Load the geometry — look it up in the Geometry Service's store (404 →
-   422 to the API caller) and rebuild the OpenTPS CT, patient and target
-   mask from the persisted NIfTI volumes (``geometry_bundle``). Nothing
-   is re-read from DICOM, so the beam model is built on exactly the
-   geometry the caller named.
+   422 to the API caller) and read the persisted CT and label volumes
+   (``geometry_bundle.load_geometry_arrays``). Nothing is re-read from
+   DICOM, so the beam model is built on exactly the geometry the caller
+   named.
 3. Resolve the machine model.
 4. Dispatch to ``_build_proton`` or ``_build_photon`` based on modality.
-5. Persist the OpenTPS plan + meta.json atomically.
+5. Persist the plan (pickled pydantic model) + meta.json atomically.
 6. Return :class:`BeamModelResult`.
 
 Testability
 -----------
 Same ``_load_*`` / ``_process`` seam as :class:`GeometryService`. Tests
 stub out ``_load_geometry`` and ``_load_machine_model`` (or the modality
-builders directly) so they never invoke OpenTPS or MCsquare.
+builders directly) so they never touch the engine assets.
 """
 
 from __future__ import annotations
@@ -56,16 +56,11 @@ ProgressCallback = Callable[[BeamModelStage, float, str], None]
 
 @dataclass
 class _LoadedGeometry:
-    """Internal bundle returned by ``_load_geometry``.
-
-    Carries the OpenTPS objects the modality builders need plus the
-    ``geometry_id`` so the result can reference its upstream input.
-    """
+    """Internal bundle returned by ``_load_geometry``: the persisted arrays
+    plus the ``geometry_id`` so the result can reference its upstream input."""
 
     geometry_id: str
-    ct: Any            # OpenTPS CTImage (or test double)
-    patient: Any       # OpenTPS Patient (or test double)
-    target_contour: Any  # First target ROI; may be None
+    arrays: Any        # GeometryArrays (or test double)
 
 
 class BeamModelService:
@@ -118,15 +113,15 @@ class BeamModelService:
     # -----------------------------------------------------------------
 
     def _load_geometry(self, geometry_id: str) -> _LoadedGeometry:
-        """Rebuild the OpenTPS objects the builders need from the persisted geometry.
+        """Read the persisted geometry the builders need.
 
         The Geometry Service wrote the CT grid, the structure masks and the
         structure index for ``geometry_id``; the beam model is built on
-        exactly those. (It used to re-read ``opentps_data_root`` whatever
-        the id was, so every beam model came out of the default phantom.)
+        exactly those. (It used to re-read the data root whatever the id
+        was, so every beam model came out of the default phantom.)
         """
         from .geometry import GeometryService  # lazy
-        from .geometry_bundle import load_opentps_geometry  # lazy
+        from .geometry_bundle import load_geometry_arrays  # lazy
 
         geom = GeometryService().store.get_by_id(geometry_id)
         if geom is None:
@@ -134,14 +129,7 @@ class BeamModelService:
                 f"geometry_id {geometry_id!r} not found — build the geometry "
                 "first via POST /api/v1/geometry/build."
             )
-
-        ct, patient, target = load_opentps_geometry(geom)
-        return _LoadedGeometry(
-            geometry_id=geometry_id,
-            ct=ct,
-            patient=patient,
-            target_contour=target,
-        )
+        return _LoadedGeometry(geometry_id=geometry_id, arrays=load_geometry_arrays(geom))
 
     @staticmethod
     def _load_machine_model(
@@ -225,9 +213,7 @@ class BeamModelService:
                 f"got {type(machine_model).__name__}"
             )
         return generate_proton_spots(
-            ct=geometry.ct,
-            patient=geometry.patient,
-            target_contour=geometry.target_contour,
+            geometry=geometry.arrays,
             machine_model=machine_model,
             beam_set=request.beam_set,
             params=request.delivery_params,
@@ -247,8 +233,7 @@ class BeamModelService:
                 f"got {type(machine_model).__name__}"
             )
         return generate_photon_beamlets(
-            ct=geometry.ct,
-            patient=geometry.patient,
+            geometry=geometry.arrays,
             machine_model=machine_model,
             beam_set=request.beam_set,
             params=request.delivery_params,

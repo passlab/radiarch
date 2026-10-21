@@ -40,12 +40,7 @@ class _MockPlan:
 
 
 def _stub_geometry() -> _LoadedGeometry:
-    return _LoadedGeometry(
-        geometry_id="g-1",
-        ct=object(),
-        patient=object(),
-        target_contour=object(),
-    )
+    return _LoadedGeometry(geometry_id="g-1", arrays=object())
 
 
 def _stub_proton_build(req, geom, mm):

@@ -2,230 +2,93 @@
 
 This is the adapter between Service 2's modality-neutral types
 (:class:`BeamSetSpec`, :class:`DeliveryParams`, :class:`FluenceElementSet`)
-and OpenTPS's ``ProtonPlanDesign.buildPlan()``. The function below is
-intentionally the *only* place that knows how to call OpenTPS for proton
-plan construction; the rest of the Beam Model Service treats spots as
-opaque "fluence elements."
-
-OpenTPS's ``buildPlan()`` returns a ``ProtonPlan`` whose ``beams`` list
-contains ``PlanProtonBeam`` objects, each with ``layers`` (per energy)
-that hold ``spots`` (per scanning position). We walk that structure to
-populate :class:`PerBeamElements` with energy_layers + spots_per_layer.
-
-The returned ``ProtonPlan`` is the artifact persisted by the Beam Model
-Service (pickled). Downstream dose engines consume it directly.
+and :func:`radiarch.services.spot_placement.place_spots`. The spots of the
+returned :class:`~radiarch.models.proton_plan.ProtonPlan`, flattened beam by
+beam and layer by layer, are the fluence elements the dose engines and the
+optimizer work on; the plan is what the Beam Model Service persists.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, List, Optional, Sequence, Tuple
+from typing import List, Optional
 
 from loguru import logger
 
-from ..models.beam_model import (
-    BeamSetSpec,
-    DeliveryParams,
-    FluenceElementSet,
-    Modality,
-    PerBeamElements,
-)
+from ..models.beam_model import BeamSetSpec, DeliveryParams, FluenceElementSet, PerBeamElements
+from ..models.proton_plan import ProtonPlan
+from .geometry_bundle import GeometryArrays
 from .machine_model import ProtonMachineModel
+from .spot_placement import BeamGeometry, PlacementParams, place_spots
 
 
 @dataclass
 class ProtonBuildResult:
-    """Internal bundle — the FluenceElementSet plus the OpenTPS plan."""
+    """Internal bundle — the FluenceElementSet plus the plan."""
 
     fluence_elements: FluenceElementSet
-    plan: Any  # OpenTPS ProtonPlan (or test double)
+    plan: ProtonPlan
 
 
 def generate_proton_spots(
-    ct: Any,
-    patient: Any,
-    target_contour: Any,
+    geometry: GeometryArrays,
     machine_model: ProtonMachineModel,
     beam_set: BeamSetSpec,
     params: DeliveryParams,
     prescription_gy: float = 2.0,
+    target_label: Optional[int] = None,
 ) -> ProtonBuildResult:
-    """Build a proton plan and summarize its fluence elements.
+    """Place the spots of every beam on the geometry's target and summarize them.
 
-    Parameters
-    ----------
-    ct
-        OpenTPS ``CTImage`` for the patient.
-    patient
-        OpenTPS ``Patient`` carrying the RTStructs.
-    target_contour
-        The target ``ROIContour`` to define the prescription against.
-        May be ``None`` — the plan still builds but with no target mask,
-        which exercises the "no target" warning path inside OpenTPS.
-    machine_model
-        Resolved :class:`ProtonMachineModel`.
-    beam_set
-        Geometric beam configuration.
-    params
-        :class:`DeliveryParams` carrying ``spot_spacing_mm`` and
-        ``layer_spacing_mm``.
-    prescription_gy
-        Dose prescription, in Gy. Default 2.0 — clinical norm for one
-        fraction. Used by ``defineTargetMaskAndPrescription``.
-
-    Returns
-    -------
-    ProtonBuildResult
-        ``fluence_elements`` for the cache + the raw ``ProtonPlan`` for
-        persistence.
+    The target is the geometry's PTV (GTV, CTV, or a structure named like a
+    target) unless ``target_label`` names one. The isocenter is the target's
+    centre of mass. ``prescription_gy`` does not enter the placement; it is
+    kept so callers can record it with the plan.
     """
-    # Lazy import — keeps fast tests from pulling in OpenTPS.
-    from opentps.core.data.plan import ProtonPlanDesign
-
-    plan_design = ProtonPlanDesign()
-    plan_design.ct = ct
-    plan_design.patient = patient
-    plan_design.calibration = machine_model.calibration
-
-    # Convert BeamSetSpec → flat angle lists in beam order.
-    plan_design.gantryAngles = [b.gantry_deg for b in beam_set.beams]
-    plan_design.couchAngles = [b.couch_deg for b in beam_set.beams]
-
-    if params.spot_spacing_mm is not None:
-        plan_design.spotSpacing = params.spot_spacing_mm
-    if params.layer_spacing_mm is not None:
-        plan_design.layerSpacing = params.layer_spacing_mm
-
-    if target_contour is not None:
-        plan_design.defineTargetMaskAndPrescription(target_contour, prescription_gy)
+    del prescription_gy
+    if target_label is None:
+        chosen = geometry.target()
+        if chosen is None:
+            raise ValueError(
+                f"geometry {geometry.geometry_id!r} has no target structure "
+                f"(PTV/GTV/CTV or a structure named Target) among {sorted(geometry.structure_index)}"
+            )
+        target_name, target_label = chosen
     else:
-        logger.warning(
-            "No target contour supplied — proton plan will build without a "
-            "prescription mask and may have zero spots."
-        )
+        target_name = next((n for n, l in geometry.structure_index.items() if int(l) == int(target_label)), str(target_label))
 
-    logger.info(
-        "Building proton plan: %d beams, spot_spacing=%s mm, layer_spacing=%s mm",
-        len(beam_set.beams),
-        plan_design.spotSpacing,
-        plan_design.layerSpacing,
+    placement = PlacementParams(
+        spot_spacing_mm=float(params.spot_spacing_mm or 5.0),
+        layer_spacing_mm=float(params.layer_spacing_mm or 5.0),
     )
-    proton_plan = plan_design.buildPlan()
+    beams = [BeamGeometry(beam_id=b.beam_id, gantry_deg=float(b.gantry_deg), couch_deg=float(b.couch_deg), name=b.beam_id)
+             for b in beam_set.beams]
+    logger.info(
+        "Building proton plan on {}: {} beams, target {!r}, spot_spacing={} mm, layer_spacing={} mm",
+        geometry.geometry_id, len(beams), target_name, placement.spot_spacing_mm, placement.layer_spacing_mm,
+    )
+    rsp = machine_model.rsp_model.rsp(geometry.ct_hu_xyz(), 100.0)
+    plan = place_spots(rsp, geometry.mask_xyz(target_label), geometry.origin_mm, geometry.spacing_mm, beams,
+                       placement, name=f"plan[{geometry.geometry_id}]")
+    return ProtonBuildResult(fluence_elements=summarize_proton_plan(plan, beam_set), plan=plan)
 
-    fluence = _summarize_proton_plan(proton_plan, beam_set)
-    return ProtonBuildResult(fluence_elements=fluence, plan=proton_plan)
 
-
-# ---------------------------------------------------------------------------
-# Plan introspection
-# ---------------------------------------------------------------------------
-
-def _summarize_proton_plan(plan: Any, beam_set: BeamSetSpec) -> FluenceElementSet:
-    """Walk a built ``ProtonPlan`` and produce a :class:`FluenceElementSet`.
-
-    OpenTPS internal layout (best-effort, defensive to API drift):
-      plan.beams  -> [PlanProtonBeam]
-        beam.layers  -> [PlanProtonLayer]
-          layer.nominalEnergy : float (MeV)
-          layer.spots         : list   (or .numberOfSpots / .scanSpotPositions)
-    """
+def summarize_proton_plan(plan: ProtonPlan, beam_set: BeamSetSpec) -> FluenceElementSet:
+    """Energy layers and spots per layer of every beam, keyed by the request's beam ids."""
     per_beam: List[PerBeamElements] = []
     total = 0
-
-    beams = list(getattr(plan, "beams", []) or [])
-    # Align to BeamSetSpec by index when possible — OpenTPS preserves
-    # construction order from gantryAngles.
-    for idx, beam in enumerate(beams):
-        beam_id = (
-            beam_set.beams[idx].beam_id
-            if idx < len(beam_set.beams)
-            else f"beam_{idx}"
-        )
-        energies, spots = _walk_layers(beam)
-        element_count = sum(spots)
-        total += element_count
-        per_beam.append(
-            PerBeamElements(
-                beam_id=beam_id,
-                element_count=element_count,
-                energy_layers=energies if energies else None,
-                spots_per_layer=spots if spots else None,
-            )
-        )
-
-    # If the plan ended up empty (no target / no spots placed), still
-    # emit one PerBeamElements per beam in the request so downstream
-    # code can find them by beam_id.
+    for idx, beam in enumerate(plan.beams):
+        beam_id = beam_set.beams[idx].beam_id if idx < len(beam_set.beams) else (beam.beam_id or f"beam_{idx}")
+        energies = [float(layer.energy_mev) for layer in beam.layers]
+        spots = [int(layer.n_spots) for layer in beam.layers]
+        total += sum(spots)
+        per_beam.append(PerBeamElements(
+            beam_id=beam_id, element_count=sum(spots),
+            energy_layers=energies or None, spots_per_layer=spots or None,
+        ))
     if not per_beam:
-        per_beam = [
-            PerBeamElements(beam_id=b.beam_id, element_count=0)
-            for b in beam_set.beams
-        ]
-
+        per_beam = [PerBeamElements(beam_id=b.beam_id, element_count=0) for b in beam_set.beams]
     return FluenceElementSet(total_count=total, per_beam=per_beam)
 
 
-def _walk_layers(beam: Any) -> Tuple[List[float], List[int]]:
-    """Extract (energies, spots-per-layer) from one PlanProtonBeam.
-
-    OpenTPS exposes spot lists under a few different attribute names
-    across versions — try the most common shapes and fall back to zero
-    if none match.
-    """
-    energies: List[float] = []
-    spots: List[int] = []
-
-    layers = list(getattr(beam, "layers", []) or [])
-    for layer in layers:
-        energy = (
-            getattr(layer, "nominalEnergy", None)
-            or getattr(layer, "energy", None)
-            or 0.0
-        )
-        count = _count_spots(layer)
-        # Skip only truly empty layer entries (no energy AND no count).
-        if count == 0 and float(energy) == 0.0:
-            continue
-        energies.append(float(energy))
-        spots.append(int(count))
-    return energies, spots
-
-
-def _count_spots(layer: Any) -> int:
-    """Try several OpenTPS attribute paths to count spots in a layer.
-
-    The canonical OpenTPS PlanProtonLayer exposes:
-      * ``spotMUs`` — numpy array of monitor units (one per spot)
-      * ``spotXY`` — list of (x, y) positions
-      * ``numberOfSpots`` — @property returning len(spotXY)
-
-    We check spotMUs first because it's what dose calculation actually
-    consumes (a spot with MU=0 is still a spot but won't deposit dose).
-    """
-    # OpenTPS canonical path: spotMUs is the source of truth.
-    mus = getattr(layer, "spotMUs", None)
-    if mus is not None and hasattr(mus, "__len__"):
-        n = len(mus)
-        if n > 0:
-            return n
-    # spotXY positions (some OpenTPS code paths populate this first).
-    xy = getattr(layer, "spotXY", None)
-    if xy is not None and hasattr(xy, "__len__"):
-        n = len(xy)
-        if n > 0:
-            return n
-    # The @property — works on any OpenTPS version.
-    n = getattr(layer, "numberOfSpots", None)
-    if isinstance(n, int) and n > 0:
-        return n
-    # Legacy / test-double attribute names.
-    spots = getattr(layer, "spots", None)
-    if spots is not None and hasattr(spots, "__len__"):
-        return len(spots)
-    pos = getattr(layer, "scanSpotPositions", None)
-    if pos is not None and hasattr(pos, "__len__"):
-        return len(pos)
-    return 0
-
-
-__all__ = ["ProtonBuildResult", "generate_proton_spots"]
+__all__ = ["ProtonBuildResult", "generate_proton_spots", "summarize_proton_plan"]

@@ -43,10 +43,9 @@ class Settings(BaseSettings):
     broker_url: str = Field(default="redis://localhost:6379/0")
     result_backend: str = Field(default="redis://localhost:6379/1")
 
-    # OpenTPS configuration
-    opentps_data_root: str = Field(default="", description="Path to DICOM test data; empty = auto-detect from tests/")
-    opentps_beam_library: str = Field(default="/data/opentps/beam-models")
-    opentps_venv: str = Field(default="", description="Path to OpenTPS venv site-packages; empty = skip")
+    # Data and machine models
+    data_root: str = Field(default="", description="Directory of DICOM (CT + RTSTRUCT) the geometry service reads when no upload or PACS study is given; empty = the bundled SimpleFantom under tests/data if present")
+    beam_library_dir: str = Field(default="/data/radiarch/beam-models", description="Custom machine models: {beam_library_dir}/{id}/BDL.txt and Scanner/")
 
     cors_origins: List[str] = Field(default_factory=lambda: ["*"])
 
@@ -262,18 +261,12 @@ def get_settings() -> Settings:
     if settings.allow_test_engines is None:
         settings.allow_test_engines = settings.environment == "dev"
 
-    # Auto-detect opentps_data_root from repo test data if not set
-    if not settings.opentps_data_root:
+    # Auto-detect the data root from the bundled test data if not set
+    if not settings.data_root:
         # Walk up from config.py → radiarch/ → src/ → repo root
         repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
-        test_data = os.path.join(repo_root, "tests", "opentps", "core",
-                                 "opentps-testData", "SimpleFantomWithStruct")
+        test_data = os.path.join(repo_root, "tests", "data", "SimpleFantomWithStruct")
         if os.path.isdir(test_data):
-            settings.opentps_data_root = test_data
-
-    # Add OpenTPS venv site-packages to sys.path if configured
-    venv_path = settings.opentps_venv
-    if venv_path and os.path.exists(venv_path):
-        site.addsitedir(venv_path)
+            settings.data_root = test_data
 
     return settings

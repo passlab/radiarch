@@ -25,17 +25,8 @@ ASSETS = D.MCsquareAssets(D.default_assets_dir())
 GOLDEN = Path(__file__).resolve().parent / "golden" / "mcsquare_inputs_simplefantom"
 
 
-def _opentps_available() -> bool:
-    try:
-        import opentps.core  # noqa: F401
-        return True
-    except Exception:
-        return False
-
-
 needs_assets = pytest.mark.skipif(not ASSETS.root.is_dir(), reason="MCsquare assets not present")
 needs_binary = pytest.mark.skipif(not ASSETS.availability()[0], reason=ASSETS.availability()[1])
-needs_opentps = pytest.mark.skipif(not _opentps_available(), reason="vendored OpenTPS not importable")
 
 
 def _plan(spots=((0.0, 0.0, 1.0),), energy=150.0, gantry=0.0, iso=(0.0, 0.0, 0.0)) -> ProtonPlan:
@@ -167,12 +158,11 @@ class TestReaders:
 
 
 # ---------------------------------------------------------------------------
-# Goldens: what the vendored OpenTPS wrapper wrote, the driver must write
+# Goldens: what the vendored OpenTPS wrapper wrote before R14, the driver must write
 # ---------------------------------------------------------------------------
 
-@needs_opentps
 @pytest.mark.skipif(not GOLDEN.is_dir(), reason="MCsquare input goldens not captured")
-def test_driver_inputs_match_the_opentps_goldens():
+def test_driver_inputs_match_the_goldens():
     from radiarch.validation import goldens as G
 
     if not G.SIMPLEFANTOM.is_dir():
@@ -225,43 +215,6 @@ class TestEngineRuns:
         via = np.asarray(dij @ np.ones(3, dtype=np.float32)).reshape(self.BOX)
         assert via.sum() == pytest.approx(dose.sum(), rel=0.15)
 
-    @needs_opentps
-    def test_matches_the_opentps_path_at_a_fixed_seed(self, tmp_path):
-        """Same inputs, same seed, one thread: the vendored wrapper and the driver give the
-        same dose (float rounding apart), with the wrapper's (x, y, z) transposed to (z, y, x)."""
-        from opentps.core.data.MCsquare._mcsquareConfig import MCsquareConfig
-        from opentps.core.data.images import CTImage
-        from opentps.core.data.plan import ProtonPlan as OPlan
-        from opentps.core.data.plan._planProtonBeam import PlanProtonBeam
-        from opentps.core.data.plan._planProtonLayer import PlanProtonLayer
-        from radiarch.core.workflows._helpers import build_mc_calculator
-        from radiarch.services.machine_model import ProtonMachineModel
-
-        seed = 4242
-        orig = MCsquareConfig.__init__
-
-        def patched(self):
-            orig(self); self.config["RNG_Seed"] = seed; self.config["Num_Threads"] = 1
-
-        hu = np.zeros(self.BOX, dtype=np.float32)
-        plan = _plan(spots=((0.0, 0.0, 1.0), (10.0, -5.0, 2.0)), energy=120.0)
-        MCsquareConfig.__init__ = patched
-        try:
-            ct = CTImage(imageArray=np.ascontiguousarray(np.transpose(hu, (2, 1, 0))),
-                         origin=np.array(self.ORIGIN, dtype=float), spacing=np.array(self.SPACING, dtype=float))
-            op = OPlan(); ob = PlanProtonBeam(); ob.gantryAngle = 0.0; ob.couchAngle = 0.0; ob.isocenterPosition = [0.0, 0.0, 0.0]
-            ol = PlanProtonLayer(nominalEnergy=120.0)
-            for s in plan.beams[0].layers[0].spots:
-                ol.appendSpot(s.x_mm, s.y_mm, s.mu)
-            ob.appendLayer(ol); op.appendBeam(ob)
-            calc = build_mc_calculator(ct, ProtonMachineModel.from_default().calibration, nb_primaries=4000)
-            ref = np.ascontiguousarray(np.transpose(calc.computeDose(ct, op).imageArray, (2, 1, 0)))
-        finally:
-            MCsquareConfig.__init__ = orig
-        got = self._driver(tmp_path, seed=seed).compute_dose(hu, self.SPACING, self.ORIGIN, plan, nb_primaries=4000)
-        assert got.shape == ref.shape == self.BOX
-        np.testing.assert_allclose(got, ref, rtol=1e-5, atol=1e-6 * ref.max())
-
     def test_water_calibration_lengthens_the_range(self, tmp_path):
         """HU 0 is a tissue blend in the clinical tables and water in the water calibration;
         the water range must be the longer one (the harness finding of 2026-10-21)."""
@@ -296,7 +249,7 @@ class TestEngineRuns:
         geom = GeometryBundle(
             result=types.SimpleNamespace(geometry_id="g", grid_spec=types.SimpleNamespace(origin_mm=self.ORIGIN, spacing_mm=self.SPACING)),
             density=np.ones(self.BOX, dtype=np.float32), masks=np.zeros(self.BOX, dtype=np.uint16),
-            spacing_mm=self.SPACING, ct_hu=hu, ct_image=None, origin_mm=self.ORIGIN,
+            spacing_mm=self.SPACING, ct_hu=hu, origin_mm=self.ORIGIN,
         )
         bm = BeamModelBundle(
             result=BeamModelResult(

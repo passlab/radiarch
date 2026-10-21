@@ -452,11 +452,7 @@ def run_dvh_crosscheck(spec: dict, ctx: Context) -> CaseResult:
         from dicompylercore import dicomparser, dvhcalc
     except ImportError:
         raise Skip("dicompyler-core not installed (pip install -e ./src[validation])")
-    try:
-        from opentps.core.io import dataLoader
-        from opentps.core.data._rtStruct import RTStruct
-    except Exception as exc:
-        raise Skip(f"OpenTPS reader not importable: {exc}")
+    from ..dicom.rtstruct import read_rtstruct
     from ..services.dvh import dose_at_volume
     root = data_root() / Path(spec["data"]).name
     if not root.is_dir():
@@ -481,10 +477,10 @@ def run_dvh_crosscheck(spec: dict, ctx: Context) -> CaseResult:
         if best is None:
             res.notes.append(f"{pid}: no RTSTRUCT in the dose frame of reference"); continue
         rs_path, structs = best
-        rt = [d for d in dataLoader.readData(str(rs_path.parent)) if isinstance(d, RTStruct)]
-        if not rt:
-            res.notes.append(f"{pid}: OpenTPS could not read {rs_path.name}"); continue
-        contours = {c.name: c for c in rt[0].contours}
+        try:
+            contours = {c.name: c for c in read_rtstruct(rs_path).contours}
+        except Exception as exc:
+            res.notes.append(f"{pid}: could not read {rs_path.name}: {exc}"); continue
         grid_xyz = (dose.shape[2], dose.shape[1], dose.shape[0])
         for roi_number, info in structs.items():
             name = info["name"]

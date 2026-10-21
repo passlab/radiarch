@@ -24,7 +24,7 @@ def _beam_set(n: int = 2) -> BeamSetSpec:
 class TestGridMath:
     def test_default_jaw_default_beamlet_yields_expected_grid(self):
         result = generate_photon_beamlets(
-            ct=object(), patient=object(),
+            geometry=object(),
             machine_model=PhotonMachineModel(machine_model_id="default"),
             beam_set=_beam_set(1),
             params=DeliveryParams(),  # default beamlet 5×5, 200 mm jaws, 10 mm leaves
@@ -36,7 +36,7 @@ class TestGridMath:
 
     def test_custom_jaw_overrides_machine_default(self):
         result = generate_photon_beamlets(
-            ct=object(), patient=object(),
+            geometry=object(),
             machine_model=PhotonMachineModel(machine_model_id="default", max_jaw_opening_mm=300.0),
             beam_set=_beam_set(1),
             params=DeliveryParams(jaw_opening_mm=(100.0, 100.0), beamlet_size_mm=(10.0, 10.0)),
@@ -47,7 +47,7 @@ class TestGridMath:
 
     def test_total_count_is_per_beam_sum(self):
         result = generate_photon_beamlets(
-            ct=object(), patient=object(),
+            geometry=object(),
             machine_model=PhotonMachineModel(machine_model_id="default"),
             beam_set=_beam_set(3),
             params=DeliveryParams(),
@@ -58,7 +58,7 @@ class TestGridMath:
 
     def test_leaf_width_from_request_overrides_machine(self):
         result = generate_photon_beamlets(
-            ct=object(), patient=object(),
+            geometry=object(),
             machine_model=PhotonMachineModel(machine_model_id="default"),
             beam_set=_beam_set(1),
             params=DeliveryParams(mlc_leaf_width_mm=5.0),
@@ -73,7 +73,7 @@ class TestPlanAssembly:
             beams=[BeamSpec(beam_id="A", gantry_deg=72.0), BeamSpec(beam_id="B", gantry_deg=144.0, couch_deg=10.0)],
         )
         result = generate_photon_beamlets(
-            ct=object(), patient=object(),
+            geometry=object(),
             machine_model=PhotonMachineModel(machine_model_id="default"),
             beam_set=beam_set, params=DeliveryParams(),
         )

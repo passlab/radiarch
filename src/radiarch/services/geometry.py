@@ -6,7 +6,7 @@ This is the public entry point for Service 1. One method, one contract:
 Pipeline
 --------
 1. Compute ``cache_key`` and short-circuit to the cached geometry if present.
-2. Load the CT + patient (delegates to ``_helpers.load_ct_and_patient``;
+2. Load the CT + structure sets (``radiarch.dicom.case.load_case``;
    respects ``data_root_override``).
 3. Convert CT HU → mass density on the *native* CT grid, using the
    requested :class:`HUDensityModel`. This ordering matters: converting
@@ -26,9 +26,9 @@ Pipeline
 Testability
 -----------
 The service exposes a ``_load`` → ``_process`` seam. ``_load`` is the
-OpenTPS-dependent step (DICOM I/O), which tests stub out with a
-synthetic CT + fake-contour patient. ``_process`` does the math and
-persistence; that's where the interesting invariants live.
+DICOM I/O step, which tests stub out with a synthetic CT + fake
+contours. ``_process`` does the math and persistence; that's where the
+interesting invariants live.
 """
 
 from __future__ import annotations
@@ -70,9 +70,9 @@ from .resampling import identity_grid_from_affine, resample_to_grid
 class _LoadedCT:
     """Internal bundle returned by ``_load`` — keeps the public API narrow."""
 
-    ct: Any             # OpenTPS CTImage (or test double)
-    patient: Any        # OpenTPS Patient (or test double)
-    contours: list      # Flattened list of ROI contours across all RTStructs
+    ct: Any             # radiarch.dicom.ct.CTVolume (or test double): imageArray (x, y, z), origin, spacing
+    patient: Any        # radiarch.dicom.ct.PatientInfo (or test double)
+    contours: list      # Flattened list of contours across all structure sets
 
 
 class GeometryService:
@@ -146,9 +146,8 @@ class GeometryService:
     #      then references it in a build request).
     #   2. PACS path — if the adapter exposes ``can_retrieve_instances()``
     #      (i.e. a real Orthanc / DICOMweb backend), we fetch the study
-    #      into a temp dir and point OpenTPS at it.
-    #   3. Disk path — fall back to the legacy ``load_ct_and_patient``
-    #      helper which reads from ``opentps_data_root`` (or the request's
+    #      into a temp dir and read it from there.
+    #   3. Disk path — read ``settings.data_root`` (or the request's
     #      ``data_root_override``). Dev-only convenience that keeps the
     #      existing tests + SimpleFantom demo working when Orthanc is
     #      mocked and no upload was provided.
@@ -191,7 +190,7 @@ class GeometryService:
         if not fetcher.can_fetch:
             logger.info(
                 "Orthanc adapter is metadata-only (mock mode); "
-                "falling back to opentps_data_root."
+                "falling back to the data root."
             )
             return self._load_from_disk(None)
 
@@ -223,8 +222,8 @@ class GeometryService:
     def _load_from_nrrd(ref) -> _LoadedCT:
         """Load a CT (+ optional segmentation) from NRRD/ITK files.
 
-        Produces the same ``_LoadedCT`` bundle as the DICOM paths: a real
-        ``CTImage`` and a list of ``ContourLike`` segment adapters, so the
+        Produces the same ``_LoadedCT`` bundle as the DICOM paths: a
+        ``CTVolume`` and a list of ``ContourLike`` segment adapters, so the
         rest of the pipeline runs unchanged.
         """
         from ..adapters.nrrd_ingest import load_nrrd_case  # lazy
@@ -238,62 +237,32 @@ class GeometryService:
 
     @staticmethod
     def _load_from_disk(data_root: Optional[str]) -> _LoadedCT:
-        from ..core.workflows._helpers import load_ct_and_patient  # lazy
+        from ..dicom.case import load_case  # lazy
 
-        ct, patient, rt_structs = load_ct_and_patient(data_root=data_root)
-        contours: list = []
-        for rt in patient.rtStructs if patient and patient.rtStructs else rt_structs:
-            contours.extend(rt.contours)
-        return _LoadedCT(ct=ct, patient=patient, contours=contours)
+        root = data_root or get_settings().data_root
+        if not root:
+            raise ValueError("no DICOM data root configured (RADIARCH_DATA_ROOT) and no upload or PACS study given")
+        case = load_case(root)
+        return _LoadedCT(ct=case.ct, patient=case.patient, contours=case.contours)
 
     # ---- PACS path ----------------------------------------------------
 
     @staticmethod
     def _load_from_pacs(fetcher, request: GeometryBuildRequest) -> _LoadedCT:
-        """Download the study via ``fetcher`` and hand OpenTPS the temp dir.
+        """Download the study via ``fetcher`` and read it from the temp dir.
 
-        The temp dir is cleaned up before we return — OpenTPS's
-        ``readData`` reads everything eagerly into memory, so we don't
-        need the files on disk afterwards.
+        The temp dir is cleaned up before we return — everything is read
+        eagerly into memory, so we don't need the files on disk afterwards.
         """
-        from opentps.core.io import dataLoader
-        from opentps.core.data.images import CTImage
-        from opentps.core.data._rtStruct import RTStruct
+        from ..dicom.case import load_case  # lazy
 
         with fetcher.fetch(request.patient_ref) as staged:
-            data_list = dataLoader.readData(str(staged.directory))
-            if not data_list:
-                raise ValueError(
-                    f"OpenTPS found no readable DICOM in staged dir {staged.directory}"
-                )
-
-            ct = None
-            patient = None
-            found_rt_structs: list = []
-            for item in data_list:
-                if isinstance(item, CTImage):
-                    ct = item
-                    patient = item.patient
-                elif isinstance(item, RTStruct):
-                    found_rt_structs.append(item)
-
-            if not ct:
-                raise ValueError(
-                    "No CTImage was produced from the staged DICOM — "
-                    "the series UID may point at something other than CT."
-                )
-            if not patient:
-                from opentps.core.data import Patient
-                patient = Patient(name="Unknown")
-
-            for rt in found_rt_structs:
-                if rt not in patient.rtStructs:
-                    patient.appendPatientData(rt)
-
-            contours: list = []
-            for rt in patient.rtStructs if patient.rtStructs else found_rt_structs:
-                contours.extend(rt.contours)
-            return _LoadedCT(ct=ct, patient=patient, contours=contours)
+            series_uid = getattr(request.patient_ref, "dicom_series_uid", None) or None
+            try:
+                case = load_case(staged.directory, ct_series_uid=series_uid)
+            except ValueError as exc:
+                raise ValueError(f"staged study {staged.directory}: {exc}") from exc
+            return _LoadedCT(ct=case.ct, patient=case.patient, contours=case.contours)
 
     # -----------------------------------------------------------------
     # Core processing pipeline — tested with stubs.

@@ -79,7 +79,6 @@ def synthetic_geometry():
         spacing_mm=(2.5, 2.5, 2.5),     # GeometryBundle uses this name
         spacing=(2.5, 2.5, 2.5),         # kept for safety if anything else reads it
         ct_hu=None,
-        ct_image=object(),               # opaque marker — analytic engine ignores
         ct_calibration=None,
         result=SimpleNamespace(geometry_id="g-synth-001"),
     )
@@ -297,7 +296,7 @@ class TestDoseErrorPaths:
 
         geometry = SimpleNamespace(
             density=np.zeros((4, 4), dtype=np.float32),  # WRONG: 2D not 3D
-            ct_image=None,                                # WRONG: no CT
+            ct_hu=None,                                   # WRONG: no CT
         )
         modality = SimpleNamespace(value="PHOTON_IMRT")   # WRONG: not PROTON
         fluence = SimpleNamespace(total_count=0)          # WRONG: empty

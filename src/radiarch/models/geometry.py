@@ -136,7 +136,7 @@ class PatientRef(BaseModel):
 
     * ``dicom_study_uid`` (+ optional series UIDs) — pulls from a PACS
       via the configured Orthanc/DICOMweb adapter, or from the
-      ``opentps_data_root`` fallback in dev mode.
+      ``data_root`` fallback in dev mode.
     * ``upload_id`` — points at a previously-uploaded DICOM bundle
       sitting under ``{settings.upload_dir}/{upload_id}/``. Takes
       precedence when both are present.

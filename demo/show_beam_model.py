@@ -46,12 +46,10 @@ os.environ["RADIARCH_ARTIFACT_DIR"] = str(_REPO_ROOT / "data" / "artifacts")
 _TEST_DATA = (
     _REPO_ROOT
     / "tests"
-    / "opentps"
-    / "core"
-    / "opentps-testData"
+    / "data"
     / "SimpleFantomWithStruct"
 )
-os.environ["RADIARCH_OPENTPS_DATA_ROOT"] = str(_TEST_DATA)
+os.environ["RADIARCH_DATA_ROOT"] = str(_TEST_DATA)
 
 
 from radiarch.models.beam_model import (  # noqa: E402

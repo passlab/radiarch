@@ -44,8 +44,8 @@ class GeometryBundle:
     ``density`` and ``masks`` are loaded eagerly so engines don't depend
     on SimpleITK / NIfTI loading.
 
-    ``ct_hu`` and ``ct_image`` carry the original CT in Hounsfield Units
-    on the same grid as ``density``. They're optional for two reasons:
+    ``ct_hu`` carries the original CT in Hounsfield Units on the same grid
+    as ``density``. It is optional for two reasons:
 
     1. Geometries cached before D6.1 don't have a CT NIfTI on disk —
        ``DoseService._load_geometry`` returns those bundles with
@@ -63,7 +63,6 @@ class GeometryBundle:
     masks: np.ndarray           # (nz, ny, nx) uint16, structure labels
     spacing_mm: tuple           # (sx, sy, sz)
     ct_hu: Optional[np.ndarray] = None    # (nz, ny, nx) int16, Hounsfield Units
-    ct_image: Optional[Any] = None        # OpenTPS CTImage wrapping ct_hu, when OpenTPS is importable
     origin_mm: Optional[tuple] = None     # (ox, oy, oz) centre of voxel [0, 0, 0]; engines that place an isocenter need it
 
 
@@ -72,7 +71,7 @@ class BeamModelBundle:
     """What the service hands to an engine for the beam model."""
 
     result: BeamModelResult
-    plan: Any                   # unpickled OpenTPS plan (or test double)
+    plan: Any                   # unpickled ProtonPlan / PhotonPlan (or test double)
 
 
 # ---------------------------------------------------------------------------

@@ -1,79 +1,24 @@
-"""Rebuild OpenTPS objects from a persisted geometry.
+"""The persisted geometry as arrays (roadmap R15).
 
 The Geometry Service writes three NIfTI volumes per geometry (CT in HU, mass
 density, uint16 structure labels) and a ``GeometryResult`` record. Every
 downstream service works from those files, never from a second DICOM read,
 so that the geometry the caller named is the one that gets used.
-
-``wrap_ct_image`` used to live in ``dose.py``; it is here so the Dose and
-Beam Model services share one definition. SimpleITK hands back arrays in
-(z, y, x) order and OpenTPS wants (x, y, z), so every wrapper transposes.
+:func:`load_geometry_arrays` reads them back into a :class:`GeometryArrays`;
+the beam model builders take that.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 import SimpleITK as sitk
 from loguru import logger
 
 from .rasterization import _target_priority
-
-
-def _grid_origin_spacing(geom) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
-    grid = geom.grid_spec
-    spacing = tuple(float(s) for s in grid.spacing_mm)
-    origin = tuple(float(o) for o in (grid.origin_mm or (0.0, 0.0, 0.0)))
-    return origin, spacing
-
-
-def wrap_ct_image(ct_hu: np.ndarray, geom) -> Optional[Any]:
-    """Wrap a (z, y, x) HU array in an OpenTPS ``CTImage``, or return None.
-
-    Returns None when OpenTPS isn't importable in this environment — the
-    caller still has the raw ``ct_hu`` for engines that don't need OpenTPS.
-    Provenance (frameOfReferenceUID, seriesInstanceUID) comes from the
-    persisted GeometryResult so the CTImage matches the original series.
-    """
-    try:
-        from opentps.core.data.images import CTImage
-    except Exception:  # pragma: no cover — exercised on import-failure machines
-        return None
-
-    # Contiguous: OpenTPS's C ray tracer reads the buffer directly.
-    arr_ijk = np.ascontiguousarray(np.transpose(np.asarray(ct_hu), (2, 1, 0)), dtype=np.int16)
-    origin, spacing = _grid_origin_spacing(geom)
-
-    series_uid = ""
-    try:
-        series_uid = str(geom.ct_metadata.series_instance_uid or "")
-    except Exception:  # pragma: no cover
-        pass
-    for_uid = str(getattr(geom, "frame_of_reference_uid", "") or "")
-
-    return CTImage(
-        imageArray=arr_ijk,
-        name=f"CT[{geom.geometry_id}]",
-        origin=origin,
-        spacing=spacing,
-        seriesInstanceUID=series_uid,
-        frameOfReferenceUID=for_uid,
-    )
-
-
-def wrap_roi_mask(mask_zyx: np.ndarray, geom, name: str) -> Optional[Any]:
-    """Wrap a (z, y, x) boolean mask in an OpenTPS ``ROIMask`` on the geometry grid."""
-    try:
-        from opentps.core.data.images import ROIMask
-    except Exception:  # pragma: no cover
-        return None
-
-    arr_ijk = np.ascontiguousarray(np.transpose(np.asarray(mask_zyx, dtype=bool), (2, 1, 0)))
-    origin, spacing = _grid_origin_spacing(geom)
-    return ROIMask(imageArray=arr_ijk, name=name, origin=origin, spacing=spacing)
-
 
 # Names that mean "the target" in phantoms and older structure sets (the
 # legacy workflows accept the same set); PTV/GTV/CTV come first via
@@ -101,6 +46,13 @@ def target_structure(structure_index: Dict[str, int]) -> Optional[Tuple[str, int
     return sorted(fallback, key=lambda nl: nl[0].lower())[0]
 
 
+def _grid_origin_spacing(geom) -> Tuple[Tuple[float, float, float], Tuple[float, float, float]]:
+    grid = geom.grid_spec
+    spacing = tuple(float(s) for s in grid.spacing_mm)
+    origin = tuple(float(o) for o in (grid.origin_mm or (0.0, 0.0, 0.0)))
+    return origin, spacing
+
+
 def load_ct_hu(geom) -> Optional[np.ndarray]:
     """Read the persisted CT grid as (z, y, x) int16, or None if it isn't on disk."""
     uri = getattr(geom, "ct_grid_uri", None)
@@ -120,12 +72,56 @@ def load_ct_hu(geom) -> Optional[np.ndarray]:
         return None
 
 
-def load_opentps_geometry(geom) -> Tuple[Any, Any, Optional[Any]]:
-    """Return ``(CTImage, Patient, target ROIMask or None)`` for a persisted geometry.
+@dataclass
+class GeometryArrays:
+    """A persisted geometry in memory: CT, labels and the grid, in radiarch's ``(z, y, x)`` order."""
 
-    Raises ``ValueError`` when the CT grid is not on disk or OpenTPS is not
-    importable: a beam model cannot be built without either, and silently
-    reading some other CT is exactly the defect this module replaces.
+    geometry_id: str
+    ct_hu: np.ndarray                      # (z, y, x) int16
+    masks: np.ndarray                      # (z, y, x) uint16 structure labels, 0 = background
+    structure_index: Dict[str, int]
+    origin_mm: Tuple[float, float, float]  # centre of voxel [0, 0, 0] (x, y, z)
+    spacing_mm: Tuple[float, float, float]
+    frame_of_reference_uid: str = ""
+    patient_name: str = "ANONYMOUS"
+    series_instance_uid: str = ""
+
+    @property
+    def shape_zyx(self) -> Tuple[int, int, int]:
+        return tuple(int(v) for v in self.ct_hu.shape)  # type: ignore[return-value]
+
+    @property
+    def grid_size_xyz(self) -> Tuple[int, int, int]:
+        nz, ny, nx = self.shape_zyx
+        return (nx, ny, nz)
+
+    def ct_hu_xyz(self) -> np.ndarray:
+        """The CT in ``(x, y, z)`` order (C-contiguous copy)."""
+        return np.ascontiguousarray(np.transpose(self.ct_hu, (2, 1, 0)))
+
+    def mask_zyx(self, label: int) -> np.ndarray:
+        return self.masks == int(label)
+
+    def mask_xyz(self, label: int) -> np.ndarray:
+        return np.ascontiguousarray(np.transpose(self.masks == int(label), (2, 1, 0)))
+
+    def target(self) -> Optional[Tuple[str, int]]:
+        """``(name, label)`` of the planning target, or None."""
+        return target_structure(self.structure_index)
+
+    def label_of(self, name: str) -> Optional[int]:
+        for n, lbl in self.structure_index.items():
+            if n.strip().lower() == name.strip().lower():
+                return int(lbl)
+        return None
+
+
+def load_geometry_arrays(geom) -> GeometryArrays:
+    """Read a persisted geometry's CT and labels.
+
+    Raises ``ValueError`` when the CT grid is not on disk: a beam model cannot
+    be built without it, and silently reading some other CT is exactly the
+    defect this module replaces.
     """
     ct_hu = load_ct_hu(geom)
     if ct_hu is None:
@@ -133,37 +129,25 @@ def load_opentps_geometry(geom) -> Tuple[Any, Any, Optional[Any]]:
             f"geometry {geom.geometry_id!r} has no CT grid on disk "
             f"(ct_grid_uri={getattr(geom, 'ct_grid_uri', None)!r}); rebuild the geometry."
         )
-    ct = wrap_ct_image(ct_hu, geom)
-    if ct is None:
-        raise ValueError("OpenTPS is not importable; cannot build OpenTPS objects for the beam model.")
-
-    from opentps.core.data import Patient
-
-    patient_name = str(getattr(getattr(geom, "ct_metadata", None), "patient_name", "") or "ANONYMOUS")
-    patient = Patient(name=patient_name)
-    patient.appendPatientData(ct)
-
-    target = None
-    chosen = target_structure(geom.structure_index)
-    if chosen is None:
+    masks = sitk.GetArrayFromImage(sitk.ReadImage(str(geom.structure_masks_uri))).astype(np.uint16)
+    if masks.shape != ct_hu.shape:
+        raise ValueError(f"geometry {geom.geometry_id!r}: masks {masks.shape} and CT {ct_hu.shape} differ in shape")
+    origin, spacing = _grid_origin_spacing(geom)
+    meta = getattr(geom, "ct_metadata", None)
+    arrays = GeometryArrays(
+        geometry_id=str(geom.geometry_id), ct_hu=ct_hu, masks=masks,
+        structure_index={str(k): int(v) for k, v in dict(geom.structure_index).items()},
+        origin_mm=origin, spacing_mm=spacing,
+        frame_of_reference_uid=str(getattr(geom, "frame_of_reference_uid", "") or ""),
+        patient_name=str(getattr(meta, "patient_name", "") or "ANONYMOUS"),
+        series_instance_uid=str(getattr(meta, "series_instance_uid", "") or ""),
+    )
+    if arrays.target() is None:
         logger.warning(
-            "Geometry %s has no PTV/GTV/CTV in its structure index (%s); "
-            "the beam model will build without a target.",
-            geom.geometry_id, sorted(geom.structure_index),
+            "Geometry %s has no PTV/GTV/CTV in its structure index (%s).",
+            geom.geometry_id, sorted(arrays.structure_index),
         )
-    else:
-        name, label = chosen
-        masks = sitk.GetArrayFromImage(sitk.ReadImage(str(geom.structure_masks_uri)))
-        target = wrap_roi_mask(masks == label, geom, name)
-        if target is not None:
-            patient.appendPatientData(target)
-    return ct, patient, target
+    return arrays
 
 
-__all__ = [
-    "wrap_ct_image",
-    "wrap_roi_mask",
-    "target_structure",
-    "load_ct_hu",
-    "load_opentps_geometry",
-]
+__all__ = ["target_structure", "load_ct_hu", "GeometryArrays", "load_geometry_arrays"]

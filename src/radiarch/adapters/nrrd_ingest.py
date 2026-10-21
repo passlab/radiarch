@@ -3,30 +3,29 @@ the exact objects the Geometry pipeline already consumes.
 
 Motivation
 ----------
-The production ingest path reads **DICOM** (CT series + RTSTRUCT) via OpenTPS's
-``dataLoader.readData``. For fast iteration on real 3D anatomy we also want to
+The production ingest path reads **DICOM** (CT series + RTSTRUCT) through
+``radiarch.dicom``. For fast iteration on real 3D anatomy we also want to
 feed the pipeline NRRD volumes exported from 3D Slicer, *without* changing any
 downstream code (HU→density, resampling, rasterization, persistence, dose).
 
 The trick: the geometry pipeline is duck-typed at two seams —
 
-* it reads ``ct.imageArray`` / ``ct.spacing`` / ``ct.origin`` from an OpenTPS
-  ``CTImage``; and
+* it reads ``ct.imageArray`` / ``ct.spacing`` / ``ct.origin`` from a
+  ``CTVolume``; and
 * the rasterizer (``services/rasterization.py``) only needs, per structure, an
   object with ``.name`` and ``.getBinaryMask(origin, gridSize, spacing) -> obj
   with .imageArray``.
 
-So this module produces a real ``CTImage`` plus a list of tiny
+So this module produces a ``CTVolume`` plus a list of tiny
 ``_SegmentContour`` adapters that satisfy the ``ContourLike`` protocol. Nothing
 in ``GeometryService._process`` or the rasterizer has to change.
 
 Axis convention
 ---------------
-OpenTPS stores ``imageArray`` as ``[x, y, z]`` — i.e. ``np.transpose`` of the
+``CTVolume.imageArray`` is ``[x, y, z]`` — i.e. ``np.transpose`` of the
 ``[z, y, x]`` array SimpleITK returns — with ``origin``/``spacing`` taken
-straight from the ITK image (see ``opentps/core/io/sitkIO.py:readImage``). We
-replicate that exactly, so an NRRD-loaded CT is byte-for-byte convention-
-compatible with a DICOM-loaded one.
+straight from the ITK image. We replicate that exactly, so an NRRD-loaded CT
+is byte-for-byte convention-compatible with a DICOM-loaded one.
 
 Orientation
 -----------
@@ -69,7 +68,7 @@ _TOL_MM = 1e-3
 
 @dataclass
 class _MaskArray:
-    imageArray: np.ndarray  # bool, OpenTPS [x, y, z] convention
+    imageArray: np.ndarray  # bool, [x, y, z]
 
 
 @dataclass
@@ -125,7 +124,7 @@ class _SegmentContour:
 def _canonicalize_to_axis_aligned(image, *, is_label: bool):
     """Return an image whose direction is the identity (axis-aligned LPS).
 
-    OpenTPS ``imageArray`` and our resampler represent only axis-aligned grids,
+    ``CTVolume.imageArray`` and our resampler represent only axis-aligned grids,
     so any non-identity acquisition direction must be brought into that frame
     *before* we hand the array downstream. Three cases:
 
@@ -191,7 +190,7 @@ def _canonicalize_to_axis_aligned(image, *, is_label: bool):
 
 def _read_itk(path: str | Path, *, is_label: bool = False):
     """Read an ITK image and return ``(array_xyz, origin, spacing, orig_image,
-    canon)`` in OpenTPS convention, canonicalized to an axis-aligned grid.
+    canon)`` in ``(x, y, z)`` order, canonicalized to an axis-aligned grid.
 
     ``orig_image`` is the *pre-canonicalization* image — used only to read
     metadata (e.g. Slicer ``Segment*`` fields), which reorientation does not
@@ -214,22 +213,22 @@ def _read_itk(path: str | Path, *, is_label: bool = False):
 
 
 def load_ct(path: str | Path, *, patient: Any = None):
-    """Load a CT ``.nrrd`` into a real OpenTPS ``CTImage`` (HU as float32)."""
-    from opentps.core.data.images import CTImage
+    """Load a CT ``.nrrd`` into a ``CTVolume`` (HU as float32)."""
+    from ..dicom.ct import CTVolume, PatientInfo
 
     array_xyz, origin, spacing, _, _ = _read_itk(path, is_label=False)
     if array_xyz.ndim != 3:
         raise ValueError(
             f"{Path(path).name}: expected a 3D CT volume, got shape {array_xyz.shape}"
         )
-    ct = CTImage(
+    ct = CTVolume(
         imageArray=array_xyz.astype(np.float32, copy=False),
+        origin=np.asarray(origin, dtype=float),
+        spacing=np.asarray(spacing, dtype=float),
         name=Path(path).name,
-        origin=origin,
-        spacing=spacing,
         seriesInstanceUID=f"NRRD-CT:{Path(path).name}",
         frameOfReferenceUID=f"NRRD-FOR:{Path(path).name}",
-        patient=patient,
+        patient=patient if patient is not None else PatientInfo(),
     )
     logger.info(
         "Loaded NRRD CT %s: shape=%s spacing=%s origin=%s",
@@ -324,9 +323,9 @@ def load_nrrd_case(
     Raises if the segmentation grid does not match the CT grid — a mis-registered
     overlay must fail loudly, not be silently trusted.
     """
-    from opentps.core.data import Patient
+    from ..dicom.ct import PatientInfo
 
-    patient = Patient(name=patient_name)
+    patient = PatientInfo(name=patient_name)
     ct = load_ct(ct_path, patient=patient)
 
     contours: List[_SegmentContour] = []

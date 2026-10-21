@@ -29,15 +29,6 @@ from radiarch.services.dose_engines.ccc_driver import (
 from radiarch.services.photon_beamlets import build_photon_plan
 
 
-def _opentps_available() -> bool:
-    try:
-        import opentps.core  # noqa: F401
-        return True
-    except Exception:
-        return False
-
-
-needs_opentps = pytest.mark.skipif(not _opentps_available(), reason="vendored OpenTPS not importable")
 needs_binary = pytest.mark.skipif(not CCCDriver().availability()[0], reason=CCCDriver().availability()[1])
 
 
@@ -163,77 +154,6 @@ class TestExitCodes:
         g = BeamletGeometry(np.zeros((1, 2)), np.ones((1, 2)), np.zeros((1, 3)), np.array([1000.0]))
         with pytest.raises(EngineRuntimeError, match="1 is success"):
             self._driver(tmp_path).run(np.ones((2, 2, 2), np.float32), (1, 1, 1), (0, 0, 0), (0, 0, 0), g)
-
-
-# ---------------------------------------------------------------------------
-# Parity with the vendored OpenTPS IO (regression against the reference code)
-# ---------------------------------------------------------------------------
-
-def _opentps_plan(beams, jaw, leaf, mu, spacing):
-    from opentps.core.data.plan._photonPlan import PhotonPlan
-    from opentps.core.data.plan._planPhotonBeam import PlanPhotonBeam
-    from opentps.core.data.plan._planPhotonSegment import PlanPhotonSegment
-    from radiarch.models.photon_plan import open_field_mlc_rows
-
-    rows = np.array([[r.y_min_mm, r.y_max_mm, r.x_left_mm, r.x_right_mm] for r in open_field_mlc_rows(jaw, jaw, leaf)])
-    plan = PhotonPlan()
-    for idx, (g, c) in enumerate(beams):
-        beam = PlanPhotonBeam(); beam.id = idx; beam.gantryAngle_degree = g; beam.couchAngle_degree = c
-        beam.xBeamletSpacing_mm = spacing; beam.yBeamletSpacing_mm = spacing
-        seg = PlanPhotonSegment(); seg.gantryAngle_degree = g; seg.couchAngle_degree = c
-        seg.xBeamletSpacing_mm = spacing; seg.yBeamletSpacing_mm = spacing
-        seg.x_jaw_mm = list(jaw); seg.y_jaw_mm = list(jaw); seg.Xmlc_mm = rows.copy(); seg.mu = mu
-        seg.createBeamletsFromSegments()
-        beam.appendBeamSegment(seg); plan.appendBeam(beam)
-    return plan
-
-
-@needs_opentps
-class TestOpenTPSParity:
-    def test_versors_match(self):
-        from opentps.core.io import CCCdoseEngineIO as io
-        for g, c, col in [(0, 0, 0), (90, 0, 0), (37, 12, -20), (270, -45, 90), (180, 90, 45)]:
-            assert np.allclose(rotated_versors(g, c, col), io.getRotatedVersors(g, c, col))
-
-    def test_geometry_files_match_writeCT(self, tmp_path):
-        from opentps.core.data.images import CTImage
-        from opentps.core.io import CCCdoseEngineIO as io
-
-        rng = np.random.default_rng(1)
-        d_zyx = rng.random((5, 6, 7)).astype(np.float32)
-        spacing = (1.5, 2.0, 2.5); origin = (-7.0, -3.0, 4.0); iso = (1.0, -2.0, 3.0)
-        ct = CTImage(imageArray=np.ascontiguousarray(d_zyx.transpose(2, 1, 0)), origin=np.array(origin), spacing=np.array(spacing))
-        ref = tmp_path / "ref"; ref.mkdir(); io.writeCT(ct, str(ref), np.array(iso))
-        header, density = write_geometry(tmp_path / "mine", d_zyx, spacing, origin, iso)
-        assert np.array_equal(np.fromfile(density, np.float32), np.fromfile(ref / "CT.bin", np.float32))
-        assert np.allclose(_numbers(header), _numbers(ref / "CT_HeaderFile.txt"))
-
-    def test_beamlet_specs_match_writePlan(self, tmp_path):
-        from opentps.core.io import CCCdoseEngineIO as io
-
-        beams = [(0.0, 0.0), (123.0, -15.0)]
-        plan = build_photon_plan(beams, (-50.0, 50.0), (-50.0, 50.0), 10.0, 3.0, (5.0, 5.0))
-        ref_plan = _opentps_plan(beams, (-50.0, 50.0), 10.0, 3.0, 5.0)
-        assert plan.n_beamlets == ref_plan.numberOfBeamlets
-        ref = tmp_path / "ref"; ref.mkdir(); io.writePlan(ref_plan, str(ref), 1)
-        mine = tmp_path / "mine.txt"; write_beamlet_specs(mine, beamlet_geometry_from_plan(plan))
-        a, b = _numbers(mine), _numbers(ref / "pencilBeamSpecs_batch0.txt")
-        assert len(a) == len(b) and np.allclose(a, b, atol=1e-6)
-
-    @needs_binary
-    def test_dose_matches_readDose(self, tmp_path):
-        from opentps.core.io import CCCdoseEngineIO as io
-
-        n, s = 24, 5.0
-        d = np.ones((n, n, n), np.float32); origin = (-(n - 1) / 2 * s,) * 3
-        plan = build_photon_plan([(0.0, 0.0)], (-30.0, 30.0), (-30.0, 30.0), 10.0, 1.0, (10.0, 10.0))
-        drv = CCCDriver(n_jobs=1, keep_workdir=True)
-        work = tmp_path / "work"
-        dij = drv.run(d, (s, s, s), origin, (0, 0, 0), beamlet_geometry_from_plan(plan), workdir=work)
-        mine = np.asarray(dij @ np.ones(dij.shape[1], np.float32)).reshape(n, n, n)
-        ref = io.readDose(str(work / "Geometry" / "CT_HeaderFile.txt"), str(work / "Outputs"), 1, np.ones(dij.shape[1])).imageArray
-        assert np.allclose(mine, np.transpose(ref, (2, 1, 0)), atol=1e-7)
-        assert mine.max() > 0
 
 
 # ---------------------------------------------------------------------------

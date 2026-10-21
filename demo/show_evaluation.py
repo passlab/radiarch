@@ -26,10 +26,10 @@ os.environ.setdefault("RADIARCH_BROKER_URL", "memory://")
 os.environ.setdefault("RADIARCH_RESULT_BACKEND", "cache+memory://")
 os.environ.setdefault("RADIARCH_ARTIFACT_DIR", str(_REPO_ROOT / "data" / "artifacts"))
 _TEST_DATA = (
-    _REPO_ROOT / "tests" / "opentps" / "core" / "opentps-testData"
+    _REPO_ROOT / "tests" / "data"
     / "SimpleFantomWithStruct"
 )
-os.environ.setdefault("RADIARCH_OPENTPS_DATA_ROOT", str(_TEST_DATA))
+os.environ.setdefault("RADIARCH_DATA_ROOT", str(_TEST_DATA))
 
 from radiarch.models.beam_model import (  # noqa: E402
     BeamModelBuildRequest, BeamSetSpec, BeamSpec, DeliveryParams, Modality,

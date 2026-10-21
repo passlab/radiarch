@@ -278,7 +278,6 @@ def synth_geometry():
         spacing_mm=(2.5, 2.5, 2.5),
         spacing=(2.5, 2.5, 2.5),
         ct_hu=None,
-        ct_image=object(),
         ct_calibration=None,
         result=SimpleNamespace(geometry_id="g-synth-dij-001"),
     )
@@ -428,10 +427,10 @@ class TestMCsquareDijRowRemap:
 # Layer 2 — Real MCsquare (auto-skipped without OpenTPS)
 # ---------------------------------------------------------------------------
 
-def _opentps_importable() -> bool:
+def _mcsquare_available() -> bool:
     try:
-        import opentps.core  # noqa: F401
-        return True
+        from radiarch.services.dose_engines.registry import engine_health
+        return bool(engine_health("mcsquare").get("available"))
     except Exception:
         return False
 
@@ -439,8 +438,7 @@ def _opentps_importable() -> bool:
 def _bundled_simplefantom_available() -> bool:
     """The SimpleFantom test data ships with the repo for end-to-end tests."""
     _REPO_ROOT = Path(__file__).resolve().parent.parent
-    return (_REPO_ROOT / "tests" / "opentps" / "core" / "opentps-testData"
-            / "SimpleFantomWithStruct").is_dir()
+    return (_REPO_ROOT / "tests" / "data" / "SimpleFantomWithStruct").is_dir()
 
 
 # Real Monte Carlo is slow and tolerance-sensitive, so it's opt-in rather than
@@ -456,7 +454,7 @@ def _mcsquare_validation_enabled() -> bool:
 
 pytestmark_real_mcsquare = pytest.mark.skipif(
     not (_mcsquare_validation_enabled()
-         and _opentps_importable()
+         and _mcsquare_available()
          and _bundled_simplefantom_available()),
     reason=(
         "Real-MCsquare V4 validation is opt-in: set "
@@ -484,11 +482,8 @@ class TestMCsquareDijConsistency:
         os.environ.setdefault("RADIARCH_RESULT_BACKEND", "cache+memory://")
         os.environ.setdefault("RADIARCH_DICOMWEB_URL", "")
         os.environ["RADIARCH_ARTIFACT_DIR"] = str(tmp_path / "artifacts")
-        _TEST_DATA = (
-            Path(__file__).resolve().parent / "opentps" / "core"
-            / "opentps-testData" / "SimpleFantomWithStruct"
-        )
-        os.environ["RADIARCH_OPENTPS_DATA_ROOT"] = str(_TEST_DATA)
+        _TEST_DATA = Path(__file__).resolve().parent / "data" / "SimpleFantomWithStruct"
+        os.environ["RADIARCH_DATA_ROOT"] = str(_TEST_DATA)
 
         from radiarch.config import get_settings
         get_settings.cache_clear()
@@ -535,10 +530,6 @@ class TestMCsquareDijConsistency:
         See the module-level note on ``_assert_mc_dij_consistency``.
         """
         from radiarch.services.dose import DoseService
-        from radiarch.services.dose_engines.mcsquare import _opentps_available
-
-        if not _opentps_available():
-            pytest.skip("OpenTPS not importable")
 
         geo, bm = self._build_synthfantom_pipeline(tmp_path)
         ds = DoseService()
@@ -593,10 +584,6 @@ class TestMCsquareDijConsistency:
         compute_dose comparison.
         """
         from radiarch.services.dose import DoseService
-        from radiarch.services.dose_engines.mcsquare import _opentps_available
-
-        if not _opentps_available():
-            pytest.skip("OpenTPS not importable")
 
         geo, bm = self._build_synthfantom_pipeline(tmp_path)
         ds = DoseService()

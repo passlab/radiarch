@@ -58,7 +58,6 @@ from .dose_persistence import (
     InfluenceStore,
 )
 from .geometry import GeometryService
-from .geometry_bundle import wrap_ct_image as _wrap_ct_image  # shared with the beam model
 from .dose_engines.registry import ensure_engine_allowed
 from .scenarios import expand_scenarios
 
@@ -277,12 +276,8 @@ class DoseService:
 
         The CT is loaded from ``geom.ct_grid_uri`` when present. For
         geometries cached before D6.1 — or any future case where the CT
-        file is missing — ``ct_hu`` and ``ct_image`` fall back to None
-        and the engine is expected to surface a clean error if it needs
-        them. ``ct_image`` is an OpenTPS ``CTImage`` wrapped around the
-        HU array; when OpenTPS isn't importable we still populate
-        ``ct_hu`` and leave ``ct_image=None`` so non-OpenTPS engines can
-        still see the raw HU.
+        file is missing — ``ct_hu`` falls back to None and the engine is
+        expected to surface a clean error if it needs it.
         """
         geom = GeometryService().store.get_by_id(geometry_id)
         if geom is None:
@@ -293,7 +288,7 @@ class DoseService:
         masks = sitk.GetArrayFromImage(sitk.ReadImage(geom.structure_masks_uri))
         spacing = tuple(geom.grid_spec.spacing_mm)
 
-        ct_hu, ct_image = self._maybe_load_ct(geom)
+        ct_hu = self._maybe_load_ct(geom)
 
         origin = getattr(geom.grid_spec, "origin_mm", None)
         return GeometryBundle(
@@ -302,42 +297,37 @@ class DoseService:
             masks=masks.astype(np.uint16),
             spacing_mm=spacing,
             ct_hu=ct_hu,
-            ct_image=ct_image,
             origin_mm=None if origin is None else tuple(float(o) for o in origin),
         )
 
     @staticmethod
     def _maybe_load_ct(geom):
-        """Read CT NIfTI + wrap in CTImage; returns (None, None) when unavailable.
+        """Read the CT NIfTI as (z, y, x) int16; None when unavailable.
 
-        Three failure modes are tolerated silently:
+        Two failure modes are tolerated silently:
 
         * ``ct_grid_uri`` is null (pre-D6.1 cached geometry).
         * The file on disk has been deleted out from under us.
-        * OpenTPS isn't importable (e.g. lightweight test env).
 
         Read errors that aren't "file missing" are intentionally swallowed
         with a warning rather than raised — the bundle is still useful
-        for engines that don't need a CT (analytic, future CCC).
+        for engines that don't need a CT.
         """
         uri = getattr(geom, "ct_grid_uri", None)
         if not uri:
-            return None, None
+            return None
         ct_path = Path(uri)
         if not ct_path.is_file():
             logger.warning(
                 "Geometry %s declares ct_grid_uri=%s but the file is missing.",
                 geom.geometry_id, uri,
             )
-            return None, None
+            return None
         try:
-            ct_arr = sitk.GetArrayFromImage(sitk.ReadImage(str(ct_path))).astype(np.int16)
+            return sitk.GetArrayFromImage(sitk.ReadImage(str(ct_path))).astype(np.int16)
         except Exception as exc:  # pragma: no cover — defensive
             logger.warning("Failed to read CT NIfTI %s: %s", uri, exc)
-            return None, None
-
-        ct_image = _wrap_ct_image(ct_arr, geom)
-        return ct_arr, ct_image
+            return None
 
     def _load_beam_model(self, beam_model_id: str) -> BeamModelBundle:
         """Look up the beam model and unpickle its plan artifact."""

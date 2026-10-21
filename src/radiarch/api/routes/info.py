@@ -32,7 +32,7 @@ async def service_info():
             {
                 "id": "proton-impt-basic",
                 "name": "Proton IMPT (3-beam)",
-                "description": "Proton plan using OpenTPS ProtonPlanDesign with MCsquare dose",
+                "description": "Proton plan with spots on the target and MCsquare dose",
             },
             {
                 "id": "photon-ccc",
