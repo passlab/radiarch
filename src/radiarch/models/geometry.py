@@ -337,6 +337,17 @@ class CTMetadata(BaseModel):
     num_slices: int = Field(..., ge=1)
     study_instance_uid: Optional[str] = None
     series_instance_uid: Optional[str] = None
+    # DICOM provenance for the RT writers (R6); empty on geometries built before R6
+    patient_id: str = Field(default="")
+    patient_birth_date: str = Field(default="")
+    patient_sex: str = Field(default="")
+    patient_position: str = Field(default="")
+    study_date: str = Field(default="")
+    study_time: str = Field(default="")
+    study_id: str = Field(default="")
+    accession_number: str = Field(default="")
+    study_description: str = Field(default="")
+    sop_instance_uids: List[str] = Field(default_factory=list, description="The CT slices, by ascending z; what an RT Structure Set references.")
 
 
 class GeometryResult(ResearchArtifact):

@@ -51,27 +51,46 @@ class DICOMwebNotifier:
         self._client = DICOMwebClient(**kwargs)
         return self._client
 
-    def store_instances(self, dicom_bytes: bytes) -> bool:
-        """Push DICOM data via STOW-RS.  Returns True on success, False on error.
+    def store_instances(self, instances, raise_errors: bool = False) -> bool:
+        """Push DICOM instances via STOW-RS: pydicom datasets, file paths or bytes.
 
-        Failures are logged but never raise — the job should not fail because
-        the remote PACS is temporarily unreachable.
+        Returns True on success. Failures are logged and return False unless
+        ``raise_errors`` is set — a plan job should not fail because the PACS is
+        unreachable, but an explicit push request wants the error.
         """
         if not self.enabled:
+            if raise_errors:
+                raise RuntimeError("DICOMweb push is disabled: RADIARCH_DICOMWEB_URL is empty")
             return False
 
         client = self._get_client()
         if client is None:
+            if raise_errors:
+                raise RuntimeError("dicomweb-client is not installed")
             return False
 
         try:
-            logger.info("STOW-RS push to %s (%d bytes)", self._url, len(dicom_bytes))
-            client.store_instances(datasets=[dicom_bytes])
+            datasets = [_as_dataset(x) for x in (instances if isinstance(instances, (list, tuple)) else [instances])]
+            logger.info("STOW-RS push of {} instance(s) to {}", len(datasets), self._url)
+            client.store_instances(datasets=datasets)
             logger.info("STOW-RS push succeeded")
             return True
         except Exception as exc:
-            logger.error("STOW-RS push failed (non-fatal): %s", exc)
+            if raise_errors:
+                raise
+            logger.error("STOW-RS push failed (non-fatal): {}", exc)
             return False
+
+
+def _as_dataset(x):
+    import pydicom
+
+    if isinstance(x, pydicom.Dataset):
+        return x
+    if isinstance(x, (bytes, bytearray)):
+        from io import BytesIO
+        return pydicom.dcmread(BytesIO(bytes(x)))
+    return pydicom.dcmread(str(x))
 
 
 # Module-level singleton (lazy)

@@ -438,12 +438,23 @@ class GeometryService:
     def _ct_metadata(ct: Any) -> CTMetadata:
         patient = getattr(ct, "patient", None)
         patient_name = getattr(patient, "name", None) or getattr(patient, "patientName", None) or "ANONYMOUS"
+        g = lambda obj, name: str(getattr(obj, name, "") or "")  # noqa: E731
         return CTMetadata(
             patient_name=str(patient_name),
             modality="CT",
             num_slices=int(np.asarray(ct.imageArray).shape[2]),
             study_instance_uid=getattr(ct, "studyInstanceUID", None),
             series_instance_uid=getattr(ct, "seriesInstanceUID", None),
+            patient_id=g(patient, "id"),
+            patient_birth_date=g(patient, "birth_date"),
+            patient_sex=g(patient, "sex"),
+            patient_position=g(ct, "patientPosition"),
+            study_date=g(ct, "studyDate"),
+            study_time=g(ct, "studyTime"),
+            study_id=g(ct, "studyID"),
+            accession_number=g(ct, "accessionNumber"),
+            study_description=g(ct, "studyDescription"),
+            sop_instance_uids=[str(u) for u in (getattr(ct, "sopInstanceUIDs", None) or [])],
         )
 
     @staticmethod

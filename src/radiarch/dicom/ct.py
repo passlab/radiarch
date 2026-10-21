@@ -53,6 +53,11 @@ class CTVolume:
     sliceLocation: Optional[np.ndarray] = None
     patient: PatientInfo = field(default_factory=PatientInfo)
     patientPosition: str = ""
+    studyDate: str = ""
+    studyTime: str = ""
+    studyID: str = ""
+    accessionNumber: str = ""
+    studyDescription: str = ""
 
     @property
     def gridSize(self) -> np.ndarray:
@@ -71,7 +76,8 @@ class CTVolume:
         return CTVolume(self.imageArray.copy(), self.origin.copy(), self.spacing.copy(), self.name,
                         self.frameOfReferenceUID, self.seriesInstanceUID, self.studyInstanceUID,
                         list(self.sopInstanceUIDs), None if self.sliceLocation is None else self.sliceLocation.copy(),
-                        self.patient, self.patientPosition)
+                        self.patient, self.patientPosition, self.studyDate, self.studyTime, self.studyID,
+                        self.accessionNumber, self.studyDescription)
 
 
 def _patient(ds: pydicom.Dataset) -> PatientInfo:
@@ -127,6 +133,11 @@ def read_ct_series(files: Sequence[Union[str, Path]]) -> CTVolume:
         sliceLocation=z,
         patient=_patient(dcm),
         patientPosition=str(getattr(dcm, "PatientPosition", "") or ""),
+        studyDate=str(getattr(dcm, "StudyDate", "") or ""),
+        studyTime=str(getattr(dcm, "StudyTime", "") or ""),
+        studyID=str(getattr(dcm, "StudyID", "") or ""),
+        accessionNumber=str(getattr(dcm, "AccessionNumber", "") or ""),
+        studyDescription=str(getattr(dcm, "StudyDescription", "") or ""),
     )
 
 

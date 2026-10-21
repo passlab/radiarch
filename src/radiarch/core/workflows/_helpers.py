@@ -259,74 +259,27 @@ def ct_provenance(geometry: GeometryResult) -> SimpleNamespace:
 
 
 def export_rtdose(dose_image, ct, output_path: str, rbe: float = 1.0) -> None:
-    """Write a dose volume as a DICOM RTDOSE file.
+    """Write a dose volume as a DICOM RTDOSE file through the R6 writer.
 
     ``dose_image`` has ``imageArray`` in ``(z, y, x)`` order, ``spacing`` and
     ``origin`` in ``(x, y, z)``; ``ct`` carries ``frameOfReferenceUID``,
     ``patientName``, ``patientID`` and ``studyInstanceUID``. With ``rbe`` other
     than 1 the dose is an RBE-weighted dose (``DoseType EFFECTIVE``). Every
-    file says it is not for clinical use (R0).
+    file says it is not for clinical use (R0). The legacy workflows have no
+    RT Plan object, so the dose references a plan UID derived from the file.
     """
-    import pydicom
-    from pydicom.dataset import FileDataset
-    from pydicom.uid import ExplicitVRLittleEndian
-    import pydicom.uid
+    from ...dicom.uids import SOP
+    from ...dicom.writers import CaseContext, stable_uid, write_rtdose
 
-    file_meta = pydicom.Dataset()
-    file_meta.MediaStorageSOPClassUID = "1.2.840.10008.5.1.4.1.1.481.2"
-    file_meta.MediaStorageSOPInstanceUID = pydicom.uid.generate_uid()
-    file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
-
-    # Explicit VR little endian: the transfer syntax in file_meta decides the
-    # encoding (pydicom 3); implicit VR would make private tags read back as UN.
-    ds = FileDataset(output_path, {}, file_meta=file_meta, preamble=b"\x00" * 128)
-
-    ds.PatientName = getattr(ct, "patientName", "ANONYMOUS") or "ANONYMOUS"
-    ds.PatientID = getattr(ct, "patientID", "UNKNOWN") or "UNKNOWN"
-    ds.StudyInstanceUID = getattr(ct, "studyInstanceUID", None) or pydicom.uid.generate_uid()
-    ds.SeriesInstanceUID = pydicom.uid.generate_uid()
-    ds.SOPInstanceUID = file_meta.MediaStorageSOPInstanceUID
-    ds.SOPClassUID = file_meta.MediaStorageSOPClassUID
-    ds.Modality = "RTDOSE"
-    ds.FrameOfReferenceUID = getattr(ct, "frameOfReferenceUID", "") or pydicom.uid.generate_uid()
-    # Intended-use statement in the public text attributes and in a private
-    # block, so it survives tools that rewrite descriptions.
-    ds.SeriesDescription = "RESEARCH - " + NOT_FOR_CLINICAL_USE
-    ds.DoseComment = NOT_FOR_CLINICAL_USE
-    block = ds.private_block(0x7779, "RADIARCH", create=True)
-    block.add_new(0x01, "LO", NOT_FOR_CLINICAL_USE)
-    ds.Manufacturer = "Radiarch"
-    ds.DoseUnits = "GY"
-    ds.DoseType = "EFFECTIVE" if abs(float(rbe) - 1.0) > 1e-9 else "PHYSICAL"
-    if abs(float(rbe) - 1.0) > 1e-9:
-        ds.DoseComment = f"{NOT_FOR_CLINICAL_USE}; RBE {float(rbe):g}, Gy(RBE)"
-    ds.DoseSummationType = "PLAN"
-
-    dose_array = np.asarray(dose_image.imageArray, dtype=np.float32)
-    ds.Rows = dose_array.shape[1]
-    ds.Columns = dose_array.shape[2]
-    ds.NumberOfFrames = dose_array.shape[0]
-    ds.PixelSpacing = [float(dose_image.spacing[1]), float(dose_image.spacing[0])]
-    ds.ImagePositionPatient = [float(dose_image.origin[0]), float(dose_image.origin[1]), float(dose_image.origin[2])]
-    ds.ImageOrientationPatient = [1, 0, 0, 0, 1, 0]
-    ds.GridFrameOffsetVector = [float(i * dose_image.spacing[2]) for i in range(dose_array.shape[0])]
-
-    dose_max = float(dose_array.max())
-    if dose_max > 0:
-        dose_grid_scaling = dose_max / (2**31 - 1)
-        scaled = (dose_array / dose_grid_scaling).astype(np.uint32)
-    else:
-        dose_grid_scaling = 1.0
-        scaled = np.zeros_like(dose_array, dtype=np.uint32)
-
-    ds.DoseGridScaling = str(dose_grid_scaling)
-    ds.BitsAllocated = 32
-    ds.BitsStored = 32
-    ds.HighBit = 31
-    ds.PixelRepresentation = 0
-    ds.SamplesPerPixel = 1
-    ds.PixelData = scaled.tobytes()
-    ds.save_as(output_path, enforce_file_format=True)
+    ctx = CaseContext(
+        patient_name=getattr(ct, "patientName", "ANONYMOUS") or "ANONYMOUS",
+        patient_id=getattr(ct, "patientID", "UNKNOWN") or "UNKNOWN",
+        study_instance_uid=getattr(ct, "studyInstanceUID", None) or "",
+        frame_of_reference_uid=getattr(ct, "frameOfReferenceUID", "") or "",
+    )
+    write_rtdose(ctx, np.asarray(dose_image.imageArray, dtype=np.float32), dose_image.origin, dose_image.spacing, output_path,
+                 plan_sop_class=SOP.RTPLAN, plan_sop_instance=stable_uid(str(output_path), "legacy-plan"), rbe=rbe,
+                 dose_units="Gy(RBE)" if abs(float(rbe) - 1.0) > 1e-9 else "Gy")
     logger.info("RTDOSE saved to %s", output_path)
 
 

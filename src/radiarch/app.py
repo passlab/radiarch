@@ -4,7 +4,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import get_settings
-from .api.routes import info, plans, jobs, artifacts, workflows, sessions, geometry, beam_model, uploads, dose, optimization, bao, evaluation
+from .api.routes import info, plans, jobs, artifacts, workflows, sessions, geometry, beam_model, uploads, dose, optimization, bao, evaluation, rt
 from .adapters import build_orthanc_adapter
 from .api.security import api_key_auth
 from .core.database import init_db
@@ -52,6 +52,7 @@ def create_app() -> FastAPI:
         optimization.router,
         bao.router,
         evaluation.router,
+        rt.router,
     ):
         app.include_router(router, prefix=settings.api_prefix, dependencies=protected)
 
