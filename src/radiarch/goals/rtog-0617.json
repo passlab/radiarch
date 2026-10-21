@@ -1,0 +1,101 @@
+{
+ "template_id": "rtog-0617",
+ "name": "RTOG 0617 (NSCLC, 60 Gy in 30 fractions): protocol dose constraints",
+ "source": "RTOG 0617 protocol (Bradley et al., Lancet Oncol 2015, 16:187-199) section 6; transcribed from the protocol's normal-tissue constraints for the 60 Gy arm",
+ "site": "lung",
+ "prescription_gy": 60.0,
+ "fractions": 30,
+ "dose_basis": "physical",
+ "structure_naming": "TG-263",
+ "goals": [
+  {
+   "structure": "PTV",
+   "metric": "V60Gy[%]",
+   "op": ">=",
+   "value": 95.0,
+   "priority": 1,
+   "note": "prescription isodose covers 95 % of the PTV"
+  },
+  {
+   "structure": "PTV",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 72.0,
+   "priority": 2,
+   "note": "120 % of the prescription"
+  },
+  {
+   "structure": "Lungs-GTV",
+   "metric": "V20Gy[%]",
+   "op": "<=",
+   "value": 37.0,
+   "priority": 1
+  },
+  {
+   "structure": "Lungs-GTV",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 20.0,
+   "priority": 1
+  },
+  {
+   "structure": "SpinalCord",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 50.5,
+   "priority": 1
+  },
+  {
+   "structure": "Esophagus",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 34.0,
+   "priority": 2
+  },
+  {
+   "structure": "Heart",
+   "metric": "V60Gy[%]",
+   "op": "<=",
+   "value": 33.0,
+   "priority": 2
+  },
+  {
+   "structure": "Heart",
+   "metric": "V45Gy[%]",
+   "op": "<=",
+   "value": 66.0,
+   "priority": 2
+  },
+  {
+   "structure": "Heart",
+   "metric": "V40Gy[%]",
+   "op": "<=",
+   "value": 100.0,
+   "priority": 3
+  },
+  {
+   "structure": "BrachialPlex",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 66.0,
+   "priority": 2
+  }
+ ],
+ "aliases": {
+  "Lungs-GTV": [
+   "Lungs_GTV",
+   "Lung_Total-GTV",
+   "TotalLung-GTV",
+   "Lungs"
+  ],
+  "SpinalCord": [
+   "Cord",
+   "Spinal_Cord"
+  ],
+  "BrachialPlex": [
+   "BrachialPlex_L",
+   "BrachialPlex_R",
+   "Brachial_Plexus"
+  ]
+ }
+}

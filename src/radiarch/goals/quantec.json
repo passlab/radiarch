@@ -1,0 +1,280 @@
+{
+ "template_id": "quantec",
+ "name": "QUANTEC normal-tissue constraints (conventional fractionation)",
+ "source": "Marks LB et al., 'Use of normal tissue complication probability models in the clinic', IJROBP 2010, 76(3 Suppl):S10-S19, Table 1, and the organ-specific QUANTEC papers in the same issue; doses in 2 Gy fractions",
+ "site": "general",
+ "dose_basis": "EQD2",
+ "structure_naming": "TG-263",
+ "goals": [
+  {
+   "structure": "Brain",
+   "metric": "Dmax[Gy]",
+   "op": "<",
+   "value": 60.0,
+   "priority": 2,
+   "note": "symptomatic necrosis < 3 % (Lawrence 2010)"
+  },
+  {
+   "structure": "Brainstem",
+   "metric": "Dmax[Gy]",
+   "op": "<",
+   "value": 54.0,
+   "priority": 1,
+   "note": "permanent neuropathy < 5 % (Mayo 2010)"
+  },
+  {
+   "structure": "OpticChiasm",
+   "metric": "Dmax[Gy]",
+   "op": "<",
+   "value": 55.0,
+   "priority": 1,
+   "note": "optic neuropathy < 3 % (Mayo 2010)"
+  },
+  {
+   "structure": "OpticNrv",
+   "metric": "Dmax[Gy]",
+   "op": "<",
+   "value": 55.0,
+   "priority": 1
+  },
+  {
+   "structure": "SpinalCord",
+   "metric": "Dmax[Gy]",
+   "op": "<",
+   "value": 50.0,
+   "priority": 1,
+   "note": "myelopathy 0.2 % (Kirkpatrick 2010); 60 Gy: 6 %"
+  },
+  {
+   "structure": "Cochlea",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 45.0,
+   "priority": 2,
+   "note": "sensory-neural hearing loss < 30 % (Bhandare 2010)"
+  },
+  {
+   "structure": "Parotid",
+   "metric": "Dmean[Gy]",
+   "op": "<",
+   "value": 25.0,
+   "priority": 2,
+   "note": "both glands; long-term salivary function < 25 % (Deasy 2010)"
+  },
+  {
+   "structure": "Parotid",
+   "metric": "Dmean[Gy]",
+   "op": "<",
+   "value": 20.0,
+   "priority": 3,
+   "note": "at least one gland"
+  },
+  {
+   "structure": "Larynx",
+   "metric": "Dmean[Gy]",
+   "op": "<",
+   "value": 44.0,
+   "priority": 2,
+   "note": "aspiration (Rancati 2010)"
+  },
+  {
+   "structure": "Lungs",
+   "metric": "V20Gy[%]",
+   "op": "<=",
+   "value": 30.0,
+   "priority": 1,
+   "note": "symptomatic pneumonitis < 20 % (Marks 2010)"
+  },
+  {
+   "structure": "Lungs",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 20.0,
+   "priority": 1
+  },
+  {
+   "structure": "Esophagus",
+   "metric": "Dmean[Gy]",
+   "op": "<",
+   "value": 34.0,
+   "priority": 1,
+   "note": "grade >= 3 acute esophagitis 5-20 % (Werner-Wasik 2010)"
+  },
+  {
+   "structure": "Esophagus",
+   "metric": "V35Gy[%]",
+   "op": "<",
+   "value": 50.0,
+   "priority": 2
+  },
+  {
+   "structure": "Esophagus",
+   "metric": "V50Gy[%]",
+   "op": "<",
+   "value": 40.0,
+   "priority": 2
+  },
+  {
+   "structure": "Esophagus",
+   "metric": "V70Gy[%]",
+   "op": "<",
+   "value": 20.0,
+   "priority": 2
+  },
+  {
+   "structure": "Heart",
+   "metric": "Dmean[Gy]",
+   "op": "<",
+   "value": 26.0,
+   "priority": 1,
+   "note": "pericarditis < 15 % (Gagliardi 2010)"
+  },
+  {
+   "structure": "Heart",
+   "metric": "V30Gy[%]",
+   "op": "<",
+   "value": 46.0,
+   "priority": 2
+  },
+  {
+   "structure": "Heart",
+   "metric": "V25Gy[%]",
+   "op": "<",
+   "value": 10.0,
+   "priority": 2,
+   "note": "long-term cardiac mortality < 1 %"
+  },
+  {
+   "structure": "Liver",
+   "metric": "Dmean[Gy]",
+   "op": "<",
+   "value": 30.0,
+   "priority": 1,
+   "note": "RILD < 5 %, normal liver function (Pan 2010)"
+  },
+  {
+   "structure": "Kidneys",
+   "metric": "Dmean[Gy]",
+   "op": "<",
+   "value": 15.0,
+   "priority": 1,
+   "note": "bilateral; clinically relevant renal dysfunction < 5 % (Dawson 2010)"
+  },
+  {
+   "structure": "Rectum",
+   "metric": "V50Gy[%]",
+   "op": "<",
+   "value": 50.0,
+   "priority": 2,
+   "note": "grade >= 2 late toxicity < 15 % (Michalski 2010)"
+  },
+  {
+   "structure": "Rectum",
+   "metric": "V60Gy[%]",
+   "op": "<",
+   "value": 35.0,
+   "priority": 2
+  },
+  {
+   "structure": "Rectum",
+   "metric": "V65Gy[%]",
+   "op": "<",
+   "value": 25.0,
+   "priority": 2
+  },
+  {
+   "structure": "Rectum",
+   "metric": "V70Gy[%]",
+   "op": "<",
+   "value": 20.0,
+   "priority": 2
+  },
+  {
+   "structure": "Rectum",
+   "metric": "V75Gy[%]",
+   "op": "<",
+   "value": 15.0,
+   "priority": 2
+  },
+  {
+   "structure": "Bladder",
+   "metric": "V65Gy[%]",
+   "op": "<=",
+   "value": 50.0,
+   "priority": 2,
+   "note": "RTOG 0415 (Viswanathan 2010)"
+  },
+  {
+   "structure": "Bladder",
+   "metric": "V70Gy[%]",
+   "op": "<=",
+   "value": 35.0,
+   "priority": 2
+  },
+  {
+   "structure": "Bladder",
+   "metric": "V75Gy[%]",
+   "op": "<=",
+   "value": 25.0,
+   "priority": 2
+  },
+  {
+   "structure": "Bladder",
+   "metric": "V80Gy[%]",
+   "op": "<=",
+   "value": 15.0,
+   "priority": 2
+  },
+  {
+   "structure": "Stomach",
+   "metric": "D100%[Gy]",
+   "op": "<",
+   "value": 45.0,
+   "priority": 2,
+   "note": "ulceration < 7 % (Kavanagh 2010)"
+  },
+  {
+   "structure": "Bowel_Small",
+   "metric": "V15Gy[cc]",
+   "op": "<",
+   "value": 120.0,
+   "priority": 2,
+   "note": "individual loops; grade >= 3 toxicity < 10 %"
+  },
+  {
+   "structure": "Penile_Bulb",
+   "metric": "Dmean[Gy]",
+   "op": "<",
+   "value": 50.0,
+   "priority": 3,
+   "note": "erectile dysfunction < 35 % (Roach 2010)"
+  }
+ ],
+ "aliases": {
+  "Lungs": [
+   "Lung_Total",
+   "Lungs-GTV",
+   "Lung_L+Lung_R"
+  ],
+  "Parotid": [
+   "Parotid_L",
+   "Parotid_R",
+   "Parotids"
+  ],
+  "OpticNrv": [
+   "OpticNrv_L",
+   "OpticNrv_R"
+  ],
+  "Cochlea": [
+   "Cochlea_L",
+   "Cochlea_R"
+  ],
+  "Kidneys": [
+   "Kidney_L+Kidney_R"
+  ],
+  "SpinalCord": [
+   "Cord",
+   "Spinal_Cord"
+  ]
+ }
+}

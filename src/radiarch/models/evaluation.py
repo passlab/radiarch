@@ -65,6 +65,188 @@ class GammaSpec(BaseModel):
         ).hexdigest()[:16]
 
 
+# ---------------------------------------------------------------------------
+# Clinical goals (R5)
+# ---------------------------------------------------------------------------
+
+class ClinicalGoal(BaseModel):
+    """A DVH statement on a structure: ``metric op value`` with a priority."""
+
+    structure: str = Field(..., min_length=1, max_length=128, description="TG-263 structure name (resolved against the geometry).")
+    metric: str = Field(..., description="D95%[Gy], D0.03cc[Gy], Dmean[Gy], Dmax[Gy], V20Gy[%], V95%[%], V12.5Gy[cc], D1500cc[Gy], D95%[%] ...")
+    op: str = Field(..., description='"<=", "<", ">=" or ">"')
+    value: float
+    priority: int = Field(default=1, ge=1, le=3, description="1 must, 2 should, 3 would like")
+    note: str = ""
+    source: str = ""
+
+    @model_validator(mode="after")
+    def _check(self) -> "ClinicalGoal":
+        if self.op not in ("<=", "<", ">=", ">"):
+            raise ValueError(f"op must be <=, <, >= or >, got {self.op!r}")
+        from ..services.clinical_goals import parse_metric   # validates the metric text
+        parse_metric(self.metric)
+        return self
+
+    def hash_payload(self) -> dict:
+        return {"structure": self.structure, "metric": self.metric, "op": self.op, "value": round(self.value, 9), "priority": self.priority}
+
+
+class GoalTemplate(BaseModel):
+    template_id: str
+    name: str
+    source: str
+    site: str = "general"
+    prescription_gy: Optional[float] = None
+    fractions: Optional[int] = None
+    dose_basis: str = Field(default="physical", description='"physical" or "EQD2"')
+    structure_naming: str = "TG-263"
+    provisional: bool = False
+    goals: List[ClinicalGoal]
+    aliases: Dict[str, List[str]] = Field(default_factory=dict)
+
+
+class GoalSetSpec(BaseModel):
+    """Which goals to evaluate: a template, explicit goals, or both."""
+
+    template_id: Optional[str] = None
+    goals: List[ClinicalGoal] = Field(default_factory=list, max_length=256)
+    structure_aliases: Dict[str, str] = Field(default_factory=dict, description="Goal structure name → geometry structure name.")
+    dose_basis: Optional[str] = Field(default=None, description='"physical" or "EQD2"; null = the template\'s, else physical.')
+    alpha_beta_gy: Dict[str, float] = Field(default_factory=dict, description="Per-structure α/β for EQD2; defaults by structure type.")
+    skip_missing: bool = Field(default=True, description="Goals whose structure the geometry lacks are reported, not failed.")
+
+    @model_validator(mode="after")
+    def _check(self) -> "GoalSetSpec":
+        if not self.template_id and not self.goals:
+            raise ValueError("a goal set needs a template_id or explicit goals")
+        if self.dose_basis is not None and self.dose_basis not in ("physical", "EQD2"):
+            raise ValueError("dose_basis must be physical or EQD2")
+        return self
+
+    def hash(self) -> str:
+        payload = {"template_id": self.template_id, "goals": [g.hash_payload() for g in self.goals],
+                   "aliases": self.structure_aliases, "dose_basis": self.dose_basis,
+                   "alpha_beta": {k: round(v, 6) for k, v in self.alpha_beta_gy.items()}, "skip_missing": self.skip_missing}
+        return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:16]
+
+
+class GoalResult(BaseModel):
+    structure: str
+    resolved_structure: Optional[str] = None
+    metric: str
+    op: str
+    value: float
+    priority: int
+    achieved: Optional[float] = None
+    passed: Optional[bool] = Field(default=None, description="Null when the structure is missing.")
+    margin: Optional[float] = Field(default=None, description="How far inside the limit (positive) or beyond it (negative).")
+    worst_case: Optional[float] = Field(default=None, description="The worst value over the nominal and scenario doses.")
+    passed_all_scenarios: Optional[bool] = None
+    per_scenario: Dict[str, float] = Field(default_factory=dict)
+    note: str = ""
+    source: str = ""
+    missing: bool = False
+
+
+class GoalsReport(BaseModel):
+    template_id: Optional[str] = None
+    dose_basis: str = "physical"
+    fractions: Optional[int] = None
+    n_goals: int
+    n_passed: int
+    n_failed: int
+    n_missing: int
+    passed_by_priority: Dict[int, int] = Field(default_factory=dict)
+    failed_by_priority: Dict[int, int] = Field(default_factory=dict)
+    all_priority1_passed: bool
+    robust_all_passed: Optional[bool] = Field(default=None, description="Every evaluable goal holds in every scenario (when scenarios exist).")
+    results: List[GoalResult] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Radiobiology (R5)
+# ---------------------------------------------------------------------------
+
+class NTCPParameters(BaseModel):
+    model_id: str
+    structure: str
+    endpoint: str
+    td50_gy: float = Field(..., gt=0.0)
+    m: float = Field(..., gt=0.0)
+    n: float = Field(..., gt=0.0)
+    alpha_beta_gy: float = Field(default=3.0, gt=0.0)
+    source: str = ""
+
+
+class TCPParameters(BaseModel):
+    model_id: str
+    structure: str
+    endpoint: str
+    d50_gy: float = Field(..., gt=0.0)
+    gamma50: float = Field(..., gt=0.0)
+    alpha_beta_gy: float = Field(default=10.0, gt=0.0)
+    source: str = ""
+
+
+class NTCPSpec(BaseModel):
+    """An LKB NTCP evaluation: a built-in model id (with an optional structure override) or explicit parameters."""
+
+    model_id: Optional[str] = None
+    structure: Optional[str] = Field(default=None, description="Geometry structure; null = the model's structure name.")
+    parameters: Optional[NTCPParameters] = None
+
+    @model_validator(mode="after")
+    def _check(self) -> "NTCPSpec":
+        if not self.model_id and self.parameters is None:
+            raise ValueError("an NTCP spec needs a model_id or parameters")
+        return self
+
+    def hash_payload(self) -> dict:
+        return {"model_id": self.model_id, "structure": self.structure,
+                "parameters": self.parameters.model_dump() if self.parameters else None}
+
+
+class TCPSpec(BaseModel):
+    model_id: Optional[str] = None
+    structure: Optional[str] = None
+    parameters: Optional[TCPParameters] = None
+
+    @model_validator(mode="after")
+    def _check(self) -> "TCPSpec":
+        if not self.model_id and self.parameters is None:
+            raise ValueError("a TCP spec needs a model_id or parameters")
+        return self
+
+    def hash_payload(self) -> dict:
+        return {"model_id": self.model_id, "structure": self.structure,
+                "parameters": self.parameters.model_dump() if self.parameters else None}
+
+
+class NTCPResult(BaseModel):
+    model_id: str
+    structure: str
+    endpoint: str
+    parameters: NTCPParameters
+    geud_gy: float
+    ntcp: float = Field(..., ge=0.0, le=1.0)
+    eqd2_applied: bool
+    worst_case_ntcp: Optional[float] = None
+    per_scenario: Dict[str, float] = Field(default_factory=dict)
+
+
+class TCPResult(BaseModel):
+    model_id: str
+    structure: str
+    endpoint: str
+    parameters: TCPParameters
+    eud_gy: float
+    tcp: float = Field(..., ge=0.0, le=1.0)
+    eqd2_applied: bool
+    worst_case_tcp: Optional[float] = None
+    per_scenario: Dict[str, float] = Field(default_factory=dict)
+
+
 class EvaluationStage(str, Enum):
     """Stages an :meth:`EvaluationService.run` call passes through."""
 
@@ -98,6 +280,10 @@ class EvaluationRequest(BaseModel):
         default=True,
         description="When the dose carries scenario doses, report DVH bands and worst-case metrics over them (R3).",
     )
+    goals: Optional[GoalSetSpec] = Field(default=None, description="Clinical goals to grade (R5).")
+    ntcp: List[NTCPSpec] = Field(default_factory=list, max_length=64)
+    tcp: List[TCPSpec] = Field(default_factory=list, max_length=16)
+    fractions: Optional[int] = Field(default=None, ge=1, description="Fractions of the plan, for EQD2-based goals and models.")
 
     @model_validator(mode="after")
     def _check_dose(self) -> "EvaluationRequest":
@@ -116,6 +302,10 @@ class EvaluationRequest(BaseModel):
             "dvh_bins": self.dvh_bins,
             "gamma": self.gamma.hash() if self.gamma else None,
             "include_scenarios": self.include_scenarios,
+            "goals": self.goals.hash() if self.goals else None,
+            "ntcp": [s.hash_payload() for s in self.ntcp],
+            "tcp": [s.hash_payload() for s in self.tcp],
+            "fractions": self.fractions,
         }
         return hashlib.sha256(
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
@@ -220,6 +410,9 @@ class EvaluationResult(ResearchArtifact):
     robust_indices: Optional[RobustIndices] = None
     n_scenarios: int = Field(default=0, description="Scenario doses evaluated (the nominal excluded).")
     dose_units: str = Field(default="Gy", description='"Gy" or "Gy(RBE)", from the dose result when known.')
+    goals: Optional[GoalsReport] = None
+    ntcp: List[NTCPResult] = Field(default_factory=list)
+    tcp: List[TCPResult] = Field(default_factory=list)
     dose_id: Optional[str] = None
     geometry_id: str
     compute_time_s: float = Field(..., ge=0.0)

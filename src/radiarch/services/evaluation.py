@@ -29,8 +29,12 @@ from ..models.evaluation import (
     EvaluationRequest,
     EvaluationResult,
     EvaluationStage,
+    GoalResult,
+    GoalsReport,
+    NTCPResult,
     RobustIndices,
     RobustStructureMetrics,
+    TCPResult,
 )
 from .dose import DoseService
 from .dose_persistence import read_dose_volume
@@ -163,6 +167,14 @@ class EvaluationService:
                     worst_scenario=worst,
                 )
 
+        # --- clinical goals, NTCP, TCP (R5) ------------------------------
+        goals_report = None
+        ntcp_results: List[NTCPResult] = []
+        tcp_results: List[TCPResult] = []
+        if request.goals is not None or request.ntcp or request.tcp:
+            on_progress(EvaluationStage.computing_indices, 0.50, "Grading clinical goals")
+            goals_report, ntcp_results, tcp_results = self._grade(request, dose, scenario_doses, masks, index, encoding, voxel_volume_cc)
+
         # --- indices (target) ----------------------------------------
         indices = None
         if request.target_structure:
@@ -204,6 +216,9 @@ class EvaluationService:
             robust_indices=robust_indices,
             n_scenarios=len(scenario_doses),
             dose_units=dose_units,
+            goals=goals_report,
+            ntcp=ntcp_results,
+            tcp=tcp_results,
             dose_id=request.dose_id,
             geometry_id=request.geometry_id,
             compute_time_s=round(time.monotonic() - t0, 4),
@@ -215,6 +230,105 @@ class EvaluationService:
                     evaluation_id, len(curves), indices is not None,
                     gamma is not None)
         return result
+
+    # -----------------------------------------------------------------
+    # Clinical goals and radiobiology (R5)
+    # -----------------------------------------------------------------
+
+    def _grade(self, request: EvaluationRequest, dose: np.ndarray, scenario_doses: Dict[str, np.ndarray],
+               masks: np.ndarray, index: Dict[str, int], encoding: str, voxel_volume_cc: float):
+        from .clinical_goals import evaluate_goal, load_template, resolve_structure
+        from .radiobiology import NTCP_MODELS, TCP_MODELS, default_alpha_beta, eqd2, lkb_ntcp, poisson_tcp
+
+        available = list(index.keys())
+        ntcp_results: List[NTCPResult] = []
+        tcp_results: List[TCPResult] = []
+
+        def doses_of(name: str, volume: np.ndarray) -> np.ndarray:
+            return np.asarray(volume, dtype=np.float64)[structure_mask(masks, index[name], encoding)]
+
+        def eqd2_of(name: str, volume: np.ndarray, alpha_beta: float) -> np.ndarray:
+            if request.fractions is None:
+                raise ValueError("EQD2 goals and models need the plan's fractions (request.fractions)")
+            return eqd2(doses_of(name, volume), request.fractions, alpha_beta)
+
+        goals_report = None
+        if request.goals is not None:
+            spec = request.goals
+            template = load_template(spec.template_id) if spec.template_id else None
+            goals = list(template.goals) if template else []
+            goals += list(spec.goals)
+            aliases = dict(template.aliases) if template else {}
+            basis = spec.dose_basis or (template.dose_basis if template else "physical")
+            prescription = request.prescription_gy
+            results: List[GoalResult] = []
+            for goal in goals:
+                resolved = resolve_structure(goal.structure, available, aliases, spec.structure_aliases)
+                if resolved is None:
+                    results.append(GoalResult(structure=goal.structure, metric=goal.metric, op=goal.op, value=goal.value,
+                                              priority=goal.priority, note=goal.note, source=goal.source or (template.source if template else ""),
+                                              missing=True, passed=None if spec.skip_missing else False))
+                    continue
+                if basis == "EQD2":
+                    ab = spec.alpha_beta_gy.get(resolved, spec.alpha_beta_gy.get(goal.structure, default_alpha_beta(resolved)))
+                    nominal = eqd2_of(resolved, dose, ab)
+                    scen = {k: eqd2_of(resolved, v, ab) for k, v in scenario_doses.items()}
+                else:
+                    nominal = doses_of(resolved, dose)
+                    scen = {k: doses_of(resolved, v) for k, v in scenario_doses.items()}
+                r = evaluate_goal(goal, nominal, voxel_volume_cc, prescription, scen or None, resolved)
+                if not r.source and template is not None:
+                    r.source = template.source
+                results.append(r)
+            evaluable = [r for r in results if not r.missing]
+            passed_by = {p: sum(1 for r in evaluable if r.priority == p and r.passed) for p in (1, 2, 3)}
+            failed_by = {p: sum(1 for r in evaluable if r.priority == p and not r.passed) for p in (1, 2, 3)}
+            goals_report = GoalsReport(
+                template_id=spec.template_id, dose_basis=basis, fractions=request.fractions,
+                n_goals=len(results), n_passed=sum(1 for r in evaluable if r.passed), n_failed=sum(1 for r in evaluable if not r.passed),
+                n_missing=sum(1 for r in results if r.missing),
+                passed_by_priority=passed_by, failed_by_priority=failed_by,
+                all_priority1_passed=all(r.passed for r in evaluable if r.priority == 1),
+                robust_all_passed=(all(r.passed_all_scenarios for r in evaluable) if scenario_doses and evaluable else None),
+                results=results,
+            )
+
+        for spec in request.ntcp:
+            params = spec.parameters or NTCP_MODELS.get(spec.model_id or "")
+            if params is None:
+                raise ValueError(f"unknown NTCP model {spec.model_id!r}; built-in: {sorted(NTCP_MODELS)}")
+            name = resolve_structure(spec.structure or params.structure, available, {})
+            if name is None:
+                raise ValueError(f"NTCP {params.model_id}: structure {spec.structure or params.structure!r} not in the geometry ({available})")
+            use_eqd2 = request.fractions is not None
+            nominal = eqd2_of(name, dose, params.alpha_beta_gy) if use_eqd2 else doses_of(name, dose)
+            r = lkb_ntcp(nominal, params.td50_gy, params.m, params.n)
+            per = {}
+            for k, v in scenario_doses.items():
+                sd = eqd2_of(name, v, params.alpha_beta_gy) if use_eqd2 else doses_of(name, v)
+                per[k] = lkb_ntcp(sd, params.td50_gy, params.m, params.n)["ntcp"]
+            ntcp_results.append(NTCPResult(model_id=params.model_id, structure=name, endpoint=params.endpoint, parameters=params,
+                                           geud_gy=r["geud_gy"], ntcp=r["ntcp"], eqd2_applied=use_eqd2,
+                                           worst_case_ntcp=max([r["ntcp"]] + list(per.values())) if per else None, per_scenario=per))
+
+        for spec in request.tcp:
+            params = spec.parameters or TCP_MODELS.get(spec.model_id or "")
+            if params is None:
+                raise ValueError(f"unknown TCP model {spec.model_id!r}; built-in: {sorted(TCP_MODELS)}")
+            name = resolve_structure(spec.structure or request.target_structure or params.structure, available, {})
+            if name is None:
+                raise ValueError(f"TCP {params.model_id}: structure {spec.structure or params.structure!r} not in the geometry ({available})")
+            use_eqd2 = request.fractions is not None
+            nominal = eqd2_of(name, dose, params.alpha_beta_gy) if use_eqd2 else doses_of(name, dose)
+            r = poisson_tcp(nominal, params.d50_gy, params.gamma50)
+            per = {}
+            for k, v in scenario_doses.items():
+                sd = eqd2_of(name, v, params.alpha_beta_gy) if use_eqd2 else doses_of(name, v)
+                per[k] = poisson_tcp(sd, params.d50_gy, params.gamma50)["tcp"]
+            tcp_results.append(TCPResult(model_id=params.model_id, structure=name, endpoint=params.endpoint, parameters=params,
+                                         eud_gy=r["eud_gy"], tcp=r["tcp"], eqd2_applied=use_eqd2,
+                                         worst_case_tcp=min([r["tcp"]] + list(per.values())) if per else None, per_scenario=per))
+        return goals_report, ntcp_results, tcp_results
 
     # -----------------------------------------------------------------
     # Dose loading

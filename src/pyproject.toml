@@ -56,6 +56,7 @@ include = ["radiarch*"]
 [tool.setuptools.package-data]
 radiarch = [
     "machines/*.json",
+    "goals/*.json",
     "services/dose_engines/*.txt",
     "validation/cases/*.yaml",
     "validation/references/*.json",

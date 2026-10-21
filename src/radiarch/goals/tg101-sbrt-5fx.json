@@ -1,0 +1,207 @@
+{
+ "template_id": "tg101-sbrt-5fx",
+ "name": "AAPM TG-101 SBRT constraints, 5 fractions",
+ "source": "Benedict SH et al., AAPM TG-101, Med Phys 2010, 37:4078-4101, Table 3 (5-fraction column)",
+ "site": "sbrt",
+ "fractions": 5,
+ "dose_basis": "physical",
+ "structure_naming": "TG-263",
+ "goals": [
+  {
+   "structure": "SpinalCord",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 30.0,
+   "priority": 1
+  },
+  {
+   "structure": "SpinalCord",
+   "metric": "D0.35cc[Gy]",
+   "op": "<=",
+   "value": 23.0,
+   "priority": 1
+  },
+  {
+   "structure": "SpinalCord",
+   "metric": "D1.2cc[Gy]",
+   "op": "<=",
+   "value": 14.5,
+   "priority": 1
+  },
+  {
+   "structure": "Esophagus",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 35.0,
+   "priority": 1
+  },
+  {
+   "structure": "Esophagus",
+   "metric": "D5cc[Gy]",
+   "op": "<=",
+   "value": 19.5,
+   "priority": 1
+  },
+  {
+   "structure": "BrachialPlex",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 32.0,
+   "priority": 1
+  },
+  {
+   "structure": "BrachialPlex",
+   "metric": "D3cc[Gy]",
+   "op": "<=",
+   "value": 27.0,
+   "priority": 1
+  },
+  {
+   "structure": "Heart",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 38.0,
+   "priority": 1
+  },
+  {
+   "structure": "Heart",
+   "metric": "D15cc[Gy]",
+   "op": "<=",
+   "value": 32.0,
+   "priority": 1
+  },
+  {
+   "structure": "GreatVes",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 53.0,
+   "priority": 2
+  },
+  {
+   "structure": "GreatVes",
+   "metric": "D10cc[Gy]",
+   "op": "<=",
+   "value": 47.0,
+   "priority": 2
+  },
+  {
+   "structure": "Trachea",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 38.0,
+   "priority": 1
+  },
+  {
+   "structure": "Trachea",
+   "metric": "D4cc[Gy]",
+   "op": "<=",
+   "value": 16.5,
+   "priority": 1
+  },
+  {
+   "structure": "Bronchus_Prox",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 38.0,
+   "priority": 1
+  },
+  {
+   "structure": "Bronchus_Prox",
+   "metric": "D4cc[Gy]",
+   "op": "<=",
+   "value": 16.5,
+   "priority": 1
+  },
+  {
+   "structure": "Ribs",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 43.0,
+   "priority": 2
+  },
+  {
+   "structure": "Ribs",
+   "metric": "D1cc[Gy]",
+   "op": "<=",
+   "value": 35.0,
+   "priority": 2
+  },
+  {
+   "structure": "Skin",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 39.5,
+   "priority": 2
+  },
+  {
+   "structure": "Skin",
+   "metric": "D10cc[Gy]",
+   "op": "<=",
+   "value": 36.5,
+   "priority": 2
+  },
+  {
+   "structure": "Stomach",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 32.0,
+   "priority": 1
+  },
+  {
+   "structure": "Stomach",
+   "metric": "D10cc[Gy]",
+   "op": "<=",
+   "value": 28.0,
+   "priority": 1
+  },
+  {
+   "structure": "Lungs",
+   "metric": "D1500cc[Gy]",
+   "op": "<=",
+   "value": 12.5,
+   "priority": 1
+  },
+  {
+   "structure": "Lungs",
+   "metric": "D1000cc[Gy]",
+   "op": "<=",
+   "value": 13.5,
+   "priority": 1
+  },
+  {
+   "structure": "Liver",
+   "metric": "D700cc[Gy]",
+   "op": "<=",
+   "value": 21.0,
+   "priority": 1
+  },
+  {
+   "structure": "Kidneys",
+   "metric": "D200cc[Gy]",
+   "op": "<=",
+   "value": 17.5,
+   "priority": 1
+  }
+ ],
+ "aliases": {
+  "Lungs": [
+   "Lung_Total",
+   "Lungs-GTV",
+   "Lungs-ITV"
+  ],
+  "BrachialPlex": [
+   "BrachialPlex_L",
+   "BrachialPlex_R"
+  ],
+  "SpinalCord": [
+   "Cord"
+  ],
+  "GreatVes": [
+   "GreatVessels",
+   "A_Aorta"
+  ],
+  "Kidneys": [
+   "Kidney_L+Kidney_R"
+  ]
+ }
+}

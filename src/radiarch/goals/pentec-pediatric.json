@@ -1,0 +1,116 @@
+{
+ "template_id": "pentec-pediatric",
+ "name": "PENTEC pediatric normal-tissue dose guidance (provisional transcription)",
+ "source": "Pediatric Normal Tissue Effects in the Clinic (PENTEC) reports, IJROBP 2021-2024 (Constine LS et al., introduction; organ reports: brainstem, cochlea/hearing, neuroendocrine, lens, spinal cord, lung, heart). Values are the thresholds the reports associate with low complication risk; PROVISIONAL, to be verified against each report before clinical-style use",
+ "site": "pediatric",
+ "dose_basis": "EQD2",
+ "structure_naming": "TG-263",
+ "provisional": true,
+ "goals": [
+  {
+   "structure": "Brainstem",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 54.0,
+   "priority": 1,
+   "note": "brainstem necrosis risk ~1 % at 54 Gy, rising above (PENTEC CNS)"
+  },
+  {
+   "structure": "Cochlea",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 35.0,
+   "priority": 1,
+   "note": "sensorineural hearing loss risk rises above ~35 Gy mean (PENTEC hearing); ~30 Gy with cisplatin"
+  },
+  {
+   "structure": "Pituitary",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 18.0,
+   "priority": 2,
+   "note": "growth-hormone deficiency risk rises with hypothalamic-pituitary dose (PENTEC endocrine)"
+  },
+  {
+   "structure": "Hypothalamus",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 18.0,
+   "priority": 2
+  },
+  {
+   "structure": "Lens",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 10.0,
+   "priority": 2,
+   "note": "cataract (PENTEC ocular)"
+  },
+  {
+   "structure": "OpticChiasm",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 54.0,
+   "priority": 1
+  },
+  {
+   "structure": "SpinalCord",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 45.0,
+   "priority": 1,
+   "note": "myelopathy (PENTEC spinal cord)"
+  },
+  {
+   "structure": "Lungs",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 14.0,
+   "priority": 2,
+   "note": "radiation pneumonitis (PENTEC lung)"
+  },
+  {
+   "structure": "Heart",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 15.0,
+   "priority": 2,
+   "note": "cardiac disease (PENTEC heart)"
+  },
+  {
+   "structure": "Kidneys",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 12.0,
+   "priority": 2,
+   "note": "renal dysfunction (PENTEC kidney)"
+  },
+  {
+   "structure": "Thyroid",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 20.0,
+   "priority": 3,
+   "note": "hypothyroidism (PENTEC thyroid)"
+  }
+ ],
+ "aliases": {
+  "Cochlea": [
+   "Cochlea_L",
+   "Cochlea_R"
+  ],
+  "Lens": [
+   "Lens_L",
+   "Lens_R"
+  ],
+  "Lungs": [
+   "Lung_Total"
+  ],
+  "Kidneys": [
+   "Kidney_L+Kidney_R"
+  ],
+  "SpinalCord": [
+   "Cord"
+  ]
+ }
+}

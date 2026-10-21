@@ -1,0 +1,185 @@
+{
+ "template_id": "nccn-head-neck",
+ "name": "Head-and-neck IMRT constraints (NCCN / RTOG 1016 style, 70 Gy in 35 fractions)",
+ "source": "NCCN Head and Neck Cancers guidelines, principles of radiation therapy (normal-tissue constraints), and the RTOG 1016 protocol (Gillison et al., Lancet 2019) constraint table; transcribed",
+ "site": "head-neck",
+ "prescription_gy": 70.0,
+ "fractions": 35,
+ "dose_basis": "physical",
+ "structure_naming": "TG-263",
+ "goals": [
+  {
+   "structure": "PTV_High",
+   "metric": "D95%[%]",
+   "op": ">=",
+   "value": 95.0,
+   "priority": 1,
+   "note": "95 % of the high-dose PTV at 95 % of its prescription"
+  },
+  {
+   "structure": "PTV_High",
+   "metric": "D0.03cc[%]",
+   "op": "<=",
+   "value": 110.0,
+   "priority": 2
+  },
+  {
+   "structure": "SpinalCord",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 45.0,
+   "priority": 1
+  },
+  {
+   "structure": "SpinalCord_PRV",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 50.0,
+   "priority": 1
+  },
+  {
+   "structure": "Brainstem",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 54.0,
+   "priority": 1
+  },
+  {
+   "structure": "Brainstem_PRV",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 60.0,
+   "priority": 2
+  },
+  {
+   "structure": "OpticChiasm",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 54.0,
+   "priority": 1
+  },
+  {
+   "structure": "OpticNrv",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 54.0,
+   "priority": 1
+  },
+  {
+   "structure": "Parotid",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 26.0,
+   "priority": 2,
+   "note": "at least one gland"
+  },
+  {
+   "structure": "Glnd_Submand",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 39.0,
+   "priority": 3
+  },
+  {
+   "structure": "Cavity_Oral",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 40.0,
+   "priority": 2
+  },
+  {
+   "structure": "Larynx",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 44.0,
+   "priority": 2
+  },
+  {
+   "structure": "Musc_Constrict",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 50.0,
+   "priority": 3
+  },
+  {
+   "structure": "Esophagus",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 45.0,
+   "priority": 3
+  },
+  {
+   "structure": "Mandible",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 70.0,
+   "priority": 2
+  },
+  {
+   "structure": "Cochlea",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 45.0,
+   "priority": 3
+  },
+  {
+   "structure": "BrachialPlex",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 66.0,
+   "priority": 2
+  },
+  {
+   "structure": "Lens",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 10.0,
+   "priority": 3
+  },
+  {
+   "structure": "Eye",
+   "metric": "Dmean[Gy]",
+   "op": "<=",
+   "value": 35.0,
+   "priority": 3
+  }
+ ],
+ "aliases": {
+  "PTV_High": [
+   "PTV70",
+   "PTV_7000",
+   "PTV_High_70"
+  ],
+  "SpinalCord": [
+   "Cord"
+  ],
+  "Parotid": [
+   "Parotid_L",
+   "Parotid_R"
+  ],
+  "Glnd_Submand": [
+   "Glnd_Submand_L",
+   "Glnd_Submand_R"
+  ],
+  "OpticNrv": [
+   "OpticNrv_L",
+   "OpticNrv_R"
+  ],
+  "Cochlea": [
+   "Cochlea_L",
+   "Cochlea_R"
+  ],
+  "BrachialPlex": [
+   "BrachialPlex_L",
+   "BrachialPlex_R"
+  ],
+  "Lens": [
+   "Lens_L",
+   "Lens_R"
+  ],
+  "Eye": [
+   "Eye_L",
+   "Eye_R"
+  ]
+ }
+}
