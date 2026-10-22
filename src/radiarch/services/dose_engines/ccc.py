@@ -102,7 +102,8 @@ class CCCCalibration:
 
     @property
     def key(self) -> str:
-        return f"{self.driver.kernel_fingerprint()}-{self.spacing_mm:g}mm-v{self.engine_version}"
+        scatter = "" if self.driver.scatter_key == "shipped" else f"-{self.driver.scatter_key}"
+        return f"{self.driver.kernel_fingerprint()}-{self.spacing_mm:g}mm-v{self.engine_version}{scatter}"
 
     def _cache_path(self) -> Optional[Path]:
         return (self.cache_dir / f"calibration-{self.key}.json") if self.cache_dir else None
@@ -188,9 +189,20 @@ class CCCEngine:
     # ----- configuration ------------------------------------------------
 
     def driver(self, params: Optional[dict] = None) -> CCCDriver:
+        """The driver for a run. ``params["scatter"]`` is ``"shipped"`` (the binary's constants:
+        scatter truncated at ~2 cm, fast; the default for Dij) or ``"full"`` (0.01 % cutoff, 10 cm
+        mask; for studies of the truncation: R7 found it no closer to Monte Carlo with these kernels); ``params["dose_cutoff"]`` and ``params["rsafe_cm"]``
+        set the two constants directly. ``RADIARCH_CCC_SCATTER`` is the default."""
         s = _settings()
-        n_jobs = int((params or {}).get("n_jobs", s.ccc_n_jobs))
-        return CCCDriver(engine_dir=Path(s.ccc_engine_dir) if s.ccc_engine_dir else None, n_jobs=n_jobs)
+        p = params or {}
+        n_jobs = int(p.get("n_jobs", s.ccc_n_jobs))
+        scatter = str(p.get("scatter", getattr(s, "ccc_scatter", "shipped") or "shipped")).lower()
+        if scatter not in ("shipped", "full"):
+            raise EngineParamError(f"ccc scatter must be 'shipped' or 'full', not {scatter!r}")
+        cutoff = p.get("dose_cutoff", CCCDriver.FULL_SCATTER_DOSE_CUTOFF if scatter == "full" else None)
+        rsafe = p.get("rsafe_cm", CCCDriver.FULL_SCATTER_RSAFE_CM if scatter == "full" else None)
+        return CCCDriver(engine_dir=Path(s.ccc_engine_dir) if s.ccc_engine_dir else None, n_jobs=n_jobs,
+                         dose_cutoff=cutoff, rsafe_cm=rsafe)
 
     def calibration(self, params: Optional[dict] = None) -> CCCCalibration:
         s = _settings()

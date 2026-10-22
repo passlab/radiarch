@@ -295,10 +295,42 @@ def read_sparse_beamlets(path: Path, shape_zyx: Tuple[int, int, int]) -> sp.csc_
 class CCCDriver:
     """Run the engine for one geometry and one set of beamlets."""
 
-    def __init__(self, engine_dir: Optional[Path] = None, n_jobs: int = 1, keep_workdir: bool = False) -> None:
+    #: the shipped engine constants (defs.h): doses below this fraction of a beamlet's
+    #: maximum are dropped, and voxels farther than this from the aperture cylinder are
+    #: never computed. Scatter beyond ~2 cm never reaches a voxel with these (R7a finding).
+    SHIPPED_DOSE_CUTOFF = 0.005
+    SHIPPED_RSAFE_CM = 2.0
+    #: the full-scatter setting of the R7 validation: a 0.01 % cutoff and a 10 cm mask;
+    #: about 45× slower, phantom scatter complete
+    FULL_SCATTER_DOSE_CUTOFF = 1e-4
+    FULL_SCATTER_RSAFE_CM = 10.0
+
+    def __init__(self, engine_dir: Optional[Path] = None, n_jobs: int = 1, keep_workdir: bool = False,
+                 dose_cutoff: Optional[float] = None, rsafe_cm: Optional[float] = None) -> None:
         self.engine_dir = Path(engine_dir) if engine_dir else default_engine_dir()
         self.n_jobs = max(1, int(n_jobs))
         self.keep_workdir = keep_workdir
+        self.dose_cutoff = None if dose_cutoff is None else float(dose_cutoff)
+        self.rsafe_cm = None if rsafe_cm is None else float(rsafe_cm)
+
+    @property
+    def scatter_key(self) -> str:
+        """Names the scatter setting in cache keys: ``shipped`` or ``cutoff{c}-rsafe{r}``."""
+        if self.dose_cutoff is None and self.rsafe_cm is None:
+            return "shipped"
+        c = self.SHIPPED_DOSE_CUTOFF if self.dose_cutoff is None else self.dose_cutoff
+        r = self.SHIPPED_RSAFE_CM if self.rsafe_cm is None else self.rsafe_cm
+        return f"cutoff{c:g}-rsafe{r:g}"
+
+    def environment(self) -> dict:
+        """The process environment of a run: the engine reads CCC_DOSE_CUTOFF and CCC_RSAFE_CM (radiarch's build)."""
+        env = dict(os.environ)
+        env.pop("CCC_DOSE_CUTOFF", None); env.pop("CCC_RSAFE_CM", None)
+        if self.dose_cutoff is not None:
+            env["CCC_DOSE_CUTOFF"] = f"{self.dose_cutoff:g}"
+        if self.rsafe_cm is not None:
+            env["CCC_RSAFE_CM"] = f"{self.rsafe_cm:g}"
+        return env
 
     @property
     def binary(self) -> Path:
@@ -363,7 +395,7 @@ class CCCDriver:
                 b, start, stop = batch
                 cmd = [str(self.binary), str(work / "kernelPaths.txt"), str(work / "geometryFilePath.txt"),
                        str(beam_dir / f"pencilBeamSpecs_batch{b}.txt"), str(out_dir / f"sparseBeamletMatrix_batch{b}.bin")]
-                proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(work))
+                proc = subprocess.run(cmd, capture_output=True, text=True, cwd=str(work), env=self.environment())
                 return b, start, stop, proc
 
             logger.info("CCC: {} beamlets in {} batch(es) on a {} grid", n, len(batches), tuple(np.asarray(density_zyx).shape))

@@ -58,6 +58,7 @@ class Settings(BaseSettings):
         ),
     )
     ccc_n_jobs: int = Field(default=4, ge=1, description="Parallel CCC processes per dose/Dij build.")
+    ccc_scatter: str = Field(default="shipped", description="CCC scatter setting: 'shipped' (truncated at ~2 cm, fast) or 'full' (0.01 % cutoff, 10 cm mask; ~45x slower). Per-run params override.")
     ccc_calibration_spacing_mm: float = Field(
         default=2.5, gt=0,
         description="Grid spacing of the water phantom used to calibrate the CCC output (reference field).",

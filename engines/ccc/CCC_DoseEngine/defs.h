@@ -20,9 +20,12 @@
 #define SUCCESS 1
 #define FAILURE 0
 
-#define doseCutoffThreshold 0.005 // doses less than this fraction of the maximum are cut off
+// radiarch: run-time parameters with the shipped values as defaults (CCC_DOSE_CUTOFF, CCC_RSAFE_CM)
+extern float ccc_dose_cutoff_threshold;   // doses less than this fraction of the maximum are cut off (shipped 0.005)
+extern float ccc_rsafe_cm;                // safety margin for dose_mask calculation in cm (shipped 2.0)
+#define doseCutoffThreshold ccc_dose_cutoff_threshold
 
-#define RSAFE 2.0   // safety margin for dose_mask calculation in cm
+#define RSAFE ccc_rsafe_cm
 
 #define PI 3.14152654
 

@@ -16,6 +16,21 @@ int convolution(MONO_KERNELS *, BEAM *, FLOAT_GRID *, FILE *);
 
 char errstr[200];  // error string that all routines have access to
 
+// radiarch: the dose cutoff and the dose-mask safety radius, from the environment when set
+// (CCC_DOSE_CUTOFF, CCC_RSAFE_CM); the shipped constants are the defaults
+#include <stdlib.h>
+float ccc_dose_cutoff_threshold = 0.005f;
+float ccc_rsafe_cm = 2.0f;
+
+static void ccc_read_runtime_parameters(void)
+{
+	const char *v;
+	if ((v = getenv("CCC_DOSE_CUTOFF")) != NULL && atof(v) >= 0.0)
+		ccc_dose_cutoff_threshold = (float)atof(v);
+	if ((v = getenv("CCC_RSAFE_CM")) != NULL && atof(v) >= 0.0)
+		ccc_rsafe_cm = (float)atof(v);
+}
+
 int main(int argc, char *argv[])
 //  Expects four input arguments: 
 // 1)  kernel_filenames -- contains a list of the kernel files
@@ -23,6 +38,7 @@ int main(int argc, char *argv[])
 // 3)  beamspec batch file -- locations of beamspec files in batch
 // 4)  beamlet batch   -- locations of resulting beamlets in batch
 {
+	ccc_read_runtime_parameters();
 	int i,j,b,B;
 
 	char tmpstr[200];
