@@ -38,7 +38,13 @@ def load_case(directory: Union[str, Path], ct_series_uid: Optional[str] = None,
         raise ValueError(f"no CT series found under {directory}")
     structure_sets = [read_rtstruct(p) for p in inv.rtstructs]
     if rtstruct_uid:
-        structure_sets = [s for s in structure_sets if s.series_instance_uid == rtstruct_uid or s.sop_instance_uid == rtstruct_uid]
+        # the SOP Instance UID names one structure set; a series UID may name several (TG-119 ships four in one series)
+        by_sop = [s for s in structure_sets if s.sop_instance_uid == rtstruct_uid]
+        chosen = by_sop or [s for s in structure_sets if s.series_instance_uid == rtstruct_uid]
+        if not chosen:
+            raise ValueError(f"structure set {rtstruct_uid} not found under {directory} "
+                             f"({len(structure_sets)} structure set(s) there)")
+        structure_sets = chosen
     series_uid = ct_series_uid
     if series_uid is None:
         referenced = [s.referenced_ct_series_uid for s in structure_sets if s.referenced_ct_series_uid in inv.ct_series]

@@ -181,13 +181,13 @@ class GeometryService:
         # through to anything else.
         if request.patient_ref.upload_id:
             upload_path = self._resolve_upload_path(request.patient_ref.upload_id)
-            return self._load_from_disk(str(upload_path))
+            return self._load_from_disk(str(upload_path), request.patient_ref)
 
         # If the caller forced a data_root, honor it — useful for tests
         # and one-off debugging against local fixtures even when Orthanc
         # is reachable.
         if request.data_root_override:
-            return self._load_from_disk(request.data_root_override)
+            return self._load_from_disk(request.data_root_override, request.patient_ref)
 
         # Prefer PACS when available.
         try:
@@ -196,7 +196,7 @@ class GeometryService:
             logger.warning(
                 "Failed to build Orthanc adapter, falling back to disk: %s", exc
             )
-            return self._load_from_disk(None)
+            return self._load_from_disk(None, request.patient_ref)
 
         from .dicom_fetcher import DicomFetcher  # lazy
 
@@ -206,7 +206,7 @@ class GeometryService:
                 "Orthanc adapter is metadata-only (mock mode); "
                 "falling back to the data root."
             )
-            return self._load_from_disk(None)
+            return self._load_from_disk(None, request.patient_ref)
 
         return self._load_from_pacs(fetcher, request)
 
@@ -250,13 +250,19 @@ class GeometryService:
     # ---- Disk path ----------------------------------------------------
 
     @staticmethod
-    def _load_from_disk(data_root: Optional[str]) -> _LoadedCT:
+    def _load_from_disk(data_root: Optional[str], patient_ref=None) -> _LoadedCT:
+        """Read a directory. The patient reference's CT series and structure set, when
+        named, select among several in the directory (R7: a directory with four structure
+        sets used to be read whole, and a name shared by two of them took the first one's
+        contours); a named one that is not there is an error, never a silent substitute."""
         from ..dicom.case import load_case  # lazy
 
         root = data_root or get_settings().data_root
         if not root:
             raise ValueError("no DICOM data root configured (RADIARCH_DATA_ROOT) and no upload or PACS study given")
-        case = load_case(root)
+        ct_uid = getattr(patient_ref, "ct_series_uid", None) or None
+        rts_uid = getattr(patient_ref, "rtstruct_uid", None) or None
+        case = load_case(root, ct_series_uid=ct_uid, rtstruct_uid=rts_uid)
         return _LoadedCT(ct=case.ct, patient=case.patient, contours=case.contours)
 
     # ---- PACS path ----------------------------------------------------
@@ -271,9 +277,10 @@ class GeometryService:
         from ..dicom.case import load_case  # lazy
 
         with fetcher.fetch(request.patient_ref) as staged:
-            series_uid = getattr(request.patient_ref, "dicom_series_uid", None) or None
+            series_uid = getattr(request.patient_ref, "ct_series_uid", None) or None
+            rts_uid = getattr(request.patient_ref, "rtstruct_uid", None) or None
             try:
-                case = load_case(staged.directory, ct_series_uid=series_uid)
+                case = load_case(staged.directory, ct_series_uid=series_uid, rtstruct_uid=rts_uid)
             except ValueError as exc:
                 raise ValueError(f"staged study {staged.directory}: {exc}") from exc
             return _LoadedCT(ct=case.ct, patient=case.patient, contours=case.contours)

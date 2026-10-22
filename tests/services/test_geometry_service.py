@@ -274,7 +274,7 @@ class TestLoadPathSelection:
         service = GeometryService(base_dir=tmp_path, adapter=_MockAdapter(can_retrieve=False))
         calls = {"disk": 0, "pacs": 0}
 
-        def fake_disk(_root):
+        def fake_disk(_root, _ref=None):
             calls["disk"] += 1
             return _build_loaded_ct(_water_ct())
 
@@ -294,7 +294,7 @@ class TestLoadPathSelection:
         service = GeometryService(base_dir=tmp_path, adapter=_MockAdapter(can_retrieve=True))
         calls = {"disk": 0, "pacs": 0}
 
-        def fake_disk(_root):  # pragma: no cover — must not be called
+        def fake_disk(_root, _ref=None):  # pragma: no cover — must not be called
             calls["disk"] += 1
             raise AssertionError("_load_from_disk must not be invoked when PACS is available")
 
@@ -315,8 +315,9 @@ class TestLoadPathSelection:
         service = GeometryService(base_dir=tmp_path, adapter=_MockAdapter(can_retrieve=True))
         seen_root = {"value": None}
 
-        def fake_disk(root):
+        def fake_disk(root, ref=None):
             seen_root["value"] = root
+            seen_root["ref"] = ref     # the patient reference reaches the loader (R7: it names the structure set)
             return _build_loaded_ct(_water_ct())
 
         monkeypatch.setattr(service, "_load_from_disk", fake_disk)
@@ -332,3 +333,4 @@ class TestLoadPathSelection:
 
         service.build(_simple_request(data_root_override="/tmp/fixtures"))
         assert seen_root["value"] == "/tmp/fixtures"
+        assert seen_root["ref"] is not None and seen_root["ref"].rtstruct_uid == "1.2.3.5"
