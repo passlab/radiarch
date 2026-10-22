@@ -1,0 +1,40 @@
+{
+  "case": "lung_slab",
+  "field_mm": 100.0,
+  "target_mm": 90.0,
+  "bixel_mm": 10.0,
+  "spacing_mm": 2.5,
+  "n_bixels": 81,
+  "engine": "pyRadPlan photon pencil beam (SVD kernels), machine Generic",
+  "pyradplan_version": "0.5.0",
+  "target_depth_mm": [
+    50.0,
+    150.0
+  ],
+  "isocenter_mm": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "ssd_mm": 1000.0,
+  "beam_axis": {
+    "beam_axis_in_sitk_zyx": 1,
+    "entrance_reversed": false,
+    "asymmetry": [
+      9.79371128652237e-05,
+      0.4094392935332039,
+      9.793627736779608e-05
+    ]
+  },
+  "slabs": [
+    [
+      30.0,
+      110.0,
+      0.26
+    ]
+  ],
+  "elapsed_s": 13.3,
+  "date": "2026-10-21T19:56:28",
+  "python": "3.12.3",
+  "units": "dose per unit fluence on every bixel; compare after normalisation"
+}

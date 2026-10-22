@@ -1,0 +1,32 @@
+{
+  "case": "water_10x10",
+  "field_mm": 100.0,
+  "construction": "stacked sibling boxes, one dose actor each",
+  "primaries": 50000000,
+  "threads": 18,
+  "seed": 20261021,
+  "spacing_mm": 2.5,
+  "source": "spectrum",
+  "spectrum": "Mohan 6 MV (EGSnrc mohan6.spectrum), point source, flat fluence within 4.79 deg",
+  "slabs": [],
+  "physics": "G4EmStandardPhysics_option3; cuts 1 mm world, 0.1 mm phantom; e-/e+ max step 0.5 mm in the phantom",
+  "collimation": "Elekta Versa HD jaws + Agility MLC (opengate.contrib.linacs.elektaversa), rectangular field at isocenter",
+  "elapsed_s": 5748.5,
+  "opengate_version": "10.1.1",
+  "python": "3.12.3",
+  "host": "CCI13SZWP3LWS",
+  "date": "2026-10-22T07:26:06",
+  "geant4_data": "downloaded by opengate_core",
+  "file": "water_10x10.npz",
+  "shape_zyx": [
+    120,
+    120,
+    120
+  ],
+  "origin_mm": [
+    -148.75,
+    1.25,
+    -148.75
+  ],
+  "units": "Gy per primary; uncertainty relative"
+}

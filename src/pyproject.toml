@@ -62,4 +62,9 @@ radiarch = [
     "services/dose_engines/*.txt",
     "validation/cases/*.yaml",
     "validation/references/*.json",
+    "validation/references/spectra/*",
+    "validation/references/mc/*.npz",
+    "validation/references/mc/*.json",
+    "validation/references/pyradplan/*.npz",
+    "validation/references/pyradplan/*.json",
 ]

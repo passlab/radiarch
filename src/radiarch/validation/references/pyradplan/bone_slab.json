@@ -1,0 +1,40 @@
+{
+  "case": "bone_slab",
+  "field_mm": 100.0,
+  "target_mm": 90.0,
+  "bixel_mm": 10.0,
+  "spacing_mm": 2.5,
+  "n_bixels": 81,
+  "engine": "pyRadPlan photon pencil beam (SVD kernels), machine Generic",
+  "pyradplan_version": "0.5.0",
+  "target_depth_mm": [
+    50.0,
+    150.0
+  ],
+  "isocenter_mm": [
+    0.0,
+    0.0,
+    0.0
+  ],
+  "ssd_mm": 1000.0,
+  "beam_axis": {
+    "beam_axis_in_sitk_zyx": 1,
+    "entrance_reversed": false,
+    "asymmetry": [
+      0.00010718180987806716,
+      0.4914431915836724,
+      0.00010718575107171753
+    ]
+  },
+  "slabs": [
+    [
+      30.0,
+      60.0,
+      1.85
+    ]
+  ],
+  "elapsed_s": 14.5,
+  "date": "2026-10-21T19:56:49",
+  "python": "3.12.3",
+  "units": "dose per unit fluence on every bixel; compare after normalisation"
+}
