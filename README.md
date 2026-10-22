@@ -270,7 +270,8 @@ python -m radiarch.validation.run --cases photon_vs_mc photon_vs_pyradplan dij_c
 python -m radiarch.validation.report                      # one document per engine from the newest run, validation/reports/
 ```
 
-`photon_vs_mc` compares the CCC engine with the references (PDD, profile, heterogeneity ratios,
+The record for review is `docs/validation/2026-10-22-r7/` (a guide for the reviewing physicist, the three
+documents and the run they come from, commit `20fc3bf`). `photon_vs_mc` compares the CCC engine with the references (PDD, profile, heterogeneity ratios,
 gamma 3 %/3 mm); `dij_consistency` repeats the Dij-versus-forward gate for every engine;
 `proton_bragg_peak` checks the fall-off and spot size against Bortfeld and the beam data library;
 `tg119_planning` plans the four TG-119 structure sets and scores the goals with the report's

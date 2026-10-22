@@ -711,6 +711,8 @@ ADR 0014. Done:
   low inside, 4 % high far beyond; DVH max 3 of 25 structures 3.5–4.6 % off dicompyler-core; one LCTSC
   oesophagus volume +5.0 %.
 - Tests: `tests/test_r7_validation.py`.
+- Record for review: `docs/validation/2026-10-22-r7/` (reviewer guide, the three documents, run summary and
+  results of the clean-commit run `20261022-150018-20fc3bf`; the outcome is identical to the earlier run).
 Open: physicist sign-off of the three documents; new CCC kernels from the OpenGATE reference or the native
 engine (R8) for the deep-water and lung errors; matRad needs MATLAB (not done); the full Versa head
 reference (hours) for the record; reference output factors with a head model.
