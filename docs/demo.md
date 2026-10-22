@@ -145,7 +145,7 @@ These are research targets, not a clinical commissioning.
 
 ## 4. The service: the same pipeline over HTTP
 
-What SMIS calls is the API, not the scripts. Locally:
+What a client calls is the API, not the scripts. Locally:
 
 ```bash
 uvicorn radiarch.app:create_app --factory --reload      # http://localhost:8000/api/v1/docs
@@ -172,7 +172,7 @@ carries the `disclaimer` field. `src/radiarch/client.py` wraps them for Python.
 Radiarch ships no viewer. Doses from the legacy `/plans` workflows are written as
 DICOM RTDOSE (labelled `NOT FOR CLINICAL USE` in the series description, the
 dose comment and a private block) and pushed to Orthanc over STOW-RS when
-`RADIARCH_DICOMWEB_URL` is set; from there any DICOM viewer with RT support (SMIS's
+`RADIARCH_DICOMWEB_URL` is set; from there any DICOM viewer with RT support (an
 OHIF deployment, 3D Slicer with SlicerRT) can overlay them on the CT. The
 service results are NIfTI volumes, which Slicer and ITK-SNAP open directly. RTDOSE
 export for the service results is roadmap item R6.

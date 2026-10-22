@@ -14,8 +14,7 @@ required numpy 2, nibabel and scikit-image in the core). The physics itself is n
 the problem: MCsquare and the WiscPlan collapsed-cone engine are standalone
 executables driven by files.
 
-The full evaluation is in the SMIS repo: `docs/reports/Radiarch TPS evaluation and
-roadmap.md`.
+The full evaluation is `docs/reports/tps-evaluation-and-roadmap.md`.
 
 ## Decision
 

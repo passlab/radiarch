@@ -15,9 +15,9 @@ the cases and the findings in prose.
 
 | Document | Contents | Signed by |
 |---|---|---|
-| [`2026-10-22-ccc-v1.0.0-20fc3bf.md`](2026-10-22-ccc-v1.0.0-20fc3bf.md) | Photon engine (WiscPlan collapsed-cone convolution, radiarch build): water depth dose, profile and penumbra against representative 6 MV data; depth dose, profile, gamma and heterogeneity correction factors (lung and bone slabs) against a Monte Carlo reference; influence matrix against forward dose; the four AAPM TG-119 cases planned and scored; an end-to-end lung case on public CT data | medical physicist and PI |
-| [`2026-10-22-mcsquare-v0.3.0-20fc3bf.md`](2026-10-22-mcsquare-v0.3.0-20fc3bf.md) | Proton engine (MCsquare, radiarch driver): R80 against NIST PSTAR, distal fall-off against range straggling, spot size against the beam model, influence matrix against forward dose | medical physicist and PI |
-| [`2026-10-22-services-v0.1.0-20fc3bf.md`](2026-10-22-services-v0.1.0-20fc3bf.md) | Engine-independent services: DVH against dicompyler-core, gamma against pymedphys, structure volumes against the contour polygons | PI (a physicist's look is welcome) |
+| [`2026-10-22-ccc-v1.0.0-20fc3bf.md`](2026-10-22-ccc-v1.0.0-20fc3bf.md) | Photon engine (WiscPlan collapsed-cone convolution, radiarch build): water depth dose, profile and penumbra against representative 6 MV data; depth dose, profile, gamma and heterogeneity correction factors (lung and bone slabs) against a Monte Carlo reference; influence matrix against forward dose; the four AAPM TG-119 cases planned and scored; an end-to-end lung case on public CT data | medical physicist and project lead |
+| [`2026-10-22-mcsquare-v0.3.0-20fc3bf.md`](2026-10-22-mcsquare-v0.3.0-20fc3bf.md) | Proton engine (MCsquare, radiarch driver): R80 against NIST PSTAR, distal fall-off against range straggling, spot size against the beam model, influence matrix against forward dose | medical physicist and project lead |
+| [`2026-10-22-services-v0.1.0-20fc3bf.md`](2026-10-22-services-v0.1.0-20fc3bf.md) | Engine-independent services: DVH against dicompyler-core, gamma against pymedphys, structure volumes against the contour polygons | project lead (a physicist's look is welcome) |
 
 `run-summary.md` lists every check of the run in one table, and `results.json` holds the
 run's full numbers (profiles, depth doses, per-structure values) as the harness wrote them.
@@ -68,6 +68,6 @@ uv run --no-project --python 3.12 --with opengate==10.1.1 --with itk \
 ```
 
 The cases on public patient data (LCTSC, Pancreatic-CT-CBCT-SEG, the TG-119 package) read
-them from `../data/public` (fetched by the SMIS repository's `data/Makefile`) or from
-`RADIARCH_VALIDATION_DATA`; without them those cases are skipped. pymedphys and
+them from a data directory outside the repository, `RADIARCH_VALIDATION_DATA` (default
+`../data/public`); without them those cases are skipped. pymedphys and
 dicompyler-core run in their own Python 3.12 environments through `uv`.

@@ -8,8 +8,7 @@ The evaluation reported DVH curves, three target indices and a brute-force
 gamma that searched voxel centres only (30 % against pymedphys's 56 % on
 a borderline case, R7a). There were no clinical goals with pass or fail,
 no biological models, no equivalent dose, and no first-class comparison
-of two evaluations, which the SMIS commissioning harness (`dvh_impact`,
-B2 Levels 2 and 3) needs.
+of two evaluations (`dvh_impact`), which a commissioning harness needs.
 
 ## Decisions
 
@@ -20,7 +19,7 @@ B2 Levels 2 and 3) needs.
    `radiarch/goals/`: RTOG 0617, QUANTEC (EQD2), TG-101 SBRT in 3 and 5
    fractions, NCCN / RTOG 1016 head and neck, and a PENTEC pediatric set
    marked **provisional**. Every template is a transcription of a published
-   table and says so; the PI or a physicist checks each value against the
+   table and says so; a physicist checks each value against the
    source before it is used as an answer key. Goal structures are resolved
    against the geometry by name, by the template's aliases, by a
    case-insensitive match, or by the request's own mapping; a goal whose

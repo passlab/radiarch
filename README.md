@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/passlab/radiarch/actions/workflows/ci.yml/badge.svg)](https://github.com/passlab/radiarch/actions/workflows/ci.yml)
 
-Radiarch is a FastAPI-based research treatment-planning service modeled after the MONAILabel server pattern. Its core (DICOM in, contour rasterization, calibration, spot and beamlet placement, optimization, evaluation) is its own; dose comes from two engines run as separate programs over files, [MCsquare](https://gitlab.com/openmcsquare/MCsquare) for protons and the WiscPlan collapsed-cone engine for photons (`engines/`). It communicates with PACS providers such as Orthanc over DICOMweb and ships no viewer: SMIS's own OHIF deployment does the viewing against this API.
+Radiarch is a FastAPI-based research treatment-planning service modeled after the MONAILabel server pattern. Its core (DICOM in, contour rasterization, calibration, spot and beamlet placement, optimization, evaluation) is its own; dose comes from two engines run as separate programs over files, [MCsquare](https://gitlab.com/openmcsquare/MCsquare) for protons and the WiscPlan collapsed-cone engine for photons (`engines/`), and from radiarch's own photon pencil-beam engine. It communicates with PACS providers such as Orthanc over DICOMweb and ships no viewer: an OHIF deployment does the viewing against this API.
 
 ## Intended use
 
@@ -11,8 +11,8 @@ system: its plans, doses and evaluations must never be used to treat patients. E
 result the API returns carries a `disclaimer` field with that statement, `/api/v1/info`
 reports it as `intended_use`, and every DICOM object radiarch writes carries
 `NOT FOR CLINICAL USE` in its description, comment and a private `RADIARCH` block.
-The dose engines are research engines with no site commissioning; see
-`docs/REAL_DATA_VALIDATION.md` for what has and has not been checked.
+The dose engines are research engines with no site commissioning; see the validation records in
+`docs/validation/` and the study `docs/reports/validation-data-and-test-plan.md` for what has and has not been checked.
 
 ## Layout
 
@@ -25,23 +25,29 @@ radiarch/
   engines/              # Dose engine assets run as subprocesses (engines/README.md)
     mcsquare/           # MCsquare launcher + Linux binaries, Materials/, BDL/, Scanners/ (Apache 2.0)
     ccc/                # WiscPlan collapsed-cone engine + kernels (GPLv2, subprocess only)
+    pb/                 # kernel table of radiarch's own pencil-beam engine (R8)
+  docs/                 # architecture.md, impl-plan.md (plan and task status), impl-log.md,
+                        # ADRs, reports, validation records (docs/README.md)
   tests/data/           # SimpleFantomWithStruct: the bundled CT + structure set
   src/
     pyproject.toml
     radiarch/
-      dicom/            # CT, RT Structure Set, RT Plan, RT Dose, registration readers (pydicom)
+      dicom/            # CT, RT Structure Set, RT Plan, RT Dose, registration readers (pydicom);
+                        # writers/ for every RT object radiarch writes; drr.py
       app.py            # FastAPI factory
       client.py         # RadiarchClient Python library
       config.py         # Pydantic settings
       api/routes/       # /info, /workflows, /plans, /jobs, /artifacts, /sessions, /uploads,
-                        # /geometry, /beam-model, /dose, /optimize, /bao, /evaluate
+                        # /geometry, /beam-model, /dose, /optimize, /bao, /evaluate, /rt, /lineage
       core/
         planner.py      # Orchestrator — dispatches to workflow modules (no fallback)
         store.py        # InMemoryStore + SQLAlchemy persistence
         workflows/      # proton_basic, proton_robust, proton_optimized, photon_ccc
       models/           # Pydantic request/response models
-      services/         # Services 1–6: geometry, beam_model, dose (+ dose_engines/),
-                        # optimization, bao, evaluation
+      services/         # geometry, beam_model, dose (+ dose_engines/: mcsquare, ccc, pb),
+                        # optimization, bao, evaluation, apertures, vmat, rt_export, lineage
+      validation/       # the validation harness (cases, references, runner, report)
+      goals/, machines/ # clinical-goal templates; photon machine definitions
       tasks/            # Celery workers (plan execution + per-service tasks)
 ```
 
@@ -141,6 +147,14 @@ binary (GPLv2), both run as separate processes on files radiarch writes through 
 defaulting to `engines/`. `RADIARCH_MCSQUARE_SEED` with `RADIARCH_MCSQUARE_N_THREADS=1` makes a proton run
 reproducible bit for bit. Doses and influence matrices are in radiarch's `(z, y, x)` C-order frame.
 
+The third engine, **`pb`**, is radiarch's own photon pencil beam (roadmap R8, ADR 0015): an
+OpenGATE pencil kernel of the same 6 MV spectrum, decomposed into four depth-weighted components,
+radiological depth by ray casting, NumPy with an optional CuPy path (`params["device"]`, `RADIARCH_PB_DEVICE`).
+Its influence matrix stops 80 mm from each beamlet and thins small entries by an unbiased roulette;
+its doses convolve the full kernel and can use the apertures as they are (`params["fluence"]="apertures"`),
+which is how VMAT control points are recomputed. All photon engines turn the gantry as IEC 61217 does
+(gantry 90 enters from the patient's left; CCC did not before version 1.1.0).
+
 ## Robust protons, Gy(RBE), craniospinal fields
 
 Scenario sets can be explicit (one engine run per scenario) or **engine-native**
@@ -173,7 +187,13 @@ custom ones live in `RADIARCH_BEAM_LIBRARY_DIR/<id>/machine.json`. Structures ov
 (a bitmask volume). `POST /geometry/{id}/derive` makes PTVs, rings, booleans, density
 overrides and a couch slab from an existing geometry. `POST /optimize/{id}/sequence` turns a
 photon optimization into step-and-shoot MLC apertures with re-optimized segment MU and a
-deliverability report (ADR 0010).
+deliverability report (ADR 0010). `POST /optimize/{id}/arcs` turns an optimization of an arc's sector
+beams into VMAT arcs: each sector's fluence swept by the leaves, control points every 2–4°, their doses
+recomputed by `pb`, the metersets re-optimized within the gantry-speed, leaf-speed and dose-rate limits,
+and the delivery time reported per fraction (ADR 0015). Arcs are DYNAMIC beams in the RT Plan writer and
+reader. `radiarch.services.sbrt` grades R100, R50, D2cm and lung V20 against the RTOG 0813/0915 table,
+and the `sbrt-lung-54gy-3fx` and `sbrt-lung-50gy-5fx` goal templates add the prescription and target goals
+to the TG-101 limits.
 
 ## DICOM RT in
 
@@ -222,7 +242,7 @@ Every stored result is a version with parents, read from the stores by `services
 (ADR 0013): `GET /lineage/{kind}/{id}` walks a version back to the geometry it started from,
 `/descendants` forward, `/attribution` names the capability (radiarch, engine and version, machine
 model, HU model) and the dataset (patient, study, CT series, frame of reference), and
-`/derivation?dataset_id=&version=` renders the version as the SMIS manifest's `derivation` record.
+`/derivation?dataset_id=&version=` renders the version as a dataset manifest's `derivation` record.
 Kinds: `geometry`, `beam_model`, `influence`, `dose`, `optimization`, `sequence`, `bao`,
 `evaluation`, `rt_export`, `plan`. `GET /lineage/capability` is radiarch's declaration to a
 capability registry.
@@ -234,14 +254,14 @@ version it derives from, cannot be deleted (409):
 
 ```bash
 curl -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
-  -d '{"state": "approved", "actor": "physicist:ab", "authority": "smis-ois", "reference": "Task/42"}' \
+  -d '{"state": "approved", "actor": "physicist:ab", "authority": "ois", "reference": "Task/42"}' \
   $API/lineage/dose/<id>/state
 ```
 
 ## Validation harness
 
 `src/radiarch/validation/` holds the physics and cross-check cases that go beyond unit
-tests (roadmap R7a; see the SMIS report *Radiarch validation data and test plan*):
+tests (roadmap R7a; see the study `docs/reports/validation-data-and-test-plan.md`):
 
 ```bash
 python -m radiarch.validation.run --list                  # the cases
@@ -254,9 +274,8 @@ Cases compare radiarch against reference tables with citations (`validation/refe
 6 MV representative beam data, proton ranges, TG-119 goals, the MPPG 5.a/5.b, TG-218 and
 TECDOC-1583 tolerance sets) and against independent tools (dicompyler-core for DVHs;
 pymedphys for gamma, run through `uv run --python 3.12` because it needs Python < 3.13).
-Cases on public data expect `../data/public/{lctsc,pancreatic-ct-cbct-seg,tg119}` from the
-SMIS repo (`make public-lctsc-validation public-pancreatic-validation public-tg119` there) or
-`RADIARCH_VALIDATION_DATA`. A run writes `validation/results/<stamp>-<commit>/summary.md`.
+Cases on public data read `{lctsc,pancreatic-ct-cbct-seg,tg119,pddca}` from a data directory outside
+the repository, `RADIARCH_VALIDATION_DATA` (default `../data/public`); without it they are skipped. A run writes `validation/results/<stamp>-<commit>/summary.md`.
 Statuses are research targets; nothing here is a clinical commissioning.
 
 R7 (ADR 0014) adds the Monte Carlo comparison, the planning cases and the signed documents:
@@ -280,6 +299,24 @@ an LCTSC thorax. The CCC engine is radiarch's own build: `params["scatter"]` cho
 (fast, truncated scatter, the default) or `full` (complete scatter, about 45x slower);
 `RADIARCH_CCC_SCATTER` sets the installation default. The full setting overshoots the Monte Carlo
 reference at depth (ADR 0014), so `shipped` stays the default.
+
+R8 (ADR 0015) adds the pencil-beam engine's cases and the arc plans:
+
+```bash
+# the pencil kernel (OpenGATE, about two hours on 18 threads) and the engine's table from it
+uv run --no-project --python 3.12 --with opengate==10.1.1 --with itk \
+  python -m radiarch.validation.mc_reference --pencil --primaries 3e7 --threads 18
+python -m radiarch.services.dose_engines.pb_kernel --mc src/radiarch/validation/references/mc/pencil_6mv.npz
+python -m radiarch.validation.run --cases pb_vs_mc pb_vs_ccc photon_pdd_10x10_pb photon_profile_10x10_pb \
+  photon_output_vs_field_pb lung_sbrt_vmat hn_sib_vmat
+```
+
+`pb_vs_mc` grades the pencil beam against the OpenGATE references (the lung factors are informative:
+a pencil beam scales depth only); `pb_vs_ccc` is the cross-engine check (gamma 3 %/3 mm in absolute
+dose, the beamlet-size and field-size dependence of each engine, and which side a lateral beam enters);
+`lung_sbrt_vmat` plans 54 Gy in 3 fractions with one arc on LCTSC thoraces and grades the TG-101 limits,
+R100, R50 and D2cm, with CCC recomputing the delivered arcs; `hn_sib_vmat` plans a 70/56 Gy simultaneous
+integrated boost with two arcs on PDDCA head-and-neck CTs against the NCCN template.
 
 `tests/golden/` freezes the outputs captured from the vendored OpenTPS code before it was
 replaced (CCC beamlet matrix, SimpleFantom geometry, proton spots, the MCsquare input files);
@@ -414,7 +451,7 @@ python demo/show_evaluation.py --prescription 20 --gamma --show
 
 ## Architecture
 
-See [`docs/architecture.md`](docs/architecture.md) for the detailed design document and [`docs/radiarch_project_report.md`](docs/radiarch_project_report.md) for the full project report including phase roadmap, testing strategy, and comparison with MONAILabel.
+[`docs/architecture.md`](docs/architecture.md) is the design and architecture as built; [`docs/impl-plan.md`](docs/impl-plan.md) the implementation plan and the status of every task; [`docs/impl-log.md`](docs/impl-log.md) what each roadmap item did; [`docs/README.md`](docs/README.md) indexes the rest (decisions, reports, validation records).
 
 ## License & Attribution
 

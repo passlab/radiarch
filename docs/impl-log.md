@@ -1,0 +1,281 @@
+# Radiarch implementation log
+
+What each roadmap item did, in roadmap order: the files, the decisions made on the way, the fixes, the tests,
+and what was left open. The plan and the task checklist are [`impl-plan.md`](impl-plan.md); the decisions behind each
+item are in [`adr/`](adr/); the evaluation that set the roadmap is
+[`reports/tps-evaluation-and-roadmap.md`](reports/tps-evaluation-and-roadmap.md). Earlier work (the six services,
+February to October 2026) is summarized under "Before the roadmap" below; its documents are in the git
+history (commit `2f7b506` is the last that has them).
+
+## Before the roadmap (2026-10-20)
+
+**State on 2026-10-20.** Features 1–6 (geometry, beam model, dose, optimization, beam-angle search, evaluation) had landed (Features 4–6 in `cbf097d`, PR #4): services, routes, Celery tasks, demos and ADRs 0002–0004 exist, and the full suite is **674 passed, 2 skipped** (the skips are the opt-in real-MCsquare V4 legs; set `RADIARCH_RUN_MCSQUARE_VALIDATION=1` to run them). Still open: V1–V4 sign-off on a machine with MCsquare and real CT, and the photon CCC engine, which remains a stub (ADR 0001).
+
+**Removed 2026-10-20:** the 4D delivery simulator (`core/simulator.py`, `/simulations`), the synthetic planner fallback (`RADIARCH_FORCE_SYNTHETIC`, `_run_synthetic`) and the OHIF extension + `demo/index.html`. The first two returned invented numbers (random QA/gamma; the simulator's OpenTPS branch called methods that do not exist), and viewing belongs to an OHIF deployment outside this repo. A plan job now fails with the error on the job when OpenTPS is missing or a runner raises; API-contract tests inject a test-only fake runner from `tests/conftest.py`. Suite after removal: 666 passed, 2 skipped (668 collected).
+
+**Direction 2026-10-20:** the evaluation and roadmap are `docs/reports/tps-evaluation-and-roadmap.md` (R0–R15). Decisions: the core (data model, DICOM in/out, plan model, optimizer, evaluation, writers) is radiarch's own code; MCsquare and the CCC binary are run as subprocess tools behind radiarch drivers; **OpenTPS is reference code, not a dependency** — the vendored 3.0.1 copy (`scripts/vendor-opentps.sh`, `src/opentps/patches/`) stays only until R1, R14, R2 and R15 replace what is still imported, then `src/opentps` goes and `engines/` keeps binaries, data and licences. pyRadPlan and matRad are offline cross-checks only. Work order: R0 hygiene → R1 CCC driver → R14 MCsquare driver → R2 DICOM RT readers → R15 own core → R3 … (see the report).
+
+## R0 — hygiene (2026-10-20)
+
+Photon plans are assembled with OpenTPS's real API (`build_photon_plan`; they used to end up with no beams), the robust workflow's setup errors reach OpenTPS (`configure_robustness`), the beam model is built on the persisted geometry (`geometry_bundle.load_opentps_geometry`) instead of re-reading the default phantom, the analytic engine is flagged `test_only` and refused outside `RADIARCH_ENVIRONMENT=dev`, the API key guards every router except `/info`, `LICENSE` (Apache-2.0) and `NOTICE` exist, and every result model, `/info` and every RTDOSE carry "not for clinical use". ADR 0005 records the direction. Tests: `tests/test_r0_hygiene.py`.
+
+Committed 2026-10-20 (265b0cd).
+
+## R1 — CCC through radiarch's own driver (2026-10-20)
+
+Photon dose is real. `models/photon_plan.py` is radiarch's own plan model (beams, segments with jaws and MLC rows, beamlets on the same half-pixel grid OpenTPS used); `services/dose_engines/ccc_driver.py` speaks the WiscPlan binary's file protocol (geometry, beamlet specs, sparse output; exit code 1 = success) and is byte-for-byte compatible with OpenTPS's IO; `services/dose_engines/ccc.py` is the engine behind the `DoseEnginePlugin` protocol with a reference-field calibration (10 × 10 cm², SSD 100, 1 cGy/MU at d_max; cached under `artifacts/ccc/`) and setup-shift / density scenarios. The legacy `photon-ccc` workflow runs on it. Settings: `RADIARCH_CCC_ENGINE_DIR`, `RADIARCH_CCC_N_JOBS`, `RADIARCH_CCC_CALIBRATION_SPACING_MM`. Tests: `tests/test_ccc_engine.py` (protocol, OpenTPS parity, physics on water phantoms). Still open from R1: a run on a public lung CT (LCTSC) once the data is downloaded; no linac head model and generic 6 MV kernels remain the engine's limits.
+
+Committed 2026-10-20 (caf6ee5).
+
+## R7a — validation foundation (2026-10-21)
+
+`src/radiarch/validation/` — phantoms, reference tables with citations (`references/*.json`), case files (`cases/*.yaml`), the runner (`run.py`: photon PDD/profile/heterogeneity/output-vs-field, proton range, LCTSC geometry volumes, DVH cross-check against dicompyler-core, gamma cross-check against pymedphys via `uv run --python 3.12`), and `goldens.py` + `tests/golden/` + `tests/test_goldens.py` (CCC beamlet matrix captured; SimpleFantom geometry, spots and MCsquare input files follow). Data fetched into the data directory outside the repo (`RADIARCH_VALIDATION_DATA`): TG-119 package, six LCTSC patients, five Pancreatic-CT-CBCT-SEG patients. CI: nightly `validation-harness` job. Findings of the first run (details in `docs/reports/validation-data-and-test-plan.md` §8): the WiscPlan CCC binary truncates scatter (`doseCutoffThreshold 0.005` per beamlet and `RSAFE 2 cm` in `defs.h`), so output factors are flat; rebuilt from source it is bit-identical, and with full scatter its kernels behave harder than 6 MV (PDD10 70 %) — the MC reference (R7) and the native engine (R8) gain priority; MCsquare maps HU 0 to a Schneider tissue blend, so water phantom tests use a water-only calibration; radiarch's gamma lacks sub-voxel interpolation (R5). matRad is GPL v3 (not BSD-3); R8 must not copy its base data. All goldens captured; 722 tests pass.
+
+Committed 2026-10-21 (37afa07, 0070918).
+
+## R7a finished; R14 — own MCsquare driver (2026-10-21)
+
+R7a: PSTAR CSDA ranges (NIST, liquid water, 70–250 MeV) entered in `validation/references/proton_water.json` with a 1 % + 1 mm tolerance; the first full (non-fast) harness run recorded in `docs/validation/`.
+
+R14: `models/proton_plan.py` (radiarch's PBS plan, `from_opentps` adapter) and `services/dose_engines/mcsquare_driver.py` (MHD CT, scanner tables, BDL, PBS plan text, config from the engine's template; subprocess through the launcher; MHD dose and sparse-beamlet readers; `(z, y, x)` frames) replace the OpenTPS wrapper inside the `mcsquare` engine plugin (0.3.0). Inputs are byte-identical to the frozen goldens and the dose equals the OpenTPS path at a fixed seed (ADR 0006). Settings: `RADIARCH_MCSQUARE_DIR`, `_N_THREADS`, `_SEED`, `_SCANNER`, `_BDL`, `_KEEP_WORKDIR`. The engine assets stay under `src/opentps/.../MCsquare` until R15 moves them to `engines/`. Tests: `tests/test_mcsquare_driver.py`.
+
+Committed 2026-10-21 (15c46ec).
+
+## R2 — DICOM RT in (2026-10-21)
+
+`src/radiarch/dicom/` reads RT Plan → `PhotonPlan` (segments per control-point interval, arcs discretized per interval; since R8 an arc is read back as an arc), RT Ion Plan → `ProtonPlan`, RT Dose → `(z, y, x)` volume with resampling, and Spatial / Deformable Spatial Registration objects. `services/plan_import.py` stores an imported plan as a beam model with the plan's metersets (`plan_weights.npy`); `POST /beam-model/import` and `POST /dose/recalculate` expose it. Frame-of-reference mismatch is refused by default (registration is R9). ADR 0007. Tests: `tests/test_dicom_readers.py`, `tests/test_plan_import.py` (the last case shows a recalculated MCsquare dose equal to the engine's for the same plan).
+
+Committed 2026-10-21 (7df0c3c).
+
+## R15 — own core, OpenTPS removed (2026-10-21)
+
+ADR 0008 records the decision, the evidence and the one deliberate deviation.
+
+Done:
+- Own loaders `dicom/{ct,rtstruct,case}.py` (identical arrays and polygons to the OpenTPS
+  loader on SimpleFantom and LCTSC-Test-S1-101); rasterizer `services/contour_raster.py`
+  (masks identical on 4 grids × SimpleFantom and 3 grids × 5 LCTSC structures); calibration
+  `services/proton_rsp.py` (identical HU→density/RSP); spot placement
+  `services/spot_placement.py` (bit-identical on the golden case and the oblique cases;
+  posterior/lateral beams differ by edge spots or a layer shift because tiny direction
+  components no longer make boundary spots crawl in 1 µm steps — 100× faster).
+- Services rewired: `GeometryArrays`/`load_geometry_arrays`, `generate_proton_spots(geometry,
+  machine_model, beam_set, params)`, machine model on the driver assets (`.rsp_model`),
+  `StoichiometricModel` on the scanner table, no `ct_image` on `GeometryBundle`, geometry
+  service and NRRD adapter on the own loaders, validation DVH cross-check on the own reader.
+- Legacy `/plans` workflows rewritten on the services (`core/workflows/*`): basic =
+  unit-MU MCsquare dose; optimized = Dij + inverse optimization + final dose; robust =
+  robust optimization over `_helpers.robust_scenarios` (REDUCED_SET 8, ALL 20, RANDOM n;
+  worst-case aggregation) + scenario doses; photon = open fields on CCC. Fixed on the way:
+  the plan record never stored the workflow parameters the workflows read
+  (`PlanParameters` on `PlanDetail`, `plans.parameters` JSON column, migration
+  `b7e2c4d9a1f0`); legacy solver names map onto radiarch's (`solver_method`); the
+  geometry is built on `scoring_spacing_mm` (2 mm default) instead of always the CT grid.
+- Engine assets moved to `engines/mcsquare` and `engines/ccc` (`engines/README.md`,
+  `scripts/fetch-engines.sh` replaces `vendor-opentps.sh`); `src/opentps` deleted; drivers
+  default to `engines/` (or `/app/engines` in the image); Dockerfile, CI, compose, env
+  templates, `install-dev.sh`, `pyproject` (radiarch* only, nibabel dropped) updated.
+- Settings: `RADIARCH_DATA_ROOT`, `RADIARCH_BEAM_LIBRARY_DIR`; `opentps_venv` gone. Test
+  data at `tests/data/SimpleFantomWithStruct`. `tests/opentps/` and
+  `test_opentps_integration.py` removed; `test_api_backend.py` moved to `tests/`;
+  `test_engine_assets.py` replaces `test_package_layout.py`; OpenTPS parity tests
+  dropped (the goldens are the reference). README, NOTICE, demo.md, ADR 0006 updated.
+- Isocenter: still the target centre of mass; the request's `isocenter_mm` is ignored
+  (as before). Decide in R3.
+
+- pydicom 3.0.2 (pin `pydicom>=3.0,<4`; `enforce_file_format=True`, no
+  `is_little_endian` attributes; the DICOM tests pass with pydicom deprecations as errors).
+- `tests/test_plans_workflows.py`: basic proton on every run; photon, optimized and robust
+  opt-in (`RADIARCH_RUN_MCSQUARE_VALIDATION=1`).
+
+Committed 2026-10-21 (091c0c0..5947ad2) and pushed.
+
+## R3 — robust protons through the engine, Gy(RBE), craniospinal fields (2026-10-21)
+
+ADR 0009. Done:
+- `EngineScenarioSet` (ALL 81 / REDUCED_SET 21 / RANDOM n; systematic, random and range
+  errors) on `ScenarioSetSpec.engine_native` and `RobustnessSpec.engine_native`; the MCsquare
+  driver's robustness mode (`robustness_config`, `read_scenarios_file`, scenario doses and
+  scenario beamlets from one run); `MCsquareEngine.compute_scenario_doses` /
+  `build_scenario_influences`; `DoseService` native path and `build_native_influences`
+  (per-scenario Dij cached under the single-scenario keys); the optimizer takes the set.
+  `ScenarioSpec.setup_random_sigma_mm` records the per-fraction random error.
+- RBE: `rbe` on dose, influence and optimization requests (null = 1.1 protons, 1.0 photons),
+  `rbe_factor`/`dose_units` on results; legacy RTDOSE `DoseType EFFECTIVE`.
+- Evaluation: `dvh_bands`, `robust_metrics` (lowest/highest envelope + per scenario),
+  `robust_indices` (worst coverage, D95, D98, D2, hotspot, HI, CI, worst scenario),
+  `include_scenarios`, `dose_units`.
+- Beam sets: `BeamSpec.isocenter_mm`, `BeamSpec.target_z_range_mm`; `BeamSetSpec.isocenter_mm`
+  optional and honoured (was ignored); `services/plan_templates.craniospinal_template`
+  (posterior fields, optional posterior-oblique brain pair with `brain_oblique_deg`) and
+  `POST /beam-model/templates/craniospinal`; `generate_proton_spots` places each beam on its slab.
+- Legacy `proton-robust` uses the native set (random error now modelled).
+- Tests: `tests/test_r3_robust_rbe_templates.py` (models, RBE through the dose service, native
+  sets with a fake engine + evaluation bands, scenarios-file parser, MCsquare native doses and
+  beamlets with the binary, split/template/spots on a synthetic craniospinal target).
+Open: probabilistic robust objectives; clinical-goal pass/fail (R5); 4D scenarios (R9).
+Fraction-wise junction shifts are deliberately not modelled (gradient junctions + robust
+optimization replace them in PBS; ADR 0009). Committed 2026-10-21 (c776958..709b533).
+
+## R4 — machine model and apertures (2026-10-21)
+
+ADR 0010. Done:
+- `models/machine.py` (PhotonMachineSpec: energies, MLC, jaws, limits; ProtonMachineSpec from the
+  BDL); `radiarch/machines/synthetic-120.json`, `synthetic-160.json`; `PhotonMachineModel` on the
+  spec (`default` = synthetic-120; custom `{beam_library_dir}/{id}/machine.json`);
+  `GET /beam-model/machines[/photon|proton/{id}]`.
+- Masks as a uint64 bitmask (`services/masks.py`; `GeometryResult.mask_encoding`); overlapping
+  structures keep their voxels; every consumer reads through `structure_mask`. The geometry golden
+  now hashes the per-structure boolean masks (re-captured; spots and MCsquare inputs unchanged).
+- `services/structure_ops.py` (expand/erode by Euclidean distance, per-axis margins, ring,
+  union/intersection/subtract, couch slab), `services/geometry_derive.py`, `GeometryService.derive`,
+  `POST /geometry/{id}/derive` (`StructureOperation`, `GeometryDeriveRequest`); `GeometryResult`
+  gains `parent_geometry_id`, `derived_operations`, `hu_to_density_model`.
+- `services/sequencing.py` (fluence maps on leaf pairs, Bortfeld–Boyer segments, machine limits,
+  coverage matrix, segment-weight optimization with the existing solvers, minimum MU/area,
+  deliverability), `services/apertures.py` (`ApertureService`: aperture plan persisted as a new
+  beam model, segment dose as a dose result, `ApertureStore`), `models/apertures.py`,
+  `POST /optimize/{id}/sequence`, `GET /optimize/sequences/{id}`.
+- Tests: `tests/test_r4_machine_structures.py`, `tests/test_r4_sequencing.py`,
+  `tests/test_r4_apertures_service.py`.
+Open: DAO refinement; leaf transmission / tongue-and-groove in the segment dose; asymmetric
+margins; VMAT (R8); the RT writer on the aperture plan (R6). Committed 2026-10-21
+(f906c51..a3c0b89).
+
+## R5 — evaluation: clinical goals, radiobiology, gamma, comparisons (2026-10-21)
+
+ADR 0011. Done:
+- `services/clinical_goals.py` (TG-263 metric parser and evaluator, templates, structure
+  resolution), `radiarch/goals/*.json` (rtog-0617, quantec, tg101-sbrt-3fx, tg101-sbrt-5fx,
+  nccn-head-neck, pentec-pediatric [provisional]); `GoalSetSpec`, `GoalsReport` on the evaluation
+  request/result; `GET /evaluate/goal-templates[/{id}]`.
+- `services/radiobiology.py` (EQD2, BED, gEUD, LKB NTCP with 12 parameter sets, Poisson TCP with 3,
+  default α/β); `NTCPSpec`/`TCPSpec` on the request, results with per-scenario values;
+  `GET /evaluate/models`; `EvaluationRequest.fractions`.
+- `services/gamma.py` rewritten: reference points, evaluated dose interpolated (5 steps per DTA),
+  early-stopping vectorized search; 56.2 % on the harness's borderline case (pymedphys 56 %).
+- `services/dose_compare.py` + `POST /evaluate/compare` (dvh_impact: metric/index deltas, goal state
+  changes; by request or by evaluation id).
+- Tests: `tests/test_r5_evaluation.py`.
+Open: the goal tables need a physicist's check against the sources before answer-key use
+(PENTEC marked provisional); relative-seriality NTCP; LQ-L for SBRT; structure-set comparison
+metrics (Dice, HD95) belong to A2.
+
+Committed 2026-10-21 (dfe907c..5612286).
+
+## R6 — RT object writer (2026-10-21)
+
+ADR 0012. Done:
+- `dicom/writers/` — `common.py` (`CaseContext`, dataset skeleton, research labelling, stable UIDs),
+  `rtstruct.py` (masks → contours, interpreted types), `rtplan.py` (RT Plan step-and-shoot, RT Ion
+  Plan, prescription as dose reference, DRR references), `rtdose.py` (PLAN/BEAM, EFFECTIVE for RBE),
+  `rtimage.py` (DRR RT Image), `records.py` (RT (Ion) Beams Treatment Record, RT Treatment Summary
+  Record); `dicom/drr.py` (ray-marched DRR on the spot placer's beam frame).
+- `CTMetadata` carries the CT's DICOM provenance (patient ID/sex/birth date/position, study date and
+  description, slice UIDs); `CTVolume` reads them; old geometries fall back to `RADIARCH_DATA_ROOT`.
+- `services/rt_export.py` + `models/rt_export.py` + `api/routes/rt.py`: `POST /rt/export` (sequence /
+  proton optimization / beam model), manifest and files, `POST /rt/exports/{id}/records`,
+  `POST /rt/exports/{id}/push`; per-beam doses through the dose service; STOW-RS push.
+- `adapters/dicomweb.py` takes datasets, paths or bytes (the legacy push passed bytes to a client
+  that wanted datasets); the legacy `/plans` RT Dose goes through the writer.
+- Validation: `dicom-validator` (dev extra; every object type clean against 2026d) in the suite,
+  `dciodvfy` (dicom3tools) as a CI step; opt-in DICOMweb round trip passed against the research
+  Orthanc (STOW → QIDO → WADO → readers → delete).
+- R4 fix found by the BEAM doses: `sequencing.fluence_maps` binned a beamlet onto the leaf pair of
+  its centre only, so 10 mm beamlets over 5 mm leaves left every other pair out of the apertures (a
+  comb) and `coverage_matrix` credited half the coverage; a beamlet now covers every pair it spans
+  and the coverage sums over them, so beam doses sum to the plan dose.
+- Tests: `tests/test_r6_rt_writers.py`, `tests/test_r6_rt_export_service.py`.
+Open: view the objects in OHIF and 3D Slicer by hand on the next fixture load (contours written on
+the geometry grid, not the CT grid, when the geometry was resampled); arcs as VMAT control points
+(R8); wedges, compensators, blocks and bolus; DVH sequence in the dose; RT Beams Delivery
+Instruction and UPS belong to the record system (an OIS).
+
+Committed 2026-10-21 (d3deb77..a9b8cce).
+
+## R12 — versions, lineage, attribution and states (2026-10-21)
+
+ADR 0013. Done:
+- `models/lineage.py` (`VersionRef`, `Attribution` with `DatasetRef`, `StateRecord`, `VersionStatus`,
+  `LineageGraph`, `DerivationRecord`; states draft/approved/superseded/retired and their transitions).
+- `services/lineage.py` (`LineageService`: nodes with parents per kind over the existing stores,
+  `lineage`, `descendants`, `attribution`, `status`/`transition` with the JSON state store and audit,
+  `locked_keys`/`assert_deletable` (ever-approved versions and their ancestors), `derivation_record`
+  in a dataset manifest's shape, `capability` declaration).
+- `api/routes/lineage.py` (`/lineage/capability`, `/lineage/{kind}/{id}[/descendants|/attribution|
+  /derivation|/state]`); `api/routes/_lineage_guard.py` on every delete route (409 when locked).
+- The RT export manifest carries `attribution`; the DICOM private block names the engine and machine.
+- Tests: `tests/test_r12_lineage.py` (service, API, schema validation of the derivation record when
+  the manifest schema is installed).
+Open: the engine binary's container digest in the attribution; the state route's caller will be a
+record system (an OIS); lineage across radiarch instances; audit-trail immutability.
+
+Committed 2026-10-21 (3e653f2..fe0573e).
+
+## R7 — validation report (2026-10-22)
+
+ADR 0014. Done:
+- `engines/ccc/CCC_DoseEngine` rebuilt from source with `CCC_DOSE_CUTOFF` / `CCC_RSAFE_CM` as run-time
+  parameters (shipped constants as defaults; goldens bit-identical; `engines/ccc/BUILD.md`); driver
+  `params["scatter"]` shipped|full, `RADIARCH_CCC_SCATTER`; calibration keyed by the setting; `shipped`
+  stays the default (full overshoots at depth).
+- `validation/mc_reference.py`: OpenGATE 10.1.1 through uv/Python 3.12; Mohan 6 MV point source (the
+  kernels' own spectrum) through the Versa jaws and MLC; phantoms as stacked sibling boxes, one dose actor
+  each; step-converged (e-/e+ max step 0.5 mm, 0.1 mm cut); compact storage (float16 relative dose,
+  per-mille uncertainty, 4.4 MB each); references `references/mc/{water_10x10,lung_slab,bone_slab}`
+  at 5e7 primaries (96–112 min each on 18 threads).
+- `validation/pyradplan_crosscheck.py` (pyRadPlan 0.5.0 photon SVD pencil beam, own uv environment,
+  `pydantic<2.12`) → `references/pyradplan/`; informative.
+- `validation/cases_r7.py` (`photon_vs_mc` with heterogeneity correction factors and both scatter settings,
+  `photon_vs_pyradplan`, `dij_consistency`, `proton_bragg_peak`, `tg119_planning` with goal-driven reweighting
+  rounds and institutional-spread grading, `lung_e2e_lctsc`); `validation/common.py`; CCC dose cache
+  `validation/cache/ccc` (gitignored); DVH cross-check runs dicompyler-core in its own uv environment.
+- `validation/report.py`: one signed document per engine (identity with binary/BDL digests, checks with
+  sources, limitations, signature block); `--also` merges a rerun case; nightly CI writes them.
+- Fixed on the way: the geometry service ignored the patient reference's structure set and CT series on
+  disk, upload and PACS loads (TG-119's four sets were merged; the prostate was planned on the head-and-neck
+  PTV); numpy bools in check results; the MCsquare launcher's build is recorded.
+- Record (`validation/results/20261022-123318-fe0573e` + `20261022-123414-fe0573e`; documents in
+  `validation/reports/`): MCsquare all pass; TG-119 24/24; lung 2/2; CCC vs Monte Carlo in water PDD10
+  68.1 vs 68.0 %, gamma 3 %/3 mm 98.0 %, 7 % low at 25 cm; bone correction factors within 3 %; lung 5 %
+  low inside, 4 % high far beyond; DVH max 3 of 25 structures 3.5–4.6 % off dicompyler-core; one LCTSC
+  oesophagus volume +5.0 %.
+- Tests: `tests/test_r7_validation.py`.
+- Record for review: `docs/validation/2026-10-22-r7/` (reviewer guide, the three documents, run summary and
+  results of the clean-commit run `20261022-150018-20fc3bf`; the outcome is identical to the earlier run).
+Open: physicist sign-off of the three documents; new CCC kernels from the OpenGATE reference or the native
+engine (R8) for the deep-water and lung errors; matRad needs MATLAB (not done); the full Versa head
+reference (hours) for the record; reference output factors with a head model.
+
+Committed 2026-10-22 (2e21a28..2f7b506).
+
+## R8 — native pencil-beam engine, VMAT, SBRT (2026-10-22, in progress, uncommitted)
+
+ADR 0015. Done:
+- CCC gantry convention fixed (IEC 61217 frame of the DRRs, mapped into the engine's axes); CCC 1.1.0.
+  `EngineSpec.key_version()`: "default" resolves to the engine's version in every cache key.
+- `validation/mc_reference.py --pencil` (OpenGATE pencil kernel, 3e7 primaries) →
+  `services/dose_engines/pb_kernel.py` (stitch, isocenter-plane remap conserving each depth's integral, radius
+  bins, deep continuation; SVD of the cumulative kernel at load) → `engines/pb/pb_6mv_kernel.{npz,json}`.
+- `services/dose_engines/pb.py`, engine `pb` 1.0.0: radiological depth on a divergent ray grid, full-kernel
+  fluence convolution (beamlets or apertures), influence matrix with an 80 mm cutoff and Weyl-sequence
+  roulette below 0.3 %, `segment_dose_matrix`, Gaussian fluence penumbra, output calibration, enclosed
+  cavities dosed, NumPy/CuPy backend (`RADIARCH_PB_DEVICE`; GPU untested: driver mismatch until reboot).
+- Plan model: `PhotonArc`/`ArcControlPoint`, `PhotonBeam.arc`, `PhotonSegment.gantry_deg`; CCC and pb honour
+  sector angles; RT Plan writer writes DYNAMIC beams, reader reads arcs back; the collimator now reaches the
+  open-field plan.
+- `models/vmat.py`, `services/vmat.py`, `POST /optimize/{id}/arcs`: arc sequencing of sector fluence maps,
+  alternating sweeps, interval timing (gantry, leaf, dose-rate floor) per fraction, meterset re-optimization.
+- `services/sbrt.py` (R100, R50, D2cm, GI, lung V20, RTOG 0813/0915 table); templates `sbrt-lung-54gy-3fx`,
+  `sbrt-lung-50gy-5fx`; NCCN template alias `Mandible: Bone_Mandible`.
+- Harness: `cases_r8.py` (`pb_vs_mc` with Monte Carlo field-size checks, `pb_vs_ccc`, `lung_sbrt_vmat`, `lung_vmat_lctsc`, `hn_sib_vmat`), `photon_*_pb` variants
+  (`common._photon_engine`), `pb` in `dij_consistency`, a fourth document in `report.py`; the R7 lung case now
+  keeps its organs (one structure set) and plans on Lungs-PTV without a maximum-dose term; run records give the
+  CPU, not the host. A beam set holds up to 180 beams (sector beams of arcs).
+- Docs: the evaluation and the validation study in `docs/reports/`; an index, `docs/README.md`; no references to other projects.
+- Tests: `tests/test_r8_{pb_engine,arcs,vmat,sbrt}.py` (the cross-engine gamma against CCC included).
+Findings: CCC's shipped scatter cut-off makes the central dose independent of field size and the depth dose
+depend on the beamlet size, and gives zero dose ~2 cm outside the beamlets (ADR 0015).
+Open: the GPU path on hardware; lateral kernel scaling for lung; direct leaf optimization for VMAT; the R8
+record for the physicist.
+

@@ -1,6 +1,6 @@
 # ADR 0001 — Photon Dose Engine: Build, Buy, or Defer
 
-> **Superseded on 2026-10-20 (R1).** The CCC photon engine is implemented: the WiscPlan binary vendored with OpenTPS core runs as a subprocess behind `services/dose_engines/ccc_driver.py`, with the reference-field calibration in `services/dose_engines/ccc.py`. See ADR 0005 for the direction and the SMIS evaluation report for the engine's limits.
+> **Superseded on 2026-10-20 (R1).** The CCC photon engine is implemented: the WiscPlan binary vendored with OpenTPS core runs as a subprocess behind `services/dose_engines/ccc_driver.py`, with the reference-field calibration in `services/dose_engines/ccc.py`. See ADR 0005 for the direction and `docs/reports/tps-evaluation-and-roadmap.md` for the engine's limits.
 
 | Field | Value |
 |---|---|

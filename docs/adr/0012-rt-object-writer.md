@@ -5,8 +5,8 @@ Date: 2026-10-21. Status: accepted. Roadmap R6 ("RT object writer").
 ## Context
 
 Radiarch read DICOM RT since R2 (ADR 0007) and wrote one thing: a legacy
-RT Dose from the `/plans` workflows, with no plan behind it. The emulated
-clinic (SMIS F5.3) needs the planning system's whole output as the objects a
+RT Dose from the `/plans` workflows, with no plan behind it. A clinic
+workflow needs the planning system's whole output as the objects a
 real one produces — structure set, plan with control points and MU, dose,
 DRRs — and the delivery side needs treatment records per fraction and a
 course summary, all storable in Orthanc and readable by OHIF and 3D Slicer.
@@ -45,7 +45,7 @@ objects need.
    A prescription becomes a dose reference (VOLUME on the target ROI when
    the structure set was written, else SITE) with cumulative dose
    coefficients at every control point. `PlanIntent` is RESEARCH and
-   `ApprovalStatus` UNAPPROVED: approval is a human act in smis-ois (F5.4).
+   `ApprovalStatus` UNAPPROVED: approval is a human act in the record system (an OIS).
 4. **RT Dose PLAN and BEAM.** Frames by ascending z on the geometry grid,
    31-bit scaling, `DoseType` EFFECTIVE with the RBE in the comment for
    Gy(RBE). A BEAM dose per beam is an engine run with the other beams'
@@ -66,8 +66,8 @@ objects need.
    records every control point, chains to the earlier records of the
    course, and the RT Treatment Summary Record carries fractions planned
    and delivered, dates and the cumulative dose to the dose reference.
-   These are what smis-linac and smis-ois will store; until they exist the
-   export service writes them on request.
+   These are what a treatment machine and a record system store; the export
+   service writes them on request.
 7. **Export service and routes.** `POST /rt/export` resolves the plan from
    an aperture sequence (photons; segment MU and segment dose), a proton
    optimization (weights become spot MU; its dose) or a beam model with its
@@ -82,8 +82,7 @@ objects need.
    2026d) in the full suite, and with `dciodvfy` (dicom3tools) in a CI
    step; both run clean. An opt-in test round-trips the objects through
    a DICOMweb server (`RADIARCH_TEST_DICOMWEB_URL`), reading the plan and
-   dose back from it; it passed against the emulated clinic's research
-   Orthanc. OHIF and 3D Slicer are checked by hand (TASKS.md).
+   dose back from it; it passed against a research Orthanc. OHIF and 3D Slicer are checked by hand (`docs/impl-plan.md`, R6).
 
 ## Consequences
 
@@ -102,4 +101,4 @@ objects need.
   to the nearest image. Writing on the CT grid is a resample away (R9).
 - Not written: arcs as single beams (R8 will write VMAT control points),
   compensators, wedges, blocks, bolus, spatial registration, DVH sequences
-  in the dose, RT Beams Delivery Instruction and UPS (smis-ois, F5.4).
+  in the dose, RT Beams Delivery Instruction and UPS (the record system's).

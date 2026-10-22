@@ -72,8 +72,8 @@ a document per engine version that a physicist can sign.
    settings), the radiarch commit, every check with its source, the known
    limitations and a signature block. The nightly job writes them beside
    the results. The document says on its first line that it is research
-   evidence and grants no acceptance level; the SMIS B2 levels are granted
-   against it, not by it.
+   evidence and grants no acceptance level; a department that uses radiarch
+   grants acceptance against it, not by it.
 
 ## Findings while building the record
 

@@ -4,9 +4,10 @@ Date: 2026-10-21. Status: accepted. Roadmap R2.
 
 ## Context
 
-Everything radiarch computed so far started from a beam set radiarch chose. The
-SMIS use cases (F1.8 dose regeneration, the dosimetric-impact rows, the
-reference site) start from plans and doses that exist as DICOM RT objects. The
+Everything radiarch computed so far started from a beam set radiarch chose.
+Recalculating the dose of an existing plan, comparing the dosimetric impact of
+two plans and planning a reference site all start from plans and doses that
+exist as DICOM RT objects. The
 vendored OpenTPS readers are not usable for this: its photon plan read path
 refers to an unbound variable, it keeps no MLC positions, and it is going away
 with R15.

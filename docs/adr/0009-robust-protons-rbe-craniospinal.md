@@ -1,6 +1,6 @@
 # ADR 0009 — Robust protons through the engine, Gy(RBE), craniospinal fields
 
-Date: 2026-10-21. Status: accepted. Roadmap R3 ("Proton robust and Profile 2").
+Date: 2026-10-21. Status: accepted. Roadmap R3 ("Robust protons and craniospinal fields").
 
 ## Context
 
@@ -10,8 +10,7 @@ per-fraction random setup error. Proton doses were physical Gy although proton
 prescriptions are in Gy(RBE). Beam sets had one isocenter for all beams and
 spots were always placed on the whole target, so a craniospinal plan, which
 needs several isocenters along the spine and matched junctions, could not be
-expressed. Profile 2 (pediatric neuro-oncology) needs proton craniospinal
-courses.
+expressed. Pediatric neuro-oncology needs proton craniospinal courses.
 
 ## Decisions
 
@@ -66,7 +65,7 @@ courses.
    Decision of 2026-10-21: the `research` preset (default) keeps one
    posterior brain field so plans stay simple and symmetric; the `clinical`
    preset gives the pair at ±15°, the usual proton practice for the cranial
-   part, and is what the Profile 2 planning protocol should name.
+   part, and is what a pediatric craniospinal planning protocol should name.
    Fraction-wise junction shifts (the feathering of passive-scattering and
    photon craniospinal plans) are deliberately not modelled: with gradient
    junctions and a robust optimization they are unnecessary, and a plan is
