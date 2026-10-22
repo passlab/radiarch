@@ -681,3 +681,36 @@ ADR 0013. Done:
   the SMIS schema is on the machine).
 Open: the engine binary's container digest in the attribution (with F3.3); the state route's
 caller will be smis-ois (F5.4); lineage across radiarch instances; audit-trail immutability.
+
+## R7 — validation report (2026-10-22)
+
+ADR 0014. Done:
+- `engines/ccc/CCC_DoseEngine` rebuilt from source with `CCC_DOSE_CUTOFF` / `CCC_RSAFE_CM` as run-time
+  parameters (shipped constants as defaults; goldens bit-identical; `engines/ccc/BUILD.md`); driver
+  `params["scatter"]` shipped|full, `RADIARCH_CCC_SCATTER`; calibration keyed by the setting; `shipped`
+  stays the default (full overshoots at depth).
+- `validation/mc_reference.py`: OpenGATE 10.1.1 through uv/Python 3.12; Mohan 6 MV point source (the
+  kernels' own spectrum) through the Versa jaws and MLC; phantoms as stacked sibling boxes, one dose actor
+  each; step-converged (e-/e+ max step 0.5 mm, 0.1 mm cut); compact storage (float16 relative dose,
+  per-mille uncertainty, 4.4 MB each); references `references/mc/{water_10x10,lung_slab,bone_slab}`
+  at 5e7 primaries (96–112 min each on 18 threads).
+- `validation/pyradplan_crosscheck.py` (pyRadPlan 0.5.0 photon SVD pencil beam, own uv environment,
+  `pydantic<2.12`) → `references/pyradplan/`; informative.
+- `validation/cases_r7.py` (`photon_vs_mc` with heterogeneity correction factors and both scatter settings,
+  `photon_vs_pyradplan`, `dij_consistency`, `proton_bragg_peak`, `tg119_planning` with goal-driven reweighting
+  rounds and institutional-spread grading, `lung_e2e_lctsc`); `validation/common.py`; CCC dose cache
+  `validation/cache/ccc` (gitignored); DVH cross-check runs dicompyler-core in its own uv environment.
+- `validation/report.py`: one signed document per engine (identity with binary/BDL digests, checks with
+  sources, limitations, signature block); `--also` merges a rerun case; nightly CI writes them.
+- Fixed on the way: the geometry service ignored the patient reference's structure set and CT series on
+  disk, upload and PACS loads (TG-119's four sets were merged; the prostate was planned on the head-and-neck
+  PTV); numpy bools in check results; the MCsquare launcher's build is recorded.
+- Record (`validation/results/20261022-123318-fe0573e` + `20261022-123414-fe0573e`; documents in
+  `validation/reports/`): MCsquare all pass; TG-119 24/24; lung 2/2; CCC vs Monte Carlo in water PDD10
+  68.1 vs 68.0 %, gamma 3 %/3 mm 98.0 %, 7 % low at 25 cm; bone correction factors within 3 %; lung 5 %
+  low inside, 4 % high far beyond; DVH max 3 of 25 structures 3.5–4.6 % off dicompyler-core; one LCTSC
+  oesophagus volume +5.0 %.
+- Tests: `tests/test_r7_validation.py`.
+Open: physicist sign-off of the three documents; new CCC kernels from the OpenGATE reference or the native
+engine (R8) for the deep-water and lung errors; matRad needs MATLAB (not done); the full Versa head
+reference (hours) for the record; reference output factors with a head model.

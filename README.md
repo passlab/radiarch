@@ -259,6 +259,27 @@ SMIS repo (`make public-lctsc-validation public-pancreatic-validation public-tg1
 `RADIARCH_VALIDATION_DATA`. A run writes `validation/results/<stamp>-<commit>/summary.md`.
 Statuses are research targets; nothing here is a clinical commissioning.
 
+R7 (ADR 0014) adds the Monte Carlo comparison, the planning cases and the signed documents:
+
+```bash
+# OpenGATE references (its own Python 3.12 environment; hours per phantom; written to validation/references/mc)
+uv run --no-project --python 3.12 --with opengate==10.1.1 --with itk \
+  python -m radiarch.validation.mc_reference --case water_10x10 --primaries 5e7
+uv run --no-project --python 3.12 --with pyRadPlan==0.5.0 python -m radiarch.validation.pyradplan_crosscheck --case water_10x10
+python -m radiarch.validation.run --cases photon_vs_mc photon_vs_pyradplan dij_consistency proton_bragg_peak tg119_planning lung_e2e_lctsc
+python -m radiarch.validation.report                      # one document per engine from the newest run, validation/reports/
+```
+
+`photon_vs_mc` compares the CCC engine with the references (PDD, profile, heterogeneity ratios,
+gamma 3 %/3 mm); `dij_consistency` repeats the Dij-versus-forward gate for every engine;
+`proton_bragg_peak` checks the fall-off and spot size against Bortfeld and the beam data library;
+`tg119_planning` plans the four TG-119 structure sets and scores the goals with the report's
+institutional means as context; `lung_e2e_lctsc` runs contour → plan → dose → RTOG 0617 goals on
+an LCTSC thorax. The CCC engine is radiarch's own build: `params["scatter"]` chooses `shipped`
+(fast, truncated scatter, the default) or `full` (complete scatter, about 45x slower);
+`RADIARCH_CCC_SCATTER` sets the installation default. The full setting overshoots the Monte Carlo
+reference at depth (ADR 0014), so `shipped` stays the default.
+
 `tests/golden/` freezes the outputs captured from the vendored OpenTPS code before it was
 replaced (CCC beamlet matrix, SimpleFantom geometry, proton spots, the MCsquare input files);
 radiarch's own loaders, rasterizer, spot placement and drivers reproduce them on every push
