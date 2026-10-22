@@ -44,3 +44,7 @@ validation/*.log
 
 # MCsquare scratch output when an engine is run from the repo root
 /Outputs/
+validation/mc/
+validation/r7-*/
+validation/cache/
+validation/reports/

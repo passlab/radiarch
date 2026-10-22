@@ -16,17 +16,15 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
-import os
 import platform
 import shutil
 import subprocess
 import sys
-import tempfile
 import time
 import traceback
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -40,126 +38,10 @@ REF_DIR = HERE / "references"
 RADIARCH_ROOT = HERE.parents[2]
 SMIS_ROOT = RADIARCH_ROOT.parent
 
-
-# ---------------------------------------------------------------------------
-# Result types
-# ---------------------------------------------------------------------------
-
-@dataclass
-class Check:
-    name: str
-    value: Any
-    target: str
-    passed: Optional[bool]          # None = informative
-    note: str = ""
-
-
-@dataclass
-class CaseResult:
-    name: str
-    kind: str
-    status: str = "pending"
-    seconds: float = 0.0
-    checks: List[Check] = field(default_factory=list)
-    metrics: Dict[str, Any] = field(default_factory=dict)
-    notes: List[str] = field(default_factory=list)
-    error: Optional[str] = None
-
-    def add(self, name: str, value: Any, target: str, passed: Optional[bool], note: str = "") -> None:
-        self.checks.append(Check(name, _jsonable(value), target, passed, note))
-
-    def finish(self) -> None:
-        if self.status in ("skip", "error"):
-            return
-        graded = [c.passed for c in self.checks if c.passed is not None]
-        if any(p is False for p in graded):
-            self.status = "fail"
-        elif graded:
-            self.status = "pass"
-        else:
-            self.status = "info"
-
-
-class Skip(Exception):
-    """Raised by a case when a prerequisite is missing."""
-
-
-def _jsonable(v):
-    if isinstance(v, (np.floating, np.integer)):
-        return v.item()
-    if isinstance(v, np.ndarray):
-        return v.tolist()
-    if isinstance(v, dict):
-        return {k: _jsonable(x) for k, x in v.items()}
-    if isinstance(v, (list, tuple)):
-        return [_jsonable(x) for x in v]
-    return v
-
-
-def load_reference(name: str) -> dict:
-    return json.loads((REF_DIR / f"{name}.json").read_text())
-
-
-def data_root() -> Path:
-    env = os.environ.get("RADIARCH_VALIDATION_DATA")
-    return Path(env) if env else SMIS_ROOT / "data" / "public"
-
-
-# ---------------------------------------------------------------------------
-# Shared helpers
-# ---------------------------------------------------------------------------
-
-@dataclass
-class Context:
-    fast: bool = False
-    spacing_scale: float = 1.0
-    workdir: Path = field(default_factory=lambda: Path(tempfile.mkdtemp(prefix="radiarch-validation-")))
-
-    def spacing(self, mm: float) -> float:
-        return float(mm) * (2.0 if self.fast else 1.0) * self.spacing_scale
-
-
-def _phantom(spec: dict, ctx: Context) -> ph.Phantom:
-    kind = spec.get("type", "water_box")
-    s = ctx.spacing(spec.get("spacing_mm", 2.5))
-    if kind == "water_box":
-        return ph.water_box(spec.get("half_width_mm", 150.0), spec.get("depth_mm", 300.0), s)
-    if kind == "lung_slab":
-        return ph.lung_slab(s)
-    if kind == "bone_slab":
-        return ph.bone_slab(s)
-    if kind == "thorax_like":
-        return ph.thorax_like(s)
-    raise ValueError(f"unknown phantom type {kind!r}")
-
-
-def _open_field_plan(field_mm: float, leaf_mm: float, beamlet_mm: float, gantry_deg: float = 0.0, mu: float = 1.0):
-    from ..services.photon_beamlets import build_photon_plan
-    h = field_mm / 2.0
-    return build_photon_plan([(gantry_deg, 0.0)], (-h, h), (-h, h), leaf_mm, mu, (beamlet_mm, beamlet_mm),
-                             name=f"validation-{field_mm:g}mm")
-
-
-def _ccc_engine():
-    from ..services.dose_engines.ccc import CCCEngine
-    eng = CCCEngine()
-    ok, reason = eng.driver().availability()
-    if not ok:
-        raise Skip(reason)
-    return eng
-
-
-def _ccc_dose(eng, phantom: ph.Phantom, plan, ctx: Context) -> np.ndarray:
-    params = {"calibration_spacing_mm": 5.0} if ctx.fast else None
-    return eng.compute_plan_dose(phantom.density, phantom.spacing_mm, phantom.origin_mm, plan, params=params)
-
-
-def _cax(dose: np.ndarray, phantom: ph.Phantom) -> np.ndarray:
-    return dose[phantom.centre_index("z"), :, phantom.centre_index("x")]
-
-
-def _within(value: float, target: float, tol: float) -> bool:
-    return abs(value - target) <= tol
+from .common import (  # noqa: E402,F401 — re-exported for the cases and the tests
+    CaseResult, Check, Context, Skip, _cax, _ccc_dose, _ccc_engine, _jsonable, _open_field_plan, _phantom, _within, data_root,
+    load_reference,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -448,12 +330,38 @@ def _read_rtdose(path: Path):
     return arr, spacing, origin, ds
 
 
+_DICOMPYLER_SCRIPT = r'''
+import json, sys
+from dicompylercore import dicomparser, dvhcalc
+rs_paths, rd_path = sys.argv[1].split("|"), sys.argv[2]
+rd = dicomparser.DicomParser(rd_path)
+dose_for = rd.ds.FrameOfReferenceUID
+best = None
+for rs in rs_paths:
+    p = dicomparser.DicomParser(rs)
+    structs = p.GetStructures()
+    if p.ds.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID == dose_for and (best is None or len(structs) > len(best[1])):
+        best = (rs, structs)
+out = {"rtstruct": best[0] if best else None, "structures": {}}
+if best:
+    for number, info in best[1].items():
+        if info.get("empty"):
+            continue
+        dvh = dvhcalc.get_dvh(best[0], rd_path, number)
+        if dvh.volume <= 0:
+            continue
+        out["structures"][info["name"]] = {"mean": float(dvh.mean), "max": float(dvh.max), "d95": float(dvh.statistic("D95").value)}
+print(json.dumps(out))
+'''
+
+
 def run_dvh_crosscheck(spec: dict, ctx: Context) -> CaseResult:
+    """DVH statistics of radiarch (its own rasterization and DVH on the RTDOSE grid) against dicompyler-core.
+    dicompyler-core 0.5.6 predates pydicom 3 (it falls back to the old ``dicom`` package), so it runs, like
+    pymedphys, in its own Python 3.12 environment through uv with pydicom 2."""
     res = CaseResult(spec["name"], spec["kind"])
-    try:
-        from dicompylercore import dicomparser, dvhcalc
-    except ImportError:
-        raise Skip("dicompyler-core not installed (pip install -e ./src[validation])")
+    if shutil.which("uv") is None:
+        raise Skip("uv not installed; dicompyler-core needs pydicom < 3 and is run through `uv run --python 3.12`")
     from ..dicom.rtstruct import read_rtstruct
     from ..services.dvh import dose_at_volume
     root = data_root() / Path(spec["data"]).name
@@ -462,43 +370,38 @@ def run_dvh_crosscheck(spec: dict, ctx: Context) -> CaseResult:
     tol = spec.get("tolerance_percent", {"mean": 3.0, "d95": 5.0, "max": 3.0})
     graded_keys = set(spec.get("graded", ["mean", "max"]))
     patients = spec["patients"][:1] if ctx.fast else spec["patients"]
+    script = ctx.workdir / "dicompyler_dvh.py"; script.write_text(_DICOMPYLER_SCRIPT)
     for pid in patients:
         pdir = root / pid
         doses = list(pdir.glob("RTDOSE_*/*.dcm"))
-        if not doses:
-            res.notes.append(f"{pid}: no RTDOSE"); continue
-        dose, spacing, origin, dds = _read_rtdose(doses[0])
-        # the planning-CT structure set: same frame of reference, most ROIs
-        best = None
-        for rs in pdir.glob("RTSTRUCT_*/*.dcm"):
-            rp = dicomparser.DicomParser(str(rs))
-            structs = rp.GetStructures()
-            same_for = rp.ds.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID == dds.FrameOfReferenceUID
-            if same_for and (best is None or len(structs) > len(best[1])):
-                best = (rs, structs)
-        if best is None:
+        structure_sets = [str(p) for p in pdir.glob("RTSTRUCT_*/*.dcm")]
+        if not doses or not structure_sets:
+            res.notes.append(f"{pid}: no RTDOSE or RTSTRUCT"); continue
+        cmd = ["uv", "run", "--quiet", "--no-project", "--python", "3.12", "--with", "dicompyler-core==0.5.6", "--with", "pydicom<3",
+               "--with", "numpy<2", "python", str(script), "|".join(structure_sets), str(doses[0])]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=3600, cwd=str(ctx.workdir))
+        if proc.returncode != 0:
+            raise Skip(f"dicompyler-core run failed: {proc.stderr[-400:]}")
+        ref = json.loads(proc.stdout.strip().splitlines()[-1])
+        if not ref.get("rtstruct"):
             res.notes.append(f"{pid}: no RTSTRUCT in the dose frame of reference"); continue
-        rs_path, structs = best
+        rs_path = Path(ref["rtstruct"])
+        dose, spacing, origin, dds = _read_rtdose(doses[0])
         try:
             contours = {c.name: c for c in read_rtstruct(rs_path).contours}
         except Exception as exc:
             res.notes.append(f"{pid}: could not read {rs_path.name}: {exc}"); continue
         grid_xyz = (dose.shape[2], dose.shape[1], dose.shape[0])
-        for roi_number, info in structs.items():
-            name = info["name"]
-            if name not in contours or info.get("empty"):
+        for name, theirs in ref["structures"].items():
+            if name not in contours:
                 continue
             print(f"   {pid}/{name}", flush=True)
-            ref_dvh = dvhcalc.get_dvh(str(rs_path), str(doses[0]), roi_number)
-            if ref_dvh.volume <= 0:
-                continue
             mask_xyz = contours[name].getBinaryMask(np.array(origin), np.array(grid_xyz), np.array(spacing)).imageArray.astype(bool)
             mask = np.ascontiguousarray(mask_xyz.transpose(2, 1, 0))
             vals = dose[mask]
             if vals.size == 0:
                 res.notes.append(f"{pid}/{name}: empty mask on the dose grid"); continue
             ours = {"mean": float(vals.mean()), "max": float(vals.max()), "d95": float(dose_at_volume(vals, 95.0))}
-            theirs = {"mean": float(ref_dvh.mean), "max": float(ref_dvh.max), "d95": float(ref_dvh.statistic("D95").value)}
             for key in ("mean", "max", "d95"):
                 if theirs[key] <= 0:
                     continue
@@ -507,6 +410,7 @@ def run_dvh_crosscheck(spec: dict, ctx: Context) -> CaseResult:
                 res.add(f"{pid} {name} {key} (Gy)", round(ours[key], 3), f"{theirs[key]:.3f} ± {tol[key]} % (dicompyler-core)",
                         abs(dev) <= tol[key] if key in graded_keys else None,
                         "" if key in graded_keys else "D95 of low-dose structures sits on the DVH tail, where the two rasterizers' voxel-level differences dominate; informative")
+    res.notes.append("dicompyler-core 0.5.6 in its own uv environment (Python 3.12, pydicom 2); radiarch on pydicom 3")
     return res
 
 
@@ -579,6 +483,11 @@ KINDS: Dict[str, Callable[[dict, Context], CaseResult]] = {
     "dvh_crosscheck": run_dvh_crosscheck,
     "gamma_crosscheck": run_gamma_crosscheck,
 }
+
+
+# R7 cases live in their own module; they import the helpers above, so they register last.
+from .cases_r7 import KINDS_R7  # noqa: E402
+KINDS.update(KINDS_R7)
 
 
 def load_cases() -> Dict[str, dict]:

@@ -1,0 +1,9 @@
+name: photon_vs_pyradplan
+kind: photon_vs_pyradplan
+description: CCC against pyRadPlan's photon pencil-beam engine (offline, its own environment; references/pyradplan) on the water box and the slabs - central-axis depth dose and heterogeneity ratios normalised at 10 cm.
+cases: [water_10x10, lung_slab, bone_slab]
+scatter: shipped      # the engine's default; the Monte Carlo case compares both settings
+n_jobs: 8
+probe_depths_mm: [50, 150, 200, 250]
+tolerance_percent: 3.0
+pass_fail: false      # a second opinion from a different beam; photon_vs_mc is the reference

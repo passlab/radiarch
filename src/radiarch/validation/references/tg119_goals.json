@@ -1,61 +1,323 @@
 {
-  "_about": "AAPM TG-119 commissioning cases, transcribed from the instructions (TG119_Instructions_102109.pdf, Zenodo 8037934, CC BY 4.0). Structure names are those in the RT structure sets of the package. Doses in Gy; D_x = dose received by x % of the volume (D99 >= 50 Gy means 99 % of the volume gets at least 50 Gy).",
-  "phantom": {"ct_slices": 129, "pixel_mm": 0.9766, "slice_mm": 2.5, "energy_mv": 6, "package": "data/public/tg119/TG119_CT_Structures"},
-  "cases": {
-    "multi_target": {
-      "rtstruct": "RS.TG119_Multi.dcm",
-      "beams": {"count": 7, "spacing_deg": 50.0, "start_deg": 0.0},
-      "goals": [
-        {"structure": "Center", "metric": "D99", "op": ">=", "gy": 50.0},
-        {"structure": "Center", "metric": "D10", "op": "<=", "gy": 53.0},
-        {"structure": "Superior", "metric": "D99", "op": ">=", "gy": 25.0},
-        {"structure": "Superior", "metric": "D10", "op": "<=", "gy": 35.0},
-        {"structure": "Inferiorr", "metric": "D99", "op": ">=", "gy": 12.5},
-        {"structure": "Inferiorr", "metric": "D10", "op": "<=", "gy": 25.0}
-      ]
+ "_about": "AAPM TG-119 commissioning cases, transcribed from the instructions (TG119_Instructions_102109.pdf, Zenodo 8037934, CC BY 4.0). Structure names are those in the RT structure sets of the package. Doses in Gy; D_x = dose received by x % of the volume (D99 >= 50 Gy means 99 % of the volume gets at least 50 Gy).",
+ "phantom": {
+  "ct_slices": 129,
+  "pixel_mm": 0.9766,
+  "slice_mm": 2.5,
+  "energy_mv": 6,
+  "package": "data/public/tg119/TG119_CT_Structures"
+ },
+ "cases": {
+  "multi_target": {
+   "rtstruct": "RS.TG119_Multi.dcm",
+   "beams": {
+    "count": 7,
+    "spacing_deg": 50.0,
+    "start_deg": 0.0
+   },
+   "goals": [
+    {
+     "structure": "Center",
+     "metric": "D99",
+     "op": ">=",
+     "gy": 50.0
     },
-    "prostate": {
-      "rtstruct": "RS.TG119_Prostate.dcm",
-      "beams": {"count": 7, "spacing_deg": 50.0, "start_deg": 0.0},
-      "goals": [
-        {"structure": "PTV", "metric": "D95", "op": ">=", "gy": 75.6},
-        {"structure": "PTV", "metric": "D5", "op": "<=", "gy": 83.0},
-        {"structure": "Rectum", "metric": "D30", "op": "<=", "gy": 70.0},
-        {"structure": "Rectum", "metric": "D10", "op": "<=", "gy": 75.0},
-        {"structure": "Urinary bladder", "metric": "D30", "op": "<=", "gy": 70.0},
-        {"structure": "Urinary bladder", "metric": "D10", "op": "<=", "gy": 75.0}
-      ]
+    {
+     "structure": "Center",
+     "metric": "D10",
+     "op": "<=",
+     "gy": 53.0
     },
-    "head_neck": {
-      "rtstruct": "RS.TG119_HN.dcm",
-      "beams": {"count": 9, "spacing_deg": 40.0, "start_deg": 0.0},
-      "goals": [
-        {"structure": "PTV", "metric": "D90", "op": ">=", "gy": 50.0},
-        {"structure": "PTV", "metric": "D99", "op": ">=", "gy": 46.5},
-        {"structure": "PTV", "metric": "D20", "op": "<=", "gy": 55.0},
-        {"structure": "Cord", "metric": "Dmax", "op": "<=", "gy": 40.0},
-        {"structure": "Lt Parotid", "metric": "D50", "op": "<=", "gy": 20.0},
-        {"structure": "Rt Parotid", "metric": "D50", "op": "<=", "gy": 20.0}
-      ]
+    {
+     "structure": "Superior",
+     "metric": "D99",
+     "op": ">=",
+     "gy": 25.0
     },
-    "c_shape_easy": {
-      "rtstruct": "RS.TG119_CShape.dcm",
-      "beams": {"count": 9, "spacing_deg": 40.0, "start_deg": 0.0},
-      "goals": [
-        {"structure": "OuterTarget", "metric": "D95", "op": ">=", "gy": 50.0},
-        {"structure": "OuterTarget", "metric": "D10", "op": "<=", "gy": 55.0},
-        {"structure": "Core", "metric": "D5", "op": "<=", "gy": 25.0}
-      ]
+    {
+     "structure": "Superior",
+     "metric": "D10",
+     "op": "<=",
+     "gy": 35.0
     },
-    "c_shape_hard": {
-      "rtstruct": "RS.TG119_CShape.dcm",
-      "beams": {"count": 9, "spacing_deg": 40.0, "start_deg": 0.0},
-      "goals": [
-        {"structure": "OuterTarget", "metric": "D95", "op": ">=", "gy": 50.0},
-        {"structure": "OuterTarget", "metric": "D10", "op": "<=", "gy": 55.0},
-        {"structure": "Core", "metric": "D5", "op": "<=", "gy": 10.0}
-      ],
-      "note": "the instructions say this goal is probably not achievable; it tests a system that is being pushed very hard"
+    {
+     "structure": "Inferiorr",
+     "metric": "D99",
+     "op": ">=",
+     "gy": 12.5
+    },
+    {
+     "structure": "Inferiorr",
+     "metric": "D10",
+     "op": "<=",
+     "gy": 25.0
     }
+   ],
+   "prescription_gy": 50.0,
+   "target": "Center"
+  },
+  "prostate": {
+   "rtstruct": "RS.TG119_Prostate.dcm",
+   "beams": {
+    "count": 7,
+    "spacing_deg": 50.0,
+    "start_deg": 0.0
+   },
+   "goals": [
+    {
+     "structure": "PTV",
+     "metric": "D95",
+     "op": ">=",
+     "gy": 75.6
+    },
+    {
+     "structure": "PTV",
+     "metric": "D5",
+     "op": "<=",
+     "gy": 83.0
+    },
+    {
+     "structure": "Rectum",
+     "metric": "D30",
+     "op": "<=",
+     "gy": 70.0
+    },
+    {
+     "structure": "Rectum",
+     "metric": "D10",
+     "op": "<=",
+     "gy": 75.0
+    },
+    {
+     "structure": "Urinary bladder",
+     "metric": "D30",
+     "op": "<=",
+     "gy": 70.0
+    },
+    {
+     "structure": "Urinary bladder",
+     "metric": "D10",
+     "op": "<=",
+     "gy": 75.0
+    }
+   ],
+   "prescription_gy": 75.6,
+   "target": "PTV"
+  },
+  "head_neck": {
+   "rtstruct": "RS.TG119_HN.dcm",
+   "beams": {
+    "count": 9,
+    "spacing_deg": 40.0,
+    "start_deg": 0.0
+   },
+   "goals": [
+    {
+     "structure": "PTV",
+     "metric": "D90",
+     "op": ">=",
+     "gy": 50.0
+    },
+    {
+     "structure": "PTV",
+     "metric": "D99",
+     "op": ">=",
+     "gy": 46.5
+    },
+    {
+     "structure": "PTV",
+     "metric": "D20",
+     "op": "<=",
+     "gy": 55.0
+    },
+    {
+     "structure": "Cord",
+     "metric": "Dmax",
+     "op": "<=",
+     "gy": 40.0
+    },
+    {
+     "structure": "Lt Parotid",
+     "metric": "D50",
+     "op": "<=",
+     "gy": 20.0
+    },
+    {
+     "structure": "Rt Parotid",
+     "metric": "D50",
+     "op": "<=",
+     "gy": 20.0
+    }
+   ],
+   "prescription_gy": 50.0,
+   "target": "PTV"
+  },
+  "c_shape_easy": {
+   "rtstruct": "RS.TG119_CShape.dcm",
+   "beams": {
+    "count": 9,
+    "spacing_deg": 40.0,
+    "start_deg": 0.0
+   },
+   "goals": [
+    {
+     "structure": "OuterTarget",
+     "metric": "D95",
+     "op": ">=",
+     "gy": 50.0
+    },
+    {
+     "structure": "OuterTarget",
+     "metric": "D10",
+     "op": "<=",
+     "gy": 55.0
+    },
+    {
+     "structure": "Core",
+     "metric": "D5",
+     "op": "<=",
+     "gy": 25.0
+    }
+   ],
+   "prescription_gy": 50.0,
+   "target": "OuterTarget"
+  },
+  "c_shape_hard": {
+   "rtstruct": "RS.TG119_CShape.dcm",
+   "beams": {
+    "count": 9,
+    "spacing_deg": 40.0,
+    "start_deg": 0.0
+   },
+   "goals": [
+    {
+     "structure": "OuterTarget",
+     "metric": "D95",
+     "op": ">=",
+     "gy": 50.0
+    },
+    {
+     "structure": "OuterTarget",
+     "metric": "D10",
+     "op": "<=",
+     "gy": 55.0
+    },
+    {
+     "structure": "Core",
+     "metric": "D5",
+     "op": "<=",
+     "gy": 10.0
+    }
+   ],
+   "note": "the instructions say this goal is probably not achievable; it tests a system that is being pushed very hard",
+   "prescription_gy": 50.0,
+   "target": "OuterTarget"
   }
+ },
+ "published": {
+  "_about": "Multi-institution planning results of the TG-119 report (Ezzell et al., Med Phys 36:5359, 2009; 10.1118/1.3238104) as reproduced in Mynampati et al., JACMP 13(5):3382, 2012 (PMC5718241), Tables 1-4: mean (SD) in Gy. The report itself is behind the publisher's paywall; the transcription is checked against that open-access reproduction only. The C-shape rows pair the PTV D95 with the harder core goal (D5 < 10 Gy); the easier case's core goal (D5 < 25 Gy) has no published mean here.",
+  "source": "Mynampati DK et al., Application of AAPM TG 119 to volumetric arc therapy (VMAT), JACMP 2012; PMC5718241",
+  "multi_target": {
+   "Center D99": [
+    49.55,
+    1.62
+   ],
+   "Center D10": [
+    54.55,
+    1.73
+   ],
+   "Superior D99": [
+    25.16,
+    0.85
+   ],
+   "Superior D10": [
+    34.12,
+    3.04
+   ],
+   "Inferiorr D99": [
+    14.07,
+    1.85
+   ],
+   "Inferiorr D10": [
+    24.18,
+    2.72
+   ]
+  },
+  "prostate": {
+   "PTV D95": [
+    75.66,
+    0.21
+   ],
+   "PTV D5": [
+    81.43,
+    1.56
+   ],
+   "Rectum D30": [
+    65.36,
+    2.97
+   ],
+   "Rectum D10": [
+    73.03,
+    1.5
+   ],
+   "Urinary bladder D30": [
+    43.94,
+    8.78
+   ],
+   "Urinary bladder D10": [
+    62.69,
+    8.15
+   ]
+  },
+  "head_neck": {
+   "PTV D90": [
+    50.28,
+    0.58
+   ],
+   "PTV D99": [
+    47.04,
+    0.52
+   ],
+   "PTV D20": [
+    52.99,
+    0.93
+   ],
+   "Cord Dmax": [
+    37.41,
+    2.5
+   ],
+   "Lt Parotid D50": [
+    17.98,
+    1.84
+   ],
+   "Rt Parotid D50": [
+    17.98,
+    1.84
+   ]
+  },
+  "c_shape_hard": {
+   "OuterTarget D95": [
+    50.11,
+    0.165
+   ],
+   "OuterTarget D10": [
+    57.02,
+    2.2
+   ],
+   "Core D5": [
+    16.3,
+    3.07
+   ]
+  },
+  "c_shape_easy": {
+   "OuterTarget D95": [
+    50.11,
+    0.165
+   ],
+   "OuterTarget D10": [
+    57.02,
+    2.2
+   ]
+  }
+ }
 }

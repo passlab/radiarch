@@ -143,9 +143,14 @@ jobs:
         run: python -m radiarch.validation.run --all --fast --out validation/results
       - name: Regression goldens
         run: python -m pytest tests/test_goldens.py -v --tb=short
-      - name: Upload results
+      - name: Validation document per engine (R7)
+        if: always()
+        run: python -m radiarch.validation.report --out validation/reports
+      - name: Upload results and documents
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: validation-results
-          path: validation/results
+          path: |
+            validation/results
+            validation/reports

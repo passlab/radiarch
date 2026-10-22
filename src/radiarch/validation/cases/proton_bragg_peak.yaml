@@ -1,0 +1,8 @@
+name: proton_bragg_peak
+kind: proton_bragg_peak
+description: Shape of single spots in water through radiarch's MCsquare driver (water calibration) - distal 80-20 % fall-off against Bortfeld's straggling plus the BDL energy spread, entrance spot sigma against the BDL, peak-to-entrance and lateral growth informative.
+engine: mcsquare
+energies_mev: [100, 150, 200, 225]
+phantom: {half_width_mm: 40, depth_mm: 350, spacing_mm: 1.0}
+nb_primaries: 400000
+references: proton_water

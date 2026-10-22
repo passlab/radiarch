@@ -1,0 +1,15 @@
+name: photon_vs_mc
+kind: photon_vs_mc
+description: CCC against the OpenGATE references (the Mohan 6 MV spectrum of the CCC kernels as a point source through the Versa jaws and MLC; references/mc). Water - PDD, profile and gamma normalised at 10 cm; lung and bone slabs - heterogeneity correction factors (slab over water at the same depth) of CCC against those of Monte Carlo. Both scatter settings of radiarch's CCC build; fast mode runs the shipped setting on a 5 mm grid.
+cases: [water_10x10, lung_slab, bone_slab]
+settings:
+  shipped: [water_10x10, lung_slab, bone_slab]
+  full: [water_10x10, lung_slab, bone_slab]
+leaf_width_mm: 10
+beamlet_mm: 10
+n_jobs: 16
+probe_depths_mm:            # at least 10 mm from every interface (lung 30-110 mm, bone 30-60 mm)
+  lung_slab: [20, 50, 80, 130, 200, 250]
+  bone_slab: [20, 45, 80, 150, 200, 250]
+tolerances: {in_field_percent: 2.0, heterogeneity_percent: 3.0}
+gamma: {dose_percent: 3.0, dta_mm: 3.0, threshold_percent: 10.0, pass_percent: 95.0}

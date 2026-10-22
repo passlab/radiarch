@@ -1,0 +1,10 @@
+name: tg119_planning
+kind: tg119_planning
+description: The AAPM TG-119 structure sets planned by radiarch (open-field beam models around every target, CCC Dij, L-BFGS-B fluence optimization, up to four goal-driven reweighting rounds, normalised to the coverage goal) and scored against the TG-119 goals; a goal the institutions did not meet on average passes within their mean ± 2 SD (the report via Mynampati 2012). Fast mode plans the C-shape (easy) only, two rounds.
+data: data/public/tg119
+cases: [c_shape_easy, c_shape_hard, prostate, head_neck, multi_target]
+spacing_mm: 3.0
+beamlet_mm: 5.0
+iterations: 200
+n_jobs: 8
+rounds: 4

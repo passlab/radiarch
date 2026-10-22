@@ -1,0 +1,15 @@
+name: lung_e2e_lctsc
+kind: lung_e2e
+description: End-to-end lung case on LCTSC thoraces - a synthetic GTV sphere in the right lung written as an RT Structure Set by radiarch's writer, CTV and PTV by expansion, seven coplanar beams, CCC Dij, fluence optimization, evaluation against the RTOG 0617 goal template. Fast mode runs one patient.
+data: data/public/lctsc
+patients: [LCTSC-Test-S1-101, LCTSC-Test-S2-101]
+spacing_mm: 3.0
+beamlet_mm: 5.0
+iterations: 200
+prescription_gy: 60.0
+fractions: 30
+beams: 7
+gtv_radius_mm: 20.0
+goal_template: rtog-0617
+n_jobs: 8
+rounds: 4

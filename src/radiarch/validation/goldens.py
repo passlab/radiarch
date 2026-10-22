@@ -24,12 +24,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
-import re
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 
 import numpy as np
 
@@ -81,7 +79,6 @@ def compute_ccc_golden() -> Dict[str, Any]:
 
 def build_simplefantom(workdir: Path):
     """Geometry + proton beam model on the SimpleFantom through the services."""
-    import SimpleITK as sitk
     from ..models.beam_model import BeamModelBuildRequest, BeamSetSpec, BeamSpec, DeliveryParams, Modality
     from ..models.geometry import GeometryBuildRequest, PatientRef
     from ..services.beam_model import BeamModelService
