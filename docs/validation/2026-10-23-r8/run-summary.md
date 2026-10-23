@@ -1,33 +1,31 @@
-# Radiarch validation run 20261023-110616-dcdc7f3 + 20261023-151703-dcdc7f3
+# Radiarch validation run 20261023-192600-52ed834
 
 RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.
 
-Cases rerun after the main run (they replace its cases of the same name): `dij_consistency` (20261023-151703-dcdc7f3), `hn_sib_vmat` (20261023-151703-dcdc7f3), `lung_sbrt_vmat` (20261023-151703-dcdc7f3), `lung_vmat_lctsc` (20261023-151703-dcdc7f3), `pb_vs_ccc` (20261023-151703-dcdc7f3), `pb_vs_mc` (20261023-151703-dcdc7f3), `photon_output_vs_field_pb` (20261023-151703-dcdc7f3), `photon_pdd_10x10_pb` (20261023-151703-dcdc7f3), `photon_profile_10x10_pb` (20261023-151703-dcdc7f3).
-
 | Case | Status | Time (s) | Checks |
 |---|---|---|---|
-| dij_consistency | **pass** | 572.4 | 9 pass, 0 fail, 0 informative |
-| dvh_crosscheck_pancreatic | **fail** | 253.7 | 47 pass, 3 fail, 19 informative |
-| gamma_crosscheck_synthetic | **pass** | 6.0 | 4 pass, 0 fail, 0 informative |
-| geometry_volumes_lctsc | **fail** | 123.0 | 29 pass, 1 fail, 0 informative |
-| hn_sib_vmat | **pass** | 2105.3 | 12 pass, 0 fail, 14 informative |
-| lung_e2e_lctsc | **pass** | 526.3 | 8 pass, 0 fail, 12 informative |
-| lung_sbrt_vmat | **pass** | 495.5 | 32 pass, 0 fail, 12 informative |
-| lung_vmat_lctsc | **pass** | 1649.7 | 10 pass, 0 fail, 20 informative |
-| pb_vs_ccc | **pass** | 6.7 | 3 pass, 0 fail, 4 informative |
-| pb_vs_mc | **pass** | 4.0 | 27 pass, 0 fail, 7 informative |
-| photon_heterogeneity_slabs | **info** | 131.0 | 0 pass, 0 fail, 6 informative |
-| photon_output_vs_field | **info** | 646.3 | 0 pass, 0 fail, 3 informative |
-| photon_output_vs_field_pb | **info** | 1.7 | 0 pass, 0 fail, 3 informative |
-| photon_pdd_10x10 | **pass** | 41.8 | 3 pass, 0 fail, 1 informative |
+| dij_consistency | **pass** | 542.1 | 9 pass, 0 fail, 0 informative |
+| dvh_crosscheck_pancreatic | **fail** | 256.5 | 47 pass, 3 fail, 19 informative |
+| gamma_crosscheck_synthetic | **pass** | 5.7 | 4 pass, 0 fail, 0 informative |
+| geometry_volumes_lctsc | **fail** | 123.8 | 29 pass, 1 fail, 0 informative |
+| hn_sib_vmat | **pass** | 1931.7 | 12 pass, 0 fail, 14 informative |
+| lung_e2e_lctsc | **pass** | 531.8 | 8 pass, 0 fail, 12 informative |
+| lung_sbrt_vmat | **pass** | 453.9 | 32 pass, 0 fail, 12 informative |
+| lung_vmat_lctsc | **pass** | 1530.0 | 10 pass, 0 fail, 20 informative |
+| pb_vs_ccc | **pass** | 6.0 | 3 pass, 0 fail, 4 informative |
+| pb_vs_mc | **pass** | 3.7 | 27 pass, 0 fail, 7 informative |
+| photon_heterogeneity_slabs | **info** | 123.4 | 0 pass, 0 fail, 6 informative |
+| photon_output_vs_field | **info** | 623.5 | 0 pass, 0 fail, 3 informative |
+| photon_output_vs_field_pb | **info** | 1.6 | 0 pass, 0 fail, 3 informative |
+| photon_pdd_10x10 | **pass** | 40.8 | 3 pass, 0 fail, 1 informative |
 | photon_pdd_10x10_pb | **pass** | 0.2 | 2 pass, 0 fail, 2 informative |
-| photon_profile_10x10 | **pass** | 41.8 | 2 pass, 0 fail, 1 informative |
-| photon_profile_10x10_pb | **pass** | 0.3 | 2 pass, 0 fail, 1 informative |
-| photon_vs_mc | **fail** | 14.7 | 26 pass, 14 fail, 2 informative |
+| photon_profile_10x10 | **pass** | 40.8 | 2 pass, 0 fail, 1 informative |
+| photon_profile_10x10_pb | **pass** | 0.2 | 2 pass, 0 fail, 1 informative |
+| photon_vs_mc | **fail** | 13.6 | 26 pass, 14 fail, 2 informative |
 | photon_vs_pyradplan | **info** | 0.4 | 0 pass, 0 fail, 13 informative |
 | proton_bragg_peak | **pass** | 8.0 | 12 pass, 0 fail, 8 informative |
 | proton_range_water | **pass** | 3.6 | 4 pass, 0 fail, 0 informative |
-| tg119_planning | **pass** | 2726.1 | 24 pass, 0 fail, 0 informative |
+| tg119_planning | **pass** | 2626.3 | 24 pass, 0 fail, 0 informative |
 
 ## dij_consistency — pass
 
@@ -37,9 +35,9 @@ Cases rerun after the main run (they replace its cases of the same name): `dij_c
 | ccc: integral ratio Dij·w / forward | 1 | 1 ± 0.0001 | pass |
 | ccc: correlation above 1 % of max | 1 | ≥ 0.9999 | pass |
 | ccc: high-dose (≥ 50 % of max) p95 relative error | 1.183e-07 | ≤ 0.001 | pass |
-| mcsquare: integral ratio Dij·w / forward | 0.9807 | 1 ± 0.05 | pass |
+| mcsquare: integral ratio Dij·w / forward | 0.9808 | 1 ± 0.05 | pass |
 | mcsquare: correlation above 1 % of max | 0.9978 | ≥ 0.95 | pass |
-| mcsquare: high-dose (≥ 50 % of max) p95 relative error | 0.0727 | ≤ 0.15 | pass |
+| mcsquare: high-dose (≥ 50 % of max) p95 relative error | 0.07357 | ≤ 0.15 | pass |
 | pb: integral ratio Dij·w / forward | 0.9979 | 1 ± 0.03 | pass |
 | pb: correlation above 1 % of max | 0.9999 | ≥ 0.999 | pass |
 | pb: high-dose (≥ 50 % of max) p95 relative error | 0.009179 | ≤ 0.02 | pass |
@@ -525,25 +523,25 @@ Cases rerun after the main run (they replace its cases of the same name): `dij_c
 | Check | Value | Target | Result |
 |---|---|---|---|
 | distal 80-20 % fall-off at 100 MeV (mm) | 1.832 | 2.1 ± 1.0 (Bortfeld straggling + BDL energy spread 0.67 %) | pass |
-| IDD peak-to-entrance at 100 MeV | 4.699 | 3-5 (informative) | informative |
-| entrance core sigma x at 100 MeV (mm) | 4.952 | 4.92 ± 0.50 (BDL SpotSize1x propagated 410 mm to the isocenter) | pass |
-| entrance core sigma y at 100 MeV (mm) | 5.608 | 5.52 ± 0.55 (BDL SpotSize1y propagated 410 mm to the isocenter) | pass |
-| lateral sigma x at 0.8 R80 (62 mm) for 100 MeV (mm) | 6.906 | informative (multiple Coulomb scattering grows it to several mm) | informative |
-| distal 80-20 % fall-off at 150 MeV (mm) | 3.34 | 4.0 ± 1.2 (Bortfeld straggling + BDL energy spread 0.63 %) | pass |
-| IDD peak-to-entrance at 150 MeV | 4.39 | 3-5 (informative) | informative |
-| entrance core sigma x at 150 MeV (mm) | 3.579 | 3.53 ± 0.50 (BDL SpotSize1x propagated 410 mm to the isocenter) | pass |
-| entrance core sigma y at 150 MeV (mm) | 3.815 | 3.82 ± 0.50 (BDL SpotSize1y propagated 410 mm to the isocenter) | pass |
-| lateral sigma x at 0.8 R80 (127 mm) for 150 MeV (mm) | 6.993 | informative (multiple Coulomb scattering grows it to several mm) | informative |
-| distal 80-20 % fall-off at 200 MeV (mm) | 4.527 | 5.5 ± 1.6 (Bortfeld straggling + BDL energy spread 0.44 %) | pass |
-| IDD peak-to-entrance at 200 MeV | 4.083 | 3-5 (informative) | informative |
-| entrance core sigma x at 200 MeV (mm) | 2.655 | 2.61 ± 0.50 (BDL SpotSize1x propagated 410 mm to the isocenter) | pass |
-| entrance core sigma y at 200 MeV (mm) | 2.807 | 2.82 ± 0.50 (BDL SpotSize1y propagated 410 mm to the isocenter) | pass |
-| lateral sigma x at 0.8 R80 (209 mm) for 200 MeV (mm) | 7.728 | informative (multiple Coulomb scattering grows it to several mm) | informative |
-| distal 80-20 % fall-off at 225 MeV (mm) | 4.969 | 5.7 ± 1.7 (Bortfeld straggling + BDL energy spread 0.27 %) | pass |
-| IDD peak-to-entrance at 225 MeV | 3.896 | 3-5 (informative) | informative |
+| IDD peak-to-entrance at 100 MeV | 4.698 | 3-5 (informative) | informative |
+| entrance core sigma x at 100 MeV (mm) | 4.957 | 4.92 ± 0.50 (BDL SpotSize1x propagated 410 mm to the isocenter) | pass |
+| entrance core sigma y at 100 MeV (mm) | 5.607 | 5.52 ± 0.55 (BDL SpotSize1y propagated 410 mm to the isocenter) | pass |
+| lateral sigma x at 0.8 R80 (62 mm) for 100 MeV (mm) | 6.905 | informative (multiple Coulomb scattering grows it to several mm) | informative |
+| distal 80-20 % fall-off at 150 MeV (mm) | 3.338 | 4.0 ± 1.2 (Bortfeld straggling + BDL energy spread 0.63 %) | pass |
+| IDD peak-to-entrance at 150 MeV | 4.388 | 3-5 (informative) | informative |
+| entrance core sigma x at 150 MeV (mm) | 3.578 | 3.53 ± 0.50 (BDL SpotSize1x propagated 410 mm to the isocenter) | pass |
+| entrance core sigma y at 150 MeV (mm) | 3.808 | 3.82 ± 0.50 (BDL SpotSize1y propagated 410 mm to the isocenter) | pass |
+| lateral sigma x at 0.8 R80 (127 mm) for 150 MeV (mm) | 6.991 | informative (multiple Coulomb scattering grows it to several mm) | informative |
+| distal 80-20 % fall-off at 200 MeV (mm) | 4.529 | 5.5 ± 1.6 (Bortfeld straggling + BDL energy spread 0.44 %) | pass |
+| IDD peak-to-entrance at 200 MeV | 4.082 | 3-5 (informative) | informative |
+| entrance core sigma x at 200 MeV (mm) | 2.653 | 2.61 ± 0.50 (BDL SpotSize1x propagated 410 mm to the isocenter) | pass |
+| entrance core sigma y at 200 MeV (mm) | 2.806 | 2.82 ± 0.50 (BDL SpotSize1y propagated 410 mm to the isocenter) | pass |
+| lateral sigma x at 0.8 R80 (209 mm) for 200 MeV (mm) | 7.73 | informative (multiple Coulomb scattering grows it to several mm) | informative |
+| distal 80-20 % fall-off at 225 MeV (mm) | 4.965 | 5.7 ± 1.7 (Bortfeld straggling + BDL energy spread 0.27 %) | pass |
+| IDD peak-to-entrance at 225 MeV | 3.897 | 3-5 (informative) | informative |
 | entrance core sigma x at 225 MeV (mm) | 2.935 | 3.10 ± 0.50 (BDL SpotSize1x propagated 410 mm to the isocenter) | pass |
-| entrance core sigma y at 225 MeV (mm) | 3.083 | 3.14 ± 0.50 (BDL SpotSize1y propagated 410 mm to the isocenter) | pass |
-| lateral sigma x at 0.8 R80 (255 mm) for 225 MeV (mm) | 8.533 | informative (multiple Coulomb scattering grows it to several mm) | informative |
+| entrance core sigma y at 225 MeV (mm) | 3.079 | 3.14 ± 0.50 (BDL SpotSize1y propagated 410 mm to the isocenter) | pass |
+| lateral sigma x at 0.8 R80 (255 mm) for 225 MeV (mm) | 8.544 | informative (multiple Coulomb scattering grows it to several mm) | informative |
 
 ## proton_range_water — pass
 

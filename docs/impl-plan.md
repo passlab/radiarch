@@ -153,7 +153,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] Cases: pencil beam against Monte Carlo and CCC, lung SBRT with one arc, lung 60/30 with two arcs, head and neck 70/56 Gy integrated boost with two arcs
 - [x] Delivered plans recomputed by CCC through coverage beamlets, so that narrow arc apertures are dosed
 - [ ] Monte Carlo field-size references (4 × 4, 20 × 20 cm) and the graded field-size check
-- [x] Full-mode harness run and the R8 record for review ([`validation/2026-10-23-r8/`](validation/2026-10-23-r8/); to be refreshed by a run at the R8 commit)
+- [x] Full-mode harness run and the R8 record for review ([`validation/2026-10-23-r8/`](validation/2026-10-23-r8/), from the clean-commit run at `52ed834`)
 - [ ] Physicist's review and signature of the R8 record **(waiting)**
 - [ ] Direct leaf optimization for VMAT (progressive sampling or sequential convex programming) **(open)**
 - [x] Lateral kernel scaling for lung (`pb` 1.1.0; fitted to the 2 × 2 and 10 × 10 cm Monte Carlo lung slabs)

@@ -32,7 +32,7 @@ native pencil-beam engine with VMAT and SBRT (0015).
 
 | Record | What it is |
 |---|---|
-| [`validation/2026-10-23-r8/`](validation/2026-10-23-r8/) | The R8 record for review: the pencil-beam engine, CCC 1.1.0, the arcs and SBRT; a guide, one document per engine version, the merged run summary and results |
+| [`validation/2026-10-23-r8/`](validation/2026-10-23-r8/) | The R8 record for review: the pencil-beam engine, CCC 1.1.0, the arcs and SBRT; a guide, one document per engine version, the run summary and results of the clean-commit run |
 | [`validation/2026-10-22-r7/`](validation/2026-10-22-r7/) | The R7 record for review: a guide for the reviewing physicist, one document per engine version, the run summary and results |
 | [`validation/2026-10-21-full-run.md`](validation/2026-10-21-full-run.md) | The first full run of the R7a harness |
 

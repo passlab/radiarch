@@ -9,9 +9,7 @@ not a clinical release.**
 R8 adds radiarch's own photon engine (`pb`, a pencil beam on a Monte Carlo kernel),
 volumetric-modulated arcs, and SBRT planning templates, and it corrects the collapsed-cone
 engine's gantry direction (CCC 1.1.0). All documents in this folder come from one full run
-of the validation harness, `20261023-110616-dcdc7f3`, with the pencil-beam cases rerun (item 9 below). The runs were made
-at commit `dcdc7f3` with the R8 changes not yet committed; the record will be refreshed by a
-run at the R8 commit, as R7's was, and a signature refers to that commit. Every check names its target
+of the validation harness on a clean commit, `20261023-192600-52ed834` at commit `52ed834`. Every check names its target
 and its source; ADR 0015 (`docs/adr/0015-native-pencil-beam-and-vmat.md`) gives the
 decisions and the findings in prose. The R7 record (`../2026-10-22-r7/`) remains the
 record of CCC 1.0.0.
@@ -20,10 +18,10 @@ record of CCC 1.0.0.
 
 | Document | Contents | Signed by |
 |---|---|---|
-| [`2026-10-23-pb-v1.1.1-dcdc7f3.md`](2026-10-23-pb-v1.1.1-dcdc7f3.md) | The pencil-beam engine: depth dose, profile, penumbra, out-of-field dose, gamma and heterogeneity correction factors against the OpenGATE references; field-size dependence against Monte Carlo; the cross-engine comparison with CCC; influence matrix against forward dose; the narrow-field lung reference; lung SBRT with one arc, lung 60 Gy in 30 with two arcs and a head-and-neck 70/56 Gy integrated boost with two arcs, on public CTs, the lung arcs recomputed by CCC | medical physicist and project lead |
-| [`2026-10-23-ccc-v1.1.0-dcdc7f3.md`](2026-10-23-ccc-v1.1.0-dcdc7f3.md) | The collapsed-cone engine at 1.1.0: the R7 cases rerun, the TG-119 and lung plans with the corrected gantry, and the R8 findings on its scatter cut-off | medical physicist and project lead |
-| [`2026-10-23-mcsquare-v0.3.0-dcdc7f3.md`](2026-10-23-mcsquare-v0.3.0-dcdc7f3.md) | The proton engine, unchanged since R7 (rerun for completeness) | medical physicist and project lead |
-| [`2026-10-23-services-v0.1.0-dcdc7f3.md`](2026-10-23-services-v0.1.0-dcdc7f3.md) | Engine-independent services, unchanged since R7 (rerun for completeness) | project lead (a physicist's look is welcome) |
+| [`2026-10-23-pb-v1.1.1-52ed834.md`](2026-10-23-pb-v1.1.1-52ed834.md) | The pencil-beam engine: depth dose, profile, penumbra, out-of-field dose, gamma and heterogeneity correction factors against the OpenGATE references; field-size dependence against Monte Carlo; the cross-engine comparison with CCC; influence matrix against forward dose; the narrow-field lung reference; lung SBRT with one arc, lung 60 Gy in 30 with two arcs and a head-and-neck 70/56 Gy integrated boost with two arcs, on public CTs, the lung arcs recomputed by CCC | medical physicist and project lead |
+| [`2026-10-23-ccc-v1.1.0-52ed834.md`](2026-10-23-ccc-v1.1.0-52ed834.md) | The collapsed-cone engine at 1.1.0: the R7 cases rerun, the TG-119 and lung plans with the corrected gantry, and the R8 findings on its scatter cut-off | medical physicist and project lead |
+| [`2026-10-23-mcsquare-v0.3.0-52ed834.md`](2026-10-23-mcsquare-v0.3.0-52ed834.md) | The proton engine, unchanged since R7 (rerun for completeness) | medical physicist and project lead |
+| [`2026-10-23-services-v0.1.0-52ed834.md`](2026-10-23-services-v0.1.0-52ed834.md) | Engine-independent services, unchanged since R7 (rerun for completeness) | project lead (a physicist's look is welcome) |
 
 `run-summary.md` lists every check of the run in one table, and `results.json` holds the
 run's full numbers as the harness wrote them.
@@ -70,12 +68,9 @@ run's full numbers as the harness wrote them.
    which put garbage into a few voxels of about one GPU dose in three on a 192-sector arc plan (a CCC
    gamma of 0 % on one lung patient gave it away). GPU lookups now pad the array; repeated GPU doses
    are bit-identical, and the CPU path was never affected.
-9. **This record merges two runs.** The full run `20261023-110616-dcdc7f3` was followed by a rerun of every
-   pencil-beam case with `pb` 1.1.1 (`20261023-151703-dcdc7f3`), which also carries the SBRT far ring
-   that reaches the skin and the corrected source text of the influence-matrix rows; its cases replace
-   the full run's of the same name. CCC, MCsquare and the services do not use the pencil beam.
-   `run-summary.md` and `results.json` are the merged run; the graded failures are the R7 ones (CCC
-   against Monte Carlo, three DVH maxima, one oesophagus volume), explained in the R7 record.
+9. **One clean run.** An earlier run of uncommitted code, with the pencil-beam cases rerun after the
+   fixes in items 6 and 8, gave the same outcome. The graded failures are the R7 ones (CCC against
+   Monte Carlo, three DVH maxima, one oesophagus volume), explained in the R7 record.
 
 ## Questions we would most like answered
 
@@ -108,7 +103,7 @@ run's full numbers as the harness wrote them.
 ## How to sign
 
 Either reply to the covering email with your comments and a statement that you reviewed the
-named documents at the R8 commit, which we then record in the signature table of each
+named documents at commit `52ed834`, which we then record in the signature table of each
 document with the date and a reference to your email; or print the signature section of a
 document, sign and date it, and return a scan. Comments that lead to changes produce a new
 run and new documents; a signature always refers to one commit.
@@ -116,7 +111,7 @@ run and new documents; a signature always refers to one commit.
 ## How to reproduce (optional)
 
 ```bash
-git clone https://github.com/passlab/radiarch && cd radiarch && git checkout <the R8 commit>
+git clone https://github.com/passlab/radiarch && cd radiarch && git checkout 52ed834
 python3 -m venv .venv && .venv/bin/pip install -e "./src[dev,validation]"     # Python 3.12 or later
 .venv/bin/python -m radiarch.validation.run --all --fast    # smoke run; full mode drops --fast
 .venv/bin/python -m radiarch.validation.report              # documents from the newest run
