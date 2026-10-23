@@ -1,0 +1,32 @@
+name: lung_vmat_lctsc
+kind: lung_vmat
+description: Conventionally fractionated lung with VMAT on LCTSC thoraces - the R7 lung case's synthetic 2 cm GTV at the right lung's centroid, CTV +5 mm, PTV +5 mm, 60 Gy in 30 fractions; two full arcs (clockwise at collimator 15, counter-clockwise at -15) from the fluence of their sector beams (pb Dij), leaves swept per sector, control-point doses recomputed and metersets re-optimized; evaluated against the RTOG 0617 template, with the delivered arcs recomputed by CCC as the second engine. Fast mode runs one patient, half the sectors, no second engine.
+data: data/public/lctsc
+patients: [LCTSC-Test-S1-101, LCTSC-Test-S2-101]
+spacing_mm: 3.0
+beamlet_mm: 5.0
+iterations: 150
+rounds: 3
+prescription_gy: 60.0
+fractions: 30
+gtv_position: centroid
+gtv_radius_mm: 20.0
+ctv_margin_mm: 5.0
+ptv_margin_mm: 5.0
+goal_template: rtog-0617
+sbrt_indices: false
+machine: synthetic-120
+jaw_margin_mm: 10.0
+ring_near_fraction: 0.9
+ring_far_fraction: 0.5
+organ_goals:
+  SpinalCord: [Dmax, 45.0]          # planned below the 50.5 Gy limit
+  Esophagus: [Dmean, 34.0]
+  Heart: [D33, 60.0]                # RTOG 0617: V60 <= 33 %
+  Lungs-PTV: [D37, 20.0]            # RTOG 0617: lungs - GTV V20 <= 37 %; the optimizer gets lungs - PTV
+arcs:
+  - {arc_id: ARC1, start_deg: 181.0, stop_deg: 179.0, direction: CW, sectors: 12, control_point_spacing_deg: 4.0, collimator_deg: 15.0}
+  - {arc_id: ARC2, start_deg: 179.0, stop_deg: 181.0, direction: CC, sectors: 12, control_point_spacing_deg: 4.0, collimator_deg: -15.0}
+second_engine: ccc
+n_jobs: 16
+note: "synthetic 2 cm GTV at the right lung's centroid, CTV +5 mm, PTV +5 mm (the R7 lung case), 60 Gy in 30 fractions"

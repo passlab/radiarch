@@ -35,7 +35,7 @@ def _mcsquare_available() -> bool:
 @pytest.mark.skipif(not _ccc_available(), reason="CCC binary not available")
 def test_ccc_beamlet_matrix_matches_golden():
     ref = np.load(GOLDEN / "ccc_water_10x10.npz")
-    meta = json.loads((GOLDEN / "ccc_water_10x10.json").read_text())
+    meta = json.loads((GOLDEN / "ccc_water_10x10.json").read_text(encoding="utf-8"))
     now = G.compute_ccc_golden()
     assert now["meta"]["kernel_fingerprint"] == meta["kernel_fingerprint"], "kernel set changed; recapture if intended"
     assert tuple(now["shape"]) == tuple(ref["shape"])
@@ -56,7 +56,7 @@ def simplefantom():
 @pytest.mark.skipif(not (GOLDEN / "geometry_simplefantom.json").is_file(), reason="golden not captured")
 def test_geometry_matches_golden(simplefantom):
     work, geo, geo_svc, bm, bm_svc = simplefantom
-    ref = json.loads((GOLDEN / "geometry_simplefantom.json").read_text())
+    ref = json.loads((GOLDEN / "geometry_simplefantom.json").read_text(encoding="utf-8"))
     now = G.compute_geometry_golden(geo, geo_svc)
     assert now["structure_index"] == ref["structure_index"]
     assert now["voxel_counts"] == ref["voxel_counts"]
@@ -68,7 +68,7 @@ def test_geometry_matches_golden(simplefantom):
 @pytest.mark.skipif(not (GOLDEN / "proton_spots_simplefantom.json").is_file(), reason="golden not captured")
 def test_proton_spots_match_golden(simplefantom):
     work, geo, geo_svc, bm, bm_svc = simplefantom
-    ref = json.loads((GOLDEN / "proton_spots_simplefantom.json").read_text())
+    ref = json.loads((GOLDEN / "proton_spots_simplefantom.json").read_text(encoding="utf-8"))
     now = G.compute_spots_golden(bm, bm_svc)
     assert now["total_spots"] == ref["total_spots"] and now["fluence_total_count"] == ref["fluence_total_count"]
     assert [l["energy_mev"] for l in now["layers"]] == [l["energy_mev"] for l in ref["layers"]]
@@ -86,6 +86,6 @@ def test_mcsquare_input_files_match_golden(simplefantom):
         if p.name == "config.txt":
             # the primary count and the seed are run parameters, not the protocol
             strip = lambda t: "\n".join(l for l in t.splitlines() if not l.split()[:1] or l.split()[0] not in ("Num_Primaries", "RNG_Seed", "Num_Threads"))
-            assert strip(now[p.name]) == strip(p.read_text()), "MCsquare config differs from the golden"
+            assert strip(now[p.name]) == strip(p.read_text(encoding="utf-8")), "MCsquare config differs from the golden"
         else:
-            assert now[p.name] == p.read_text(), f"{p.name} differs from the golden"
+            assert now[p.name] == p.read_text(encoding="utf-8"), f"{p.name} differs from the golden"

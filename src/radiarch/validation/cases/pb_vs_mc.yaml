@@ -1,0 +1,12 @@
+name: pb_vs_mc
+kind: pb_vs_mc
+description: The native pencil-beam engine (R8) against the OpenGATE references of R7 (the Mohan 6 MV spectrum through the Versa jaws and MLC). Water - PDD, profile, penumbra, out-of-field dose and gamma normalised at 10 cm; lung and bone slabs - heterogeneity correction factors (slab over water at the same depth); the lung factors check the lateral kernel scaling fitted to them. With the 4 x 4 and 20 x 20 references, the dose at 10 cm against 10 x 10 (phantom scatter) for pb (graded) and CCC (reported). With the 2 x 2 cm lung-slab reference, the dose in and beyond the lung over the dose at 2 cm against Monte Carlo, pb graded (the scaling was fitted to it) and CCC reported.
+cases: [water_10x10, lung_slab, bone_slab]
+leaf_width_mm: 10
+beamlet_mm: 10
+probe_depths_mm:
+  lung_slab: [20, 50, 80, 130, 200, 250]
+  bone_slab: [20, 45, 80, 150, 200, 250]
+tolerances: {in_field_percent: 2.0, heterogeneity_percent: 3.0, field_size_percent: 2.0}
+n_jobs: 16
+gamma: {dose_percent: 3.0, dta_mm: 3.0, threshold_percent: 10.0, pass_percent: 95.0}

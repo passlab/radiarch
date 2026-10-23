@@ -20,7 +20,7 @@
   "elapsed_s": 6589.5,
   "opengate_version": "10.1.1",
   "python": "3.12.3",
-  "host": "CCI13SZWP3LWS",
+  "cpu": "Intel(R) Xeon(R) W-2255 CPU @ 3.70GHz, 20 logical CPUs",
   "date": "2026-10-22T09:15:58",
   "geant4_data": "downloaded by opengate_core",
   "file": "lung_slab.npz",

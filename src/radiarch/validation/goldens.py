@@ -177,7 +177,7 @@ def compute_mcsquare_inputs_golden(geo, bm, geo_svc, bm_svc, workdir: Path) -> D
     roots = (str(sim_dir), str(sim_dir.parent), str(Path.home()))
     out: Dict[str, str] = {}
     for name in ("config.txt", "PlanPencil.txt", "CT.mhd"):
-        out[name] = _normalise_paths((sim_dir / name).read_text(), roots)
+        out[name] = _normalise_paths((sim_dir / name).read_text(encoding="utf-8"), roots)
     out["CT.raw.sha256"] = _sha256((sim_dir / "CT.raw").read_bytes())
     return out
 
@@ -191,20 +191,20 @@ def capture(golden_dir: Path = GOLDEN_DIR, which: Tuple[str, ...] = ("ccc", "sim
     if "ccc" in which:
         g = compute_ccc_golden()
         np.savez_compressed(golden_dir / "ccc_water_10x10.npz", data=g["data"], indices=g["indices"], indptr=g["indptr"], shape=g["shape"])
-        (golden_dir / "ccc_water_10x10.json").write_text(json.dumps(g["meta"], indent=2))
+        (golden_dir / "ccc_water_10x10.json").write_text(json.dumps(g["meta"], indent=2), encoding="utf-8")
         print("captured ccc_water_10x10 (nnz", int(g["data"].size), ")")
     if "simplefantom" in which:
         with tempfile.TemporaryDirectory(prefix="radiarch-golden-") as tmp:
             work = Path(tmp)
             geo, geo_svc, bm, bm_svc = build_simplefantom(work)
-            (golden_dir / "geometry_simplefantom.json").write_text(json.dumps(compute_geometry_golden(geo, geo_svc), indent=2))
-            (golden_dir / "proton_spots_simplefantom.json").write_text(json.dumps(compute_spots_golden(bm, bm_svc), indent=2))
+            (golden_dir / "geometry_simplefantom.json").write_text(json.dumps(compute_geometry_golden(geo, geo_svc), indent=2), encoding="utf-8")
+            (golden_dir / "proton_spots_simplefantom.json").write_text(json.dumps(compute_spots_golden(bm, bm_svc), indent=2), encoding="utf-8")
             print("captured geometry and spots for SimpleFantom")
             inputs = compute_mcsquare_inputs_golden(geo, bm, geo_svc, bm_svc, work)
             d = golden_dir / "mcsquare_inputs_simplefantom"
             d.mkdir(exist_ok=True)
             for name, text in inputs.items():
-                (d / name).write_text(text)
+                (d / name).write_text(text, encoding="utf-8")
             print("captured MCsquare inputs:", sorted(inputs))
 
 

@@ -21,7 +21,7 @@ HERE = Path(__file__).resolve().parent
 CASES_DIR = HERE / "cases"
 REF_DIR = HERE / "references"
 RADIARCH_ROOT = HERE.parents[2]
-SMIS_ROOT = RADIARCH_ROOT.parent
+PARENT_ROOT = RADIARCH_ROOT.parent
 
 
 # ---------------------------------------------------------------------------
@@ -81,12 +81,12 @@ def _jsonable(v):
 
 
 def load_reference(name: str) -> dict:
-    return json.loads((REF_DIR / f"{name}.json").read_text())
+    return json.loads((REF_DIR / f"{name}.json").read_text(encoding="utf-8"))
 
 
 def data_root() -> Path:
     env = os.environ.get("RADIARCH_VALIDATION_DATA")
-    return Path(env) if env else SMIS_ROOT / "data" / "public"
+    return Path(env) if env else PARENT_ROOT / "data" / "public"
 
 
 # ---------------------------------------------------------------------------
@@ -138,6 +138,28 @@ def _ccc_dose(eng, phantom: ph.Phantom, plan, ctx: Context) -> np.ndarray:
     return eng.compute_plan_dose(phantom.density, phantom.spacing_mm, phantom.origin_mm, plan, params=params)
 
 
+
+def _photon_engine(spec: dict):
+    """The photon engine a case names (``engine: ccc`` or ``pb``; CCC by default)."""
+    name = str(spec.get("engine", "ccc")).lower()
+    if name == "ccc":
+        return _ccc_engine()
+    if name == "pb":
+        from ..services.dose_engines.pb import PencilBeamEngine
+        eng = PencilBeamEngine()
+        ok, reason = eng.availability()
+        if not ok:
+            raise Skip(reason)
+        return eng
+    raise ValueError(f"unknown photon engine {name!r}")
+
+
+def _photon_dose(eng, phantom: ph.Phantom, plan, ctx: Context) -> np.ndarray:
+    """A phantom dose from either photon engine (CCC through its Dij, pb by convolving the apertures)."""
+    if getattr(eng, "name", "") == "pb":
+        return eng.compute_plan_dose(phantom.density, phantom.spacing_mm, phantom.origin_mm, plan, params={"fluence": "apertures"})
+    return _ccc_dose(eng, phantom, plan, ctx)
+
 def _cax(dose: np.ndarray, phantom: ph.Phantom) -> np.ndarray:
     return dose[phantom.centre_index("z"), :, phantom.centre_index("x")]
 
@@ -147,5 +169,5 @@ def _within(value: float, target: float, tol: float) -> bool:
 
 
 
-__all__ = ["HERE", "CASES_DIR", "REF_DIR", "RADIARCH_ROOT", "SMIS_ROOT", "Check", "CaseResult", "Skip", "_jsonable", "load_reference",
-           "data_root", "Context", "_phantom", "_open_field_plan", "_ccc_engine", "_ccc_dose", "_cax", "_within"]
+__all__ = ["HERE", "CASES_DIR", "REF_DIR", "RADIARCH_ROOT", "PARENT_ROOT", "Check", "CaseResult", "Skip", "_jsonable", "load_reference",
+           "data_root", "Context", "_phantom", "_open_field_plan", "_ccc_engine", "_ccc_dose", "_photon_engine", "_photon_dose", "_cax", "_within"]

@@ -442,7 +442,7 @@ def _bundled_simplefantom_available() -> bool:
 
 
 # Real Monte Carlo is slow and tolerance-sensitive, so it's opt-in rather than
-# run on every CI push: it's the V4 *validation* gate (TASKS.md), meant to run
+# run on every CI push: it's the V4 *validation* gate of the February handoff task list (in the git history), meant to run
 # deliberately on a machine with the MCsquare binary — not to block routine PRs
 # with stochastic flakiness. Enable with RADIARCH_RUN_MCSQUARE_VALIDATION=1
 # (the nightly / manual "MCsquare Validation" CI job sets it). The analytic

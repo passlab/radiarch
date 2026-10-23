@@ -126,7 +126,7 @@ def main(argv=None) -> int:
         "engine": "pyRadPlan photon pencil beam (SVD kernels), machine Generic", "pyradplan_version": getattr(pyRadPlan, "__version__", "0.5.0"),
         "target_depth_mm": list(TARGET_DEPTH_MM), "isocenter_mm": [0.0, 0.0, 0.0], "ssd_mm": 1000.0, "beam_axis": flipped, "slabs": SLABS[args.case], "elapsed_s": round(elapsed, 1),
         "date": _dt.datetime.now().isoformat(timespec="seconds"), "python": sys.version.split()[0],
-        "units": "dose per unit fluence on every bixel; compare after normalisation"}, indent=2))
+        "units": "dose per unit fluence on every bixel; compare after normalisation"}, indent=2), encoding="utf-8")
     c = n // 2
     cax = dose[c, :, c]
     k = int(np.argmax(cax))

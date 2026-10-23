@@ -83,7 +83,7 @@ def _mc_reference(name: str):
         return None
     from .mc_reference import load_reference_arrays
     dose, unc, spacing, origin, primaries = load_reference_arrays(npz)
-    prov = json.loads(meta.read_text()) if meta.is_file() else {}
+    prov = json.loads(meta.read_text(encoding="utf-8")) if meta.is_file() else {}
     return {"dose": dose, "uncertainty": unc, "spacing_mm": spacing, "origin_mm": origin, "primaries": primaries, "provenance": prov}
 
 
@@ -100,7 +100,7 @@ def _resample_to(dose: np.ndarray, spacing_from: Sequence[float], origin_from: S
 
 def _phantom_for(case: str, s: float) -> ph.Phantom:
     return {"water_10x10": lambda: ph.water_box(150.0, 300.0, s), "water_4x4": lambda: ph.water_box(150.0, 300.0, s),
-            "water_20x20": lambda: ph.water_box(150.0, 300.0, s), "lung_slab": lambda: ph.lung_slab(s), "bone_slab": lambda: ph.bone_slab(s)}[case]()
+            "water_20x20": lambda: ph.water_box(150.0, 300.0, s), "lung_slab": lambda: ph.lung_slab(s), "lung_slab_2x2": lambda: ph.lung_slab(s), "bone_slab": lambda: ph.bone_slab(s)}[case]()
 
 
 def _cax3(dose: np.ndarray, phantom: ph.Phantom) -> np.ndarray:
@@ -252,13 +252,13 @@ def run_dij_consistency(spec: dict, ctx: Context) -> CaseResult:
         if not h.get("available"):
             res.notes.append(f"{eng}: unavailable ({h.get('reason', '')}); skipped"); continue
         e = spec.get(eng, {})
-        if eng == "ccc":
+        if eng in ("ccc", "pb"):
             bm = BeamModelService().build(BeamModelBuildRequest(
                 geometry_id=geo.geometry_id, modality=Modality.photon_imrt, machine_model_id="synthetic-120",
                 beam_set=BeamSetSpec(beams=[BeamSpec(beam_id="B1", gantry_deg=0.0), BeamSpec(beam_id="B2", gantry_deg=90.0)]),
                 delivery_params=DeliveryParams(jaw_opening_mm=(60.0, 60.0), beamlet_size_mm=(10.0, 10.0))))
             params = {"n_jobs": int(e.get("n_jobs", 8))}
-        else:
+        else:   # mcsquare
             bm = BeamModelService().build(BeamModelBuildRequest(
                 geometry_id=geo.geometry_id, modality=Modality.proton_pbs,
                 beam_set=BeamSetSpec(isocenter_mm=(0.0, 0.0, 0.0), beams=[BeamSpec(beam_id="B1", gantry_deg=0.0)]),
@@ -276,15 +276,21 @@ def run_dij_consistency(spec: dict, ctx: Context) -> CaseResult:
         via = np.asarray(dij @ w.astype(np.float64)).reshape(direct.shape).astype(np.float32)
         rep = _agreement(direct, via)
         res.metrics[eng] = {**rep, "n_elements": int(n), "params": params}
-        tols = dict(e.get("tolerances", {"integral_ratio": 0.05, "correlation": 0.95, "highdose_p95": 0.15} if eng == "mcsquare"
-                          else {"integral_ratio": 1e-4, "correlation": 0.9999, "highdose_p95": 1e-3}))
+        default_tols = {"mcsquare": {"integral_ratio": 0.05, "correlation": 0.95, "highdose_p95": 0.15},
+                        # pb: the forward dose convolves the full 200 mm kernel; the Dij stops 80 mm from each beamlet and
+                        # thins entries below 0.3 % of a column's maximum (unbiased), R8
+                        "pb": {"integral_ratio": 0.03, "correlation": 0.999, "highdose_p95": 0.02}}
+        tols = dict(e.get("tolerances", default_tols.get(eng, {"integral_ratio": 1e-4, "correlation": 0.9999, "highdose_p95": 1e-3})))
         if ctx.fast and eng == "mcsquare":       # a fifth of the primaries: the per-voxel noise is sqrt(5) larger
             tols = {k: (v * 2.2 if k != "correlation" else 1 - (1 - v) * 2.2) for k, v in tols.items()}
         res.add(f"{eng}: integral ratio Dij·w / forward", rep["integral_ratio"], f"1 ± {tols['integral_ratio']:g}", _within(rep["integral_ratio"], 1.0, tols["integral_ratio"]),
-                "two independent Monte Carlo runs" if eng == "mcsquare" else "deterministic engine: the forward dose is the same beamlets")
+                {"mcsquare": "two independent Monte Carlo runs", "pb": "forward: full kernel; Dij: 80 mm cutoff, sampled tail"}.get(
+                    eng, "deterministic engine: the forward dose is the same beamlets"))
         res.add(f"{eng}: correlation above 1 % of max", rep["correlation"], f"≥ {tols['correlation']}", rep["correlation"] >= tols["correlation"])
         res.add(f"{eng}: high-dose (≥ 50 % of max) p95 relative error", rep["highdose_p95"], f"≤ {tols['highdose_p95']:g}", rep["highdose_p95"] <= tols["highdose_p95"],
-                "two independent Monte Carlo runs: the p95 of the relative difference in the well-sampled region is the counting noise of both")
+                {"mcsquare": "two independent Monte Carlo runs: the p95 of the relative difference in the well-sampled region is the counting noise of both",
+                 "pb": "the Dij's sampled tail and cutoff: per-voxel spread of the unbiased roulette"}.get(
+                    eng, "deterministic engine: rounding only"))
     return res
 
 
@@ -293,7 +299,7 @@ def run_dij_consistency(spec: dict, ctx: Context) -> CaseResult:
 # ---------------------------------------------------------------------------
 
 def _bdl_row(bdl_path: Path, energy: float) -> Optional[Dict[str, float]]:
-    lines = [l for l in bdl_path.read_text().splitlines() if l.strip()]
+    lines = [l for l in bdl_path.read_text(encoding="utf-8").splitlines() if l.strip()]
     header = None
     for l in lines:
         if l.startswith("NominalEnergy"):
@@ -314,7 +320,7 @@ def _sigma_mm(values: np.ndarray, axis_mm: np.ndarray) -> float:
 
 
 def _bdl_nozzle_to_isocenter_mm(bdl_path: Path) -> float:
-    lines = [l.strip() for l in bdl_path.read_text().splitlines()]
+    lines = [l.strip() for l in bdl_path.read_text(encoding="utf-8").splitlines()]
     for i, l in enumerate(lines):
         if l.lower().startswith("nozzle exit to isocenter distance") and i + 1 < len(lines):
             return float(lines[i + 1].split()[0])
@@ -497,7 +503,8 @@ def _objectives(arrays, target: str, rx_gy: float, goals: List[dict], scale: Dic
                 objectives.append(ObjectiveSpec(type="DVHMax", structure_name=st, dose_gy=val, weight=30.0 * w, volume_fraction=frac))
             else:
                 objectives.append(ObjectiveSpec(type="DVHMax", structure_name=st, dose_gy=val * lv, weight=OAR_WEIGHT * w, volume_fraction=frac))
-                objectives.append(ObjectiveSpec(type="DMax", structure_name=st, dose_gy=min(val * 1.25, rx_gy) * lv, weight=OAR_WEIGHT * w / 4))
+                if g.get("dmax_term", True):     # parallel organs around the target (the lungs) opt out: their maximum is the target's
+                    objectives.append(ObjectiveSpec(type="DMax", structure_name=st, dose_gy=min(val * 1.25, rx_gy) * lv, weight=OAR_WEIGHT * w / 4))
     return objectives
 
 
@@ -589,7 +596,7 @@ def run_tg119_planning(spec: dict, ctx: Context) -> CaseResult:
     ref = load_reference("tg119_goals")
     root = data_root() / Path(spec["data"]).name / ref["phantom"]["package"].split("/")[-1]
     if not root.is_dir():
-        raise Skip(f"TG-119 package not found at {root} (run `make public-tg119` in smis/data)")
+        raise Skip(f"TG-119 package not found at {root} (set RADIARCH_VALIDATION_DATA to the directory holding it)")
     _services(ctx)
     cases = spec["cases"][:1] if ctx.fast else spec["cases"]
     s = ctx.spacing(spec.get("spacing_mm", 3.0))
@@ -654,10 +661,34 @@ def _sphere_polygons(centre: Sequence[float], radius_mm: float, z_positions: Seq
     return polys
 
 
+def _case_dir_with_gtv(ctx: Context, tag: str, ct_files, rs_files, centre: Sequence[float], radius_mm: float, description: str) -> Path:
+    """A case directory beside the CT: the CT slices linked, and one RT Structure Set written by radiarch with the
+    original contours and a synthetic GTV sphere. One structure set, because the geometry service reads one: before
+    R8 the GTV went into a second file and the organs were lost, so the organ goals were never evaluated."""
+    from ..dicom.ct import read_ct_series
+    from ..dicom.rtstruct import read_rtstruct
+    from ..dicom.writers import CaseContext, Structure, write_rtstruct
+
+    case_dir = ctx.workdir / tag
+    case_dir.mkdir(parents=True, exist_ok=True)
+    for f in ct_files:
+        dst = case_dir / f.name
+        if not dst.exists():
+            os.symlink(f, dst)
+    ct = read_ct_series(ct_files)
+    structures = []
+    for rs in rs_files:
+        for c in read_rtstruct(rs).contours:
+            if c.name != "GTV" and c.polygonMesh:
+                structures.append(Structure(name=c.name, polygons=[np.asarray(p, float) for p in c.polygonMesh],
+                                            color=tuple(c.displayColor) if c.displayColor else None, generation="MANUAL"))
+    structures.append(Structure(name="GTV", polygons=_sphere_polygons(centre, radius_mm, ct.sliceLocation)))
+    write_rtstruct(CaseContext.from_ct(ct), structures, case_dir / "RS_with_synthetic_gtv.dcm", label="SYN-GTV", description=description)
+    return case_dir
+
+
 def run_lung_e2e(spec: dict, ctx: Context) -> CaseResult:
     res = CaseResult(spec["name"], spec["kind"])
-    from ..dicom.ct import read_ct_series
-    from ..dicom.writers import CaseContext, Structure, write_rtstruct
     from ..models.evaluation import EvaluationRequest, GoalSetSpec
     from ..models.geometry import GeometryBuildRequest, GeometryDeriveRequest, GridSpec, PatientRef, StructureOperation
     from ..services.evaluation import EvaluationService
@@ -666,7 +697,7 @@ def run_lung_e2e(spec: dict, ctx: Context) -> CaseResult:
 
     root = data_root() / Path(spec["data"]).name
     if not root.is_dir():
-        raise Skip(f"data not found: {root} (run `make public-lctsc-validation` in smis/data)")
+        raise Skip(f"data not found: {root} (set RADIARCH_VALIDATION_DATA to the directory holding it)")
     _services(ctx)
     patients = spec["patients"][:1] if ctx.fast else spec["patients"]
     s = ctx.spacing(spec.get("spacing_mm", 3.0))
@@ -691,29 +722,24 @@ def run_lung_e2e(spec: dict, ctx: Context) -> CaseResult:
         com = idx.mean(axis=0)                      # (z, y, x) voxel
         centre = (arr0.origin_mm[0] + com[2] * s, arr0.origin_mm[1] + com[1] * s, arr0.origin_mm[2] + com[0] * s)
         radius = float(spec.get("gtv_radius_mm", 20.0))
-        # 2. a synthetic GTV sphere as an RT Structure Set beside the CT (radiarch's own writer)
-        case_dir = ctx.workdir / f"lung-{pid}"
-        case_dir.mkdir(parents=True, exist_ok=True)
-        for f in ct_files + rs_files:
-            dst = case_dir / f.name
-            if not dst.exists():
-                os.symlink(f, dst)
-        ct = read_ct_series(ct_files)
-        ctx_case = CaseContext.from_ct(ct)
-        polys = _sphere_polygons(centre, radius, ct.sliceLocation)
-        write_rtstruct(ctx_case, [Structure(name="GTV", polygons=polys)], case_dir / "RS_synthetic_gtv.dcm", label="SYN-GTV",
-                       description="synthetic GTV sphere for the validation harness")
+        # 2. the original contours and a synthetic GTV sphere in one RT Structure Set beside the CT (radiarch's own writer)
+        case_dir = _case_dir_with_gtv(ctx, f"lung-{pid}", ct_files, rs_files, centre, radius, "synthetic GTV sphere for the validation harness")
         geo = GeometryService().build(GeometryBuildRequest(patient_ref=PatientRef(dicom_study_uid=f"lung-{pid}"), data_root_override=str(case_dir),
                                                            grid_spec=GridSpec(spacing_mm=(s, s, s))))
         geo = GeometryService().derive(geo.geometry_id, GeometryDeriveRequest(operations=[
             StructureOperation(op="expand", name="CTV", source="GTV", margin_mm=5.0),
-            StructureOperation(op="expand", name="PTV", source="CTV", margin_mm=5.0)]))
+            StructureOperation(op="expand", name="PTV", source="CTV", margin_mm=5.0),
+            StructureOperation(op="union", name="Lungs", sources=["Lung_L", "Lung_R"]),
+            StructureOperation(op="subtract", name="Lungs-GTV", source="Lungs", sources=["GTV"]),     # the template's
+            StructureOperation(op="subtract", name="Lungs-PTV", source="Lungs", sources=["PTV"])]))   # the optimizer's
         # 3. plan: 7 coplanar fields, RTOG 0617-style objectives
         goals = [{"structure": "SpinalCord", "metric": "Dmax", "op": "<=", "gy": 50.5},
                  {"structure": "Esophagus", "metric": "Dmean", "op": "<=", "gy": 34.0},
                  {"structure": "Heart", "metric": "D33", "op": "<=", "gy": 60.0},
-                 {"structure": "Lung_L", "metric": "D30", "op": "<=", "gy": 20.0},
-                 {"structure": "Lung_R", "metric": "D30", "op": "<=", "gy": 20.0}]
+                 # RTOG 0617 limits the lungs minus the GTV (V20 <= 37 %, mean <= 20 Gy); the optimizer gets the lungs
+                 # minus the PTV, so its maximum-dose terms do not cool the PTV margin that lies in lung
+                 {"structure": "Lungs-PTV", "metric": "D37", "op": "<=", "gy": 20.0, "dmax_term": False},
+                 {"structure": "Lungs-PTV", "metric": "Dmean", "op": "<=", "gy": 20.0}]
         beams = {"count": int(spec.get("beams", 7)), "spacing_deg": 360.0 / int(spec.get("beams", 7)), "start_deg": 0.0}
         plan_goals = [{"structure": "PTV", "metric": "D95", "op": ">=", "gy": rx}] + goals
         rounds = int(spec.get("rounds", 4)) if not ctx.fast else min(2, int(spec.get("rounds", 4)))
@@ -764,7 +790,7 @@ def run_photon_vs_pyradplan(spec: dict, ctx: Context) -> CaseResult:
         npz, meta = PYRADPLAN_DIR / f"{case}.npz", PYRADPLAN_DIR / f"{case}.json"
         if not npz.is_file():
             missing.append(case); continue
-        d = np.load(npz); prov = json.loads(meta.read_text()) if meta.is_file() else {}
+        d = np.load(npz); prov = json.loads(meta.read_text(encoding="utf-8")) if meta.is_file() else {}
         s = ctx.spacing(float(d["spacing_mm"][0]))
         phantom = {"water_10x10": lambda: ph.water_box(150.0, 300.0, s), "lung_slab": lambda: ph.lung_slab(s), "bone_slab": lambda: ph.bone_slab(s)}[case]()
         plan = _open_field_plan(float(prov.get("field_mm", 100.0)), 10.0, 10.0)

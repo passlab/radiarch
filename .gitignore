@@ -46,5 +46,6 @@ validation/*.log
 /Outputs/
 validation/mc/
 validation/r7-*/
+validation/r8-*/
 validation/cache/
 validation/reports/

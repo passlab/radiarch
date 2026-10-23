@@ -1,0 +1,9 @@
+name: photon_output_vs_field_pb
+kind: photon_output_vs_field
+description: The native pencil-beam engine (R8) - central-axis dose at d_max for 4 x 4, 10 x 10, 20 x 20 and 30 x 30 cm2 fields relative to 10 x 10 (phantom scatter only; radiarch has no head-scatter model, so this is informative against measured output factors).
+engine: pb
+phantom: {type: water_box, half_width_mm: 200, depth_mm: 300, spacing_mm: 2.5}
+fields_mm: [40, 100, 200, 300]
+beamlet_mm: 5
+leaf_width_mm: 10
+references: photon_6mv

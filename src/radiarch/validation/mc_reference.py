@@ -31,6 +31,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import os
 import platform
 import sys
 import time
@@ -52,15 +53,16 @@ SLABS = {
     "water_4x4": [],
     "water_20x20": [],
     "lung_slab": [(30.0, 110.0, 0.26)],
+    "lung_slab_2x2": [(30.0, 110.0, 0.26)],      # a narrow field in lung: lateral electronic disequilibrium (R8)
     "bone_slab": [(30.0, 60.0, 1.85)],
 }
-FIELDS = {"water_10x10": 100.0, "water_4x4": 40.0, "water_20x20": 200.0, "lung_slab": 100.0, "bone_slab": 100.0}
+FIELDS = {"water_10x10": 100.0, "water_4x4": 40.0, "water_20x20": 200.0, "lung_slab": 100.0, "lung_slab_2x2": 20.0, "bone_slab": 100.0}
 
 
 def read_egsnrc_spectrum(path: Path):
     """EGSnrc spectrum file: title; ``nbins, e_low, mode``; then ``e_upper, value`` per bin.
     Mode 1 values are per MeV, mode 0 per bin. Returns ``(bin_edges_mev, weights_per_bin)``."""
-    lines = [l.strip() for l in path.read_text().splitlines() if l.strip()]
+    lines = [l.strip() for l in path.read_text(encoding="utf-8").splitlines() if l.strip()]
     nbins, e_low, mode = [float(v) for v in lines[1].split(",")[:3]]
     edges = [e_low]
     weights = []
@@ -243,9 +245,119 @@ def to_radiarch(arr_mc: np.ndarray) -> np.ndarray:
     return np.ascontiguousarray(np.transpose(arr_mc[::-1], (1, 0, 2)), dtype=np.float32)
 
 
+# ---------------------------------------------------------------------------
+# Pencil-beam kernel for the native photon engine (R8)
+# ---------------------------------------------------------------------------
+
+PENCIL_LATERAL_MM = 400.0
+PENCIL_DEPTH_MM = 300.0
+PENCIL_FINE = (81, 1.0)          # voxels across, lateral spacing (mm): +-40 mm at 1 mm
+PENCIL_COARSE = (81, 5.0)        # +-200 mm at 5 mm
+PENCIL_DEPTH_SPACING = 2.0
+
+
+def build_pencil(primaries: int, threads: int, seed: int, out_dir: Path, radius_mm: float = 0.5):
+    """A narrow pencil of the Mohan 6 MV spectrum (radius ``radius_mm`` at the surface, which is the
+    isocenter plane, 1000 mm from a point source) into a 400 x 400 x 300 mm water box, scored by two dose
+    actors on the same volume (no internal boundary): 1 mm laterally to +-40 mm for the core, 5 mm to
+    +-200 mm for the scatter tail, 2 mm in depth. Step-converged settings as the references."""
+    import opengate as gate
+
+    mm, m, MeV, deg = gate.g4_units.mm, gate.g4_units.m, gate.g4_units.MeV, gate.g4_units.deg
+    sim = gate.Simulation()
+    sim.g4_verbose = False
+    sim.number_of_threads = int(threads)
+    sim.random_seed = int(seed)
+    sim.output_dir = str(out_dir)
+    sim.progress_bar = False
+    sim.check_volumes_overlap = False
+    world = sim.world
+    world.size = [2 * m, 2 * m, 2.6 * m]
+    world.material = "G4_Galactic"           # the pencil reaches the surface unscattered, as the kernel assumes
+    box = sim.add_volume("Box", "phantom")
+    box.size = [PENCIL_LATERAL_MM * mm, PENCIL_LATERAL_MM * mm, PENCIL_DEPTH_MM * mm]
+    box.material = "G4_WATER"
+    box.translation = [0, 0, -PENCIL_DEPTH_MM / 2 * mm]
+    edges, weights = read_egsnrc_spectrum(SPECTRUM)
+    src = sim.add_source("GenericSource", "pencil")
+    src.particle = "gamma"
+    src.position.type = "point"
+    src.position.translation = [0, 0, SAD_MM * mm]
+    src.direction.type = "iso"
+    theta = float(np.degrees(np.arctan(radius_mm / SAD_MM)))
+    src.direction.theta = [0, theta * deg]
+    src.direction.phi = [0, 360 * deg]
+    src.energy.type = "spectrum_histogram"
+    src.energy.spectrum_energy_bin_edges = [float(e) * MeV for e in edges]
+    src.energy.spectrum_weights = [float(w) for w in weights]
+    src.n = int(primaries)
+    pm = sim.physics_manager
+    pm.physics_list_name = "G4EmStandardPhysics_option3"
+    pm.set_production_cut("world", "all", 1 * mm)
+    pm.user_limits_particles = ["e-", "e+"]
+    pm.set_production_cut(box.name, "all", CUT_MM * mm)
+    pm.set_max_step_size(box.name, MAX_STEP_MM * mm)
+    actors = {}
+    nz = int(round(PENCIL_DEPTH_MM / PENCIL_DEPTH_SPACING))
+    for name, (n, sp) in (("fine", PENCIL_FINE), ("coarse", PENCIL_COARSE)):
+        a = sim.add_actor("DoseActor", f"dose_{name}")
+        a.attached_to = box.name
+        a.size = [n, n, nz]
+        a.spacing = [sp * mm, sp * mm, PENCIL_DEPTH_SPACING * mm]
+        a.output_filename = f"pencil_{name}.mhd"
+        a.dose.active = True
+        a.dose_uncertainty.active = True
+        a.edep.active = False
+        actors[name] = a
+    stats = sim.add_actor("SimulationStatisticsActor", "stats")
+    prov = dict(case="pencil_6mv", radius_mm=radius_mm, area_mm2=float(np.pi * radius_mm ** 2), primaries=int(primaries), threads=int(threads),
+                seed=int(seed), sad_mm=SAD_MM, ssd_mm=SAD_MM, spectrum=f"Mohan 6 MV (EGSnrc {SPECTRUM.name}), point source",
+                physics=f"G4EmStandardPhysics_option3; cut {CUT_MM:g} mm and e-/e+ max step {MAX_STEP_MM:g} mm in the phantom; vacuum outside",
+                phantom_mm=[PENCIL_LATERAL_MM, PENCIL_LATERAL_MM, PENCIL_DEPTH_MM],
+                grids={"fine": {"n": PENCIL_FINE[0], "spacing_mm": PENCIL_FINE[1]}, "coarse": {"n": PENCIL_COARSE[0], "spacing_mm": PENCIL_COARSE[1]},
+                       "depth_spacing_mm": PENCIL_DEPTH_SPACING})
+    return sim, actors, stats, prov
+
+
+def cpu_model() -> str:
+    """The processor, for the provenance record (the repository is public: no host names)."""
+    try:
+        for line in Path("/proc/cpuinfo").read_text().splitlines():
+            if line.lower().startswith("model name"):
+                return f"{line.split(':', 1)[1].strip()}, {os.cpu_count()} logical CPUs"
+    except OSError:
+        pass
+    return platform.processor() or "unknown CPU"
+
+
+def radial_profiles(dose_zyx: np.ndarray, unc_zyx: np.ndarray, spacing_mm: float, bin_mm: float, r_max_mm: float):
+    """Mean dose and its uncertainty in annuli around the axis, per depth slice. ``dose_zyx`` is in radiarch
+    order (depth along axis 1, lateral axes 0 and 2, axis at the centre voxel)."""
+    nl = dose_zyx.shape[0]
+    c = (nl - 1) / 2.0
+    x = (np.arange(nl) - c) * spacing_mm
+    rr = np.sqrt(x[:, None] ** 2 + x[None, :] ** 2)                 # (z_lateral, x_lateral)
+    edges = np.arange(0.0, r_max_mm + bin_mm, bin_mm)
+    idx = np.digitize(rr, edges) - 1
+    nb = len(edges) - 1
+    prof = np.zeros((dose_zyx.shape[1], nb)); err = np.zeros_like(prof); count = np.zeros(nb)
+    for b in range(nb):
+        m = idx == b
+        count[b] = m.sum()
+        if not count[b]:
+            continue
+        sub = dose_zyx[:, :, :].transpose(1, 0, 2)[:, m]            # (depth, voxels in the annulus)
+        prof[:, b] = sub.mean(axis=1)
+        u = (unc_zyx.transpose(1, 0, 2)[:, m] * sub)
+        err[:, b] = np.sqrt((u ** 2).sum(axis=1)) / max(count[b], 1)
+    centres = np.array([rr[idx == b].mean() if count[b] else (edges[b] + edges[b + 1]) / 2 for b in range(nb)])
+    return centres, prof, err
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="OpenGATE photon references for the radiarch validation harness")
     ap.add_argument("--case", choices=sorted(SLABS))
+    ap.add_argument("--pencil", action="store_true", help="the pencil-beam kernel of the native photon engine (R8) instead of a phantom case")
     ap.add_argument("--compact", type=Path, nargs="*", default=None, help="rewrite existing references in the compact format and exit")
     ap.add_argument("--primaries", type=float, default=2e7)
     ap.add_argument("--threads", type=int, default=16)
@@ -260,6 +372,8 @@ def main(argv=None) -> int:
         for f in args.compact:
             compact(f); print("compacted", f)
         return 0
+    if args.pencil:
+        return run_pencil(args)
     if not args.case:
         ap.error("--case is required")
     args.out.mkdir(parents=True, exist_ok=True)
@@ -284,13 +398,48 @@ def main(argv=None) -> int:
     out = args.out / f"{args.case}.npz"
     save_reference(out, dose_r, unc_r, s, origin, int(args.primaries))
     prov.update(elapsed_s=round(elapsed, 1), opengate_version=getattr(opengate, "__version__", "10.1.1"), python=sys.version.split()[0],
-                host=platform.node(), date=_dt.datetime.now().isoformat(timespec="seconds"), geant4_data="downloaded by opengate_core",
+                cpu=cpu_model(), date=_dt.datetime.now().isoformat(timespec="seconds"), geant4_data="downloaded by opengate_core",
                 file=out.name, shape_zyx=list(dose_r.shape), origin_mm=list(origin), units="Gy per primary; uncertainty relative")
-    (args.out / f"{args.case}.json").write_text(json.dumps(prov, indent=2))
+    (args.out / f"{args.case}.json").write_text(json.dumps(prov, indent=2), encoding="utf-8")
     cax = dose_r[n // 2, :, n // 2]
     k = int(np.argmax(cax))
     print(f"wrote {out}: max {dose_r.max():.3e} Gy/primary, d_max {origin[1] + k * s:.1f} mm, "
           f"PDD10 {np.interp(100.0, origin[1] + np.arange(n) * s, cax) / cax[k] * 100:.1f} %, elapsed {elapsed:.0f} s")
+    return 0
+
+
+
+
+def run_pencil(args) -> int:
+    """Run the pencil case and write ``pencil_6mv.npz``: radial depth-dose tables (geometric radius at depth,
+    inverse square included, dose per primary) from the fine core grid and the coarse tail grid."""
+    import itk
+    import opengate
+
+    work = args.work or (HERE.parents[2] / "validation" / "mc" / "work")
+    work.mkdir(parents=True, exist_ok=True)
+    args.out.mkdir(parents=True, exist_ok=True)
+    sim, actors, stats, prov = build_pencil(int(args.primaries), args.threads, args.seed, work)
+    t0 = time.time(); sim.run(); elapsed = time.time() - t0
+    print(stats)
+    out = {}
+    for name, (n, sp) in (("fine", PENCIL_FINE), ("coarse", PENCIL_COARSE)):
+        a = actors[name]
+        d = to_radiarch(itk.array_from_image(itk.imread(str(a.get_output_path("dose")))).astype(np.float64)) / float(args.primaries)
+        u = to_radiarch(itk.array_from_image(itk.imread(str(a.get_output_path("dose_uncertainty")))).astype(np.float64))
+        r_max = (n - 1) / 2.0 * sp
+        centres, prof, err = radial_profiles(d, np.nan_to_num(u, nan=1.0), sp, 0.5 if name == "fine" else 5.0, r_max)
+        out[f"{name}_r_mm"], out[f"{name}_dose"], out[f"{name}_err"] = centres, prof, err
+        out[f"{name}_cax"] = d[(n - 1) // 2, :, (n - 1) // 2]
+    depth = PENCIL_DEPTH_SPACING / 2 + np.arange(out["fine_dose"].shape[0]) * PENCIL_DEPTH_SPACING
+    path = args.out / "pencil_6mv.npz"
+    np.savez_compressed(path, depth_mm=depth, primaries=int(args.primaries), area_mm2=prov["area_mm2"], sad_mm=SAD_MM, **out)
+    prov.update(elapsed_s=round(elapsed, 1), opengate_version=getattr(opengate, "__version__", "10.1.1"), python=sys.version.split()[0],
+                cpu=cpu_model(), date=_dt.datetime.now().isoformat(timespec="seconds"), file=path.name,
+                units="dose per primary (Gy), geometric radius at depth, inverse square included")
+    (args.out / "pencil_6mv.json").write_text(json.dumps(prov, indent=2), encoding="utf-8")
+    k = int(np.argmax(out["fine_dose"][:, 0]))
+    print(f"wrote {path}: axis maximum at {depth[k]:.0f} mm, elapsed {elapsed:.0f} s")
     return 0
 
 

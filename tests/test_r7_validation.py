@@ -75,7 +75,8 @@ def test_report_renders_every_engine_from_a_run(tmp_path):
     out = tmp_path / "reports"
     paths = report.write_reports(run_dir, out)
     names = {p.name for p in paths}
-    assert len(paths) == 3 and (out / "LATEST.md").is_file() and any("-ccc-" in n for n in names) and any("-mcsquare-" in n for n in names)
+    assert len(paths) == 4 and (out / "LATEST.md").is_file() and any("-ccc-" in n for n in names) and any("-mcsquare-" in n for n in names)
+    assert any("-pb-" in n for n in names)          # R8: the native pencil-beam engine has its own document
     ccc = next(p for p in paths if "-ccc-" in p.name).read_text()
     assert "RESEARCH USE ONLY" in ccc and "every graded check passed" in ccc and "PDD10 (%)" in ccc and "| Medical physicist" in ccc
     assert "binary_sha256" in ccc and "scatter_settings" in ccc
@@ -220,3 +221,27 @@ def test_report_merges_a_rerun_case(tmp_path):
     assert merged["runs"] == ["20261022-1", "20261022-2"] and [r["status"] for r in merged["results"]] == ["info", "pass"]
     doc = report.render("ccc", merged, main)
     assert "`20261022-1` + `20261022-2`" in doc
+
+
+def test_organ_goals_add_a_maximum_term_unless_they_opt_out():
+    """A Dxx organ goal brings a DVH-maximum and a maximum-dose term; the lungs around a target opt out of the
+    second (its level sits next to the prescription), R8."""
+    from types import SimpleNamespace
+    from radiarch.validation.cases_r7 import _objectives
+    arrays = SimpleNamespace(structure_index={"PTV": 1, "Cord": 2, "Lungs-PTV": 3})
+    goals = [{"structure": "PTV", "metric": "D95", "op": ">=", "gy": 60.0},
+             {"structure": "Cord", "metric": "D2", "op": "<=", "gy": 45.0},
+             {"structure": "Lungs-PTV", "metric": "D37", "op": "<=", "gy": 20.0, "dmax_term": False}]
+    objs = _objectives(arrays, "PTV", 60.0, goals, {}, {})
+    kinds = {(o.structure_name, o.type) for o in objs}
+    assert ("Cord", "DMax") in kinds and ("Cord", "DVHMax") in kinds
+    assert ("Lungs-PTV", "DVHMax") in kinds and ("Lungs-PTV", "DMax") not in kinds
+
+
+def test_r8_kinds_are_registered():
+    from radiarch.validation.run import KINDS, load_cases
+    for k in ("pb_vs_mc", "pb_vs_ccc", "lung_sbrt_vmat", "lung_vmat", "hn_sib_vmat"):
+        assert k in KINDS
+    cases = load_cases()
+    for name in ("pb_vs_mc", "pb_vs_ccc", "lung_sbrt_vmat", "lung_vmat_lctsc", "hn_sib_vmat", "photon_pdd_10x10_pb"):
+        assert name in cases and cases[name]["kind"] in KINDS

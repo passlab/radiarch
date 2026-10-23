@@ -1,7 +1,7 @@
 name: dij_consistency
 kind: dij_consistency
-description: Dij · w against the forward dose for every physics engine through the services on SimpleFantom (random weights); the nightly MCsquare gate repeated in the record at 1e6 primaries (a fifth in fast mode, tolerances widened), and the deterministic CCC identity.
-engines: [ccc, mcsquare]
+description: Dij · w against the forward dose for every physics engine through the services on SimpleFantom (random weights); the nightly MCsquare gate repeated in the record at 1e6 primaries (a fifth in fast mode, tolerances widened), the deterministic CCC identity, and the pencil-beam engine's sampled, cut-off Dij against its full-kernel forward dose (R8).
+engines: [ccc, mcsquare, pb]
 spacing_mm: 2.0
 ccc: {n_jobs: 8}
 mcsquare: {nb_primaries: 1000000, spot_spacing_mm: 7.0, layer_spacing_mm: 7.0}

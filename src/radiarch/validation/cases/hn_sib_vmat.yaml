@@ -1,0 +1,29 @@
+name: hn_sib_vmat
+kind: hn_sib_vmat
+description: Head and neck with two VMAT arcs on PDDCA CTs - a synthetic oropharynx-like primary between the parotids, PTV70 (GTV + 8 mm) and PTV56 (GTV + 25 mm outside PTV70 + 3 mm and the brainstem + 5 mm), 70/56 Gy simultaneous integrated boost in 35 fractions; two full arcs (clockwise at collimator 15, counter-clockwise at -15) from the fluence of their sector beams (pb Dij), leaves swept per sector, control-point doses recomputed and metersets re-optimized; evaluated against the NCCN head-and-neck template. Fast mode runs one patient and half the sectors.
+data: data/public/pddca
+patients: [0522c0001, 0522c0002]
+spacing_mm: 3.0
+beamlet_mm: 10.0
+iterations: 150
+rounds: 3
+prescription_gy: 70.0
+elective_gy: 56.0
+fractions: 35
+gtv_radius_mm: 12.0
+gtv_offset_mm: [0.0, -15.0, -25.0]   # from the parotids' midpoint: anterior and inferior of the airway, a tonsil or base-of-tongue position
+goal_template: nccn-head-neck
+machine: synthetic-120
+jaw_margin_mm: 10.0
+pb_params: {cutoff_mm: 50.0}
+organ_goals:
+  Parotid_L: [Dmean, 26.0]
+  Parotid_R: [Dmean, 26.0]
+  Brainstem_PRV: [Dmax, 54.0]     # planned on the planning margin: the brainstem itself is evaluated at 54 Gy
+  OpticChiasm: [Dmax, 54.0]
+  OpticNrv_L: [Dmax, 54.0]
+  OpticNrv_R: [Dmax, 54.0]
+  Bone_Mandible: [Dmax, 70.0]
+arcs:
+  - {arc_id: ARC1, start_deg: 181.0, stop_deg: 179.0, direction: CW, sectors: 8, control_point_spacing_deg: 4.0, collimator_deg: 15.0}
+  - {arc_id: ARC2, start_deg: 179.0, stop_deg: 181.0, direction: CC, sectors: 8, control_point_spacing_deg: 4.0, collimator_deg: -15.0}

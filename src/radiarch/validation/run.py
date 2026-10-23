@@ -16,7 +16,6 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
-import platform
 import shutil
 import subprocess
 import sys
@@ -36,10 +35,10 @@ HERE = Path(__file__).resolve().parent
 CASES_DIR = HERE / "cases"
 REF_DIR = HERE / "references"
 RADIARCH_ROOT = HERE.parents[2]
-SMIS_ROOT = RADIARCH_ROOT.parent
+PARENT_ROOT = RADIARCH_ROOT.parent
 
 from .common import (  # noqa: E402,F401 — re-exported for the cases and the tests
-    CaseResult, Check, Context, Skip, _cax, _ccc_dose, _ccc_engine, _jsonable, _open_field_plan, _phantom, _within, data_root,
+    CaseResult, Check, Context, Skip, _cax, _ccc_dose, _ccc_engine, _jsonable, _open_field_plan, _phantom, _photon_dose, _photon_engine, _within, data_root,
     load_reference,
 )
 
@@ -66,18 +65,20 @@ def _pdd_metrics(dose: np.ndarray, phantom: ph.Phantom) -> Dict[str, float]:
 def run_photon_pdd(spec: dict, ctx: Context) -> CaseResult:
     res = CaseResult(spec["name"], spec["kind"])
     ref = load_reference(spec.get("references", "photon_6mv"))
-    eng = _ccc_engine()
+    eng = _photon_engine(spec)
     phantom = _phantom(spec["phantom"], ctx)
     f = spec["field"]
     plan = _open_field_plan(f["jaw_mm"], f["leaf_width_mm"], f["beamlet_mm"], f.get("gantry_deg", 0.0), f.get("mu", 1.0))
-    dose = _ccc_dose(eng, phantom, plan, ctx)
+    dose = _photon_dose(eng, phantom, plan, ctx)
     m = _pdd_metrics(dose, phantom)
     res.metrics.update({k: v for k, v in m.items() if not k.startswith("cax_")})
     res.metrics["cax"] = {"depth_mm": m["cax_depth_mm"], "dose_gy_per_mu": m["cax_dose"]}
 
     r = ref["pdd10_percent"]
+    graded = r.get("pass_fail", True) and not spec.get("pdd10_informative", False)
     res.add("PDD10 (%)", m["pdd10"], f"{r['value']} ± {r['tolerance_abs']}",
-            _within(m["pdd10"], r["value"], r["tolerance_abs"]) if r.get("pass_fail", True) else None, r["source"])
+            _within(m["pdd10"], r["value"], r["tolerance_abs"]) if graded else None,
+            r["source"] + (f"; informative here: {spec['pdd10_note']}" if spec.get("pdd10_note") else ""))
     r = ref["dmax_mm"]
     res.add("d_max (mm)", m["dmax_mm"], f"{r['min']}–{r['max']}", r["min"] <= m["dmax_mm"] <= r["max"], r["source"])
     r = ref["pdd20_over_pdd10"]
@@ -115,11 +116,11 @@ def _profile_metrics(dose: np.ndarray, phantom: ph.Phantom, depth_mm: float, fie
 def run_photon_profile(spec: dict, ctx: Context) -> CaseResult:
     res = CaseResult(spec["name"], spec["kind"])
     ref = load_reference(spec.get("references", "photon_6mv"))
-    eng = _ccc_engine()
+    eng = _photon_engine(spec)
     phantom = _phantom(spec["phantom"], ctx)
     f = spec["field"]
     plan = _open_field_plan(f["jaw_mm"], f["leaf_width_mm"], f["beamlet_mm"], f.get("gantry_deg", 0.0), f.get("mu", 1.0))
-    dose = _ccc_dose(eng, phantom, plan, ctx)
+    dose = _photon_dose(eng, phantom, plan, ctx)
     m = _profile_metrics(dose, phantom, spec.get("depth_mm", 100.0), f["jaw_mm"])
     res.metrics.update({k: v for k, v in m.items() if k not in ("x_mm", "profile")})
     res.metrics["profile"] = {"x_mm": m["x_mm"], "dose_gy_per_mu": m["profile"]}
@@ -135,17 +136,17 @@ def run_photon_profile(spec: dict, ctx: Context) -> CaseResult:
 
 def run_photon_slab(spec: dict, ctx: Context) -> CaseResult:
     res = CaseResult(spec["name"], spec["kind"])
-    eng = _ccc_engine()
+    eng = _photon_engine(spec)
     s = ctx.spacing(spec.get("spacing_mm", 2.5))
     f = spec["field"]
     plan = _open_field_plan(f["jaw_mm"], f["leaf_width_mm"], f["beamlet_mm"], f.get("gantry_deg", 0.0), f.get("mu", 1.0))
     water = ph.water_box(150.0, 300.0, s)
-    cax_w = _cax(_ccc_dose(eng, water, plan, ctx), water)
+    cax_w = _cax(_photon_dose(eng, water, plan, ctx), water)
     y = water.axis_mm("y")
     tol = float(spec.get("tolerance_percent", 5.0))
     graded = bool(spec.get("pass_fail", False))
     for slab in (ph.lung_slab(s), ph.bone_slab(s)):
-        dose = _ccc_dose(eng, slab, plan, ctx)
+        dose = _photon_dose(eng, slab, plan, ctx)
         cax = _cax(dose, slab)
         rho = slab.density[slab.centre_index("z"), :, slab.centre_index("x")]
         # radiological depth at each voxel centre: density integrated to the centre
@@ -168,12 +169,12 @@ def run_photon_slab(spec: dict, ctx: Context) -> CaseResult:
 def run_photon_output_vs_field(spec: dict, ctx: Context) -> CaseResult:
     res = CaseResult(spec["name"], spec["kind"])
     ref = load_reference(spec.get("references", "photon_6mv"))["output_factor_vs_10x10"]
-    eng = _ccc_engine()
+    eng = _photon_engine(spec)
     phantom = _phantom(spec["phantom"], ctx)
     dmax_dose = {}
     for fmm in spec["fields_mm"]:
         plan = _open_field_plan(fmm, spec.get("leaf_width_mm", 10.0), spec.get("beamlet_mm", 5.0))
-        cax = _cax(_ccc_dose(eng, phantom, plan, ctx), phantom)
+        cax = _cax(_photon_dose(eng, phantom, plan, ctx), phantom)
         dmax_dose[fmm] = float(cax.max())
     base = dmax_dose[100]
     for fmm, d in dmax_dose.items():
@@ -287,7 +288,7 @@ def run_geometry_volumes(spec: dict, ctx: Context) -> CaseResult:
     from ..services.geometry import GeometryService
     root = data_root() / Path(spec["data"]).name
     if not root.is_dir():
-        raise Skip(f"data not found: {root} (run `make public-lctsc-validation` in smis/data)")
+        raise Skip(f"data not found: {root} (set RADIARCH_VALIDATION_DATA to the directory holding it)")
     tol = float(spec.get("tolerance_percent", 5.0))
     svc = GeometryService(base_dir=ctx.workdir / "geometry")
     patients = spec["patients"][:1] if ctx.fast else spec["patients"]
@@ -366,11 +367,11 @@ def run_dvh_crosscheck(spec: dict, ctx: Context) -> CaseResult:
     from ..services.dvh import dose_at_volume
     root = data_root() / Path(spec["data"]).name
     if not root.is_dir():
-        raise Skip(f"data not found: {root} (run `make public-pancreatic-validation` in smis/data)")
+        raise Skip(f"data not found: {root} (set RADIARCH_VALIDATION_DATA to the directory holding it)")
     tol = spec.get("tolerance_percent", {"mean": 3.0, "d95": 5.0, "max": 3.0})
     graded_keys = set(spec.get("graded", ["mean", "max"]))
     patients = spec["patients"][:1] if ctx.fast else spec["patients"]
-    script = ctx.workdir / "dicompyler_dvh.py"; script.write_text(_DICOMPYLER_SCRIPT)
+    script = ctx.workdir / "dicompyler_dvh.py"; script.write_text(_DICOMPYLER_SCRIPT, encoding="utf-8")
     for pid in patients:
         pdir = root / pid
         doses = list(pdir.glob("RTDOSE_*/*.dcm"))
@@ -455,7 +456,7 @@ def run_gamma_crosscheck(spec: dict, ctx: Context) -> CaseResult:
         npz = ctx.workdir / f"gamma_{pert['name']}.npz"
         np.savez(npz, z=z, y=y, x=x, reference=reference, evaluated=evaluated,
                  dose_percent=crit["dose_percent"], dta_mm=crit["dta_mm"], threshold_percent=crit["threshold_percent"])
-        script = ctx.workdir / "pymedphys_gamma.py"; script.write_text(_PYMEDPHYS_SCRIPT)
+        script = ctx.workdir / "pymedphys_gamma.py"; script.write_text(_PYMEDPHYS_SCRIPT, encoding="utf-8")
         cmd = ["uv", "run", "--quiet", "--no-project", "--python", "3.12", "--with", "pymedphys==0.41.0", "--with", "numba",
                "python", str(script), str(npz)]
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=1800, cwd=str(ctx.workdir))
@@ -488,13 +489,15 @@ KINDS: Dict[str, Callable[[dict, Context], CaseResult]] = {
 # R7 cases live in their own module; they import the helpers above, so they register last.
 from .cases_r7 import KINDS_R7  # noqa: E402
 KINDS.update(KINDS_R7)
+from .cases_r8 import KINDS_R8  # noqa: E402
+KINDS.update(KINDS_R8)
 
 
 def load_cases() -> Dict[str, dict]:
     import yaml
     cases = {}
     for f in sorted(CASES_DIR.glob("*.yaml")):
-        spec = yaml.safe_load(f.read_text())
+        spec = yaml.safe_load(f.read_text(encoding="utf-8"))
         cases[spec["name"]] = spec
     return cases
 
@@ -512,6 +515,12 @@ def run_case(spec: dict, ctx: Context) -> CaseResult:
     return res
 
 
+def _cpu() -> str:
+    """The processor for the run record; host names stay out (the records are published)."""
+    from .report import _cpu_model
+    return _cpu_model()
+
+
 def _git_commit() -> str:
     try:
         return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=RADIARCH_ROOT, capture_output=True, text=True).stdout.strip() or "unknown"
@@ -526,11 +535,11 @@ def write_results(results: List[CaseResult], out_dir: Path, ctx: Context) -> Pat
     from ..models.common import RESEARCH_USE_ONLY
     payload = {
         "intended_use": RESEARCH_USE_ONLY,
-        "radiarch_commit": _git_commit(), "timestamp": stamp, "fast": ctx.fast, "host": platform.node(),
+        "radiarch_commit": _git_commit(), "timestamp": stamp, "fast": ctx.fast, "cpu": _cpu(),
         "python": sys.version.split()[0],
         "results": [asdict(r) for r in results],
     }
-    (run_dir / "results.json").write_text(json.dumps(payload, indent=2))
+    (run_dir / "results.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
     lines = [f"# Radiarch validation run {stamp} ({_git_commit()})", "", RESEARCH_USE_ONLY, ""]
     lines.append("| Case | Status | Time (s) | Checks |")
     lines.append("|---|---|---|---|")
@@ -550,7 +559,7 @@ def write_results(results: List[CaseResult], out_dir: Path, ctx: Context) -> Pat
                 flag = "informative" if c.passed is None else ("pass" if c.passed else "FAIL")
                 val = c.value if not isinstance(c.value, float) else f"{c.value:.4g}"
                 lines.append(f"| {c.name} | {val} | {c.target} | {flag} |")
-    (run_dir / "summary.md").write_text("\n".join(lines) + "\n")
+    (run_dir / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
     return run_dir
 
 

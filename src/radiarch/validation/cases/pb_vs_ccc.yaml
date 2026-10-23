@@ -1,0 +1,8 @@
+name: pb_vs_ccc
+kind: pb_vs_ccc
+description: The two photon engines against each other (the roadmap's cross-engine check). Water 10 x 10 cm in absolute dose, gamma 3 %/3 mm graded at 10 mm beamlets (CCC's validated configuration) and reported at 5 mm; the beamlet-size dependence of each engine; a lateral beam (gantry 90 and 270) onto an isocenter 60 mm off centre, which the engines must agree enters from the IEC side.
+spacing_mm: 2.5
+beamlets_mm: [5.0, 10.0]
+graded_beamlet_mm: 10.0
+n_jobs: 16
+gamma: {dose_percent: 3.0, dta_mm: 3.0, threshold_percent: 10.0, pass_percent: 95.0}

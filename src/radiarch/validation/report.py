@@ -5,12 +5,12 @@
 Compiles the newest harness run (or the one named) into one document per
 engine — CCC photons, MCsquare protons, and the engine-independent services
 (geometry, evaluation, writers) — with the engine's identity (binary and
-kernel digests, version, build notes), the radiarch commit, the host, every
-case with its checks and their sources, the known limitations, and a
-signature block for the physicist and the PI. The document is evidence in
-the sense of the SMIS B2 levels: it records what was tested against which
-reference and what the numbers were; it never grants a level, and it says
-so on its first line.
+kernel digests, version, build notes), the radiarch commit, the processor,
+every case with its checks and their sources, the known limitations, and a
+signature block for the physicist and the project lead. The document is
+evidence: it records what was tested against which reference and what the
+numbers were; it never grants an acceptance level, and it says so on its
+first line.
 """
 
 from __future__ import annotations
@@ -47,6 +47,28 @@ ENGINE_CASES: Dict[str, Dict[str, Any]] = {
             "The Monte Carlo references share the engine's assumptions where the engine has them (water composition at the slab "
             "densities, a flat primary fluence collimated by jaws and MLC, no flattening filter), so they test transport, not the linac. "
             "They are step-converged (0.5 mm electron steps, 0.1 mm cut; a single and a split water box agree within 0.5 %).",
+            "R8 findings against the pencil-beam engine: the shipped scatter truncation makes the central-axis dose almost "
+            "independent of field size (4 x 4 and 6 x 6 cm give the 10 x 10 cm dose at 10 cm depth; output factors 1.000) and makes "
+            "the depth dose depend on the beamlet size (PDD10 about 2.5 points lower with 5 mm beamlets than with the 10 mm "
+            "beamlets this record validated). Small fields are overdosed at depth by up to ~10 %.",
+            "Before engine version 1.1.0 (R8) the gantry turned the opposite way to IEC 61217: lateral and oblique beams entered "
+            "from the mirrored side. Plans optimized within radiarch were self-consistent; DICOM imports and exports were not.",
+        ],
+    },
+    "pb": {
+        "title": "Native photon pencil-beam engine (radiarch, roadmap R8)",
+        "kinds": ("photon_pdd", "photon_profile", "photon_output_vs_field", "pb_vs_mc", "pb_vs_ccc", "dij_consistency", "lung_sbrt_vmat",
+                  "lung_vmat", "hn_sib_vmat"),
+        "limitations": [
+            "The kernel is a Monte Carlo pencil kernel of the Mohan 6 MV spectrum in water (the CCC kernels' spectrum), decomposed "
+            "into a few depth-weighted components; there is no linac head model (no head scatter or off-axis softening), and the "
+            "field edge is an ideal edge blurred by a Gaussian fluence penumbra fitted to the Monte Carlo reference.",
+            "Heterogeneities change the radiological depth and the lateral spread: the kernel's part within 30 mm is stretched "
+            "by the local density to the power -0.9. The two parameters were fitted to the Monte Carlo lung slabs (2 x 2 and "
+            "10 x 10 cm), so the lung checks are consistency checks; the photon scatter beyond 30 mm is not scaled and the "
+            "build-down and re-build-up at interfaces are not modelled.",
+            "The influence matrix stops 80 mm from each beamlet and thins its small entries by an unbiased roulette; final and "
+            "segment doses use the full 200 mm kernel. Optimization doses therefore differ slightly from the final dose.",
         ],
     },
     "mcsquare": {
@@ -136,9 +158,38 @@ def engine_identity(engine: str) -> Dict[str, Any]:
         except Exception as exc:  # pragma: no cover
             out["bdl_path"] = f"unavailable ({exc})"
         out["build"] = "MCsquare binaries as shipped with OpenTPS 3.0.1 (engines/mcsquare; LICENSE-OpenTPS); driver: radiarch"
+    elif engine == "pb":
+        from ..services.dose_engines import pb as pbm
+        eng = pbm.PencilBeamEngine()
+        k = eng.kernel()
+        cal = eng.calibration()
+        out["engine_version"] = eng.version
+        from ..services.dose_engines.pb_kernel import default_kernel_path
+        out["kernel_table"] = _rel(default_kernel_path())
+        out["kernel_fingerprint"] = k.fingerprint
+        out["kernel_source"] = {kk: k.meta.get("source", {}).get(kk) for kk in ("file", "sha256", "primaries", "spectrum", "physics")}
+        out["model"] = {"components": cal["n_components"], "penumbra_fwhm_mm": cal["penumbra_fwhm_mm"], "dmax_mm": cal["dmax_mm"],
+                        "dij_cutoff_mm": pbm.DEFAULT_CUTOFF_MM, "dij_sampling_threshold": pbm.DEFAULT_SAMPLING,
+                        "lateral_scaling": {"near_mm": pbm.DEFAULT_LATERAL_NEAR_MM, "exponent": pbm.DEFAULT_LATERAL_EXPONENT,
+                                            "density_sigma_mm": pbm.DEFAULT_LATERAL_SIGMA_MM, "max_scale": pbm.DEFAULT_LATERAL_MAX_SCALE,
+                                            "scales": pbm.DEFAULT_LATERAL_SCALES}}
+        out["build"] = "radiarch's own NumPy engine (src/radiarch/services/dose_engines/pb.py); optional CuPy path"
     else:
         out["engine_version"] = out["radiarch_version"]
     return out
+
+
+def _belongs(engine: str, result: Dict[str, Any]) -> bool:
+    """Whether a case speaks for an engine's document: by kind, with the pencil-beam variants of the shared photon
+    kinds (names ending ``_pb``) in the pb document only, and the cross-engine case in both photon documents."""
+    kind, name = result.get("kind"), str(result.get("name", ""))
+    if kind not in ENGINE_CASES[engine]["kinds"] and not (engine == "ccc" and kind == "pb_vs_ccc"):
+        return False
+    if name.endswith("_pb"):
+        return engine == "pb"
+    if engine == "pb" and kind in ("photon_pdd", "photon_profile", "photon_output_vs_field"):
+        return False
+    return True
 
 
 def _rel(path: Any) -> str:
@@ -165,7 +216,7 @@ def latest_run(results_dir: Path = RESULTS_DIR) -> Optional[Path]:
 
 
 def load_run(run_dir: Path) -> Dict[str, Any]:
-    return json.loads((run_dir / "results.json").read_text())
+    return json.loads((run_dir / "results.json").read_text(encoding="utf-8"))
 
 
 def _case_section(r: Dict[str, Any]) -> List[str]:
@@ -193,7 +244,7 @@ def _case_section(r: Dict[str, Any]) -> List[str]:
 def render(engine: str, run: Dict[str, Any], run_dir: Path) -> str:
     spec = ENGINE_CASES[engine]
     ident = engine_identity(engine)
-    cases = [r for r in run["results"] if r.get("kind") in spec["kinds"]]
+    cases = [r for r in run["results"] if _belongs(engine, r)]
     statuses = [r["status"] for r in cases]
     verdict = ("every graded check passed" if cases and all(s in ("pass", "info", "skip") for s in statuses)
                else "graded checks failed; see the cases" if cases else "no case of this engine in the run")
@@ -202,7 +253,7 @@ def render(engine: str, run: Dict[str, Any], run_dir: Path) -> str:
         f"# Validation record — {spec['title']}",
         "",
         f"**{RESEARCH_USE_ONLY}** This document records research targets against the commissioning literature; it is not a "
-        "clinical commissioning and grants no acceptance level (SMIS B2 levels are granted by the department against this evidence).",
+        "clinical commissioning and grants no acceptance level (a department that uses radiarch grants acceptance against this evidence).",
         "",
         f"Date: {today}. Harness run: `{'` + `'.join(run.get('runs', [run_dir.name]))}` (radiarch commit {run.get('radiarch_commit')}, {'fast mode' if run.get('fast') else 'full mode'}, "
         f"{_cpu_model()}, Python {run.get('python')}).",
@@ -245,7 +296,7 @@ def render(engine: str, run: Dict[str, Any], run_dir: Path) -> str:
         "| Role | Name | Date | Signature |",
         "|---|---|---|---|",
         "| Medical physicist (review of physics cases) |  |  |  |",
-        "| Principal investigator |  |  |  |",
+        "| Project lead |  |  |  |",
         "",
         f"Generated by `radiarch.validation.report` from `{_rel(run_dir)}/results.json`.",
         "",
@@ -274,9 +325,9 @@ def write_reports(run_dir: Path, out_dir: Path = REPORTS_DIR, engines: Optional[
         ident = engine_identity(engine)
         stamp = _dt.date.today().isoformat()
         path = out_dir / f"{stamp}-{engine}-v{ident.get('engine_version', '0')}-{run.get('radiarch_commit', 'unknown')}.md"
-        path.write_text(render(engine, run, run_dir))
+        path.write_text(render(engine, run, run_dir), encoding="utf-8")
         written.append(path)
-    (out_dir / "LATEST.md").write_text("\n".join(f"- [{p.name}]({p.name})" for p in written) + "\n")
+    (out_dir / "LATEST.md").write_text("\n".join(f"- [{p.name}]({p.name})" for p in written) + "\n", encoding="utf-8")
     return written
 
 

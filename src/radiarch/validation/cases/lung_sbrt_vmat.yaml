@@ -1,0 +1,23 @@
+name: lung_sbrt_vmat
+kind: lung_sbrt_vmat
+description: Lung SBRT with VMAT on LCTSC thoraces - a synthetic peripheral GTV in the right lung, PTV +5 mm, 54 Gy in 3 fractions; one 200-degree arc on the tumour's side from the fluence of its sector beams (pb Dij), leaves swept per sector, control-point doses recomputed and metersets re-optimized within the machine's limits; evaluated against the lung SBRT template (TG-101 limits) and the RTOG 0813/0915 conformality table, with the delivered arcs recomputed by CCC as the second engine. Fast mode runs one patient, half the sectors, no second engine.
+data: data/public/lctsc
+patients: [LCTSC-Test-S1-101, LCTSC-Test-S2-101]
+spacing_mm: 3.0
+beamlet_mm: 5.0
+iterations: 150
+rounds: 3
+prescription_gy: 54.0
+fractions: 3
+gtv_radius_mm: 12.0
+goal_template: sbrt-lung-54gy-3fx
+machine: synthetic-120
+jaw_margin_mm: 10.0
+ring_far_fraction: 0.4
+ring_far_outer_mm: 400.0
+organ_limits: {SpinalCord: 21.9, Esophagus: 25.2, Heart: 30.0}
+arcs:
+  - {arc_id: ARC1, start_deg: 180.0, stop_deg: 20.0, direction: CW, sectors: 10, control_point_spacing_deg: 4.0}
+second_engine: ccc
+n_jobs: 16
+note: "synthetic peripheral GTV in the right lung (radius 12 mm), PTV +5 mm, rings for the SBRT dose fall-off"

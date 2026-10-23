@@ -120,7 +120,7 @@ jobs:
     # R7a: the validation harness in fast mode (coarser grids, fewer primaries) on the
     # cases that need no external data: photon physics on water and slab phantoms,
     # the proton range case, the synthetic gamma cross-check. Cases that need
-    # data/public of the SMIS repo skip here and run on the workstation. Results are
+    # a data directory outside the repo (RADIARCH_VALIDATION_DATA) skip here and run on the workstation. Results are
     # research targets against the commissioning literature, never a commissioning.
     name: Validation harness (nightly / manual, fast mode)
     runs-on: ubuntu-latest

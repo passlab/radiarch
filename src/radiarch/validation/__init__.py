@@ -2,7 +2,7 @@
 case definitions and a runner that writes a dated results folder.
 
 This is not the unit-test suite. Cases take seconds to hours, need the engine
-binaries and, for some, data under ``data/public`` of the SMIS repo. Run::
+binaries and, for some, public data in ``RADIARCH_VALIDATION_DATA`` (default ``../data/public``). Run::
 
     python -m radiarch.validation.run --list
     python -m radiarch.validation.run --cases photon_pdd_10x10 photon_profile_10x10
