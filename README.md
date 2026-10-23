@@ -311,8 +311,8 @@ python -m radiarch.validation.run --cases pb_vs_mc pb_vs_ccc photon_pdd_10x10_pb
   photon_output_vs_field_pb lung_sbrt_vmat hn_sib_vmat
 ```
 
-`pb_vs_mc` grades the pencil beam against the OpenGATE references (the lung factors are informative:
-a pencil beam scales depth only); `pb_vs_ccc` is the cross-engine check (gamma 3 %/3 mm in absolute
+`pb_vs_mc` grades the pencil beam against the OpenGATE references (the lung checks are consistency
+checks: the lateral kernel scaling was fitted to the two lung slabs); `pb_vs_ccc` is the cross-engine check (gamma 3 %/3 mm in absolute
 dose, the beamlet-size and field-size dependence of each engine, and which side a lateral beam enters);
 `lung_sbrt_vmat` plans 54 Gy in 3 fractions with one arc on LCTSC thoraces and grades the TG-101 limits,
 R100, R50 and D2cm, with CCC recomputing the delivered arcs; `hn_sib_vmat` plans a 70/56 Gy simultaneous

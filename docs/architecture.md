@@ -138,7 +138,7 @@ registry (`registry.py`) resolves them by name.
 |---|---|---|---|---|
 | `mcsquare` (0.3.0) | protons, PBS | MCsquare binary over files, radiarch driver (`mcsquare_driver.py`) | `engines/mcsquare/` (binaries, materials, beam data library, scanner tables) | Monte Carlo dose and sparse Dij; engine-native robust scenario sets (81 / 21 / random); seedable |
 | `ccc` (1.1.0) | photons | WiscPlan collapsed-cone binary (GPLv2, separate program) over files (`ccc_driver.py`) | `engines/ccc/` (source, binary rebuilt with scatter parameters, generic 6 MV kernels) | reference-field calibration; shipped scatter truncation (~2 cm) by default, full scatter as an option |
-| `pb` (1.0.0) | photons | in process, NumPy or CuPy (`pb.py`) | `engines/pb/` (OpenGATE pencil kernel table) | SVD pencil beam with radiological depth; full-kernel dose, cut-off sampled Dij, per-segment doses for VMAT; the second engine |
+| `pb` (1.1.1) | photons | in process, NumPy or CuPy (`pb.py`) | `engines/pb/` (OpenGATE pencil kernel table) | SVD pencil beam with radiological depth and density-scaled lateral kernels; full-kernel dose, cut-off sampled Dij, per-segment doses for VMAT; the second engine |
 | `analytic` | test only | in process | none | toy depth fall-off; refused outside development |
 
 Engines follow IEC 61217 (gantry 90 enters from the patient's left). Absolute photon dose
@@ -247,7 +247,7 @@ the audit log and storage hygiene. The pencil-beam engine uses a GPU through CuP
   the engines' outputs, DICOM conformance of the written objects, the cross-engine gamma.
 - **CI**: fast API tests, the full suite with the engine binaries, `dciodvfy` on the written
   objects, a nightly MCsquare consistency check and a nightly fast run of the validation harness.
-- **Validation records**: `docs/validation/` (R7 for review; R8 to follow).
+- **Validation records**: `docs/validation/` (R7 and R8 for review).
 
 ## 9. Known limits
 
@@ -255,7 +255,8 @@ the audit log and storage hygiene. The pencil-beam engine uses a GPU through CuP
   transmission or tongue-and-groove in segment doses.
 - CCC's shipped scatter truncation: central dose nearly independent of field size, depth dose
   dependent on beamlet size, no dose beyond ~2 cm of the beamlets (ADR 0015).
-- The pencil beam scales depth only: dose in and behind lung is overestimated for small fields.
+- The pencil beam's lateral kernel scaling in lung is fitted to two Monte Carlo slabs (2 x 2 and
+  10 x 10 cm, within 2 %); photon scatter is not scaled and interface build-up is not modelled.
 - VMAT leaf trajectories come from sliding-window sweeps of sector fluence, not from direct
   leaf optimization.
 - Store cleanup can evict an approved version (it does not consult the lineage locks yet).

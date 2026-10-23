@@ -57,9 +57,11 @@ TG-101; the results it names are lung VMAT and SBRT plans, a head-and-neck
    SSD 100 cm, computed from the engine's own components and penumbra.
 6. **NumPy, with CuPy behind a switch.** `params["device"]` (`cpu`, `gpu`,
    `auto`; `RADIARCH_PB_DEVICE`) chooses the backend; the code is written once
-   against the array API both share. The GPU path is not yet tested on
-   hardware: the workstation's NVIDIA driver and library versions disagree
-   until it is rebooted.
+   against the array API both share (the `gpu` extra installs CuPy). On a
+   workstation GPU the doses agree with the CPU's to 3 × 10⁻⁶ and are up to
+   25 times faster; influence and segment matrices differ only in a few
+   entries at the sampling threshold. `test_gpu_matches_cpu` checks this
+   where a device is present.
 7. **Air outside the patient gets no dose; cavities do.** Voxels below
    0.05 g/cm³ get no dose unless an axial slice encloses them, as a planning
    system's external contour would: airways and sinuses inside targets are
@@ -99,6 +101,38 @@ TG-101; the results it names are lung VMAT and SBRT plans, a head-and-neck
     lung V20, graded against the RTOG 0813/0915 conformality table
     (interpolated by PTV volume; the minor-deviation limits checked against
     the NRG Oncology protocol template).
+12. **A delivered plan is recomputed through coverage beamlets.** The beamlet
+    cut that defines the optimizer's columns keeps a leaf pair only when its
+    opening exceeds one beamlet, and a beamlet only when its centre is inside
+    the opening. That is right for fluence optimization and wrong for
+    recomputing a sequenced plan: most sliding-window arc apertures are a
+    single beamlet wide and vanish. `PhotonSegment.coverage_beamlets()` keeps
+    every beamlet cell the aperture touches, with the fraction of its area
+    that is open, and `CCCEngine.compute_delivered_dose` weights each cell by
+    its segment's meterset times that fraction. The optimizer's beamlets, the
+    R4 coverage matrix and the goldens are unchanged.
+13. **The kernel is scaled laterally in low density (`pb` 1.1.0).** A pencil
+    beam that scales depth only overdoses narrow fields in lung by about
+    25 % (findings). The kernel's part within 30 mm of the axis, which
+    secondary electrons carry, is stretched by s = ρ_eff^−0.9, k(r / s) / s²,
+    so its integral and the broad-field dose stay as they were; the photon
+    scatter beyond (a cosine taper from 30 to 45 mm) is left as it is.
+    ρ_eff is the body's density smoothed by a 5 mm Gaussian (normalised
+    inside the body), clipped to at most 1, so water and bone use the
+    unscaled kernel and the calibration and water results do not change. The
+    planes are precomputed at five scales from 1 to 5, geometrically spaced;
+    each voxel interpolates between the two nearest in log scale, in the dose
+    path, the segment matrix and the influence matrix alike. The exponent and
+    the radius were fitted to the two Monte Carlo lung slabs (2 × 2 and
+    10 × 10 cm): with an exponent of 1 the narrow field came out 3–7 % low,
+    with 0.9 and 30 mm both slabs are within 2 % at every depth. The lung
+    checks are therefore consistency checks, like the penumbra. The influence
+    matrix agrees with the full dose in the slab within 0.6 % (its 80 mm
+    cutoff truncates little of the stretched kernel) and costs about a third
+    more time. Interface build-down and re-build-up are not modelled.
+    (Scaling kernels by density follows O'Connor's theorem; superposition
+    engines and some commercial pencil beams scale laterally in the same
+    spirit.)
 
 ## Findings
 
@@ -138,6 +172,54 @@ TG-101; the results it names are lung VMAT and SBRT plans, a head-and-neck
   the lungs, which wrap the PTV, a 25 Gy maximum next to a 60 Gy target cooled
   the PTV edge, and normalisation then made a hot core (PTV D5/D95 1.4–1.5).
   Parallel organs around the target now opt out of the maximum term.
+- **CCC dropped narrow arc apertures.** The first full run recomputed the
+  arcs with CCC's ordinary plan dose and found a PTV D95 of 0.63–0.72 of
+  `pb`'s and a gamma pass rate of 44–59 %. A sliding window in water traced
+  it to the beamlet cut (decision 12): a 4 mm window had no beamlets at all,
+  while windows of 8–40 mm were fully covered and agreed with `pb` to within
+  8 % at 10 cm depth. With coverage beamlets the 4 mm window is covered too,
+  and CCC / `pb` is 1.07. On the lung arcs the gamma pass rate rose to
+  69–83 % and the PTV D95 ratio to 0.70–0.87; the rest is lung transport
+  (next finding).
+- **The pencil beam overdoses narrow fields in lung.** The kernel is scaled
+  in depth only, so it ignores the lateral loss of electrons in low density.
+  Recomputing the same arcs and metersets with the body set to water gives
+  CCC / `pb` PTV D95 of 1.04–1.09 (CCC's scatter cut-off overdoses small
+  fields in water, finding above); with the patient's lungs it is 0.70–0.87.
+  So in lung `pb` gives a PTV dose 20–35 % higher than CCC for sliding-window
+  arcs, whose apertures are a few millimetres wide: the arcs' lung target
+  doses, and their normalisation, are not to be trusted from `pb` alone. The
+  same effect makes `pb`'s gradient indices optimistic: R50 of 1.6–2.3 for a
+  16 cc PTV is better than lung SBRT achieves in practice (about 3 is typical).
+  A Monte Carlo reference of a 2 × 2 cm field through the lung slab settles
+  which engine is nearer: relative to the dose at 2 cm in the water above,
+  `pb` is 22–27 % above Monte Carlo inside the lung (5–10 cm deep) and right
+  beyond it, CCC 8 % below to 1 % above inside and 10 % above beyond. For
+  narrow fields in lung CCC was the nearer engine. Lateral kernel scaling
+  (decision 13) brings `pb` to 0.99–1.02 of Monte Carlo inside the lung and
+  1.00 beyond it.
+- **The SBRT plans' fall-off was unchecked beyond 45 mm.** With lateral
+  scaling, narrow apertures deliver less dose per MU to a target in lung,
+  and the fluence optimization answered with heavily weighted beamlets
+  whose entrance dose, 18–22 cm from the PTV at the edge of the body, was
+  under no objective: the far ring ran from 20 to 45 mm. D2cm, the maximum
+  anywhere in the body beyond 2 cm, rose to 70–83 % of the prescription
+  (major deviations). The far ring now reaches the skin; on the second
+  patient D2cm fell to 49 %, its maximum 20 mm from the PTV. The earlier
+  passes (49 and 59 %) owed something to `pb` 1.0's overly steep fall-off
+  in lung.
+- **CuPy's constant-mode interpolation read past its array (fixed, `pb`
+  1.1.1).** On a float32 array, CuPy 14 takes the cell from the coordinate
+  rounded to float32 and the fraction from the float64 coordinate, so a
+  coordinate just below the last index reads one element beyond the array
+  with a small negative weight. In the dose path this put garbage (up to
+  10³⁰) into a few voxels of about one GPU dose in three on a 192-sector arc
+  plan, and differences of up to 0.004 Gy between identical runs. It showed
+  as a CCC gamma of 0 % on one patient and an invalid dose in another run;
+  the CPU path was never affected. GPU lookups now pad the array with zeros
+  and zero what lies outside it, which is SciPy's behaviour exactly; repeated
+  GPU doses are bit-identical. Version 1.1.1 keeps cached GPU doses of 1.1.0
+  from being reused.
 - **The Monte Carlo provenance recorded the host name** in a public repository;
   references and run records now record the processor instead.
 
@@ -149,6 +231,13 @@ TG-101; the results it names are lung VMAT and SBRT plans, a head-and-neck
   `hn_sib_vmat` (70/56 Gy in 35, two arcs) join the harness; `dij_consistency` covers `pb`; the report writes a fourth
   document for `pb`; `tests/test_r8_*.py` cover the engine, arcs, VMAT and SBRT,
   with the cross-engine gamma against CCC in CI.
-- Open: the GPU path on hardware; lateral kernel scaling (or a collapsed-cone
-  engine of our own) for lung; direct leaf optimization for VMAT; the
-  physicist's review of the R8 record.
+- CCC remains a weak second engine for small lung fields: its scatter
+  cut-off overdoses them at depth while its lung transport is more realistic
+  `pb` 1.0's. Its arc comparisons are informative, not graded; whole-plan
+  Monte Carlo recomputation is the stronger check.
+- CuPy's first CUDA use sets the thread's locale to C (driver 580), after
+  which Python reads and writes text as ASCII; the GPU backend restores the
+  locale, and the harness passes explicit encodings.
+- Open: a Monte Carlo reference of a tumour in lung (interfaces, build-up
+  inside the target) and whole-plan Monte Carlo recomputation; direct leaf
+  optimization for VMAT; the physicist's review of the R8 record.

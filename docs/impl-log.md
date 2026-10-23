@@ -260,7 +260,9 @@ ADR 0015. Done:
 - `services/dose_engines/pb.py`, engine `pb` 1.0.0: radiological depth on a divergent ray grid, full-kernel
   fluence convolution (beamlets or apertures), influence matrix with an 80 mm cutoff and Weyl-sequence
   roulette below 0.3 %, `segment_dose_matrix`, Gaussian fluence penumbra, output calibration, enclosed
-  cavities dosed, NumPy/CuPy backend (`RADIARCH_PB_DEVICE`; GPU untested: driver mismatch until reboot).
+  cavities dosed, NumPy/CuPy backend (`RADIARCH_PB_DEVICE`; `gpu` extra; on GPU doses equal the CPU's to
+  3e-6, 6–25 times faster; `test_gpu_matches_cpu`). Production kernel 3e7 primaries, fingerprint
+  f046d6a503757f17, four components, penumbra FWHM 4.0 mm fitted to the Monte Carlo 80-20 % penumbra.
 - Plan model: `PhotonArc`/`ArcControlPoint`, `PhotonBeam.arc`, `PhotonSegment.gantry_deg`; CCC and pb honour
   sector angles; RT Plan writer writes DYNAMIC beams, reader reads arcs back; the collimator now reaches the
   open-field plan.
@@ -276,6 +278,24 @@ ADR 0015. Done:
 - Tests: `tests/test_r8_{pb_engine,arcs,vmat,sbrt}.py` (the cross-engine gamma against CCC included).
 Findings: CCC's shipped scatter cut-off makes the central dose independent of field size and the depth dose
 depend on the beamlet size, and gives zero dose ~2 cm outside the beamlets (ADR 0015).
-Open: the GPU path on hardware; lateral kernel scaling for lung; direct leaf optimization for VMAT; the R8
-record for the physicist.
+- Delivered plans: `PhotonSegment.coverage_beamlets()` (every aperture cell with its open fraction),
+  `ccc_driver.delivered_beamlet_geometry`, `CCCEngine.compute_delivered_dose`; the harness's second-engine
+  recompute of arcs uses it. The first full run (`20261022-225008-dcdc7f3`) had recomputed arcs through the
+  optimizer's beamlet cut, which drops leaf pairs no wider than one beamlet: CCC PTV D95 0.63–0.72 of pb.
+- Harness files are read and written as UTF-8 (the summary failed in a shell without a UTF-8 locale).
+- The lung arcs' second-engine gap that remained (CCC / pb PTV D95 0.70–0.87, 1.04–1.09 with the body as
+  water) was pb overdosing narrow fields in lung: a new OpenGATE reference `lung_slab_2x2` gave pb 22–27 % high
+  in the lung. `pb` 1.1.0 scales the kernel laterally: the part within 30 mm stretched by rho_eff^-0.9 (5 mm
+  smoothed density, five precomputed scales, log interpolation), fitted to both lung slabs (within 2 %); lung
+  checks in `pb_vs_mc` graded as consistency checks; `TestLateralScaling`.
+- GPU: the CUDA driver sets the thread's locale to C on first use; `backend()` launches a first kernel and
+  restores it (`test_gpu_backend_keeps_the_locale`); golden tests read their files as UTF-8.
+- `lung_sbrt_vmat`: the far ring reaches the skin (`ring_far_outer_mm: 400`): with pb 1.1.0 the unconstrained
+  entrance dose of heavy beamlets 18–22 cm from the PTV gave D2cm 70–83 %; now 49 % on the second patient.
+- `pb` 1.1.1: CuPy 14's constant-mode `map_coordinates` on float32 reads one element past the array for a
+  coordinate just below the last index (mixed float32/float64 index arithmetic): rare garbage voxels (up to
+  1e30) in GPU doses, the 0 % CCC gamma of one lung arc patient. `_lookup` pads on the GPU and zeroes points
+  outside the array; repeated GPU doses bit-identical; `test_gpu_lookup_stays_inside_the_array`.
+Open: a Monte Carlo tumour-in-lung reference and whole-plan Monte Carlo as the second engine; direct leaf
+optimization for VMAT; the R8 record for the physicist.
 

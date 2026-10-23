@@ -144,17 +144,20 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] CCC gantry turned as IEC 61217 (CCC 1.1.0); engine versions in every cache key
 - [x] Pencil kernel from OpenGATE (Monte Carlo run of the Mohan 6 MV spectrum)
 - [x] Kernel table (integral-conserving, SVD of the cumulative kernel) and the engine `pb`: dose path, influence matrix with unbiased sampling, per-segment doses, scenarios, calibration
-- [ ] Production kernel table, number of components and penumbra width fitted to Monte Carlo (waiting for the Monte Carlo run)
-- [x] NumPy path; [ ] CuPy path tested on the GPUs (after the workstation's reboot)
+- [x] Production kernel table (3 × 10⁷ primaries), four components, penumbra FWHM 4.0 mm fitted to Monte Carlo
+- [x] NumPy path; CuPy path tested on GPUs (`gpu` extra, `test_gpu_matches_cpu`)
 - [x] Cross-engine gamma against CCC in CI
 - [x] Arcs in the plan model; RT Plan writes and reads them as DYNAMIC beams
 - [x] VMAT: arc sequencing of sector fluence, gantry, leaf and dose-rate limits per fraction, control-point doses recomputed, metersets re-optimized; `POST /optimize/{id}/arcs`
 - [x] SBRT templates (TG-101 limits with target goals) and RTOG 0813/0915 indices
 - [x] Cases: pencil beam against Monte Carlo and CCC, lung SBRT with one arc, lung 60/30 with two arcs, head and neck 70/56 Gy integrated boost with two arcs
+- [x] Delivered plans recomputed by CCC through coverage beamlets, so that narrow arc apertures are dosed
 - [ ] Monte Carlo field-size references (4 × 4, 20 × 20 cm) and the graded field-size check
-- [ ] Full-mode harness run and the R8 record for review
+- [x] Full-mode harness run and the R8 record for review ([`validation/2026-10-23-r8/`](validation/2026-10-23-r8/); to be refreshed by a run at the R8 commit)
+- [ ] Physicist's review and signature of the R8 record **(waiting)**
 - [ ] Direct leaf optimization for VMAT (progressive sampling or sequential convex programming) **(open)**
-- [ ] Lateral kernel scaling for lung **(open)**
+- [x] Lateral kernel scaling for lung (`pb` 1.1.0; fitted to the 2 × 2 and 10 × 10 cm Monte Carlo lung slabs)
+- [x] Monte Carlo 2 × 2 cm lung-slab reference and the narrow-field lung check
 
 ### R9 — Registration, 4D, replanning (not started)
 - [ ] Rigid and deformable registration (SimpleITK) and contour propagation

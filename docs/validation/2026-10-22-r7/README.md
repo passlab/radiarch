@@ -64,7 +64,7 @@ python3 -m venv .venv && .venv/bin/pip install -e "./src[dev,validation]"     # 
 .venv/bin/python -m radiarch.validation.report              # documents from the newest run
 # one Monte Carlo reference (about 100 minutes on 18 threads)
 uv run --no-project --python 3.12 --with opengate==10.1.1 --with itk \
-  python -m radiarch.validation.mc_reference --case water_10x10 --primaries 5e7
+  python src/radiarch/validation/mc_reference.py --case water_10x10 --primaries 5e7
 ```
 
 The cases on public patient data (LCTSC, Pancreatic-CT-CBCT-SEG, the TG-119 package) read
