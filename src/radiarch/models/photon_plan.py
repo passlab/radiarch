@@ -65,6 +65,10 @@ class PhotonSegment(BaseModel):
     beamlet_spacing_mm: Tuple[float, float] = Field(
         default=(5.0, 5.0), description="Beamlet pixel size (x, y) in the BEV at isocenter."
     )
+    gantry_deg: Optional[float] = Field(
+        default=None, ge=0.0, lt=360.0,
+        description="Gantry angle of an arc sector (the mid-angle of its control-point interval); None = the beam's.",
+    )
 
     @model_validator(mode="after")
     def _jaws_ordered(self) -> "PhotonSegment":
@@ -122,13 +126,147 @@ class PhotonSegment(BaseModel):
                         out.append((x, y, bx, by))
         return np.asarray(out, dtype=float).reshape(-1, 4)
 
+    def coverage_beamlets(self) -> np.ndarray:
+        """Every beamlet cell the aperture touches, with the fraction of its area that is open: an
+        ``(n, 5)`` array of ``x_mm, y_mm, dx_mm, dy_mm, fraction``.
+
+        For recomputing a delivered plan (:meth:`radiarch.services.dose_engines.ccc.CCCEngine.compute_delivered_dose`):
+        :meth:`beamlets` drops leaf pairs no wider than one beamlet and cells whose centre lies outside the
+        opening, which loses most of a sliding-window arc's narrow apertures. Cells lie on the same lattice
+        (edges on multiples of the spacing); the open area of a cell is the area of the leaf openings and the
+        jaws that falls inside it. The optimizer's columns stay those of :meth:`beamlets`.
+        """
+        bx, by = float(self.beamlet_spacing_mm[0]), float(self.beamlet_spacing_mm[1])
+        xj0, xj1 = self.x_jaw_mm
+        yj0, yj1 = self.y_jaw_mm
+        area: dict = {}
+        for row in self.aperture_rows():
+            x0, x1 = max(row.x_left_mm, xj0), min(row.x_right_mm, xj1)
+            y0, y1 = max(row.y_min_mm, yj0), min(row.y_max_mm, yj1)
+            if x1 <= x0 or y1 <= y0:
+                continue
+            for j in range(math.floor(y0 / by), math.ceil(y1 / by)):
+                hy = min(y1, (j + 1) * by) - max(y0, j * by)
+                if hy <= 0:
+                    continue
+                for i in range(math.floor(x0 / bx), math.ceil(x1 / bx)):
+                    hx = min(x1, (i + 1) * bx) - max(x0, i * bx)
+                    if hx > 0:
+                        area[(i, j)] = area.get((i, j), 0.0) + hx * hy
+        cells = sorted(area.items(), key=lambda kv: (kv[0][1], kv[0][0]))
+        out = [((i + 0.5) * bx, (j + 0.5) * by, bx, by, min(a / (bx * by), 1.0)) for (i, j), a in cells if a > 1e-9 * bx * by]
+        return np.asarray(out, dtype=float).reshape(-1, 5)
+
     @property
     def n_beamlets(self) -> int:
         return int(self.beamlets().shape[0])
 
 
+def mid_angle_deg(g0: float, g1: float, direction: str) -> float:
+    """The angle halfway from ``g0`` to ``g1`` turning in ``direction`` (``CW``: increasing angles)."""
+    return (g0 + 0.5 * arc_step_deg(g0, g1, direction)) % 360.0
+
+
+def arc_step_deg(g0: float, g1: float, direction: str) -> float:
+    """The signed rotation from ``g0`` to ``g1`` in ``direction``: positive for ``CW``, negative for ``CC``."""
+    if direction == "CW":
+        return (g1 - g0) % 360.0
+    return -((g0 - g1) % 360.0)
+
+
+class ArcControlPoint(BaseModel):
+    """A control point of an arc: the gantry angle, jaws and leaves when the beam's cumulative meterset
+    reaches ``cumulative_mu``. Between control points the gantry turns, the leaves and jaws move linearly and
+    the meterset difference is delivered (DICOM RT Plan, a DYNAMIC beam)."""
+
+    gantry_deg: float = Field(..., ge=0.0, lt=360.0)
+    cumulative_mu: float = Field(..., ge=0.0)
+    x_jaw_mm: Tuple[float, float]
+    y_jaw_mm: Tuple[float, float]
+    mlc_rows: List[MLCRow] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _jaws_ordered(self) -> "ArcControlPoint":
+        if self.x_jaw_mm[1] < self.x_jaw_mm[0] or self.y_jaw_mm[1] < self.y_jaw_mm[0]:
+            raise ValueError("arc control point jaws must be (min, max)")
+        return self
+
+
+class PhotonArc(BaseModel):
+    """A volumetric-modulated arc: control points every few degrees, turning in one direction.
+
+    Its dose is computed sector by sector (:meth:`sectors`): each control-point interval becomes one static
+    segment at the interval's mid-angle, with the mean of the two control points' leaves and jaws and the
+    interval's meterset, the usual approximation for intervals of 2-4 degrees."""
+
+    direction: Literal["CW", "CC"]
+    collimator_deg: float = 0.0
+    control_points: List[ArcControlPoint] = Field(..., min_length=2)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> "PhotonArc":
+        cps = self.control_points
+        if abs(cps[0].cumulative_mu) > 1e-9:
+            raise ValueError("an arc's first control point has cumulative_mu 0")
+        total_turn = 0.0
+        for a, b in zip(cps, cps[1:]):
+            if b.cumulative_mu < a.cumulative_mu - 1e-9:
+                raise ValueError("cumulative_mu must not decrease along the arc")
+            step = abs(arc_step_deg(a.gantry_deg, b.gantry_deg, self.direction))
+            if step <= 1e-6 or step > 30.0:
+                raise ValueError(f"control points {a.gantry_deg:g} -> {b.gantry_deg:g} deg: each interval must turn "
+                                 f"the gantry by more than 0 and at most 30 degrees in the arc's direction")
+            total_turn += step
+        if total_turn > 360.0 + 1e-6:
+            raise ValueError("an arc turns at most 360 degrees")
+        shapes = {tuple((round(r.y_min_mm, 6), round(r.y_max_mm, 6)) for r in cp.mlc_rows) for cp in cps}
+        if len(shapes) > 1:
+            raise ValueError("all control points of an arc must have the same leaf pairs")
+        return self
+
+    @property
+    def total_mu(self) -> float:
+        return float(self.control_points[-1].cumulative_mu)
+
+    @property
+    def start_deg(self) -> float:
+        return float(self.control_points[0].gantry_deg)
+
+    @property
+    def stop_deg(self) -> float:
+        return float(self.control_points[-1].gantry_deg)
+
+    @property
+    def length_deg(self) -> float:
+        cps = self.control_points
+        return float(sum(abs(arc_step_deg(a.gantry_deg, b.gantry_deg, self.direction)) for a, b in zip(cps, cps[1:])))
+
+    def sectors(self, beamlet_spacing_mm: Tuple[float, float] = (5.0, 5.0)) -> List[PhotonSegment]:
+        """One static segment per control-point interval (see the class docstring)."""
+        out: List[PhotonSegment] = []
+        cps = self.control_points
+        for k, (a, b) in enumerate(zip(cps, cps[1:])):
+            rows = [MLCRow(y_min_mm=ra.y_min_mm, y_max_mm=ra.y_max_mm,
+                           x_left_mm=0.5 * (ra.x_left_mm + rb.x_left_mm), x_right_mm=0.5 * (ra.x_right_mm + rb.x_right_mm))
+                    for ra, rb in zip(a.mlc_rows, b.mlc_rows)]
+            xj = (0.5 * (a.x_jaw_mm[0] + b.x_jaw_mm[0]), 0.5 * (a.x_jaw_mm[1] + b.x_jaw_mm[1]))
+            yj = (0.5 * (a.y_jaw_mm[0] + b.y_jaw_mm[0]), 0.5 * (a.y_jaw_mm[1] + b.y_jaw_mm[1]))
+            if xj[1] <= xj[0]:
+                xj = (xj[0] - 0.5, xj[0] + 0.5)      # closed jaws: a sliver, the sector delivers nothing anyway
+            if yj[1] <= yj[0]:
+                yj = (yj[0] - 0.5, yj[0] + 0.5)
+            out.append(PhotonSegment(
+                control_point_index=k, mu=max(0.0, b.cumulative_mu - a.cumulative_mu), x_jaw_mm=xj, y_jaw_mm=yj,
+                collimator_deg=self.collimator_deg, mlc_rows=rows,
+                beamlet_spacing_mm=(float(beamlet_spacing_mm[0]), float(beamlet_spacing_mm[1])),
+                gantry_deg=mid_angle_deg(a.gantry_deg, b.gantry_deg, self.direction),
+            ))
+        return out
+
+
 class PhotonBeam(BaseModel):
-    """A gantry/couch position with its isocenter and control points."""
+    """A gantry/couch position with its isocenter and control points; or an arc (``arc`` set), whose
+    ``segments`` are the arc's sectors and whose ``gantry_deg`` is the arc's start."""
 
     beam_id: str = Field(..., min_length=1, max_length=64)
     gantry_deg: float = Field(..., ge=0.0, lt=360.0)
@@ -137,6 +275,27 @@ class PhotonBeam(BaseModel):
     sad_mm: float = Field(default=1000.0, gt=0.0)
     energy_mv: Optional[float] = Field(default=None, description="Nominal beam energy (MV) when known; the engines use their own beam model.")
     segments: List[PhotonSegment] = Field(..., min_length=1)
+    arc: Optional[PhotonArc] = Field(default=None, description="Set for a VMAT arc: the control points; segments are its sectors.")
+
+    @model_validator(mode="after")
+    def _arc_sectors(self) -> "PhotonBeam":
+        if self.arc is not None:
+            if len(self.segments) != len(self.arc.control_points) - 1:
+                raise ValueError("an arc beam has one segment per control-point interval (PhotonBeam.from_arc builds them)")
+            if any(seg.gantry_deg is None for seg in self.segments):
+                raise ValueError("an arc beam's segments carry their sector angles")
+        return self
+
+    @classmethod
+    def from_arc(cls, beam_id: str, arc: PhotonArc, couch_deg: float = 0.0,
+                 isocenter_mm: Tuple[float, float, float] = (0.0, 0.0, 0.0), sad_mm: float = 1000.0,
+                 energy_mv: Optional[float] = None, beamlet_spacing_mm: Tuple[float, float] = (5.0, 5.0)) -> "PhotonBeam":
+        return cls(beam_id=beam_id, gantry_deg=arc.start_deg, couch_deg=couch_deg, isocenter_mm=isocenter_mm, sad_mm=sad_mm,
+                   energy_mv=energy_mv, segments=arc.sectors(beamlet_spacing_mm), arc=arc)
+
+    def segment_gantry_deg(self, seg: "PhotonSegment") -> float:
+        """The gantry angle a segment is delivered at: its own (an arc sector) or the beam's."""
+        return float(self.gantry_deg if seg.gantry_deg is None else seg.gantry_deg)
 
     def beamlets(self) -> np.ndarray:
         parts = [s.beamlets() for s in self.segments]
@@ -221,11 +380,13 @@ def open_field_segment(
     mu: float,
     beamlet_spacing_mm: Tuple[float, float] = (5.0, 5.0),
     control_point_index: int = 0,
+    collimator_deg: float = 0.0,
 ) -> PhotonSegment:
     """One open aperture the size of the jaw opening."""
     return PhotonSegment(
         control_point_index=control_point_index,
         mu=mu,
+        collimator_deg=float(collimator_deg),
         x_jaw_mm=(float(jaw_x_mm[0]), float(jaw_x_mm[1])),
         y_jaw_mm=(float(jaw_y_mm[0]), float(jaw_y_mm[1])),
         mlc_rows=open_field_mlc_rows(jaw_x_mm, jaw_y_mm, leaf_width_mm),
@@ -236,6 +397,10 @@ def open_field_segment(
 __all__ = [
     "MLCRow",
     "PhotonSegment",
+    "ArcControlPoint",
+    "PhotonArc",
+    "arc_step_deg",
+    "mid_angle_deg",
     "PhotonBeam",
     "PhotonPlan",
     "open_field_mlc_rows",

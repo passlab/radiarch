@@ -33,10 +33,11 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 import pydicom
+from loguru import logger
 from pydicom.dataset import Dataset
 
 from ..models.common import DicomPlanProvenance
-from ..models.photon_plan import MLCRow, PhotonBeam, PhotonPlan, PhotonSegment, open_field_mlc_rows
+from ..models.photon_plan import ArcControlPoint, MLCRow, PhotonArc, PhotonBeam, PhotonPlan, PhotonSegment, open_field_mlc_rows
 from ..models.proton_plan import ProtonBeam, ProtonLayer, ProtonPlan, ProtonSpot, RangeShifterSetting
 from .uids import PLAN_SOP_CLASSES, SOP
 
@@ -140,6 +141,39 @@ def _mlc_rows(bounds: Sequence[float], positions: Sequence[float]) -> List[MLCRo
     return rows
 
 
+def _arc_beam(cps, states, bounds, final_cmw: float, mu_total: float, name: str, couch: float, iso, sad: float,
+              energy, beamlet_spacing_mm, leaf_width_without_mlc_mm: float) -> Optional[PhotonBeam]:
+    """A DYNAMIC beam whose gantry turns as one :class:`PhotonArc`, or ``None`` when it does not fit one
+    (a control point that does not turn the gantry, a turn back, more than 30 degrees between points)."""
+    direction = str(getattr(cps[0], "GantryRotationDirection", "") or "").upper()
+    if direction not in ("CW", "CC"):
+        g0, g1 = states[0][1]["gantry"], states[1][1]["gantry"]
+        direction = "CW" if (g1 - g0) % 360.0 <= 180.0 else "CC"
+    points = []
+    for w, st in states:
+        xj, yj, mlc = st["xj"], st["yj"], st["mlc"]
+        if mlc is not None and bounds is not None:
+            rows = _mlc_rows(bounds, mlc)
+            if xj is None:
+                xj = [min(r.x_left_mm for r in rows), max(r.x_right_mm for r in rows)]
+            if yj is None:
+                yj = [bounds[0], bounds[-1]]
+        else:
+            if xj is None or yj is None:
+                return None
+            rows = open_field_mlc_rows((xj[0], xj[1]), (yj[0], yj[1]), leaf_width_without_mlc_mm)
+        points.append(ArcControlPoint(gantry_deg=st["gantry"] % 360.0, cumulative_mu=w / final_cmw * mu_total,
+                                      x_jaw_mm=(float(min(xj)), float(max(xj))), y_jaw_mm=(float(min(yj)), float(max(yj))),
+                                      mlc_rows=rows))
+    try:
+        arc = PhotonArc(direction=direction, collimator_deg=float(states[0][1]["coll"]), control_points=points)
+        return PhotonBeam.from_arc(name, arc, couch_deg=couch, isocenter_mm=iso, sad_mm=sad, energy_mv=energy,
+                                   beamlet_spacing_mm=(float(beamlet_spacing_mm[0]), float(beamlet_spacing_mm[1])))
+    except ValueError as exc:
+        logger.warning("beam {}: arc not kept as one ({}); one beam per control-point interval", name, exc)
+        return None
+
+
 def read_photon_plan(src: Source, beamlet_spacing_mm: Tuple[float, float] = (5.0, 5.0),
                      leaf_width_without_mlc_mm: float = 10.0) -> PhotonPlan:
     ds, path = _dataset(src)
@@ -230,7 +264,12 @@ def read_photon_plan(src: Source, beamlet_spacing_mm: Tuple[float, float] = (5.0
         if len(gantries) == 1:
             beams.append(PhotonBeam(beam_id=name, gantry_deg=segments[0][0], couch_deg=couch, isocenter_mm=iso,
                                     sad_mm=sad, energy_mv=energy, segments=[s for _, s in segments]))
-        else:   # an arc: one beam per control-point interval at its mid-angle
+            continue
+        arc_beam = _arc_beam(cps, states, bounds, final_cmw, mu_total, name, couch, iso, sad, energy, beamlet_spacing_mm,
+                             leaf_width_without_mlc_mm)
+        if arc_beam is not None:
+            beams.append(arc_beam)
+        else:   # an arc radiarch cannot hold as one (a control point that does not turn): one beam per interval
             for g, seg in segments:
                 beams.append(PhotonBeam(beam_id=f"{name}:{seg.control_point_index}", gantry_deg=g, couch_deg=couch,
                                         isocenter_mm=iso, sad_mm=sad, energy_mv=energy, segments=[seg]))

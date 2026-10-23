@@ -38,7 +38,7 @@ class PhotonBuildResult:
 
 
 def build_photon_plan(
-    beams: Sequence[Tuple[float, float]],
+    beams: Sequence[Tuple[float, ...]],
     jaw_x_mm: Tuple[float, float],
     jaw_y_mm: Tuple[float, float],
     leaf_width_mm: float,
@@ -53,7 +53,7 @@ def build_photon_plan(
     Parameters
     ----------
     beams
-        ``(gantry_deg, couch_deg)`` per beam, in beam order.
+        ``(gantry_deg, couch_deg)`` or ``(gantry_deg, couch_deg, collimator_deg)`` per beam, in beam order.
     jaw_x_mm, jaw_y_mm
         Jaw positions as ``(min, max)`` at isocenter.
     leaf_width_mm
@@ -67,13 +67,15 @@ def build_photon_plan(
     if len(ids) != len(beams):
         raise ValueError("beam_ids must match beams")
     plan_beams: List[PhotonBeam] = []
-    for beam_id, (gantry, couch) in zip(ids, beams):
+    for beam_id, angles in zip(ids, beams):
+        gantry, couch = angles[0], angles[1]
+        collimator = float(angles[2]) if len(angles) > 2 else 0.0
         plan_beams.append(PhotonBeam(
             beam_id=beam_id,
             gantry_deg=float(gantry) % 360.0,
             couch_deg=float(couch),
             isocenter_mm=tuple(float(v) for v in isocenter_mm),
-            segments=[open_field_segment(jaw_x_mm, jaw_y_mm, leaf_width_mm, mu_per_beam, beamlet_spacing_mm)],
+            segments=[open_field_segment(jaw_x_mm, jaw_y_mm, leaf_width_mm, mu_per_beam, beamlet_spacing_mm, collimator_deg=collimator)],
         ))
     return PhotonPlan(name=name, beams=plan_beams)
 
@@ -98,7 +100,7 @@ def generate_photon_beamlets(
     grid_dims = (max(1, math.ceil(jaw_x / bx)), max(1, math.ceil(jaw_y / by)))
 
     plan = build_photon_plan(
-        beams=[(b.gantry_deg, b.couch_deg) for b in beam_set.beams],
+        beams=[(b.gantry_deg, b.couch_deg, b.collimator_deg) for b in beam_set.beams],   # R8: the collimator was dropped
         jaw_x_mm=(-jaw_x / 2.0, jaw_x / 2.0),
         jaw_y_mm=(-jaw_y / 2.0, jaw_y / 2.0),
         leaf_width_mm=leaf_width,

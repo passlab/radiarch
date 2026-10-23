@@ -69,10 +69,24 @@ class TestPhotonPlan:
             {"cmw": 1.0, "gantry": 30.0},
         ]
         plan = read_photon_plan(F.photon_rtplan([{"number": 3, "name": "Arc", "cps": cps}], {3: 200.0}, bounds=BOUNDS))
+        # R8: the arc stays one beam (its control points kept for export); its segments are the sectors
+        assert [b.beam_id for b in plan.beams] == ["Arc"]
+        beam = plan.beams[0]
+        assert beam.arc is not None and beam.arc.direction == "CW"        # inferred: 350 -> 10 turns +20
+        assert [c.gantry_deg for c in beam.arc.control_points] == [350.0, 10.0, 30.0]
+        assert [beam.segment_gantry_deg(s) for s in beam.segments] == [0.0, 20.0]   # mid-angles, wrap handled
+        assert [s.mu for s in beam.segments] == [100.0, 100.0]
+        assert beam.segments[0].mlc_rows[0].x_right_mm == 15.0          # mean of 10 and 20 over the interval
+
+    def test_an_arc_that_does_not_fit_one_is_read_per_interval(self):
+        cps = [
+            {"cmw": 0.0, "gantry": 350.0, "iso": [0, 0, 0], "xj": [-10, 10], "yj": [-20, 20], "mlc": [-10, -10, -10, -10, 10, 10, 10, 10]},
+            {"cmw": 0.5, "gantry": 30.0},                                 # 40 degrees in one interval
+            {"cmw": 1.0, "gantry": 40.0},
+        ]
+        plan = read_photon_plan(F.photon_rtplan([{"number": 3, "name": "Arc", "cps": cps}], {3: 200.0}, bounds=BOUNDS))
         assert [b.beam_id for b in plan.beams] == ["Arc:0", "Arc:1"]
-        assert [b.gantry_deg for b in plan.beams] == [0.0, 20.0]          # mid-angles, wrap handled
-        assert [b.segments[0].mu for b in plan.beams] == [100.0, 100.0]
-        assert plan.beams[0].segments[0].mlc_rows[0].x_right_mm == 15.0   # mean of 10 and 20 over the interval
+        assert [b.gantry_deg for b in plan.beams] == [10.0, 35.0] and all(b.arc is None for b in plan.beams)
 
     def test_crossed_leaves_close_and_missing_jaws_come_from_the_mlc(self):
         cps = [{"cmw": 0.0, "gantry": 0.0, "iso": [0, 0, 0], "mlc": [-10, 3, -10, -10, 10, 1, 10, 10]}, {"cmw": 1.0}]
@@ -181,7 +195,8 @@ class TestRTDose:
         assert np.all(outside == -1.0)
 
     def test_real_eclipse_dose_if_present(self):
-        files = sorted(glob.glob("/home/yyan7/SMIS/smis/data/public/pancreatic-ct-cbct-seg/Pancreas-CT-CB_001/RTDOSE_*/*.dcm"))
+        from radiarch.validation.common import data_root   # RADIARCH_VALIDATION_DATA, default ../data/public
+        files = sorted(glob.glob(str(data_root() / "pancreatic-ct-cbct-seg" / "Pancreas-CT-CB_001" / "RTDOSE_*" / "*.dcm")))
         if not files:
             pytest.skip("public RTDOSE not on this machine")
         ds = pydicom.dcmread(files[0])

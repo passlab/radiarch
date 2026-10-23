@@ -14,7 +14,7 @@ abstraction: each element produces one independent unit of dose deposit
 downstream, and the dose engine doesn't need to know which modality
 made it.
 
-See ``docs/tps_services_implementation_plan.md`` (Service 2) for the
+See ``docs/architecture.md`` (§4.3) for the
 full specification.
 """
 
@@ -108,13 +108,14 @@ class BeamSetSpec(BaseModel):
     ``isocenter_mm`` is in patient LPS coordinates; null means the centre of
     mass of the target (of each beam's own target when beams carry
     ``target_z_range_mm``). ``beams`` carries one entry per delivery direction
-    (1–9 beams supported, matching the existing PlanRequest constraint).
+    (1–180 beams: static fields, or the sector beams of VMAT arcs, R8; the legacy
+    PlanRequest keeps its own 1–9).
     """
 
     isocenter_mm: Optional[Tuple[float, float, float]] = Field(
         default=None, description="Isocenter of every beam that has none of its own; null = the target's centre of mass.",
     )
-    beams: List[BeamSpec] = Field(..., min_length=1, max_length=9)
+    beams: List[BeamSpec] = Field(..., min_length=1, max_length=180)
 
     @field_validator("beams")
     @classmethod

@@ -190,6 +190,36 @@ def _leaf_positions(rows: Sequence[MLCRow], bounds: Sequence[float], parked_x: f
     return ds_list(left + right)
 
 
+def _arc_control_points(arc, beam: PhotonBeam, bounds: Optional[Sequence[float]], energy: float, total: float,
+                        opt: PlanWriteOptions) -> List[Dataset]:
+    """The control points of a DYNAMIC (VMAT) beam: the gantry turns in the arc's direction from one control
+    point to the next while the leaves and jaws move linearly and the meterset difference is delivered."""
+    cps: List[Dataset] = []
+    last = len(arc.control_points) - 1
+    for k, c in enumerate(arc.control_points):
+        cp = Dataset()
+        cp.ControlPointIndex = k
+        cp.NominalBeamEnergy = energy
+        cp.DoseRateSet = float(opt.dose_rate_mu_min)
+        positions = []
+        for kind, jaw in (("X", c.x_jaw_mm), ("Y", c.y_jaw_mm)):
+            p = Dataset(); p.RTBeamLimitingDeviceType = kind; p.LeafJawPositions = ds_list(jaw); positions.append(p)
+        if bounds is not None:
+            p = Dataset(); p.RTBeamLimitingDeviceType = "MLCX"
+            p.LeafJawPositions = _leaf_positions(c.mlc_rows, bounds, float(c.x_jaw_mm[0]))
+            positions.append(p)
+        cp.BeamLimitingDevicePositionSequence = seq(positions)
+        _angles(cp, c.gantry_deg, arc.collimator_deg, beam.couch_deg, beam.isocenter_mm)
+        cp.GantryRotationDirection = arc.direction if k < last else "NONE"
+        cp.CumulativeMetersetWeight = float(f"{c.cumulative_mu:.6g}")
+        if opt.prescription is not None:
+            rd = Dataset(); rd.ReferencedDoseReferenceNumber = 1
+            rd.CumulativeDoseReferenceCoefficient = float(f"{c.cumulative_mu / total:.6g}") if total > 0 else 0.0
+            cp.ReferencedDoseReferenceSequence = seq([rd])
+        cps.append(cp)
+    return cps
+
+
 def build_rtplan(ctx: CaseContext, plan: PhotonPlan, *, rtstruct_uid: str, options: Optional[PlanWriteOptions] = None) -> Dataset:
     opt = options or PlanWriteOptions()
     n_fractions = int(opt.prescription.fractions) if opt.prescription else 1
@@ -207,8 +237,10 @@ def build_rtplan(ctx: CaseContext, plan: PhotonPlan, *, rtstruct_uid: str, optio
         bd = Dataset()
         bd.BeamNumber = number
         bd.BeamName = beam.beam_id[:64]
-        bd.BeamDescription = research_text(f"{len(beam.segments)} segments")
-        bd.BeamType = "STATIC"
+        arc = getattr(beam, "arc", None)
+        bd.BeamDescription = research_text(f"arc of {len(arc.control_points)} control points" if arc is not None
+                                           else f"{len(beam.segments)} segments")
+        bd.BeamType = "DYNAMIC" if arc is not None else "STATIC"
         bd.RadiationType = "PHOTON"
         bd.TreatmentMachineName = opt.machine_name[:16]
         bd.Manufacturer = "Radiarch"
@@ -241,7 +273,10 @@ def build_rtplan(ctx: CaseContext, plan: PhotonPlan, *, rtstruct_uid: str, optio
         cps: List[Dataset] = []
         cmw = 0.0
         energy = float(beam.energy_mv) if beam.energy_mv else 6.0
-        for seg in beam.segments:
+        if arc is not None:
+            cps = _arc_control_points(arc, beam, bounds, energy, total, opt)
+            cmw = float(arc.total_mu)
+        for seg in ([] if arc is not None else beam.segments):
             for phase in (0, 1):
                 cp = Dataset()
                 cp.ControlPointIndex = len(cps)
