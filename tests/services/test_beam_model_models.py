@@ -54,10 +54,11 @@ class TestBeamSetSpec:
         with pytest.raises(ValueError):
             BeamSetSpec(isocenter_mm=(0, 0, 0), beams=[])
 
-    def test_max_nine_beams(self) -> None:
-        beams = [BeamSpec(beam_id=f"B{i}", gantry_deg=0) for i in range(10)]
+    def test_max_180_beams(self) -> None:
+        """Up to 180 beams: the sector beams of VMAT arcs (R8)."""
+        BeamSetSpec(isocenter_mm=(0, 0, 0), beams=[BeamSpec(beam_id=f"B{i}", gantry_deg=0) for i in range(180)])
         with pytest.raises(ValueError):
-            BeamSetSpec(isocenter_mm=(0, 0, 0), beams=beams)
+            BeamSetSpec(isocenter_mm=(0, 0, 0), beams=[BeamSpec(beam_id=f"B{i}", gantry_deg=0) for i in range(181)])
 
 
 # ---------------------------------------------------------------------------
