@@ -56,3 +56,11 @@ def test_no_opentps_left():
     assert not offenders, offenders
     with pytest.raises(ImportError):
         import opentps  # noqa: F401
+
+
+def test_pb_layout():
+    """The native pencil-beam engine's kernel table and its provenance (R8)."""
+    from radiarch.services.dose_engines.pb_kernel import default_kernel_path
+    path = default_kernel_path()
+    assert path == ENGINES / "pb" / "pb_6mv_kernel.npz"
+    assert path.is_file() and path.with_suffix(".json").is_file()

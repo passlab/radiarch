@@ -64,6 +64,12 @@ class Settings(BaseSettings):
         description="Grid spacing of the water phantom used to calibrate the CCC output (reference field).",
     )
 
+    # Native photon pencil-beam engine (roadmap R8): kernels in engines/pb, NumPy or CuPy
+    pb_device: str = Field(default="cpu", description="Pencil-beam engine device: 'cpu', 'gpu' (CuPy, fails when absent) or 'auto'. Per-run params override.")
+    pb_n_jobs: int = Field(default=4, ge=1, description="Threads for the pencil-beam engine's influence matrix on the CPU.")
+    pb_components: int = Field(default=0, ge=0, description="Kernel components of the pencil-beam engine; 0 = the engine's default.")
+    pb_cutoff_mm: float = Field(default=0.0, ge=0.0, description="Lateral cutoff of the pencil-beam influence matrix (mm); 0 = the engine's default.")
+
     # MCsquare proton engine (roadmap R14): the binaries, launcher, Materials, BDL and
     # Scanners directory, run as a subprocess through radiarch's own driver.
     mcsquare_dir: str = Field(

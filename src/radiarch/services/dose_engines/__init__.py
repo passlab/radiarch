@@ -9,6 +9,7 @@ Engines live in submodules:
 
 * ``mcsquare`` — MCsquare-backed proton dose + influence + scenario.
 * ``ccc`` — Collapsed-cone-convolution-based photon dose + influence.
+* ``pb`` — radiarch's own photon pencil-beam engine (NumPy, optional CuPy).
 
 A test-only ``analytic`` engine in :mod:`.analytic` is registered by
 default so the service can be exercised end-to-end without OpenTPS /
@@ -36,11 +37,13 @@ from .registry import (
 from . import analytic  # noqa: F401 — side-effect: registers the analytic engine
 from . import mcsquare  # noqa: F401 — registers the MCsquare proton engine
 from . import ccc       # noqa: F401 — registers the CCC photon engine
+from . import pb        # noqa: F401 — registers the native photon pencil-beam engine
 
 # Re-export the concrete engine classes for convenience (tests / direct use).
 from .analytic import AnalyticEngine
 from .mcsquare import MCsquareEngine
 from .ccc import CCCEngine
+from .pb import PencilBeamEngine
 
 __all__ = [
     "DoseEnginePlugin",
@@ -59,4 +62,5 @@ __all__ = [
     "AnalyticEngine",
     "MCsquareEngine",
     "CCCEngine",
+    "PencilBeamEngine",
 ]

@@ -27,6 +27,11 @@ async def service_info():
                 "status": "available" if engine_health("ccc").get("available") else "unavailable",
                 "type": "dose_calculation",
             },
+            "photon-pb": {
+                "description": "Photon dose via radiarch's own pencil-beam engine (SVD kernels, NumPy/CuPy); VMAT control-point doses",
+                "status": "available" if engine_health("pb").get("available") else "unavailable",
+                "type": "dose_calculation",
+            },
         },
         "workflows": [
             {

@@ -1,0 +1,33 @@
+{
+  "kernel": "6 MV pencil kernel in water, isocenter-plane radius, inverse square removed; Gy per primary photon",
+  "source": {
+    "file": "pencil_6mv.npz",
+    "sha256": "75be915dc1c4fc30",
+    "primaries": 30000000,
+    "spectrum": "Mohan 6 MV (EGSnrc mohan6.spectrum), point source",
+    "physics": "G4EmStandardPhysics_option3; cut 0.1 mm and e-/e+ max step 0.5 mm in the phantom; vacuum outside",
+    "opengate_version": "10.1.1",
+    "date": "2026-10-22T19:44:54"
+  },
+  "construction": {
+    "grid_mm": 1.0,
+    "radius_mm": 200.0,
+    "stitch_mm": [
+      28.0,
+      36.0
+    ],
+    "bins": "0.5 mm to 50.0 mm, 2.0 mm to 200.0 mm",
+    "tail": "exponential per bin fitted over 200-270 mm, used from 270 to 500 mm",
+    "measured_depths": 135
+  },
+  "checks": {
+    "integral_iso_vs_mc_max_rel": 0.0006007222195506534,
+    "stitch_fine_over_coarse_20_36mm": {
+      "min": 0.9599777670292468,
+      "max": 0.9883236398033984,
+      "median": 0.9842085020932522
+    }
+  },
+  "fingerprint": "f046d6a503757f17",
+  "built": "2026-10-22T19:45:06"
+}

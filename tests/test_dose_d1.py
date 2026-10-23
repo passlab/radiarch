@@ -51,6 +51,7 @@ from radiarch.services.dose_engines import (
 )
 from radiarch.services.dose_engines.analytic import AnalyticEngine as _AnalyticCls
 from radiarch.services.dose_engines.ccc import CCCEngine as _CCCCls
+from radiarch.services.dose_engines.pb import PencilBeamEngine as _PBCls
 from radiarch.services.dose_engines.mcsquare import MCsquareEngine as _MCsquareCls
 from radiarch.services.dose_engines.protocol import (
     BeamModelBundle,
@@ -140,6 +141,21 @@ class TestEngineSpec:
     def test_empty_name_rejected(self):
         with pytest.raises(Exception):
             EngineSpec(name="")
+
+    def test_key_version_resolves_default_to_the_engine_version(self):
+        """Cache keys carry the engine's real version, so fixing an engine invalidates old doses."""
+        from radiarch.services.dose_engines.registry import get_engine
+        assert EngineSpec(name="ccc").key_version() == f"default={get_engine('ccc').version}"
+        assert EngineSpec(name="ccc", version="1.0.0").key_version() == "1.0.0"
+        assert EngineSpec(name="no-such-engine").key_version() == "default"
+
+    def test_engine_version_change_changes_the_dose_cache_key(self, monkeypatch):
+        from radiarch.services.dose_engines.registry import get_engine
+        req = DoseComputeRequest(geometry_id="g-1", beam_model_id="bm-1", engine=EngineSpec(name="ccc"),
+                                 weights=WeightVector(length=1, values=[1.0]))
+        a = req.compute_cache_key()
+        monkeypatch.setattr(get_engine("ccc"), "version", "9.9.9")
+        assert req.compute_cache_key() != a
 
 
 class TestScenarioSpec:
@@ -328,18 +344,20 @@ class TestDoseJobStatus:
 
 class TestRegistry:
     def setup_method(self):
-        # Reset and re-register all three engines so later tests in
+        # Reset and re-register every engine so later tests in
         # other files still see the full registry.
         reset_registry()
         register_engine(_AnalyticCls())
         register_engine(_MCsquareCls())
         register_engine(_CCCCls())
+        register_engine(_PBCls())
 
     def teardown_method(self):
         reset_registry()
         register_engine(_AnalyticCls())
         register_engine(_MCsquareCls())
         register_engine(_CCCCls())
+        register_engine(_PBCls())
 
     def test_analytic_is_registered_by_default(self):
         assert "analytic" in list_engines()
