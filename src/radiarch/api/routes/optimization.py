@@ -33,6 +33,7 @@ from ...models.optimization import (
     OptimizationRunRequest,
 )
 from ...models.apertures import SequenceRequest, SequenceResult
+from ...models.vmat import ArcRequest, ArcResult
 from ...services.audit import emit, make_event
 from ...services.dose_engines import EngineRegistryError
 from ...services.optimization import OptimizationService
@@ -223,6 +224,41 @@ async def sequence_optimization(opt_id: str, request: SequenceRequest, api_key_p
         return svc.sequence(opt_id, request)
     except (ValueError, MachineModelError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Arcs (R8)
+# ---------------------------------------------------------------------------
+
+@router.post(
+    "/{opt_id}/arcs",
+    response_model=ArcResult,
+    summary="Turn an optimization of sector beams into VMAT arcs with recomputed control-point doses and re-optimized metersets (R8).",
+    responses={404: {"description": "Optimization not found."},
+               422: {"description": "Not a photon optimization, the beams are not the arcs' sectors, or the engine cannot recompute segments."}},
+)
+async def arc_optimization(opt_id: str, request: ArcRequest, api_key_prefix: Optional[str] = Depends(api_key_auth)) -> ArcResult:
+    from ...services.dose_engines.protocol import EngineParamError, EngineUnavailableError
+    from ...services.machine_model import MachineModelError
+    from ...services.vmat import VMATService
+
+    svc = VMATService(optimization_service=_service())
+    if svc.optimization_service.store.get_by_id(opt_id) is None:
+        raise HTTPException(status_code=404, detail=f"Optimization not found: {opt_id}")
+    try:
+        return svc.arcs(opt_id, request)
+    except (ValueError, MachineModelError, EngineParamError, EngineUnavailableError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/arcs/{vmat_id}", response_model=ArcResult, summary="A VMAT result.")
+async def get_arcs(vmat_id: str) -> ArcResult:
+    from ...services.vmat import VMATService
+
+    result = VMATService(optimization_service=_service()).store.get_by_id(vmat_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"VMAT result not found: {vmat_id}")
+    return result
 
 
 @router.get("/sequences/{sequence_id}", response_model=SequenceResult, summary="A sequencing result.")

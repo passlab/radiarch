@@ -1,0 +1,269 @@
+{
+ "template_id": "sbrt-lung-50gy-5fx",
+ "name": "Lung SBRT, 50 Gy in 5 fractions (central): prescription, target goals and TG-101 limits",
+ "source": "Planning template: prescription and target goals from the RTOG lung SBRT protocols (50 Gy in 5 fractions of 10 Gy, the starting level of RTOG 0813 for central tumours); normal-tissue limits copied from the tg101-sbrt-5fx template (Benedict SH et al., AAPM TG-101, Med Phys 2010, 37:4078-4101, Table 3 (5-fraction column)). Plan-quality indices R100, R50, D2cm are not DVH metrics: radiarch.services.sbrt computes and grades them.",
+ "site": "lung",
+ "prescription_gy": 50.0,
+ "fractions": 5,
+ "dose_basis": "physical",
+ "structure_naming": "TG-263",
+ "goals": [
+  {
+   "structure": "PTV",
+   "metric": "V100%[%]",
+   "op": ">=",
+   "value": 95.0,
+   "priority": 1,
+   "note": "the prescription isodose covers 95 % of the PTV",
+   "source": "RTOG 0618 / 0813 / 0915"
+  },
+  {
+   "structure": "PTV",
+   "metric": "V90%[%]",
+   "op": ">=",
+   "value": 99.0,
+   "priority": 1,
+   "note": "99 % of the PTV receives at least 90 % of the prescription",
+   "source": "RTOG 0236 / 0618 / 0813"
+  },
+  {
+   "structure": "PTV",
+   "metric": "D0.03cc[%]",
+   "op": "<=",
+   "value": 140.0,
+   "priority": 3,
+   "note": "hot spot inside the PTV: the protocols prescribe to the 60-90 % isodose, so a maximum near 125-140 % is expected",
+   "source": "RTOG 0813 / 0915 prescription isodose range"
+  },
+  {
+   "structure": "Lungs-GTV",
+   "metric": "V20Gy[%]",
+   "op": "<=",
+   "value": 10.0,
+   "priority": 2,
+   "note": "no deviation below 10 %, minor up to 15 %",
+   "source": "RTOG 0813 / 0915 conformality table"
+  },
+  {
+   "structure": "SpinalCord",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 30.0,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "SpinalCord",
+   "metric": "D0.35cc[Gy]",
+   "op": "<=",
+   "value": 23.0,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "SpinalCord",
+   "metric": "D1.2cc[Gy]",
+   "op": "<=",
+   "value": 14.5,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Esophagus",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 35.0,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Esophagus",
+   "metric": "D5cc[Gy]",
+   "op": "<=",
+   "value": 19.5,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "BrachialPlex",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 32.0,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "BrachialPlex",
+   "metric": "D3cc[Gy]",
+   "op": "<=",
+   "value": 27.0,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Heart",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 38.0,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Heart",
+   "metric": "D15cc[Gy]",
+   "op": "<=",
+   "value": 32.0,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "GreatVes",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 53.0,
+   "priority": 2,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "GreatVes",
+   "metric": "D10cc[Gy]",
+   "op": "<=",
+   "value": 47.0,
+   "priority": 2,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Trachea",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 38.0,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Trachea",
+   "metric": "D4cc[Gy]",
+   "op": "<=",
+   "value": 16.5,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Bronchus_Prox",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 38.0,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Bronchus_Prox",
+   "metric": "D4cc[Gy]",
+   "op": "<=",
+   "value": 16.5,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Ribs",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 43.0,
+   "priority": 2,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Ribs",
+   "metric": "D1cc[Gy]",
+   "op": "<=",
+   "value": 35.0,
+   "priority": 2,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Skin",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 39.5,
+   "priority": 2,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Skin",
+   "metric": "D10cc[Gy]",
+   "op": "<=",
+   "value": 36.5,
+   "priority": 2,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Stomach",
+   "metric": "D0.03cc[Gy]",
+   "op": "<=",
+   "value": 32.0,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Stomach",
+   "metric": "D10cc[Gy]",
+   "op": "<=",
+   "value": 28.0,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Lungs",
+   "metric": "D1500cc[Gy]",
+   "op": "<=",
+   "value": 12.5,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Lungs",
+   "metric": "D1000cc[Gy]",
+   "op": "<=",
+   "value": 13.5,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Liver",
+   "metric": "D700cc[Gy]",
+   "op": "<=",
+   "value": 21.0,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  },
+  {
+   "structure": "Kidneys",
+   "metric": "D200cc[Gy]",
+   "op": "<=",
+   "value": 17.5,
+   "priority": 1,
+   "source": "AAPM TG-101 Table 3 (5 fractions)"
+  }
+ ],
+ "aliases": {
+  "Lungs": [
+   "Lung_Total",
+   "Lungs-GTV",
+   "Lungs-ITV"
+  ],
+  "BrachialPlex": [
+   "BrachialPlex_L",
+   "BrachialPlex_R"
+  ],
+  "SpinalCord": [
+   "Cord"
+  ],
+  "GreatVes": [
+   "GreatVessels",
+   "A_Aorta"
+  ],
+  "Kidneys": [
+   "Kidney_L+Kidney_R"
+  ]
+ }
+}

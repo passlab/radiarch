@@ -61,7 +61,8 @@ class TestMetrics:
 
     def test_templates_and_resolution(self):
         ids = sorted(builtin_templates())
-        assert ids == ["nccn-head-neck", "pentec-pediatric", "quantec", "rtog-0617", "tg101-sbrt-3fx", "tg101-sbrt-5fx"]
+        assert ids == ["nccn-head-neck", "pentec-pediatric", "quantec", "rtog-0617", "sbrt-lung-50gy-5fx", "sbrt-lung-54gy-3fx",
+                       "tg101-sbrt-3fx", "tg101-sbrt-5fx"]
         t = load_template("rtog-0617")
         assert t.prescription_gy == 60.0 and t.fractions == 30 and any(g.structure == "Lungs-GTV" for g in t.goals)
         assert load_template("pentec-pediatric").provisional and load_template("quantec").dose_basis == "EQD2"

@@ -180,6 +180,9 @@
   "Eye": [
    "Eye_L",
    "Eye_R"
+  ],
+  "Mandible": [
+   "Bone_Mandible"
   ]
  }
 }
