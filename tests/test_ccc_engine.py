@@ -89,6 +89,26 @@ class TestProtocol:
         _, _, k0 = rotated_versors(0, 0, 0)
         assert np.allclose(k0, [1.0, 0.0, 0.0])
 
+    @pytest.mark.parametrize("g,c", [(0, 0), (90, 0), (270, 0), (37, 12), (300, -20), (180, 90)])
+    def test_versors_are_the_iec_frame_of_the_drrs_and_the_spot_placer(self, g, c):
+        """The engine axes are (patient y, patient x, patient z); mapped back, the frame is the DRR's
+        IEC 61217 beam frame and the proton spot placer's beam direction."""
+        from radiarch.dicom.drr import beam_frame
+        from radiarch.services.spot_placement import beam_direction
+        i, j, k = (np.array(v) for v in rotated_versors(g, c, 0))
+        back = lambda v: np.array([v[1], v[0], v[2]])   # noqa: E731
+        xb, yb, d = beam_frame(g, c)
+        assert np.allclose(back(i), xb) and np.allclose(back(j), yb) and np.allclose(back(k), d)
+        assert np.allclose(back(k), beam_direction(g, c), atol=1e-9)
+        assert np.allclose(np.cross(i, j), k)            # the engine checks i x j = k
+
+    def test_gantry_90_travels_toward_the_patients_right_and_the_collimator_turns_x_toward_y(self):
+        _, _, k90 = rotated_versors(90, 0, 0)
+        assert np.allclose(k90, [0.0, -1.0, 0.0], atol=1e-12)     # patient -x: the source is on the left (+x)
+        i0, j0, _ = rotated_versors(0, 0, 0)
+        i_col, j_col, _ = rotated_versors(0, 0, 90)
+        assert np.allclose(i_col, j0, atol=1e-12) and np.allclose(j_col, -np.array(i0), atol=1e-12)
+
     def test_read_sparse_beamlets_hand_made(self, tmp_path):
         nz, ny, nx = 2, 3, 4
         eng = lambda z, x, y: (z * nx + x) * ny + y      # engine: C-order over (z, x, y)
@@ -208,15 +228,19 @@ class TestPhysics:
         assert prof[core].std() / prof[core].mean() < 0.03               #  the penumbra slightly asymmetric)
         assert prof[0] < 0.05 * prof[c] and prof[-1] < 0.05 * prof[c]    # little dose outside the field
 
-    def test_gantry_90_enters_along_x(self, engine):
+    @pytest.mark.parametrize("gantry,entrance", [(90.0, +1), (270.0, -1)])
+    def test_lateral_beams_enter_from_the_iec_side(self, engine, gantry, entrance):
+        """IEC 61217, head-first supine: gantry 90 enters from the patient's left (+x), 270 from the right.
+        Engine 1.0.0 had these the other way round."""
         n, s = 32, 4.0
         density = np.ones((n, n, n), np.float32); origin = (-(n - 1) / 2 * s,) * 3
-        plan = build_photon_plan([(90.0, 0.0)], (-30.0, 30.0), (-30.0, 30.0), 10.0, 1.0, (10.0, 10.0))
+        plan = build_photon_plan([(gantry, 0.0)], (-30.0, 30.0), (-30.0, 30.0), 10.0, 1.0, (10.0, 10.0))
         dose = engine.compute_plan_dose(density, spacing_mm=(s, s, s), origin_mm=origin, plan=plan)
         c = n // 2
         along_x = dose[c, c, :]; along_y = dose[c, :, c]
-        # The beam axis is x: dose varies strongly along x (entrance side higher) and is flat along y inside the field.
-        assert along_x[:c].mean() != pytest.approx(along_x[c:].mean(), rel=0.05)
+        # The beam axis is x and the entrance side gets more dose; dose is flat along y inside the field.
+        high_x, low_x = along_x[c + 2:].mean(), along_x[:c - 2].mean()
+        assert (high_x - low_x) * entrance > 0.1 * max(high_x, low_x)   # about 17 % across 13 cm of water
         inside = along_y[c - 3:c + 4]
         assert inside.std() / inside.mean() < 0.05
 

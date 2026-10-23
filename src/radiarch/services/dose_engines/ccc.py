@@ -11,7 +11,7 @@ calibration. The factor is computed once per kernel set by running the
 engine on a water phantom (:class:`CCCCalibration`) and cached under the
 artifact directory; ``params["output_factor_gy_per_unit"]`` overrides it.
 
-Limits (see ADR 0001, ADR 0005 and the SMIS evaluation report): generic
+Limits (see ADR 0001, ADR 0005 and docs/reports/tps-evaluation-and-roadmap.md): generic
 6 MV kernels only, no linac head model (no output factors, head scatter,
 MLC transmission or tongue-and-groove), no published validation. Research
 use only.
@@ -36,7 +36,7 @@ from loguru import logger
 
 from ...models.dose import ScenarioSpec
 from ...models.photon_plan import PhotonPlan
-from .ccc_driver import CCCDriver, beamlet_geometry_from_plan
+from .ccc_driver import CCCDriver, beamlet_geometry_from_plan, delivered_beamlet_geometry
 from .protocol import (
     BeamModelBundle,
     EngineParamError,
@@ -182,7 +182,7 @@ class CCCEngine:
     """Photon dose engine on the WiscPlan collapsed-cone binary."""
 
     name: str = "ccc"
-    version: str = "1.0.0"
+    version: str = "1.1.0"   # 1.1.0: IEC gantry, couch and collimator rotation (R8); 1.0.0 mirrored lateral beams
     modalities: List[str] = field(default_factory=lambda: ["PHOTON_IMRT"])
     test_only: bool = False
 
@@ -300,6 +300,25 @@ class CCCEngine:
         if w.shape != (dij.shape[1],):
             raise EngineParamError(f"weights shape {w.shape} != ({dij.shape[1]},)")
         return np.asarray(dij @ w.astype(np.float32)).reshape(np.asarray(density_zyx).shape).astype(np.float32)
+
+    def compute_delivered_dose(
+        self,
+        density_zyx: np.ndarray,
+        spacing_mm: Sequence[float],
+        origin_mm: Sequence[float],
+        plan: PhotonPlan,
+        params: Optional[dict] = None,
+    ) -> np.ndarray:
+        """Dose in Gy of the plan as delivered: every aperture through its coverage beamlets, weighted by
+        segment MU and open fraction, so that apertures no wider than one beamlet (sliding-window arcs)
+        are dosed. Use it to recompute a sequenced plan; :meth:`compute_plan_dose` keeps the optimizer's columns."""
+        beamlets, mu = delivered_beamlet_geometry(plan)
+        if len(beamlets) == 0:
+            raise EngineParamError("photon plan has no open apertures")
+        dij = self.driver(params).run(np.asarray(density_zyx, dtype=np.float32), spacing_mm, origin_mm,
+                                      tuple(np.asarray(plan.isocenter_mm, dtype=np.float64)), beamlets)
+        dose = dij.tocsr().astype(np.float32) @ mu.astype(np.float32)
+        return (np.asarray(dose) * np.float32(self.output_factor(params))).reshape(np.asarray(density_zyx).shape).astype(np.float32)
 
     # ----- DoseEnginePlugin -------------------------------------------------
 

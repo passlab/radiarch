@@ -114,12 +114,35 @@ def beamlet_geometry_from_plan(plan) -> BeamletGeometry:
                 continue
             xy.append(b[:, :2])
             size.append(b[:, 2:])
-            angles.append(np.tile([beam.gantry_deg, beam.couch_deg, seg.collimator_deg], (b.shape[0], 1)))
+            gantry = beam.gantry_deg if getattr(seg, "gantry_deg", None) is None else seg.gantry_deg   # an arc sector's own angle
+            angles.append(np.tile([gantry, beam.couch_deg, seg.collimator_deg], (b.shape[0], 1)))
             sad.append(np.full(b.shape[0], float(beam.sad_mm)))
     if not xy:
         return BeamletGeometry(np.zeros((0, 2)), np.zeros((0, 2)), np.zeros((0, 3)), np.zeros(0))
     return BeamletGeometry(np.concatenate(xy), np.concatenate(size), np.concatenate(angles), np.concatenate(sad))
 
+
+
+def delivered_beamlet_geometry(plan) -> Tuple[BeamletGeometry, np.ndarray]:
+    """The plan's coverage beamlets (:meth:`radiarch.models.photon_plan.PhotonSegment.coverage_beamlets`) and
+    their metersets, segment MU times open fraction: what recomputing a delivered plan needs, narrow
+    apertures included."""
+    xy, size, angles, sad, mu = [], [], [], [], []
+    for beam in plan.beams:
+        for seg in beam.segments:
+            b = seg.coverage_beamlets()
+            if b.shape[0] == 0 or seg.mu <= 0:
+                continue
+            xy.append(b[:, :2])
+            size.append(b[:, 2:4])
+            gantry = beam.gantry_deg if getattr(seg, "gantry_deg", None) is None else seg.gantry_deg
+            angles.append(np.tile([gantry, beam.couch_deg, seg.collimator_deg], (b.shape[0], 1)))
+            sad.append(np.full(b.shape[0], float(beam.sad_mm)))
+            mu.append(float(seg.mu) * b[:, 4])
+    if not xy:
+        return BeamletGeometry(np.zeros((0, 2)), np.zeros((0, 2)), np.zeros((0, 3)), np.zeros(0)), np.zeros(0)
+    return (BeamletGeometry(np.concatenate(xy), np.concatenate(size), np.concatenate(angles), np.concatenate(sad)),
+            np.concatenate(mu))
 
 # ---------------------------------------------------------------------------
 # Writers (one function per file the engine reads)
@@ -135,16 +158,33 @@ def _rotate(vec: Sequence[float], angle_rad: float, axis: str) -> List[float]:
     return [x * c - y * s, x * s + y * c, z]
 
 
+def iec_beam_frame(gantry_deg: float, couch_deg: float, collimator_deg: float):
+    """The beam's-eye-view axes and the beam direction in the patient (DICOM LPS, head-first supine) frame,
+    as IEC 61217 defines them and as the proton spot placer and the DRRs use them: at gantry 0 the beam
+    travels anterior to posterior (+y) with BEV x along +x and BEV y along +z; the gantry turns right-handed
+    about +z (gantry 90 enters from the patient's left), the collimator turns BEV x toward BEV y, and the couch
+    rotation acts on the patient, so the beam turns about +y. Returns ``(x_bev, y_bev, direction)``."""
+    g, c, col = (math.radians(float(v)) for v in (gantry_deg, couch_deg, collimator_deg))
+    rz = np.array([[math.cos(g), -math.sin(g), 0.0], [math.sin(g), math.cos(g), 0.0], [0.0, 0.0, 1.0]])
+    ry = np.array([[math.cos(c), 0.0, math.sin(c)], [0.0, 1.0, 0.0], [-math.sin(c), 0.0, math.cos(c)]])
+    x0, y0, d0 = np.array([1.0, 0.0, 0.0]), np.array([0.0, 0.0, 1.0]), np.array([0.0, 1.0, 0.0])
+    xb = math.cos(col) * x0 + math.sin(col) * y0
+    yb = -math.sin(col) * x0 + math.cos(col) * y0
+    m = ry @ rz
+    return m @ xb, m @ yb, m @ d0
+
+
 def rotated_versors(gantry_deg: float, couch_deg: float, collimator_deg: float):
-    """The engine's beam frame ``(i, j, k)`` for a gantry/couch/collimator
-    setting. In its reference frame ``x`` points at the gantry and ``z`` runs
-    along the couch; the collimator and couch rotate about ``x``, the gantry
-    about ``z``."""
-    g, c, col = map(math.radians, (gantry_deg, couch_deg, collimator_deg))
-    i = _rotate(_rotate(_rotate([0.0, 1.0, 0.0], col, "x"), g, "z"), c, "x")
-    j = _rotate(_rotate(_rotate([0.0, 0.0, 1.0], col, "x"), g, "z"), c, "x")
-    k = _rotate(_rotate([1.0, 0.0, 0.0], g, "z"), c, "x")
-    return i, j, k
+    """The engine's beam frame ``(i, j, k)``: BEV x, BEV y and the beam direction, in the engine's axes
+    ``(patient y, patient x, patient z)``. The angles are IEC 61217 (DICOM) angles.
+
+    R8 found that the frame used until then (inherited with the engine's file protocol) turned the gantry
+    the opposite way: gantry 90 entered from the patient's right and 270 from the left, mirrored against
+    IEC, DICOM, the proton engine and the DRRs. Plans optimized in radiarch were self-consistent, but plans
+    read from or written to DICOM, and lateral or oblique beams next to a DRR, were mirrored."""
+    xb, yb, d = iec_beam_frame(gantry_deg, couch_deg, collimator_deg)
+    to_engine = lambda v: [float(v[1]), float(v[0]), float(v[2])]  # noqa: E731
+    return to_engine(xb), to_engine(yb), to_engine(d)
 
 
 def write_kernel_paths(path: Path, kernel_dir: Path) -> None:

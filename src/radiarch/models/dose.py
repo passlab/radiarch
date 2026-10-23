@@ -18,7 +18,7 @@ an :class:`EngineSpec` so callers can pin a specific engine + version;
 the service rejects engines whose ``modalities`` don't include the beam
 model's modality.
 
-See ``docs/tps_services_implementation_plan.md`` (Service 3) for the
+See ``docs/architecture.md`` (§4.3) for the
 full specification. The cache key folds in plan/geometry/beam model ids,
 engine name+version, a hash of the weight vector, and the scenario hash.
 """
@@ -68,11 +68,23 @@ class EngineSpec(BaseModel):
     """
 
     name: str = Field(..., min_length=1, max_length=64,
-                      description='Registered engine name, e.g. "mcsquare" or "ccc".')
+                      description='Registered engine name, e.g. "mcsquare", "ccc" or "pb".')
     version: str = Field(default="default", max_length=32,
                          description="Engine version pin. Default = whatever the registry exposes.")
     params: Dict[str, Any] = Field(default_factory=dict,
                                    description="Engine-specific tuning knobs (folded into cache key).")
+
+    def key_version(self) -> str:
+        """The version that goes into cache keys: the pinned one, or for "default" the registered
+        engine's own version, so a fix in an engine invalidates the doses and influence matrices it
+        computed before (R8: they were keyed by the literal "default")."""
+        if self.version != "default":
+            return self.version
+        try:
+            from ..services.dose_engines.registry import get_engine
+            return f"default={getattr(get_engine(self.name), 'version', 'unknown')}"
+        except Exception:
+            return "default"
 
 
 # ---------------------------------------------------------------------------
@@ -334,7 +346,7 @@ class DoseComputeRequest(BaseModel):
             "beam_model_id": self.beam_model_id,
             "engine": {
                 "name": self.engine.name,
-                "version": self.engine.version,
+                "version": self.engine.key_version(),
                 "params": self.engine.params,
             },
             "weights_hash": self.weights.hash(),
@@ -372,7 +384,7 @@ class InfluenceBuildRequest(BaseModel):
             "beam_model_id": self.beam_model_id,
             "engine": {
                 "name": self.engine.name,
-                "version": self.engine.version,
+                "version": self.engine.key_version(),
                 "params": self.engine.params,
             },
             "scenario_hash": self.scenario.hash() if self.scenario else None,

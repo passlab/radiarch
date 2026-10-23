@@ -140,7 +140,7 @@ class BAORunRequest(BaseModel):
             "machine_model_id": self.machine_model_id,
             "engine": {
                 "name": self.dose_engine.name,
-                "version": self.dose_engine.version,
+                "version": self.dose_engine.key_version(),
                 "params": self.dose_engine.params,
             },
             "objectives_hash": [o.hash() for o in self.objectives],
