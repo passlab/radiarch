@@ -1,5 +1,5 @@
 """R12: versions with parents, attribution, states and immutability over the real stores,
-through the service and the API; the SMIS transformation record; the capability declaration."""
+through the service and the API; the dataset manifest's transformation record; the capability declaration."""
 
 from __future__ import annotations
 
@@ -68,7 +68,7 @@ def test_states_and_immutability(env):  # noqa: F811
         StateRecord(state=VersionState.approved, actor="physicist", authority="radiarch")
     with pytest.raises(ValueError, match="authority"):
         StateRecord(state=VersionState.approved)
-    st = svc.transition(dose, StateRecord(state=VersionState.approved, actor="physicist:ab", authority="smis-ois", reference="Task/42"))
+    st = svc.transition(dose, StateRecord(state=VersionState.approved, actor="physicist:ab", authority="ois", reference="Task/42"))
     assert st.state is VersionState.approved and st.locked and st.history[-1].at is not None
 
     # the approved dose and everything it derives from are immutable
@@ -93,7 +93,7 @@ def test_states_and_immutability(env):  # noqa: F811
     st = svc.transition(dose, StateRecord(state=VersionState.retired, note="course closed"))
     assert st.state is VersionState.retired and len(st.history) == 3 and st.locked
     with pytest.raises(LineageError, match="cannot become"):
-        svc.transition(dose, StateRecord(state=VersionState.approved, actor="x", authority="smis-ois"))
+        svc.transition(dose, StateRecord(state=VersionState.approved, actor="x", authority="ois"))
     # the record survives a new service instance (one JSON file under the artifact directory)
     assert LineageService().status(dose).state is VersionState.retired
     assert (Path(env) / "lineage" / "states.json").is_file()
@@ -105,7 +105,7 @@ def _expand_request():
     return GeometryDeriveRequest(operations=[StructureOperation(op="expand", name="PTV_5", source="PTV", margin_mm=5.0)])
 
 
-def test_derivation_record_in_the_smis_shape(env):  # noqa: F811
+def test_derivation_record_in_the_manifest_shape(env):  # noqa: F811
     from radiarch.services.lineage import LineageService
 
     geo, bm, opt, seq = _photon_pipeline()
@@ -119,8 +119,10 @@ def test_derivation_record_in_the_smis_shape(env):  # noqa: F811
     written = rec.outputs["objects_written"]
     assert {o["modality"] for o in written} == {"RTSTRUCT", "RTPLAN", "RTDOSE"} and all(o["instance_count"] == 1 for o in written)
     assert all(o["study_uid"] == exp.study_instance_uid for o in written)
-    # the record validates against the SMIS manifest schema when the schema is at hand
-    schema_path = os.environ.get("SMIS_MANIFEST_SCHEMA", "/home/yyan7/SMIS/smis/packages/smis-schemas/schemas/manifest/v1.schema.json")
+    # the record validates against the dataset manifest schema when the schema is at hand: RADIARCH_MANIFEST_SCHEMA,
+    # or a schema package checked out beside this repository
+    found = sorted(Path(__file__).resolve().parents[2].glob("packages/*/schemas/manifest/v1.schema.json"))
+    schema_path = os.environ.get("RADIARCH_MANIFEST_SCHEMA", str(found[0]) if found else "")
     try:
         import jsonschema
     except ImportError:
@@ -160,7 +162,7 @@ def test_lineage_endpoints(env, monkeypatch):  # noqa: F811
         d = client.get(f"/api/v1/lineage/dose/{seq.dose_id}/derivation", params={"dataset_id": "ds", "version": 1})
         assert d.status_code == 200 and d.json()["transformation"]["kind"] == "computation" and d.json()["outputs"] is None
         assert client.get(f"/api/v1/lineage/dose/{seq.dose_id}/state").json()["state"] == "draft"
-        r = client.post(f"/api/v1/lineage/dose/{seq.dose_id}/state", json={"state": "approved", "actor": "physician:cd", "authority": "smis-ois"})
+        r = client.post(f"/api/v1/lineage/dose/{seq.dose_id}/state", json={"state": "approved", "actor": "physician:cd", "authority": "ois"})
         assert r.status_code == 200 and r.json()["locked"] is True
         # approval makes the whole chain immutable at the delete routes
         assert client.delete(f"/api/v1/dose/{seq.dose_id}").status_code == 409

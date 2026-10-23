@@ -11,7 +11,7 @@ store of results.
 
 A version has a *state*. Radiarch records state transitions, it never
 decides them: approval is a human act in the clinic's record system
-(smis-ois, F5.4), and radiarch keeps the record of who, under which
+(an oncology information system), and radiarch keeps the record of who, under which
 authority, with which reference. A version that was ever approved is
 immutable: it and every version it derives from can no longer be deleted.
 """
@@ -84,7 +84,7 @@ class StateRecord(BaseModel):
 
     state: VersionState
     actor: str = Field(default="", max_length=128, description="Who decided: a role or a user id in the authority's terms.")
-    authority: str = Field(default="", max_length=64, description='The deciding system, e.g. "smis-ois"; never radiarch.')
+    authority: str = Field(default="", max_length=64, description='The deciding system, e.g. "ois"; never radiarch.')
     reference: str = Field(default="", max_length=256, description="The authority's record of the decision (a Task, a UPS, a signature id).")
     note: str = Field(default="", max_length=500)
     superseded_by: Optional[VersionRef] = None
@@ -134,7 +134,7 @@ class LineageGraph(BaseModel):
 
 
 class DerivationRecord(BaseModel):
-    """The SMIS transformation record (manifest schema member ``derivation``) of a version."""
+    """A dataset manifest's transformation record (manifest schema member ``derivation``) of a version."""
 
     transformation: Dict[str, Any]
     inputs: List[Dict[str, Any]]

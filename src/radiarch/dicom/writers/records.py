@@ -4,8 +4,8 @@ Summary Record writers (roadmap R6).
 A treatment record is what a delivery system writes after a session: the
 plan it delivered, the fraction number, the date, and per beam what was
 specified and what was delivered at every control point. Radiarch writes
-them from the plan it wrote, for the emulated clinic's delivery device
-(smis-linac) and for its own end-to-end tests: ``delivered`` scales the
+them from the plan it wrote, for a treatment machine's record keeping
+and for its own end-to-end tests: ``delivered`` scales the
 specified metersets (1.0 = the whole fraction; less for an interrupted
 session, which then terminates OPERATOR or MACHINE). The summary record
 closes a course: fractions delivered, first and last dates, the cumulative

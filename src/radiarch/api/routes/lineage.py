@@ -4,7 +4,7 @@
 ``GET  /api/v1/lineage/{kind}/{id}``                      — the version and everything it derives from.
 ``GET  /api/v1/lineage/{kind}/{id}/descendants``          — what derives from it.
 ``GET  /api/v1/lineage/{kind}/{id}/attribution``          — who produced it, with what, from what.
-``GET  /api/v1/lineage/{kind}/{id}/derivation``           — the SMIS transformation record (dataset_id, version of the input).
+``GET  /api/v1/lineage/{kind}/{id}/derivation``           — a dataset manifest's transformation record (dataset_id, version of the input).
 ``GET  /api/v1/lineage/{kind}/{id}/state``                — state, immutability and history.
 ``POST /api/v1/lineage/{kind}/{id}/state``                — record a transition decided elsewhere.
 """
@@ -63,7 +63,7 @@ async def get_attribution(kind: str, version_id: str) -> Attribution:
 
 
 @router.get("/{kind}/{version_id}/derivation", response_model=DerivationRecord,
-            summary="The version as a SMIS transformation record (manifest member `derivation`).")
+            summary="The version as a dataset manifest's transformation record (manifest member `derivation`).")
 async def get_derivation(kind: str, version_id: str, dataset_id: str = Query(..., min_length=1),
                          version: int = Query(..., ge=0), identifiability: str = Query(default="pseudonymized"),
                          description: Optional[str] = None) -> DerivationRecord:

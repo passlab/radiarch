@@ -3,8 +3,8 @@
 The service reads every result store radiarch has and answers: what did this
 version derive from (``lineage``), what derives from it (``descendants``),
 who produced it with what (``attribution``), what is its state and may it be
-deleted (``status``, ``assert_deletable``), and how does it read as a SMIS
-transformation record (``derivation_record``). States live in one JSON file
+deleted (``status``, ``assert_deletable``), and how does it read as a dataset
+manifest's transformation record (``derivation_record``). States live in one JSON file
 under the artifact directory; every transition is audited.
 
 Parents per kind:
@@ -400,11 +400,11 @@ class LineageService:
         if self.is_locked(ref):
             raise VersionLocked(f"{ref.kind} {ref.id} is immutable: it, or a version derived from it, was approved")
 
-    # ----- SMIS transformation record ----------------------------------
+    # ----- dataset manifest transformation record ----------------------
 
     def derivation_record(self, ref: VersionRef, *, inputs: List[Dict[str, Any]], identifiability: str = "pseudonymized",
                           description: Optional[str] = None) -> DerivationRecord:
-        """The version as the SMIS manifest's ``derivation`` member (design §6.1): a computation by the
+        """The version as a dataset manifest's ``derivation`` member: a computation by the
         tool radiarch, with the engine, machine and ids as parameters and the DICOM objects an export wrote."""
         node = self.node(ref)
         if node is None:

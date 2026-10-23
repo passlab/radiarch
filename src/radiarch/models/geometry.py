@@ -4,7 +4,7 @@ Service 1 converts raw clinical DICOM (CT + RTSTRUCT) into a
 computation-ready voxel model consumable by downstream dose / optimization
 services. This module defines the public request / response schemas.
 
-See ``docs/tps_services_implementation_plan.md`` (Service 1) for the full
+See ``docs/architecture.md`` (§4.3) for the full
 specification. Highlights:
 
   - ``GeometryBuildRequest`` — inputs: patient_ref, target GridSpec,
