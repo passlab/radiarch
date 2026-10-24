@@ -249,7 +249,7 @@ reference (hours) for the record; reference output factors with a head model.
 
 Committed 2026-10-22 (2e21a28..2f7b506).
 
-## R8 — native pencil-beam engine, VMAT, SBRT (2026-10-22, in progress, uncommitted)
+## R8 — native pencil-beam engine, VMAT, SBRT (2026-10-22 to 2026-10-23)
 
 ADR 0015. Done:
 - CCC gantry convention fixed (IEC 61217 frame of the DRRs, mapped into the engine's axes); CCC 1.1.0.
@@ -299,7 +299,7 @@ depend on the beamlet size, and gives zero dose ~2 cm outside the beamlets (ADR 
 Open: a Monte Carlo tumour-in-lung reference and whole-plan Monte Carlo as the second engine; direct leaf
 optimization for VMAT; the R8 record for the physicist.
 
-## DICOMweb push for research write endpoints (2026-10-23, uncommitted)
+## DICOMweb push for research write endpoints (2026-10-23)
 
 - `adapters/dicomweb.py`: OAuth2 client-credentials bearer token (`RADIARCH_DICOMWEB_TOKEN_URL`, `_CLIENT_ID`,
   `_CLIENT_SECRET` as a `SecretStr`, `_TOKEN_SCOPE`), fetched on first use, shared per endpoint and client,
@@ -310,3 +310,17 @@ optimization for VMAT; the R8 record for the physicist.
 - Tests: `tests/test_dicomweb_push_auth.py` (a local token and STOW-RS stand-in: token reuse and refresh, the
   secret kept out of settings' repr, a 409 with findings, a bad secret).
 
+## Derived geometries stored transposed (fixed 2026-10-24)
+
+- `GeometryStore.save` takes (x, y, z) arrays; `geometry_derive` (R4) passed its (z, y, x) arrays unchanged, so
+  every derived geometry (PTV, rings, overrides) was stored with x and z swapped against its parent. Planning and
+  evaluation read the same swapped arrays, so plans were self-consistent and passed their checks, but the anatomy
+  was mirrored against the beams and the CT, and exported structure sets were misplaced (an exported tumour
+  centroid 46 mm from the clinical one). The R4 test used a centred cube. Fixed: the derive step transposes before
+  saving; `DERIVE_VERSION` "2" in its cache key; `test_derived_volumes_keep_the_parent_orientation` (a 40 × 30 × 20
+  grid, an off-centre CTV).
+- Affected harness cases (rerun `20261024-114041`): `lung_e2e_lctsc` (R7 and R8 records), `lung_sbrt_vmat`,
+  `lung_vmat_lctsc`, `hn_sib_vmat`. All checks pass as before; organ doses change: spinal cord D0.03cc from
+  0–0.7 Gy to 10–20 Gy, heart D0.03cc in the SBRT case from 0.3–0.6 Gy to 17 Gy, and in the head-and-neck case
+  the optic structures fall from 16–23 Gy to under 1 Gy while the parotid mean rises from 2–11 Gy to 22–30 Gy.
+  The engine, Monte Carlo, phantom, TG-119 and cross-check cases do not derive geometries and are unchanged.

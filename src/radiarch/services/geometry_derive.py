@@ -32,9 +32,13 @@ def _read(path: str) -> np.ndarray:
     return sitk.GetArrayFromImage(sitk.ReadImage(str(path)))
 
 
+# v2 (R9): derived volumes were written with x and z swapped before; the version keeps those out of every cache
+DERIVE_VERSION = "2"
+
+
 def derive_cache_key(parent: GeometryResult, request: GeometryDeriveRequest) -> str:
     import hashlib
-    return hashlib.sha256(f"{parent.cache_key}|derive|{request.operations_hash()}".encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"{parent.cache_key}|derive-v{DERIVE_VERSION}|{request.operations_hash()}".encode("utf-8")).hexdigest()
 
 
 class GeometryDeriver:
@@ -132,7 +136,9 @@ class GeometryDeriver:
             derived_operations=list(parent.derived_operations) + applied,
             hu_to_density_model=parent.hu_to_density_model,
         )
-        self.store.save(geometry_id=geometry_id, cache_key=cache_key, density=density, masks=masks, ct=ct, result=result)
+        # the arrays here are (z, y, x), as SimpleITK reads them; the store takes (x, y, z)
+        self.store.save(geometry_id=geometry_id, cache_key=cache_key, density=density.transpose(2, 1, 0), masks=masks.transpose(2, 1, 0),
+                        ct=ct.transpose(2, 1, 0) if ct is not None else None, result=result)
         logger.info("Derived geometry %s from %s: %d operation(s), structures %s", geometry_id, parent.geometry_id,
                     len(applied), sorted(index))
         return result

@@ -256,6 +256,28 @@ class TestDerivedGeometry:
         with pytest.raises(ValueError, match="not in the geometry"):
             svc.derive(parent.geometry_id, GeometryDeriveRequest(operations=[StructureOperation(op="expand", source="GTV", margin_mm=3.0, name="X")]))
 
+    def test_derived_volumes_keep_the_parent_orientation(self, monkeypatch, tmp_path):
+        """A non-cubic grid and an off-centre structure: the derived CT is the parent's voxel for voxel, and an
+        expansion surrounds its source (before R9 the derived volumes were written with x and z swapped)."""
+        from radiarch.services.geometry import GeometryService, _LoadedCT
+        from radiarch.services.geometry_bundle import load_geometry_arrays
+
+        nx, ny, nz = 40, 30, 20
+        xx, yy, zz = np.mgrid[:nx, :ny, :nz]
+        ct = (xx * 10 + yy * 3 + zz).astype(np.int16)                                        # every voxel distinct
+        ctv = (xx - 8) ** 2 + (yy - 20) ** 2 + (zz - 5) ** 2 <= 3 ** 2                        # off centre in x, y and z
+        vol = _CT(imageArray=ct, origin=(-40.0, -30.0, -20.0), spacing=(2.0, 2.0, 2.0), patient=_Patient())
+        loaded = _LoadedCT(ct=vol, patient=vol.patient, contours=[_Contour("CTV", ctv)])
+        monkeypatch.setattr(GeometryService, "_load", lambda self, _req: loaded)
+        svc = GeometryService(base_dir=tmp_path / "geometry")
+        parent = svc.build(GeometryBuildRequest(patient_ref=PatientRef(dicom_study_uid="1.2.3"), hu_to_density_model="LINEAR"))
+        derived = svc.derive(parent.geometry_id, GeometryDeriveRequest(operations=[StructureOperation(op="expand", source="CTV", margin_mm=4.0, name="PTV")]))
+        pa, da = load_geometry_arrays(parent), load_geometry_arrays(derived)
+        assert pa.ct_hu.shape == da.ct_hu.shape == (nz, ny, nx)
+        assert np.array_equal(pa.ct_hu, da.ct_hu)
+        assert np.array_equal(pa.mask_zyx(pa.label_of("CTV")), da.mask_zyx(da.label_of("CTV")))
+        assert da.mask_zyx(da.label_of("PTV"))[pa.mask_zyx(pa.label_of("CTV"))].all()
+
     def test_operation_validation(self):
         with pytest.raises(ValueError):
             StructureOperation(op="expand", source="CTV", name="PTV")
