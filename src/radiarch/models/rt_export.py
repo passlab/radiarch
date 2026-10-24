@@ -37,7 +37,8 @@ class RTExportRequest(BaseModel):
     beam_model_id: Optional[str] = Field(default=None, max_length=36, description="A beam model whose plan has its own metersets (an imported plan, a basic plan).")
     dose_id: Optional[str] = Field(default=None, max_length=36, description="The dose to write with a beam model; null = none.")
     plan_id: Optional[str] = Field(default=None, max_length=36)
-    label: str = Field(default="radiarch", max_length=64)
+    label: str = Field(default="RESEARCH", max_length=64,
+                       description="RT Plan and Structure Set label (16 characters are written); research endpoints may require RESEARCH in it.")
     description: str = Field(default="", max_length=200)
     machine_name: str = Field(default="RADIARCH", max_length=16)
     prescription: Optional[PrescriptionSpec] = None
@@ -148,6 +149,8 @@ class RTPushResult(BaseModel):
     pushed: int
     url: str
     error: Optional[str] = None
+    http_status: Optional[int] = Field(default=None, description="The server's HTTP status when it refused the push.")
+    response: Optional[Any] = Field(default=None, description="The refusal body, parsed when it is JSON (a gateway's findings).")
 
 
 __all__ = ["OBJECT_KINDS", "PrescriptionSpec", "RTExportRequest", "RTObjectRef", "RTExportResult", "SessionSpec",

@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import List, Optional, Any
 
-from pydantic import AnyUrl, Field
+from pydantic import AnyUrl, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     dicomweb_url: str = Field(default="", description="DICOMweb STOW-RS URL for artifact push; empty = disabled")
     dicomweb_username: Optional[str] = Field(default=None)
     dicomweb_password: Optional[str] = Field(default=None)
+    # OAuth2 client credentials for a DICOMweb endpoint that wants a bearer token (a research write gateway);
+    # used when the token URL and client id are set and no username is given. The secret is never logged.
+    dicomweb_token_url: str = Field(default="", description="OAuth2 token endpoint (client_credentials grant); empty = no bearer token")
+    dicomweb_client_id: str = Field(default="", description="OAuth2 client id for the DICOMweb push")
+    dicomweb_client_secret: Optional[SecretStr] = Field(default=None, description="OAuth2 client secret for the DICOMweb push")
+    dicomweb_token_scope: str = Field(default="", description="OAuth2 scope to request; empty = the client's default")
 
     # Job queue
     broker_url: str = Field(default="redis://localhost:6379/0")

@@ -279,12 +279,15 @@ class RTExportService:
         result = self.get(export_id)
         if result is None:
             raise RTExportError(f"export {export_id!r} not found")
-        from ..adapters.dicomweb import DICOMwebNotifier
+        from ..adapters.dicomweb import DICOMwebNotifier, DICOMwebPushError
 
         notifier = DICOMwebNotifier(url=url, username=username, password=password)
         paths = [o.path for o in result.objects if kinds is None or o.kind.lower() in {k.lower() for k in kinds}]
         try:
             notifier.store_instances(paths, raise_errors=True)
+        except DICOMwebPushError as exc:
+            return RTPushResult(export_id=export_id, pushed=0, url=notifier._url or "", error=str(exc),
+                                http_status=exc.status, response=exc.details if exc.details is not None else exc.body)
         except Exception as exc:
             return RTPushResult(export_id=export_id, pushed=0, url=notifier._url or "", error=str(exc))
         result.pushed, result.push_error = True, None

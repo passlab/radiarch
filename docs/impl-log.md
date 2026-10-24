@@ -299,3 +299,14 @@ depend on the beamlet size, and gives zero dose ~2 cm outside the beamlets (ADR 
 Open: a Monte Carlo tumour-in-lung reference and whole-plan Monte Carlo as the second engine; direct leaf
 optimization for VMAT; the R8 record for the physicist.
 
+## DICOMweb push for research write endpoints (2026-10-23, uncommitted)
+
+- `adapters/dicomweb.py`: OAuth2 client-credentials bearer token (`RADIARCH_DICOMWEB_TOKEN_URL`, `_CLIENT_ID`,
+  `_CLIENT_SECRET` as a `SecretStr`, `_TOKEN_SCOPE`), fetched on first use, shared per endpoint and client,
+  refreshed before `expires_in`; basic auth kept for plain PACS (an explicit username wins).
+  `DICOMwebPushError` carries a refusal's HTTP status and body.
+- `RTPushResult.http_status` and `.response` (the refusal body, parsed when JSON); the export label defaults to
+  `RESEARCH`; two docstrings lose an external plan identifier.
+- Tests: `tests/test_dicomweb_push_auth.py` (a local token and STOW-RS stand-in: token reuse and refresh, the
+  secret kept out of settings' repr, a 409 with findings, a bad secret).
+

@@ -82,6 +82,22 @@ full list; what follows is what *must* change from defaults.
 | `RADIARCH_CELERY_WORKER_MAX_MEMORY_KB` | 4 GB for fast workers, 16 GB+ for dose workers | D7.1. Recycles leaked memory. |
 | `RADIARCH_DOSE_SOFT_TIME_LIMIT_S` | Bench your worst clinical case + 30 % | Defaults work for SimpleFantom; clinical CT needs longer. |
 | `RADIARCH_CORS_ORIGINS` | Explicit list of allowed origins | Default `*` is wrong for production. |
+| `RADIARCH_PB_DEVICE` | `auto` on a host with a CUDA GPU (install the `gpu` extra) | The pencil-beam engine runs on the GPU when it can. |
+
+### Pushing RT objects (DICOMweb STOW-RS)
+
+`POST /api/v1/rt/exports/{id}/push` sends an export's objects to `RADIARCH_DICOMWEB_URL`, or to
+the `url` of the request. Two kinds of authentication:
+
+| Variables | When |
+|---|---|
+| `RADIARCH_DICOMWEB_USERNAME`, `RADIARCH_DICOMWEB_PASSWORD` | HTTP basic, for a plain PACS; a request's `username` and `password` override them |
+| `RADIARCH_DICOMWEB_TOKEN_URL`, `RADIARCH_DICOMWEB_CLIENT_ID`, `RADIARCH_DICOMWEB_CLIENT_SECRET` (and optionally `RADIARCH_DICOMWEB_TOKEN_SCOPE`) | An OAuth2 client-credentials bearer token, for an endpoint that wants one (a research write gateway). Used when the token URL and client id are set and the request gives no username. The token is fetched on first use and refreshed before it expires; the secret and the token are never logged. Keep the secret in your orchestrator's secret store. |
+
+Give `kinds` to push only what the endpoint accepts (for example `["RTSTRUCT", "RTPLAN", "RTDOSE"]`).
+When the server refuses the push, the result carries `http_status` and `response` (the body, parsed
+when it is JSON), so its findings say why. The export's `label` (default `RESEARCH`) becomes the RT
+Plan and Structure Set labels (16 characters); research endpoints may require RESEARCH in them.
 
 ## Resource limits (D7.1)
 

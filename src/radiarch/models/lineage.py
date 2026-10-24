@@ -66,7 +66,7 @@ class DatasetRef(BaseModel):
 
 
 class Attribution(BaseModel):
-    """The capability that produced a version (F2.5): who, with what, from what."""
+    """The capability that produced a version: who, with what, from what."""
 
     capability_id: str = "radiarch"
     capability_version: str

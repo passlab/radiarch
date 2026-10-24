@@ -443,7 +443,7 @@ class LineageService:
     # ----- capability --------------------------------------------------
 
     def capability(self) -> Dict[str, Any]:
-        """What radiarch declares about itself to a capability registry (F2.5)."""
+        """What radiarch declares about itself to a capability registry."""
         from ..models.common import NOT_FOR_CLINICAL_USE, RESEARCH_USE_ONLY
         from ..models.geometry import HUDensityModel
         from .clinical_goals import builtin_templates
