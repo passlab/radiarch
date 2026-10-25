@@ -307,9 +307,11 @@ def _pancreas_series(pdir: Path) -> Tuple[Optional[Tuple[Path, Path]], List[Tupl
         ct = cts.get(str(ref))
         if ct is None:
             continue
-        desc = str(pydicom.dcmread(first(ct), stop_before_pixels=True).get("SeriesDescription", ""))
+        hdr = pydicom.dcmread(first(ct), stop_before_pixels=True)
+        desc = str(hdr.get("SeriesDescription", ""))
         if "aligned" in desc.lower():
-            days.append((ct, d, desc.strip()))
+            # the description repeats across a patient's days ("Aligned CT - test1" twice): the date tells them apart
+            days.append((ct, d, f"{desc.strip()} {hdr.get('SeriesDate', '') or hdr.get('AcquisitionDate', '')}".strip()))
         else:
             planning = (ct, d)
     dose = next(pdir.glob("RTDOSE_*/*.dcm"), None)
