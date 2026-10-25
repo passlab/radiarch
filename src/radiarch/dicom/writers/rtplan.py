@@ -55,6 +55,8 @@ class PlanWriteOptions:
     sop_instance_uid: Optional[str] = None
     approval: str = "UNAPPROVED"
     plan_intent: str = "RESEARCH"
+    # plans this one relates to: (sop class, sop instance, relationship), e.g. the plan a re-plan replaces (PREDECESSOR)
+    referenced_plans: List[Tuple[str, str, str]] = field(default_factory=list)
     # ion
     virtual_sad_mm: Tuple[float, float] = (2000.0, 2000.0)
     range_shifter_types: Dict[str, str] = field(default_factory=dict)    # id → BINARY | ANALOG
@@ -87,6 +89,13 @@ def _general_plan(ds: Dataset, ctx: CaseContext, opt: PlanWriteOptions, rtstruct
     ds.RTPlanGeometry = "PATIENT"
     ds.PlanIntent = opt.plan_intent
     ds.ReferencedStructureSetSequence = seq([ref(SOP.RTSTRUCT, rtstruct_uid)])
+    if opt.referenced_plans:
+        items = []
+        for sop_class, sop_instance, relationship in opt.referenced_plans:
+            item = ref(sop_class, sop_instance)
+            item.RTPlanRelationship = relationship
+            items.append(item)
+        ds.ReferencedRTPlanSequence = seq(items)
     ds.FrameOfReferenceUID = ctx.frame_of_reference_uid
     ds.PositionReferenceIndicator = ""
 

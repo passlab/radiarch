@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Sequence, Union
+from typing import Optional, Sequence, Tuple, Union
 
 import numpy as np
 from pydicom.dataset import Dataset
@@ -38,7 +38,7 @@ def build_rtdose(ctx: CaseContext, dose_zyx: np.ndarray, origin_mm: Sequence[flo
                  fraction_group_number: int = 1, rbe: float = 1.0, dose_units: str = "Gy", comment: str = "",
                  series_number: int = 300, series_instance_uid: Optional[str] = None,
                  sop_instance_uid: Optional[str] = None, instance_number: int = 1,
-                 heterogeneity: str = "IMAGE") -> Dataset:
+                 heterogeneity: str = "IMAGE", other_plans: Sequence[Tuple[str, str]] = ()) -> Dataset:
     dose = np.asarray(dose_zyx, dtype=np.float32)
     if dose.ndim != 3:
         raise ValueError("dose must be a (z, y, x) volume")
@@ -46,6 +46,8 @@ def build_rtdose(ctx: CaseContext, dose_zyx: np.ndarray, origin_mm: Sequence[flo
         raise ValueError(f"unsupported DoseSummationType {summation}")
     if summation == "BEAM" and beam_number is None:
         raise ValueError("a BEAM dose needs the beam number")
+    if other_plans and summation != "MULTI_PLAN":
+        raise ValueError("only a MULTI_PLAN dose references other plans")
     nz, ny, nx = dose.shape
     sx, sy, sz = (float(v) for v in spacing_mm)
     ox, oy, oz = (float(v) for v in origin_mm)
@@ -90,7 +92,7 @@ def build_rtdose(ctx: CaseContext, dose_zyx: np.ndarray, origin_mm: Sequence[flo
             b.ReferencedBeamNumber = int(beam_number)
             fg.ReferencedBeamSequence = seq([b])
         plan_ref.ReferencedFractionGroupSequence = seq([fg])
-    ds.ReferencedRTPlanSequence = seq([plan_ref])
+    ds.ReferencedRTPlanSequence = seq([plan_ref] + [ref(c, u) for c, u in other_plans])     # MULTI_PLAN: every plan summed
     ds.TissueHeterogeneityCorrection = heterogeneity
 
     # unsigned pixel data: an engine's round-off below zero (the pencil beam's FFT gives -1e-5 Gy) must not wrap to

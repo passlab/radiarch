@@ -50,6 +50,11 @@ class RTExportRequest(BaseModel):
     drr_pixel_mm: Tuple[float, float] = Field(default=(1.0, 1.0))
     rtstruct_uid: Optional[str] = Field(default=None, max_length=64, description="Reference an existing structure set instead of writing one.")
     push: bool = Field(default=False, description="Push the objects with STOW-RS to RADIARCH_DICOMWEB_URL after writing.")
+    predecessor_plan_uid: Optional[str] = Field(default=None, max_length=64,
+                                                description="The plan this one replaces (a re-plan, R9): referenced with RTPlanRelationship PREDECESSOR.")
+    dose_summation: str = Field(default="PLAN", pattern="^(PLAN|MULTI_PLAN)$",
+                                description="MULTI_PLAN: the dose sums this plan and the plans in summed_plan_uids (an accumulated course, R9).")
+    summed_plan_uids: List[str] = Field(default_factory=list, max_length=16, description="The other plans of a MULTI_PLAN dose.")
 
     @model_validator(mode="after")
     def _one_source(self) -> "RTExportRequest":
@@ -63,6 +68,10 @@ class RTExportRequest(BaseModel):
             raise ValueError("an RT Plan references a structure set: write rtstruct too or give rtstruct_uid")
         if self.per_beam_dose and "rtdose" not in self.objects:
             raise ValueError("per_beam_dose needs rtdose among the objects")
+        if (self.dose_summation == "MULTI_PLAN") != bool(self.summed_plan_uids):
+            raise ValueError("a MULTI_PLAN dose names the other plans it sums (summed_plan_uids), and only a MULTI_PLAN dose does")
+        if self.dose_summation == "MULTI_PLAN" and "rtplan" not in self.objects:
+            raise ValueError("a MULTI_PLAN dose references this plan too: write rtplan")
         return self
 
 

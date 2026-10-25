@@ -173,8 +173,9 @@ class RTExportService:
                 raise RTExportError(f"dose shape {src.dose_zyx.shape} differs from the geometry grid {arrays.shape_zyx}")
             rd = write_rtdose(ctx, src.dose_zyx, origin, spacing, out / "RD.dcm", plan_sop_class=plan_sop_class, plan_sop_instance=plan_uid,
                               rbe=src.rbe, dose_units=src.dose_units, comment=f"engine {src.engine_name}" if src.engine_name else "",
-                              series_instance_uid=_series_uid(export_id, "rtdose"))
-            objects.append(self._ref("RTDOSE", rd.path, SOP.RTDOSE, rd.sop_instance_uid, rd.series_instance_uid, summation="PLAN"))
+                              series_instance_uid=_series_uid(export_id, "rtdose"), summation=request.dose_summation,
+                              other_plans=[(plan_sop_class, u) for u in request.summed_plan_uids])
+            objects.append(self._ref("RTDOSE", rd.path, SOP.RTDOSE, rd.sop_instance_uid, rd.series_instance_uid, summation=request.dose_summation))
             if request.per_beam_dose:
                 for n, (beam, dose) in enumerate(zip(beams, self._beam_doses(request, src)), start=1):
                     rdb = write_rtdose(ctx, dose, origin, spacing, out / f"RD_B{n}.dcm", plan_sop_class=plan_sop_class,
@@ -453,6 +454,9 @@ class RTExportService:
             prescription = prescription.model_copy(update={"target_structure": t[0] if t else None})
         opt = PlanWriteOptions(label=request.label, description=request.description, machine_name=request.machine_name,
                                prescription=self._prescription(prescription, roi_numbers))
+        if request.predecessor_plan_uid:
+            sop = SOP.RTPLAN if isinstance(src.plan, PhotonPlan) else SOP.RTIONPLAN
+            opt.referenced_plans.append((sop, request.predecessor_plan_uid, "PREDECESSOR"))
         if isinstance(src.plan, PhotonPlan):
             opt.leaf_boundaries_mm = self._leaf_boundaries(src.beam_model.machine_model_id, src.plan)
         else:

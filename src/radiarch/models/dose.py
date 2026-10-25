@@ -433,6 +433,8 @@ class DoseResult(ResearchArtifact):
     scenario_doses: Optional[List["ScenarioDoseEntry"]] = None
     mapped_from: Optional[Dict[str, str]] = Field(
         default=None, description="A dose mapped through a registration (R9): the source dose_id and the registration_id.")
+    accumulated_from: Optional[List[Dict[str, Any]]] = Field(
+        default=None, description="A dose accumulated over phases (R9): each phase's dose_id, registration_id and weight.")
 
     cache_key: str
     created_at: Optional[datetime] = None
