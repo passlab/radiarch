@@ -1,0 +1,2573 @@
+{
+  "intended_use": "RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.",
+  "radiarch_commit": "d458e46",
+  "timestamp": "20261024-152201",
+  "fast": false,
+  "cpu": "Intel(R) Xeon(R) W-2255 CPU @ 3.70GHz, 20 logical CPUs",
+  "python": "3.14.3",
+  "results": [
+    {
+      "name": "lung_e2e_lctsc",
+      "kind": "lung_e2e",
+      "status": "pass",
+      "seconds": 810.2,
+      "checks": [
+        {
+          "name": "LCTSC-Test-S1-101: PTV V60Gy[%] >= 95.0 Gy",
+          "value": 97.82,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV D0.03cc[Gy] <= 72.0 Gy",
+          "value": 61.77,
+          "target": "<= 72.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs-GTV V20Gy[%] <= 37.0 Gy",
+          "value": 21.35,
+          "target": "<= 37.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs-GTV Dmean[Gy] <= 20.0 Gy",
+          "value": 10.73,
+          "target": "<= 20.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: SpinalCord D0.03cc[Gy] <= 50.5 Gy",
+          "value": 12.96,
+          "target": "<= 50.5",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Esophagus Dmean[Gy] <= 34.0 Gy",
+          "value": 3.9,
+          "target": "<= 34.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart V60Gy[%] <= 33.0 Gy",
+          "value": 0.0,
+          "target": "<= 33.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart V45Gy[%] <= 66.0 Gy",
+          "value": 0.01,
+          "target": "<= 66.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart V40Gy[%] <= 100.0 Gy",
+          "value": 0.07,
+          "target": "<= 100.0",
+          "passed": null,
+          "note": "rtog-0617 priority 3 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV D5 / D95 after normalisation (homogeneity)",
+          "value": 1.017,
+          "target": "\u2264 1.15 (informative)",
+          "passed": null,
+          "note": "plan normalised by 1.011 so that PTV D95 = 60.12 Gy; 1 reweighting round(s)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV V60Gy[%] >= 95.0 Gy",
+          "value": 98.2,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV D0.03cc[Gy] <= 72.0 Gy",
+          "value": 61.25,
+          "target": "<= 72.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs-GTV V20Gy[%] <= 37.0 Gy",
+          "value": 19.64,
+          "target": "<= 37.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs-GTV Dmean[Gy] <= 20.0 Gy",
+          "value": 9.61,
+          "target": "<= 20.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: SpinalCord D0.03cc[Gy] <= 50.5 Gy",
+          "value": 13.5,
+          "target": "<= 50.5",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Esophagus Dmean[Gy] <= 34.0 Gy",
+          "value": 3.21,
+          "target": "<= 34.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart V60Gy[%] <= 33.0 Gy",
+          "value": 0.01,
+          "target": "<= 33.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart V45Gy[%] <= 66.0 Gy",
+          "value": 0.45,
+          "target": "<= 66.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart V40Gy[%] <= 100.0 Gy",
+          "value": 0.85,
+          "target": "<= 100.0",
+          "passed": null,
+          "note": "rtog-0617 priority 3 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV D5 / D95 after normalisation (homogeneity)",
+          "value": 1.012,
+          "target": "\u2264 1.15 (informative)",
+          "passed": null,
+          "note": "plan normalised by 1.008 so that PTV D95 = 60.12 Gy; 1 reweighting round(s)"
+        }
+      ],
+      "metrics": {
+        "LCTSC-Test-S1-101": {
+          "normalisation_factor": 1.010544562175294,
+          "rounds": [
+            {
+              "round": 1,
+              "optimization_id": "046c3411-b79f-4042-af70-e3565b3734b3",
+              "normalisation": 1.010544562175294,
+              "failed": []
+            }
+          ],
+          "gtv_centre_mm": [
+            -77.1,
+            -196.5,
+            -452.4
+          ],
+          "gtv_radius_mm": 20.0,
+          "beamlets": 2268,
+          "goals_pass": 9,
+          "goals_fail": 0,
+          "geometry_id": "dc0fc859-a5bf-4d9b-a78f-b519216e01f1",
+          "optimization_id": "046c3411-b79f-4042-af70-e3565b3734b3",
+          "evaluation_id": "f64ff0e8-7a5f-47e9-ad25-87ef83c1aeab",
+          "indices": {
+            "target_structure": "PTV",
+            "prescription_gy": 60.0,
+            "homogeneity_index": 0.021967475823231417,
+            "conformity_index": 0.6424840229199319,
+            "coverage_pct": 97.81672816728168,
+            "hotspot_gy": 75.13992309570312
+          }
+        },
+        "LCTSC-Test-S2-101": {
+          "normalisation_factor": 1.0082676980277356,
+          "rounds": [
+            {
+              "round": 1,
+              "optimization_id": "a61f4f14-ebf1-4828-b520-67a0198e22aa",
+              "normalisation": 1.0082676980277356,
+              "failed": []
+            }
+          ],
+          "gtv_centre_mm": [
+            -60.0,
+            -6.5,
+            -57.4
+          ],
+          "gtv_radius_mm": 20.0,
+          "beamlets": 2268,
+          "goals_pass": 9,
+          "goals_fail": 0,
+          "geometry_id": "e88557e6-8cbb-4cce-9f6a-beb4376a4344",
+          "optimization_id": "a61f4f14-ebf1-4828-b520-67a0198e22aa",
+          "evaluation_id": "1f9def6f-5dcb-49c0-bf3a-2382aad8b0e8",
+          "indices": {
+            "target_structure": "PTV",
+            "prescription_gy": 60.0,
+            "homogeneity_index": 0.015420436354938864,
+            "conformity_index": 0.7912850267671594,
+            "coverage_pct": 98.19651741293532,
+            "hotspot_gy": 64.74688720703125
+          }
+        }
+      },
+      "notes": [
+        "synthetic 2 cm GTV at the right lung's centroid, CTV +5 mm, PTV +5 mm; 7 coplanar open-field beam models, CCC shipped-scatter Dij, L-BFGS-B; goals from the RTOG 0617 template; a research pipeline check, not a plan quality statement"
+      ],
+      "error": null
+    },
+    {
+      "name": "lung_sbrt_vmat",
+      "kind": "lung_sbrt_vmat",
+      "status": "pass",
+      "seconds": 520.6,
+      "checks": [
+        {
+          "name": "LCTSC-Test-S1-101: PTV V100%[%] >= 95.0",
+          "value": 95.27,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV V90%[%] >= 99.0",
+          "value": 100.0,
+          "target": ">= 99.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV D0.03cc[%] <= 140.0",
+          "value": 117.95,
+          "target": "<= 140.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs-GTV V20Gy[%] <= 10.0",
+          "value": 2.6,
+          "target": "<= 10.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: SpinalCord D0.03cc[Gy] <= 21.9",
+          "value": 11.16,
+          "target": "<= 21.9",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: SpinalCord D0.35cc[Gy] <= 18.0",
+          "value": 9.25,
+          "target": "<= 18.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: SpinalCord D1.2cc[Gy] <= 12.3",
+          "value": 8.23,
+          "target": "<= 12.3",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Esophagus D0.03cc[Gy] <= 25.2",
+          "value": 2.57,
+          "target": "<= 25.2",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Esophagus D5cc[Gy] <= 17.7",
+          "value": 0.64,
+          "target": "<= 17.7",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart D0.03cc[Gy] <= 30.0",
+          "value": 16.99,
+          "target": "<= 30.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart D15cc[Gy] <= 24.0",
+          "value": 10.68,
+          "target": "<= 24.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs D1500cc[Gy] <= 11.6",
+          "value": 0.55,
+          "target": "<= 11.6",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs D1000cc[Gy] <= 12.4",
+          "value": 1.15,
+          "target": "<= 12.4",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs V12.5Gy[cc] <= 1000.0",
+          "value": 229.85,
+          "target": "<= 1000.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: R100 (PTV 16.0 cc)",
+          "value": 0.956,
+          "target": "< 1.2 (minor \u2264 1.5)",
+          "passed": true,
+          "note": "RTOG 0813/0915 conformality table: none deviation"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: R50 (PTV 16.0 cc)",
+          "value": 2.287,
+          "target": "< 4.63673 (minor \u2264 5.70509)",
+          "passed": true,
+          "note": "RTOG 0813/0915 conformality table: none deviation"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: D2cm (PTV 16.0 cc)",
+          "value": 55.899,
+          "target": "< 51.2655 (minor \u2264 59.5818)",
+          "passed": true,
+          "note": "RTOG 0813/0915 conformality table: minor deviation"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: LungV20 (PTV 16.0 cc)",
+          "value": 2.601,
+          "target": "< 10 (minor \u2264 15)",
+          "passed": true,
+          "note": "RTOG 0813/0915 conformality table: none deviation"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: arcs deliverable at the machine's limits",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "per fraction: 51 control points, 8676 MU after normalisation, 794 s before it, gantry 0.10-6.0 deg/s"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: second engine (CCC) gamma 3 %/3 mm against pb (%)",
+          "value": 89.1,
+          "target": "informative",
+          "passed": null,
+          "note": "independent recomputation of the delivered arcs (coverage beamlets: every aperture cell weighted by its open fraction); CCC's shipped scatter cut-off overdoses small fields in water by up to about 10 %"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: second engine PTV D95, CCC / pb",
+          "value": 0.997,
+          "target": "informative",
+          "passed": null,
+          "note": "same MU, two engines"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: second engine PTV D95, CCC / pb, body as water",
+          "value": 1.042,
+          "target": "informative",
+          "passed": null,
+          "note": "the same arcs and metersets with every voxel above 0.05 g/cm\u00b3 set to water: the lung's share of the difference is the gap to the row above"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV V100%[%] >= 95.0",
+          "value": 96.18,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV V90%[%] >= 99.0",
+          "value": 100.0,
+          "target": ">= 99.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV D0.03cc[%] <= 140.0",
+          "value": 115.2,
+          "target": "<= 140.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs-GTV V20Gy[%] <= 10.0",
+          "value": 2.66,
+          "target": "<= 10.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: SpinalCord D0.03cc[Gy] <= 21.9",
+          "value": 9.99,
+          "target": "<= 21.9",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: SpinalCord D0.35cc[Gy] <= 18.0",
+          "value": 8.86,
+          "target": "<= 18.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: SpinalCord D1.2cc[Gy] <= 12.3",
+          "value": 7.35,
+          "target": "<= 12.3",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Esophagus D0.03cc[Gy] <= 25.2",
+          "value": 6.22,
+          "target": "<= 25.2",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Esophagus D5cc[Gy] <= 17.7",
+          "value": 1.77,
+          "target": "<= 17.7",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart D0.03cc[Gy] <= 30.0",
+          "value": 17.5,
+          "target": "<= 30.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart D15cc[Gy] <= 24.0",
+          "value": 10.47,
+          "target": "<= 24.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs D1500cc[Gy] <= 11.6",
+          "value": 0.62,
+          "target": "<= 11.6",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs D1000cc[Gy] <= 12.4",
+          "value": 1.22,
+          "target": "<= 12.4",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs V12.5Gy[cc] <= 1000.0",
+          "value": 211.98,
+          "target": "<= 1000.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: R100 (PTV 16.3 cc)",
+          "value": 0.972,
+          "target": "< 1.2 (minor \u2264 1.5)",
+          "passed": true,
+          "note": "RTOG 0813/0915 conformality table: none deviation"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: R50 (PTV 16.3 cc)",
+          "value": 2.267,
+          "target": "< 4.63059 (minor \u2264 5.69589)",
+          "passed": true,
+          "note": "RTOG 0813/0915 conformality table: none deviation"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: D2cm (PTV 16.3 cc)",
+          "value": 49.277,
+          "target": "< 51.3882 (minor \u2264 59.7352)",
+          "passed": true,
+          "note": "RTOG 0813/0915 conformality table: none deviation"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: LungV20 (PTV 16.3 cc)",
+          "value": 2.664,
+          "target": "< 10 (minor \u2264 15)",
+          "passed": true,
+          "note": "RTOG 0813/0915 conformality table: none deviation"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: arcs deliverable at the machine's limits",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "per fraction: 51 control points, 8650 MU after normalisation, 803 s before it, gantry 0.10-6.0 deg/s"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: second engine (CCC) gamma 3 %/3 mm against pb (%)",
+          "value": 93.0,
+          "target": "informative",
+          "passed": null,
+          "note": "independent recomputation of the delivered arcs (coverage beamlets: every aperture cell weighted by its open fraction); CCC's shipped scatter cut-off overdoses small fields in water by up to about 10 %"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: second engine PTV D95, CCC / pb",
+          "value": 0.988,
+          "target": "informative",
+          "passed": null,
+          "note": "same MU, two engines"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: second engine PTV D95, CCC / pb, body as water",
+          "value": 1.059,
+          "target": "informative",
+          "passed": null,
+          "note": "the same arcs and metersets with every voxel above 0.05 g/cm\u00b3 set to water: the lung's share of the difference is the gap to the row above"
+        }
+      ],
+      "metrics": {
+        "LCTSC-Test-S1-101": {
+          "gtv_centre_mm": [
+            -126.5,
+            -234.0,
+            -484.2
+          ],
+          "gtv_radius_mm": 12.0,
+          "rounds": [
+            {
+              "round": 1,
+              "normalisation": 1.035859592523512,
+              "failed": []
+            },
+            {
+              "arc_round": 1,
+              "normalisation": 1.0992564605136945,
+              "failed": []
+            }
+          ],
+          "normalisation_factor": 1.0992564605136945,
+          "sbrt": {
+            "prescription_gy": 54.0,
+            "ptv_cc": 15.984,
+            "r100": 0.956081081081081,
+            "r50": 2.2871621621621623,
+            "d2cm_pct": 55.898503903989436,
+            "gradient_index": 2.392226148409894,
+            "lung_v20_pct": 2.6013918886489082,
+            "limits": {
+              "R50": [
+                4.636727272727273,
+                5.7050909090909085
+              ],
+              "D2cm": [
+                51.265454545454546,
+                59.58181818181818
+              ],
+              "R100": [
+                1.2,
+                1.5
+              ],
+              "LungV20": [
+                10.0,
+                15.0
+              ]
+            },
+            "deviations": {
+              "R100": "none",
+              "R50": "none",
+              "D2cm": "minor",
+              "LungV20": "none"
+            },
+            "acceptable": true
+          },
+          "vmat": {
+            "disclaimer": "RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.",
+            "vmat_id": "34b9e137-3d27-4b89-9eef-2d1cea3568e3",
+            "cache_key": "a42ddfa74dd0dc3eb5c1087f68055e57fc6092457cab0f8f93c6795ad9de2327",
+            "optimization_id": "716d2966-3154-4dea-82fd-0ccfa16c8159",
+            "geometry_id": "84edfaae-b6d5-4ab7-ad82-46acd966f533",
+            "source_beam_model_id": "cd01b465-8e97-4420-9f19-b14a7db63fc9",
+            "beam_model_id": "90cd5171-cc97-419d-87bc-8fda41e5c7ee",
+            "dose_id": "7720bc86-62ba-4b4a-a927-92ee58498220",
+            "machine_model_id": "synthetic-120",
+            "engine_name": "pb",
+            "engine_version": "1.1.1",
+            "n_control_points": 51,
+            "total_mu": 23678.311670746494,
+            "fractions": 3,
+            "arcs": [
+              {
+                "arc_id": "ARC1",
+                "direction": "CW",
+                "start_deg": 180.0,
+                "stop_deg": 20.0,
+                "n_control_points": 51,
+                "control_point_spacing_deg": 4.0,
+                "fractions": 3,
+                "total_mu": 7892.770556915498,
+                "delivery_time_s": 794.2770556915498,
+                "gantry_speed_deg_s": [
+                  0.09939845109828739,
+                  6.0
+                ],
+                "mean_dose_rate_mu_min": 596.2229804090363,
+                "max_leaf_travel_mm": 35.0,
+                "intervals_at_dose_rate_floor": 7,
+                "issues": []
+              }
+            ],
+            "convergence": {
+              "success": false,
+              "iterations": 150,
+              "final_cost": 559950.8993521195,
+              "cost_history": [
+                3817561.3749762704,
+                2129975.149316957,
+                1898748.202971979,
+                1509499.9444242562,
+                1201345.7933182213,
+                899863.6943886571,
+                811871.8634290714,
+                778238.1194105633,
+                729546.1226922299,
+                692155.4925792572,
+                678230.9083199215,
+                657280.1903717093,
+                628222.5818694336,
+                616823.1005001364,
+                608620.7279035631,
+                603709.2186795092,
+                598964.4936218748,
+                593072.0293302059,
+                586460.2165255249,
+                582199.3196436375,
+                579153.8602536791,
+                577747.7419935714,
+                577081.1558437524,
+                575566.032901101,
+                574600.0598318584,
+                571835.3883124024,
+                570572.8146191901,
+                569228.7037376293,
+                567791.241994657,
+                566964.7716765628,
+                566536.5953505825,
+                565474.5513831831,
+                564458.9033756527,
+                564039.6648081092,
+                563185.8381857823,
+                563003.653131832,
+                562821.0568407652,
+                562638.9873949074,
+                562433.2691279138,
+                562119.6710796022,
+                561890.4506720592,
+                561806.2589476256,
+                561612.7820451544,
+                561480.3797934109,
+                561311.3539954129,
+                561213.1704660342,
+                561094.9513126028,
+                561054.3175080926,
+                561008.4367916798,
+                560987.9298419153,
+                560917.5601348479,
+                560842.0276132248,
+                560777.120341893,
+                560651.1767677792,
+                560595.6615019173,
+                560568.5932985614,
+                560529.5413963718,
+                560479.0673182562,
+                560430.6495238828,
+                560407.3829405392,
+                560399.224458531,
+                560382.8938871524,
+                560342.7721695253,
+                560301.4492284552,
+                560257.9983230277,
+                560240.7955403965,
+                560215.809692368,
+                560208.8481425833,
+                560194.5871964686,
+                560183.4100095548,
+                560178.1297826539,
+                560169.9156355567,
+                560164.8134476101,
+                560157.354793353,
+                560139.7800580966,
+                560127.524411852,
+                560113.588809987,
+                560105.4813183937,
+                560097.9695517789,
+                560087.9009429761,
+                560075.1240373317,
+                560067.9527369544,
+                560054.3215654538,
+                560049.7723692466,
+                560045.0127696823,
+                560037.8312053406,
+                560027.1181841994,
+                560023.4124668449,
+                560020.0838456027,
+                560015.5246704163,
+                560010.894474043,
+                560003.2500095334,
+                560000.1584905395,
+                559990.8071791062,
+                559987.1813004942,
+                559984.5891820161,
+                559982.5312512531,
+                559977.1489944634,
+                559973.8784909182,
+                559971.8235135586,
+                559971.1023422348,
+                559969.9350747367,
+                559967.9798181595,
+                559965.2587626181,
+                559964.5706046982,
+                559962.6629478696,
+                559961.6658245568,
+                559961.0120032614,
+                559960.2261283039,
+                559958.9878673014,
+                559958.3438105887,
+                559957.8520850351,
+                559957.4495125206,
+                559957.206018127,
+                559956.9704143935,
+                559956.5228518391,
+                559956.266400432,
+                559955.9602903207,
+                559955.7351974607,
+                559955.2641372898,
+                559954.7364208356,
+                559954.4817312326,
+                559954.0206830639,
+                559953.8146232248,
+                559953.635194561,
+                559953.1566434114,
+                559952.9794426321,
+                559952.6995003396,
+                559952.661502535,
+                559952.2479676536,
+                559952.1590257477,
+                559951.9856232528,
+                559951.733409416,
+                559951.6261169992,
+                559951.474503731,
+                559951.4172976745,
+                559951.3740250553,
+                559951.3294118927,
+                559951.2754598623,
+                559951.2371976327,
+                559951.1840426351,
+                559951.1609050154,
+                559951.120392385,
+                559951.059452754,
+                559951.000740292,
+                559950.9651047224,
+                559950.9435793762,
+                559950.920735366,
+                559950.9086884453,
+                559950.8993521195
+              ],
+              "constraint_violations": {}
+            },
+            "deliverable": true,
+            "dose_units": "Gy",
+            "plan_id": null,
+            "created_at": null
+          },
+          "geometry_id": "84edfaae-b6d5-4ab7-ad82-46acd966f533",
+          "optimization_id": "716d2966-3154-4dea-82fd-0ccfa16c8159",
+          "vmat_id": "34b9e137-3d27-4b89-9eef-2d1cea3568e3",
+          "beamlets": 960,
+          "second_engine": {
+            "gamma_3_3_pct": 89.11209439528024,
+            "ptv_d95_ccc_over_pb": 0.9970310392885323,
+            "ptv_d95_ccc_over_pb_water": 1.0417708033957611
+          }
+        },
+        "LCTSC-Test-S2-101": {
+          "gtv_centre_mm": [
+            -106.0,
+            -4.0,
+            -80.5
+          ],
+          "gtv_radius_mm": 12.0,
+          "rounds": [
+            {
+              "round": 1,
+              "normalisation": 1.027156145743462,
+              "failed": []
+            },
+            {
+              "arc_round": 1,
+              "normalisation": 1.080820601118167,
+              "failed": []
+            }
+          ],
+          "normalisation_factor": 1.080820601118167,
+          "sbrt": {
+            "prescription_gy": 54.0,
+            "ptv_cc": 16.254,
+            "r100": 0.9717607973421926,
+            "r50": 2.267441860465116,
+            "d2cm_pct": 49.276846426504626,
+            "gradient_index": 2.333333333333333,
+            "lung_v20_pct": 2.6642943670502723,
+            "limits": {
+              "R50": [
+                4.630590909090909,
+                5.6958863636363635
+              ],
+              "D2cm": [
+                51.38818181818182,
+                59.73522727272727
+              ],
+              "R100": [
+                1.2,
+                1.5
+              ],
+              "LungV20": [
+                10.0,
+                15.0
+              ]
+            },
+            "deviations": {
+              "R100": "none",
+              "R50": "none",
+              "D2cm": "none",
+              "LungV20": "none"
+            },
+            "acceptable": true
+          },
+          "vmat": {
+            "disclaimer": "RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.",
+            "vmat_id": "035278b7-a291-4fee-bc7c-13a0045d8360",
+            "cache_key": "5d621d9cf25a213dd9298d66ef886bac4ce17bda1422f14c07b57fdf4a0fd559",
+            "optimization_id": "43077bb9-d523-4d98-a41c-b966eb63f076",
+            "geometry_id": "6f33b7a6-65d1-4a18-906d-913f2b37916c",
+            "source_beam_model_id": "42c257f1-03d3-45b8-827b-edd18384ab8e",
+            "beam_model_id": "98135fca-1eb8-4a25-bb3e-8226fd194f2f",
+            "dose_id": "cba11df1-2111-48f7-9d2b-2c2c47416c88",
+            "machine_model_id": "synthetic-120",
+            "engine_name": "pb",
+            "engine_version": "1.1.1",
+            "n_control_points": 51,
+            "total_mu": 24010.61611136988,
+            "fractions": 3,
+            "arcs": [
+              {
+                "arc_id": "ARC1",
+                "direction": "CW",
+                "start_deg": 180.0,
+                "stop_deg": 20.0,
+                "n_control_points": 51,
+                "control_point_spacing_deg": 4.0,
+                "fractions": 3,
+                "total_mu": 8003.53870378996,
+                "delivery_time_s": 803.1316481567738,
+                "gantry_speed_deg_s": [
+                  0.09935130069112677,
+                  6.0
+                ],
+                "mean_dose_rate_mu_min": 597.9247902003466,
+                "max_leaf_travel_mm": 35.0,
+                "intervals_at_dose_rate_floor": 4,
+                "issues": []
+              }
+            ],
+            "convergence": {
+              "success": false,
+              "iterations": 150,
+              "final_cost": 285279.5538921377,
+              "cost_history": [
+                1903394.904587454,
+                1085379.970179358,
+                859398.7314108916,
+                603095.9312098033,
+                510938.4825166721,
+                452029.1975778241,
+                407324.63179101306,
+                386308.79739140125,
+                375215.72014783527,
+                364471.2270918117,
+                353722.0186420763,
+                337811.1928850699,
+                326705.60001758626,
+                321147.08863274596,
+                318653.1073914364,
+                317137.0574675208,
+                312018.36385313753,
+                308600.2318955241,
+                305102.64122532506,
+                301674.1638764369,
+                300514.7484279602,
+                298251.5176896497,
+                296553.26322778675,
+                296139.44747286604,
+                295558.68620729144,
+                294795.1685751124,
+                293189.31425708195,
+                292019.21901694103,
+                291313.45434286806,
+                290413.74153234565,
+                289944.7252304805,
+                289547.56478833134,
+                288838.3602243117,
+                288407.4616016465,
+                288105.994840727,
+                287908.93759914633,
+                287726.772182293,
+                287499.9218971525,
+                287224.3790401078,
+                287028.0979004492,
+                286963.8835304282,
+                286932.99207741,
+                286859.57901645976,
+                286726.93746800686,
+                286542.724987804,
+                286463.01921793463,
+                286330.16201960377,
+                286292.62187451636,
+                286239.6009342215,
+                286165.7880301437,
+                286081.47917988116,
+                286013.48060999444,
+                285966.3604960316,
+                285906.1339842515,
+                285841.94144342974,
+                285759.4118140683,
+                285745.4530082033,
+                285713.9480213782,
+                285710.34518637945,
+                285699.571231753,
+                285672.2373880338,
+                285655.42744836485,
+                285639.46815532097,
+                285630.4473100001,
+                285623.879878672,
+                285613.13600693434,
+                285593.52368458855,
+                285557.4668617869,
+                285549.01298390015,
+                285527.8879090495,
+                285514.7768084653,
+                285496.4371660686,
+                285481.913332269,
+                285476.92198773375,
+                285464.5279672569,
+                285461.0951579457,
+                285451.0441500582,
+                285437.2274029296,
+                285426.91149141884,
+                285415.9884699244,
+                285409.07963513304,
+                285394.05401048885,
+                285382.5874230686,
+                285368.9007296296,
+                285354.9004788274,
+                285343.0214127965,
+                285334.9057267664,
+                285325.9595047565,
+                285323.28509540105,
+                285318.73323920363,
+                285316.35238803667,
+                285314.047608086,
+                285311.4666476656,
+                285308.40059241466,
+                285305.54879616114,
+                285301.7983204107,
+                285299.1027906842,
+                285295.91170306545,
+                285292.1621490108,
+                285290.22260063054,
+                285289.4363311051,
+                285288.1151081094,
+                285287.15824682056,
+                285286.29069233313,
+                285286.0214232364,
+                285285.5235111271,
+                285284.3601328583,
+                285283.15145067615,
+                285282.489202342,
+                285282.0183882533,
+                285281.6554425775,
+                285281.3379710265,
+                285281.14606704813,
+                285281.0563852184,
+                285280.8446954663,
+                285280.75181568967,
+                285280.647053364,
+                285280.49772285053,
+                285280.4008847675,
+                285280.2576843576,
+                285280.1745113676,
+                285280.0856831632,
+                285280.016111613,
+                285279.98382555426,
+                285279.9341211586,
+                285279.92692917073,
+                285279.8792419196,
+                285279.84973036585,
+                285279.813607861,
+                285279.7708658662,
+                285279.74826100684,
+                285279.7154497804,
+                285279.69997720764,
+                285279.68710030854,
+                285279.6695517619,
+                285279.65940862603,
+                285279.643257138,
+                285279.6360366667,
+                285279.6308482244,
+                285279.62316611566,
+                285279.6140033035,
+                285279.60756259086,
+                285279.59946033655,
+                285279.5824739347,
+                285279.57820210175,
+                285279.5658233577,
+                285279.5628310099,
+                285279.55893931584,
+                285279.55525224016,
+                285279.5538921377
+              ],
+              "constraint_violations": {}
+            },
+            "deliverable": true,
+            "dose_units": "Gy",
+            "plan_id": null,
+            "created_at": null
+          },
+          "geometry_id": "6f33b7a6-65d1-4a18-906d-913f2b37916c",
+          "optimization_id": "43077bb9-d523-4d98-a41c-b966eb63f076",
+          "vmat_id": "035278b7-a291-4fee-bc7c-13a0045d8360",
+          "beamlets": 960,
+          "second_engine": {
+            "gamma_3_3_pct": 93.04648288733638,
+            "ptv_d95_ccc_over_pb": 0.988436548647791,
+            "ptv_d95_ccc_over_pb_water": 1.0591283563085598
+          }
+        }
+      },
+      "notes": [
+        "synthetic peripheral GTV in the right lung (radius 12 mm), PTV +5 mm, rings for the SBRT dose fall-off; FMO of the arcs' sector beams with the pb Dij, arcs by sweeping each sector's fluence, control-point doses recomputed and metersets re-optimized (R8); a research pipeline check, not a plan quality statement"
+      ],
+      "error": null
+    },
+    {
+      "name": "lung_vmat_lctsc",
+      "kind": "lung_vmat",
+      "status": "pass",
+      "seconds": 2112.9,
+      "checks": [
+        {
+          "name": "LCTSC-Test-S1-101: PTV V60Gy[%] >= 95.0",
+          "value": 95.66,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV D0.03cc[Gy] <= 72.0",
+          "value": 65.9,
+          "target": "<= 72.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs-GTV V20Gy[%] <= 37.0",
+          "value": 13.72,
+          "target": "<= 37.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs-GTV Dmean[Gy] <= 20.0",
+          "value": 7.85,
+          "target": "<= 20.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: SpinalCord D0.03cc[Gy] <= 50.5",
+          "value": 17.89,
+          "target": "<= 50.5",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Esophagus Dmean[Gy] <= 34.0",
+          "value": 2.72,
+          "target": "<= 34.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart V60Gy[%] <= 33.0",
+          "value": 0.0,
+          "target": "<= 33.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart V45Gy[%] <= 66.0",
+          "value": 0.0,
+          "target": "<= 66.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart V40Gy[%] <= 100.0",
+          "value": 0.0,
+          "target": "<= 100.0",
+          "passed": null,
+          "note": "rtog-0617 priority 3 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV D5 / D95 (homogeneity)",
+          "value": 1.061,
+          "target": "\u2264 1.15 (informative)",
+          "passed": null,
+          "note": "normalised by 1.037 so that PTV D95 = 60.12 Gy"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Paddick conformity index",
+          "value": 0.91,
+          "target": "informative",
+          "passed": null,
+          "note": "1 is ideal"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: arcs deliverable at the machine's limits",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "per fraction: 194 control points, 1031 MU after normalisation, 285 s before it, gantry 0.66-6.0 deg/s"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: second engine (CCC) gamma 3 %/3 mm against pb (%)",
+          "value": 83.3,
+          "target": "informative",
+          "passed": null,
+          "note": "independent recomputation of the delivered arcs (coverage beamlets: every aperture cell weighted by its open fraction); CCC's shipped scatter cut-off overdoses small fields in water by up to about 10 %"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: second engine PTV D95, CCC / pb",
+          "value": 0.88,
+          "target": "informative",
+          "passed": null,
+          "note": "same MU, two engines"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: second engine PTV D95, CCC / pb, body as water",
+          "value": 1.05,
+          "target": "informative",
+          "passed": null,
+          "note": "the same arcs and metersets with every voxel above 0.05 g/cm\u00b3 set to water: the lung's share of the difference is the gap to the row above"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV V60Gy[%] >= 95.0",
+          "value": 95.74,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV D0.03cc[Gy] <= 72.0",
+          "value": 66.87,
+          "target": "<= 72.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs-GTV V20Gy[%] <= 37.0",
+          "value": 13.18,
+          "target": "<= 37.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs-GTV Dmean[Gy] <= 20.0",
+          "value": 8.28,
+          "target": "<= 20.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: SpinalCord D0.03cc[Gy] <= 50.5",
+          "value": 20.19,
+          "target": "<= 50.5",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Esophagus Dmean[Gy] <= 34.0",
+          "value": 3.24,
+          "target": "<= 34.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart V60Gy[%] <= 33.0",
+          "value": 0.0,
+          "target": "<= 33.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart V45Gy[%] <= 66.0",
+          "value": 0.11,
+          "target": "<= 66.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart V40Gy[%] <= 100.0",
+          "value": 0.31,
+          "target": "<= 100.0",
+          "passed": null,
+          "note": "rtog-0617 priority 3 (informative)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV D5 / D95 (homogeneity)",
+          "value": 1.064,
+          "target": "\u2264 1.15 (informative)",
+          "passed": null,
+          "note": "normalised by 1.038 so that PTV D95 = 60.12 Gy"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Paddick conformity index",
+          "value": 0.915,
+          "target": "informative",
+          "passed": null,
+          "note": "1 is ideal"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: arcs deliverable at the machine's limits",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "per fraction: 194 control points, 1122 MU after normalisation, 283 s before it, gantry 0.84-6.0 deg/s"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: second engine (CCC) gamma 3 %/3 mm against pb (%)",
+          "value": 86.4,
+          "target": "informative",
+          "passed": null,
+          "note": "independent recomputation of the delivered arcs (coverage beamlets: every aperture cell weighted by its open fraction); CCC's shipped scatter cut-off overdoses small fields in water by up to about 10 %"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: second engine PTV D95, CCC / pb",
+          "value": 0.938,
+          "target": "informative",
+          "passed": null,
+          "note": "same MU, two engines"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: second engine PTV D95, CCC / pb, body as water",
+          "value": 1.06,
+          "target": "informative",
+          "passed": null,
+          "note": "the same arcs and metersets with every voxel above 0.05 g/cm\u00b3 set to water: the lung's share of the difference is the gap to the row above"
+        }
+      ],
+      "metrics": {
+        "LCTSC-Test-S1-101": {
+          "gtv_centre_mm": [
+            -77.1,
+            -196.5,
+            -452.4
+          ],
+          "gtv_radius_mm": 20.0,
+          "rounds": [
+            {
+              "round": 1,
+              "normalisation": 1.02092106204156,
+              "failed": []
+            },
+            {
+              "arc_round": 1,
+              "normalisation": 1.0368845915755884,
+              "failed": []
+            }
+          ],
+          "normalisation_factor": 1.0368845915755884,
+          "sbrt": null,
+          "vmat": {
+            "disclaimer": "RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.",
+            "vmat_id": "893a91a2-2f8e-47dc-aaf1-5398653b4ae3",
+            "cache_key": "00b2cb631208c3f34154b2440184fc9a238303509471a00abee764ad87e80e18",
+            "optimization_id": "b74da3ef-f6b6-4e02-83b4-f951ba916fc3",
+            "geometry_id": "ca0c06e4-e9a6-4ad0-9ccf-5ec5cf7eb16b",
+            "source_beam_model_id": "806c38af-857c-4d2f-9555-059c435807c6",
+            "beam_model_id": "1bfbe0dd-b2e7-4ea3-8ce2-f8e65179b9d1",
+            "dose_id": "e646cd99-9387-4c7d-af75-821c38bcf3db",
+            "machine_model_id": "synthetic-120",
+            "engine_name": "pb",
+            "engine_version": "1.1.1",
+            "n_control_points": 194,
+            "total_mu": 66719.6595005857,
+            "fractions": 30,
+            "arcs": [
+              {
+                "arc_id": "ARC1",
+                "direction": "CW",
+                "start_deg": 181.0,
+                "stop_deg": 179.0,
+                "n_control_points": 97,
+                "control_point_spacing_deg": 3.7291666666666665,
+                "fractions": 30,
+                "total_mu": 994.2843828046693,
+                "delivery_time_s": 134.9440923427149,
+                "gantry_speed_deg_s": [
+                  0.6557738475166537,
+                  6.0
+                ],
+                "mean_dose_rate_mu_min": 442.08725208044143,
+                "max_leaf_travel_mm": 50.0,
+                "intervals_at_dose_rate_floor": 21,
+                "issues": []
+              },
+              {
+                "arc_id": "ARC2",
+                "direction": "CC",
+                "start_deg": 179.0,
+                "stop_deg": 181.0,
+                "n_control_points": 97,
+                "control_point_spacing_deg": 3.7291666666666665,
+                "fractions": 30,
+                "total_mu": 1229.7042672148546,
+                "delivery_time_s": 149.8257785558741,
+                "gantry_speed_deg_s": [
+                  0.8395675972217136,
+                  6.0
+                ],
+                "mean_dose_rate_mu_min": 492.4536801614274,
+                "max_leaf_travel_mm": 45.0,
+                "intervals_at_dose_rate_floor": 18,
+                "issues": []
+              }
+            ],
+            "convergence": {
+              "success": false,
+              "iterations": 150,
+              "final_cost": 486671.8765786318,
+              "cost_history": [
+                2379291.1960126106,
+                1626306.469677793,
+                1588553.3875834472,
+                1527241.0863831933,
+                1350535.1832741408,
+                1253782.1384871197,
+                1038657.2731110401,
+                980457.4382788932,
+                924333.8890900073,
+                883688.7015352637,
+                818901.5345933514,
+                743915.8293621594,
+                683489.3606641175,
+                675638.4102446387,
+                666837.3809731904,
+                653407.900723978,
+                649389.5944389764,
+                639057.3398252818,
+                631081.5520199025,
+                621755.5139333839,
+                610724.5394118272,
+                603131.1560825742,
+                588751.209636539,
+                582260.4176984008,
+                576387.847899858,
+                574706.6291446706,
+                572974.0523153589,
+                566881.4895715455,
+                561177.9786149256,
+                558194.8114810348,
+                554054.6974191343,
+                551982.4337779192,
+                548050.0925147333,
+                547363.1505025979,
+                541245.2478867575,
+                539673.5568535371,
+                537431.7411395689,
+                535589.9913862939,
+                534485.3649057824,
+                531621.8839807028,
+                528633.8303442401,
+                527034.6519150934,
+                525074.0163490757,
+                523280.73962486826,
+                520961.059163519,
+                518432.5395852343,
+                516670.6292834975,
+                515119.502410294,
+                513873.64447464846,
+                513305.0489280882,
+                513019.9410325641,
+                512038.8670822275,
+                510299.991918133,
+                508861.1691637071,
+                508060.9902577852,
+                507386.6777813649,
+                506555.11015957256,
+                505563.8776169391,
+                504874.07703890745,
+                504242.42469972064,
+                503399.47300717595,
+                503061.76288040855,
+                502581.29075461347,
+                502379.5262160654,
+                502141.21543176,
+                501857.76186411455,
+                501348.9244279818,
+                500707.4113213342,
+                500281.6197325489,
+                499864.1346359346,
+                499523.2525391399,
+                499307.5804528704,
+                498955.8663620216,
+                498569.18994752195,
+                498435.99651786545,
+                498208.22291087324,
+                497734.347617616,
+                497228.6465723096,
+                496799.4562431533,
+                496280.1107497032,
+                495922.2367112581,
+                495771.08950273105,
+                495486.4676453706,
+                495271.72704296594,
+                494961.4107238022,
+                494816.4704132248,
+                494685.3151835752,
+                494377.5949951529,
+                494292.51122193976,
+                494146.5444126561,
+                493818.5734492473,
+                493259.29140484973,
+                493135.8298632812,
+                492623.4051521338,
+                492404.0121355394,
+                492200.1199918496,
+                491959.79616071185,
+                491736.1380896084,
+                491631.61045155785,
+                491600.7387351737,
+                491547.5665338874,
+                491495.3022097944,
+                491405.7235982981,
+                491170.0340566408,
+                490844.7959765772,
+                490661.2150601505,
+                490561.27930775704,
+                490472.35640502395,
+                490346.2666295237,
+                490253.2023784851,
+                490122.42434936657,
+                490047.55364763265,
+                489939.06057655456,
+                489742.2161784899,
+                489612.7660665116,
+                489491.15655303956,
+                489417.2568926021,
+                489369.5641448503,
+                489218.220077569,
+                489025.62632570876,
+                488917.2067031327,
+                488789.85758763266,
+                488683.4423048996,
+                488601.7301875894,
+                488511.08568395505,
+                488392.5441774126,
+                488337.2922608026,
+                488291.523281078,
+                488211.03734074754,
+                488129.9410677809,
+                487918.0445902317,
+                487820.9448385342,
+                487750.1110276775,
+                487699.81097762793,
+                487665.5882214238,
+                487623.94929370563,
+                487461.54712860583,
+                487413.633338953,
+                487357.1137958646,
+                487327.94885445957,
+                487293.8657862795,
+                487253.64193641563,
+                487165.18075574166,
+                487104.7930871995,
+                487057.7269991278,
+                487021.76586223824,
+                486962.14964857465,
+                486850.3770016498,
+                486753.1208955196,
+                486671.8765786318
+              ],
+              "constraint_violations": {}
+            },
+            "deliverable": true,
+            "dose_units": "Gy",
+            "plan_id": null,
+            "created_at": null
+          },
+          "geometry_id": "ca0c06e4-e9a6-4ad0-9ccf-5ec5cf7eb16b",
+          "optimization_id": "b74da3ef-f6b6-4e02-83b4-f951ba916fc3",
+          "vmat_id": "893a91a2-2f8e-47dc-aaf1-5398653b4ae3",
+          "beamlets": 6048,
+          "second_engine": {
+            "gamma_3_3_pct": 83.31312653399178,
+            "ptv_d95_ccc_over_pb": 0.879579611724471,
+            "ptv_d95_ccc_over_pb_water": 1.0497657551323945
+          }
+        },
+        "LCTSC-Test-S2-101": {
+          "gtv_centre_mm": [
+            -60.0,
+            -6.5,
+            -57.4
+          ],
+          "gtv_radius_mm": 20.0,
+          "rounds": [
+            {
+              "round": 1,
+              "normalisation": 1.0142211643611831,
+              "failed": []
+            },
+            {
+              "arc_round": 1,
+              "normalisation": 1.037636494609031,
+              "failed": []
+            }
+          ],
+          "normalisation_factor": 1.037636494609031,
+          "sbrt": null,
+          "vmat": {
+            "disclaimer": "RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.",
+            "vmat_id": "406bb883-f81b-4663-ab85-0c4a3322ab3f",
+            "cache_key": "f10a7d299f204770a8d51801a09dcd1b0d636f054369de3ea7311543a649be9d",
+            "optimization_id": "62dbf42e-e9ed-47b5-8a71-32c6b07d123d",
+            "geometry_id": "17b3a6ee-9be0-4a2f-b8de-5103ea256681",
+            "source_beam_model_id": "5636ebc3-425d-490a-a10a-3083907872bc",
+            "beam_model_id": "13df0f16-fe1a-4e73-a7a6-ce9832d1810c",
+            "dose_id": "8929144a-9106-497c-9d9e-310de5ef3deb",
+            "machine_model_id": "synthetic-120",
+            "engine_name": "pb",
+            "engine_version": "1.1.1",
+            "n_control_points": 194,
+            "total_mu": 65974.38067364469,
+            "fractions": 30,
+            "arcs": [
+              {
+                "arc_id": "ARC1",
+                "direction": "CW",
+                "start_deg": 181.0,
+                "stop_deg": 179.0,
+                "n_control_points": 97,
+                "control_point_spacing_deg": 3.7291666666666665,
+                "fractions": 30,
+                "total_mu": 1080.9391812088816,
+                "delivery_time_s": 139.09964719286955,
+                "gantry_speed_deg_s": [
+                  0.8353446595984182,
+                  6.0
+                ],
+                "mean_dose_rate_mu_min": 466.25819821531167,
+                "max_leaf_travel_mm": 55.0,
+                "intervals_at_dose_rate_floor": 12,
+                "issues": []
+              },
+              {
+                "arc_id": "ARC2",
+                "direction": "CC",
+                "start_deg": 179.0,
+                "stop_deg": 181.0,
+                "n_control_points": 97,
+                "control_point_spacing_deg": 3.7291666666666665,
+                "fractions": 30,
+                "total_mu": 1118.206841245941,
+                "delivery_time_s": 144.19395523721084,
+                "gantry_speed_deg_s": [
+                  0.7324135343246325,
+                  6.0
+                ],
+                "mean_dose_rate_mu_min": 465.2928090111958,
+                "max_leaf_travel_mm": 50.0,
+                "intervals_at_dose_rate_floor": 16,
+                "issues": []
+              }
+            ],
+            "convergence": {
+              "success": false,
+              "iterations": 150,
+              "final_cost": 462352.57273504086,
+              "cost_history": [
+                1710480.5378593358,
+                1538316.0977889712,
+                1478799.7066995134,
+                1284836.2884275527,
+                1147757.3453403977,
+                1026690.0971957874,
+                962864.9163094755,
+                899407.5421559678,
+                828229.2037246886,
+                783177.8271196024,
+                755923.5086015617,
+                740591.1780947567,
+                727253.6125519825,
+                720561.0473400642,
+                711333.6229305512,
+                690681.8221019389,
+                677182.8009064901,
+                668633.1952784087,
+                653075.900371298,
+                632568.313775502,
+                611062.7063943925,
+                601733.7099395206,
+                588407.293743355,
+                581054.5645670657,
+                573466.932470404,
+                571829.3835035218,
+                568936.1912175501,
+                564087.3375153445,
+                561827.531855306,
+                555159.495190251,
+                548137.0335384309,
+                544446.648952932,
+                540037.8680559389,
+                536243.5773220876,
+                530290.6093874762,
+                523586.0015917531,
+                522829.7384841195,
+                517716.57031499763,
+                515680.93430671,
+                512557.4645615998,
+                509682.6866885793,
+                506573.8048310781,
+                504236.40383685,
+                502896.9561155328,
+                500099.4093840325,
+                497316.35346960404,
+                494048.60373733914,
+                492703.4979240454,
+                491797.55551875103,
+                490939.9000206409,
+                490249.8915158921,
+                489838.43777098483,
+                488555.13257187564,
+                486978.8130731288,
+                486234.0104287841,
+                485438.2069678819,
+                483852.0468571788,
+                482819.29451323557,
+                481522.73070223146,
+                480681.25079826836,
+                479946.2411745522,
+                478984.3033225517,
+                478145.3060868836,
+                476873.7708642596,
+                476445.59098039666,
+                476115.9838817306,
+                475669.0861045433,
+                475341.0626923989,
+                474677.37668843917,
+                474175.9605587874,
+                473504.240792922,
+                472529.86316351284,
+                472001.2640430412,
+                471321.31428653514,
+                470950.3424764928,
+                470582.5025418496,
+                470216.9176664114,
+                469941.65981646464,
+                469806.17700224376,
+                469443.62089730916,
+                469083.30861522956,
+                468678.34617785976,
+                468419.8732530637,
+                468220.0113950094,
+                468005.696082228,
+                467859.99165488675,
+                467666.4697301191,
+                467472.3211759357,
+                467205.3080594542,
+                466946.6732100578,
+                466675.716143515,
+                466602.5740190828,
+                466500.6112138125,
+                466451.66253038566,
+                466404.26564944425,
+                466237.45285924786,
+                465936.9523225845,
+                465837.4400055975,
+                465705.4161704558,
+                465624.39556820714,
+                465549.29714277183,
+                465394.05162393843,
+                465201.1350218899,
+                465112.0942793249,
+                465045.6888299807,
+                464989.95299401233,
+                464849.8646908237,
+                464592.6030502455,
+                464419.60022799455,
+                464166.8059135576,
+                464058.76382126077,
+                464050.3882213567,
+                463968.3573972421,
+                463938.607446581,
+                463881.73829446465,
+                463828.1067099305,
+                463812.3308737752,
+                463786.7896461187,
+                463759.1545464729,
+                463742.89479220187,
+                463704.3455068962,
+                463634.34770210786,
+                463558.91842031974,
+                463518.4674186525,
+                463446.77080609265,
+                463403.2095646087,
+                463314.321302242,
+                463261.5671760391,
+                463209.98384911224,
+                463197.287330325,
+                463151.1245523136,
+                463126.8866291429,
+                463093.46265756397,
+                463042.96256656037,
+                462987.45976529276,
+                462904.2116425473,
+                462849.69817506196,
+                462807.46057850163,
+                462767.3968225283,
+                462734.8626580989,
+                462675.91480532486,
+                462657.39722514205,
+                462629.7955066144,
+                462619.53411637264,
+                462593.34259270557,
+                462545.55447514437,
+                462470.44456127565,
+                462438.84159466287,
+                462391.34045730525,
+                462352.57273504086
+              ],
+              "constraint_violations": {}
+            },
+            "deliverable": true,
+            "dose_units": "Gy",
+            "plan_id": null,
+            "created_at": null
+          },
+          "geometry_id": "17b3a6ee-9be0-4a2f-b8de-5103ea256681",
+          "optimization_id": "62dbf42e-e9ed-47b5-8a71-32c6b07d123d",
+          "vmat_id": "406bb883-f81b-4663-ab85-0c4a3322ab3f",
+          "beamlets": 6048,
+          "second_engine": {
+            "gamma_3_3_pct": 86.43283199765798,
+            "ptv_d95_ccc_over_pb": 0.9378673914337334,
+            "ptv_d95_ccc_over_pb_water": 1.0595965641796743
+          }
+        }
+      },
+      "notes": [
+        "synthetic 2 cm GTV at the right lung's centroid, CTV +5 mm, PTV +5 mm (the R7 lung case), 60 Gy in 30 fractions; FMO of the arcs' sector beams with the pb Dij, arcs by sweeping each sector's fluence, control-point doses recomputed and metersets re-optimized (R8); a research pipeline check, not a plan quality statement"
+      ],
+      "error": null
+    },
+    {
+      "name": "hn_sib_vmat",
+      "kind": "hn_sib_vmat",
+      "status": "pass",
+      "seconds": 2715.6,
+      "checks": [
+        {
+          "name": "0522c0001: PTV_High D95%[%] >= 95.0",
+          "value": 100.2,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "nccn-head-neck priority 1"
+        },
+        {
+          "name": "0522c0001: PTV_High D0.03cc[%] <= 110.0",
+          "value": 112.5,
+          "target": "<= 110.0",
+          "passed": null,
+          "note": "nccn-head-neck priority 2 (informative)"
+        },
+        {
+          "name": "0522c0001: Brainstem D0.03cc[Gy] <= 54.0",
+          "value": 41.55,
+          "target": "<= 54.0",
+          "passed": true,
+          "note": "nccn-head-neck priority 1"
+        },
+        {
+          "name": "0522c0001: Brainstem_PRV D0.03cc[Gy] <= 60.0",
+          "value": 48.64,
+          "target": "<= 60.0",
+          "passed": null,
+          "note": "nccn-head-neck priority 2 (informative)"
+        },
+        {
+          "name": "0522c0001: OpticChiasm D0.03cc[Gy] <= 54.0",
+          "value": 0.91,
+          "target": "<= 54.0",
+          "passed": true,
+          "note": "nccn-head-neck priority 1"
+        },
+        {
+          "name": "0522c0001: OpticNrv D0.03cc[Gy] <= 54.0",
+          "value": 0.85,
+          "target": "<= 54.0",
+          "passed": true,
+          "note": "nccn-head-neck priority 1"
+        },
+        {
+          "name": "0522c0001: Parotid Dmean[Gy] <= 26.0",
+          "value": 29.81,
+          "target": "<= 26.0",
+          "passed": null,
+          "note": "nccn-head-neck priority 2 (informative)"
+        },
+        {
+          "name": "0522c0001: Glnd_Submand Dmean[Gy] <= 39.0",
+          "value": 62.3,
+          "target": "<= 39.0",
+          "passed": null,
+          "note": "nccn-head-neck priority 3 (informative)"
+        },
+        {
+          "name": "0522c0001: Mandible D0.03cc[Gy] <= 70.0",
+          "value": 62.51,
+          "target": "<= 70.0",
+          "passed": null,
+          "note": "nccn-head-neck priority 2 (informative)"
+        },
+        {
+          "name": "0522c0001: PTV56 D95%[Gy] >= 56.0",
+          "value": 58.98,
+          "target": ">= 56.0",
+          "passed": true,
+          "note": "nccn-head-neck priority 1"
+        },
+        {
+          "name": "0522c0001: PTV70 D5 / D95 (homogeneity)",
+          "value": 1.099,
+          "target": "\u2264 1.10 (informative)",
+          "passed": null,
+          "note": "normalised by 1.045 so that PTV70 D95 = 70.14 Gy"
+        },
+        {
+          "name": "0522c0001: hottest point outside the elective volume (% of 70 Gy)",
+          "value": 98.7,
+          "target": "informative",
+          "passed": null,
+          "note": "dose spill of the two arcs"
+        },
+        {
+          "name": "0522c0001: arcs deliverable at the machine's limits",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "per fraction: ARC1 97 control points, 541 MU, 135 s; ARC2 97 control points, 464 MU, 134 s"
+        },
+        {
+          "name": "0522c0002: PTV_High D95%[%] >= 95.0",
+          "value": 100.2,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "nccn-head-neck priority 1"
+        },
+        {
+          "name": "0522c0002: PTV_High D0.03cc[%] <= 110.0",
+          "value": 113.09,
+          "target": "<= 110.0",
+          "passed": null,
+          "note": "nccn-head-neck priority 2 (informative)"
+        },
+        {
+          "name": "0522c0002: Brainstem D0.03cc[Gy] <= 54.0",
+          "value": 41.05,
+          "target": "<= 54.0",
+          "passed": true,
+          "note": "nccn-head-neck priority 1"
+        },
+        {
+          "name": "0522c0002: Brainstem_PRV D0.03cc[Gy] <= 60.0",
+          "value": 50.97,
+          "target": "<= 60.0",
+          "passed": null,
+          "note": "nccn-head-neck priority 2 (informative)"
+        },
+        {
+          "name": "0522c0002: OpticChiasm D0.03cc[Gy] <= 54.0",
+          "value": 0.8,
+          "target": "<= 54.0",
+          "passed": true,
+          "note": "nccn-head-neck priority 1"
+        },
+        {
+          "name": "0522c0002: OpticNrv D0.03cc[Gy] <= 54.0",
+          "value": 0.77,
+          "target": "<= 54.0",
+          "passed": true,
+          "note": "nccn-head-neck priority 1"
+        },
+        {
+          "name": "0522c0002: Parotid Dmean[Gy] <= 26.0",
+          "value": 22.35,
+          "target": "<= 26.0",
+          "passed": null,
+          "note": "nccn-head-neck priority 2 (informative)"
+        },
+        {
+          "name": "0522c0002: Glnd_Submand Dmean[Gy] <= 39.0",
+          "value": 53.72,
+          "target": "<= 39.0",
+          "passed": null,
+          "note": "nccn-head-neck priority 3 (informative)"
+        },
+        {
+          "name": "0522c0002: Mandible D0.03cc[Gy] <= 70.0",
+          "value": 56.92,
+          "target": "<= 70.0",
+          "passed": null,
+          "note": "nccn-head-neck priority 2 (informative)"
+        },
+        {
+          "name": "0522c0002: PTV56 D95%[Gy] >= 56.0",
+          "value": 59.56,
+          "target": ">= 56.0",
+          "passed": true,
+          "note": "nccn-head-neck priority 1"
+        },
+        {
+          "name": "0522c0002: PTV70 D5 / D95 (homogeneity)",
+          "value": 1.111,
+          "target": "\u2264 1.10 (informative)",
+          "passed": null,
+          "note": "normalised by 1.052 so that PTV70 D95 = 70.14 Gy"
+        },
+        {
+          "name": "0522c0002: hottest point outside the elective volume (% of 70 Gy)",
+          "value": 97.7,
+          "target": "informative",
+          "passed": null,
+          "note": "dose spill of the two arcs"
+        },
+        {
+          "name": "0522c0002: arcs deliverable at the machine's limits",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "per fraction: ARC1 97 control points, 390 MU, 124 s; ARC2 97 control points, 458 MU, 124 s"
+        }
+      ],
+      "metrics": {
+        "0522c0001": {
+          "gtv_centre_mm": [
+            4.9,
+            -56.6,
+            232.9
+          ],
+          "gtv_radius_mm": 12.0,
+          "rounds": [
+            {
+              "round": 1,
+              "normalisation": 1.0265649487777775,
+              "failed": [
+                "PTV70 D2",
+                "Parotid_L Dmean",
+                "Parotid_R Dmean",
+                "Brainstem_PRV Dmax"
+              ]
+            },
+            {
+              "round": 2,
+              "normalisation": 1.0266579218881933,
+              "failed": [
+                "PTV70 D2",
+                "Parotid_L Dmean",
+                "Parotid_R Dmean"
+              ]
+            },
+            {
+              "round": 3,
+              "normalisation": 1.0263402091376685,
+              "failed": [
+                "PTV70 D2",
+                "Parotid_L Dmean",
+                "Parotid_R Dmean"
+              ]
+            },
+            {
+              "arc_round": 1,
+              "normalisation": 1.0454359361343415,
+              "failed": [
+                "PTV70 D2",
+                "Parotid_L Dmean",
+                "Parotid_R Dmean"
+              ]
+            },
+            {
+              "arc_round": 2,
+              "normalisation": 1.045463993236898,
+              "failed": [
+                "PTV70 D2",
+                "Parotid_L Dmean",
+                "Parotid_R Dmean"
+              ]
+            },
+            {
+              "arc_round": 3,
+              "normalisation": 1.045364849031751,
+              "failed": [
+                "PTV70 D2",
+                "Parotid_L Dmean",
+                "Parotid_R Dmean"
+              ]
+            }
+          ],
+          "normalisation_factor": 1.045364849031751,
+          "vmat": {
+            "disclaimer": "RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.",
+            "vmat_id": "2e414ae1-0ec6-447c-b17d-eb8712e69394",
+            "cache_key": "cc4ee9014249257bbf143457911133c956079f1527e0cf2d65177a3301fadb42",
+            "optimization_id": "c2beff55-3807-4b9f-8193-99d4526a2b68",
+            "geometry_id": "32ce59a7-fab9-4716-872b-fb2bcc642733",
+            "source_beam_model_id": "45c71b98-3e44-4749-90b8-76be200c3142",
+            "beam_model_id": "62963dcd-a445-40df-8f71-a0e9fc529ac3",
+            "dose_id": "0530f310-a9c4-47f5-b526-8703c46aa20c",
+            "machine_model_id": "synthetic-120",
+            "engine_name": "pb",
+            "engine_version": "1.1.1",
+            "n_control_points": 194,
+            "total_mu": 33661.386156137705,
+            "fractions": 35,
+            "arcs": [
+              {
+                "arc_id": "ARC1",
+                "direction": "CW",
+                "start_deg": 181.0,
+                "stop_deg": 179.0,
+                "n_control_points": 97,
+                "control_point_spacing_deg": 3.7291666666666665,
+                "fractions": 35,
+                "total_mu": 517.8919858165665,
+                "delivery_time_s": 135.07866258959191,
+                "gantry_speed_deg_s": [
+                  1.1653645833333215,
+                  6.0
+                ],
+                "mean_dose_rate_mu_min": 230.04017476397686,
+                "max_leaf_travel_mm": 80.0,
+                "intervals_at_dose_rate_floor": 46,
+                "issues": []
+              },
+              {
+                "arc_id": "ARC2",
+                "direction": "CC",
+                "start_deg": 179.0,
+                "stop_deg": 181.0,
+                "n_control_points": 97,
+                "control_point_spacing_deg": 3.7291666666666665,
+                "fractions": 35,
+                "total_mu": 443.86190435879615,
+                "delivery_time_s": 134.30935118647272,
+                "gantry_speed_deg_s": [
+                  1.3318452380952348,
+                  6.0
+                ],
+                "mean_dose_rate_mu_min": 198.28637415240559,
+                "max_leaf_travel_mm": 70.0,
+                "intervals_at_dose_rate_floor": 47,
+                "issues": []
+              }
+            ],
+            "convergence": {
+              "success": false,
+              "iterations": 150,
+              "final_cost": 3255571.1677462445,
+              "cost_history": [
+                7490095.818951021,
+                7274888.420883503,
+                6995310.034991405,
+                6381317.288350585,
+                5696954.608847227,
+                4668756.5719701005,
+                4555514.561488097,
+                4263246.284773096,
+                4234251.573572432,
+                4158277.731106055,
+                4050197.0843941094,
+                3916701.144178146,
+                3859942.8171629584,
+                3734263.4257491534,
+                3666734.3440741585,
+                3645163.5178646985,
+                3609585.633791081,
+                3585511.3610611632,
+                3550469.3092340617,
+                3513530.3780006524,
+                3490458.2127632326,
+                3472142.664937821,
+                3453752.6837231587,
+                3443185.501540734,
+                3420570.882995971,
+                3410406.3523908244,
+                3402750.056592907,
+                3401492.8930402487,
+                3385284.579477563,
+                3375608.0994998794,
+                3361454.8851970355,
+                3353373.1921194927,
+                3344034.858211909,
+                3339477.888898155,
+                3335328.668355302,
+                3333783.1195305986,
+                3329778.701629846,
+                3327579.8372015683,
+                3323351.774761086,
+                3319088.0687293634,
+                3315791.6088559,
+                3311916.3835515156,
+                3305764.294778473,
+                3302309.229082658,
+                3299336.728542606,
+                3297300.1755486433,
+                3296486.467141309,
+                3295179.2670503436,
+                3293106.3012025505,
+                3292434.858471726,
+                3292142.2957768347,
+                3289423.6347162873,
+                3287478.1882829755,
+                3284897.6002217354,
+                3280858.1428959076,
+                3278788.183593609,
+                3277971.9583927672,
+                3276580.491700862,
+                3275600.554628243,
+                3274254.42827875,
+                3273275.524164969,
+                3272487.6698032427,
+                3272163.2862167545,
+                3271117.1801068764,
+                3270018.4626978207,
+                3269350.876728149,
+                3268777.355750224,
+                3268105.8776250263,
+                3267538.1705366294,
+                3266604.332790401,
+                3265562.067530924,
+                3264980.1681643017,
+                3264733.666198346,
+                3264327.0715855905,
+                3263973.11304433,
+                3263742.2251857393,
+                3263432.5094080977,
+                3263112.4342500386,
+                3262656.386490643,
+                3261987.4958659275,
+                3261335.1614148077,
+                3260795.5649338537,
+                3260372.089715226,
+                3259953.17924644,
+                3259561.7340406706,
+                3259210.283418174,
+                3259010.8772123586,
+                3258903.612384064,
+                3258869.8349925326,
+                3258671.7691049143,
+                3258400.6106124953,
+                3258207.5035373396,
+                3257903.2909235256,
+                3257531.781580324,
+                3257215.4641789803,
+                3257115.848738197,
+                3257061.0827349797,
+                3256976.502899663,
+                3256966.7690311125,
+                3256907.5125691774,
+                3256859.3182453145,
+                3256798.18768052,
+                3256735.8522676663,
+                3256641.7479314003,
+                3256563.08054981,
+                3256495.6144514033,
+                3256458.5499948575,
+                3256416.316973837,
+                3256341.7641101824,
+                3256315.699538418,
+                3256232.9749483205,
+                3256215.1532205236,
+                3256193.601620961,
+                3256165.2383726076,
+                3256154.973157476,
+                3256137.6900832453,
+                3256114.058962296,
+                3256064.088683225,
+                3256030.327733112,
+                3255970.768804723,
+                3255938.0189405694,
+                3255923.571716128,
+                3255911.0337126004,
+                3255902.878136198,
+                3255888.900592731,
+                3255871.434706174,
+                3255857.389567239,
+                3255835.5957038803,
+                3255811.5420161276,
+                3255785.506772441,
+                3255762.8682477,
+                3255725.9207547577,
+                3255691.3183238273,
+                3255684.9066111823,
+                3255667.473159318,
+                3255661.887644125,
+                3255655.5056675766,
+                3255643.870362102,
+                3255626.3057314972,
+                3255619.291873515,
+                3255611.1162914173,
+                3255605.843629777,
+                3255603.495551397,
+                3255595.686026551,
+                3255587.7003829074,
+                3255584.6646002866,
+                3255578.3800883107,
+                3255576.1761117848,
+                3255574.552240041,
+                3255571.1677462445
+              ],
+              "constraint_violations": {}
+            },
+            "deliverable": true,
+            "dose_units": "Gy",
+            "plan_id": null,
+            "created_at": null
+          },
+          "geometry_id": "32ce59a7-fab9-4716-872b-fb2bcc642733",
+          "optimization_id": "c2beff55-3807-4b9f-8193-99d4526a2b68",
+          "vmat_id": "2e414ae1-0ec6-447c-b17d-eb8712e69394",
+          "beamlets": 1536,
+          "indices": {
+            "target_structure": "PTV70",
+            "prescription_gy": 70.0,
+            "homogeneity_index": 0.11152890074854635,
+            "conformity_index": 0.7951500713802513,
+            "coverage_pct": 95.71836346336822,
+            "hotspot_gy": 79.58306884765625
+          }
+        },
+        "0522c0002": {
+          "gtv_centre_mm": [
+            0.5,
+            -79.9,
+            -345.2
+          ],
+          "gtv_radius_mm": 12.0,
+          "rounds": [
+            {
+              "round": 1,
+              "normalisation": 1.0239432024661805,
+              "failed": [
+                "PTV70 D2",
+                "Brainstem_PRV Dmax"
+              ]
+            },
+            {
+              "round": 2,
+              "normalisation": 1.0237508447841088,
+              "failed": [
+                "PTV70 D2"
+              ]
+            },
+            {
+              "round": 3,
+              "normalisation": 1.0238337310223493,
+              "failed": [
+                "PTV70 D2"
+              ]
+            },
+            {
+              "arc_round": 1,
+              "normalisation": 1.051383286311097,
+              "failed": [
+                "PTV70 D2",
+                "Brainstem_PRV Dmax"
+              ]
+            },
+            {
+              "arc_round": 2,
+              "normalisation": 1.0519337894532808,
+              "failed": [
+                "PTV70 D2"
+              ]
+            },
+            {
+              "arc_round": 3,
+              "normalisation": 1.0518946722016276,
+              "failed": [
+                "PTV70 D2"
+              ]
+            }
+          ],
+          "normalisation_factor": 1.0518946722016276,
+          "vmat": {
+            "disclaimer": "RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.",
+            "vmat_id": "d2493b02-5a3f-4b0a-8ade-629ad587de42",
+            "cache_key": "35fc5ce69cba9af38bbeb7e8ba07dac9a56941327c154d158069380911fa239d",
+            "optimization_id": "322a308b-1ff8-4a26-a066-6cd0e981bde6",
+            "geometry_id": "e7e6ac1e-fde9-44d0-8333-84323c499b75",
+            "source_beam_model_id": "34aa98eb-ca76-4dcf-8076-361a54aed92a",
+            "beam_model_id": "1f965b40-8e07-4861-bc7b-a612774eab78",
+            "dose_id": "577498ec-9308-498f-90ee-e28721b5763f",
+            "machine_model_id": "synthetic-120",
+            "engine_name": "pb",
+            "engine_version": "1.1.1",
+            "n_control_points": 194,
+            "total_mu": 28223.24274562221,
+            "fractions": 35,
+            "arcs": [
+              {
+                "arc_id": "ARC1",
+                "direction": "CW",
+                "start_deg": 181.0,
+                "stop_deg": 179.0,
+                "n_control_points": 97,
+                "control_point_spacing_deg": 3.7291666666666665,
+                "fractions": 35,
+                "total_mu": 370.5494643676663,
+                "delivery_time_s": 124.37307811822872,
+                "gantry_speed_deg_s": [
+                  1.331845238095245,
+                  6.0
+                ],
+                "mean_dose_rate_mu_min": 178.76029280971383,
+                "max_leaf_travel_mm": 70.0,
+                "intervals_at_dose_rate_floor": 45,
+                "issues": []
+              },
+              {
+                "arc_id": "ARC2",
+                "direction": "CC",
+                "start_deg": 179.0,
+                "stop_deg": 181.0,
+                "n_control_points": 97,
+                "control_point_spacing_deg": 3.7291666666666665,
+                "fractions": 35,
+                "total_mu": 435.8288997929682,
+                "delivery_time_s": 124.15106085470445,
+                "gantry_speed_deg_s": [
+                  1.331845238095245,
+                  6.0
+                ],
+                "mean_dose_rate_mu_min": 210.62835716064845,
+                "max_leaf_travel_mm": 70.0,
+                "intervals_at_dose_rate_floor": 50,
+                "issues": []
+              }
+            ],
+            "convergence": {
+              "success": false,
+              "iterations": 150,
+              "final_cost": 3051905.434507391,
+              "cost_history": [
+                6338359.034652112,
+                5967608.068901111,
+                5789290.299107275,
+                5090947.194407228,
+                4567634.034058157,
+                4257886.32521492,
+                4150818.9872781816,
+                4042149.7504118653,
+                3918769.1509932773,
+                3753607.246038421,
+                3560813.9977244292,
+                3481228.9828540552,
+                3410655.044160598,
+                3383149.594371682,
+                3366580.7536996803,
+                3356088.8660328747,
+                3335666.8872373793,
+                3314437.088512067,
+                3281520.1206533234,
+                3260841.2110988824,
+                3245502.7409881987,
+                3222121.4239677475,
+                3177056.862338143,
+                3164870.0288784746,
+                3157549.0473468876,
+                3146372.186040657,
+                3140424.2117606574,
+                3134688.16952855,
+                3127836.9629551833,
+                3120821.1665706835,
+                3117873.7000627713,
+                3112654.1030060938,
+                3108446.6192897526,
+                3102454.7127187504,
+                3097404.853759035,
+                3094205.8278955086,
+                3088610.961025594,
+                3086427.783040043,
+                3085354.577870381,
+                3084907.0328452145,
+                3084759.29416866,
+                3083954.8160781898,
+                3082520.820865314,
+                3081110.938074386,
+                3080321.971283659,
+                3079112.677587377,
+                3078161.4654944655,
+                3077077.3918328593,
+                3076848.3524947837,
+                3076066.222164851,
+                3075594.3479403155,
+                3074834.8764927257,
+                3073734.1420391956,
+                3072895.700820535,
+                3072316.4015604234,
+                3071737.716772291,
+                3070885.618932726,
+                3069787.625439029,
+                3069201.687201997,
+                3068968.087785901,
+                3068733.116302295,
+                3068433.065190829,
+                3068022.9307443476,
+                3067499.0446355827,
+                3067153.6197094503,
+                3066649.3154958966,
+                3066055.362468853,
+                3065256.3514261665,
+                3064846.1192511353,
+                3064597.6399654713,
+                3064435.0194194894,
+                3063981.2843226595,
+                3063744.716028212,
+                3063371.8302997025,
+                3062854.9802354546,
+                3062359.8121825606,
+                3062052.618203389,
+                3061474.565430475,
+                3061182.6610114416,
+                3060779.482819178,
+                3060362.0655915467,
+                3060025.2173140375,
+                3059729.1774114263,
+                3059594.6296515823,
+                3059143.4569237144,
+                3058842.265960498,
+                3058316.28316312,
+                3057593.0591891506,
+                3056877.4341373793,
+                3056727.3659663997,
+                3056352.2201948836,
+                3056237.61934176,
+                3055924.062557992,
+                3055448.025718367,
+                3055076.75830656,
+                3054961.8696711836,
+                3054688.65949113,
+                3054482.1016325946,
+                3054341.891386224,
+                3054101.338187145,
+                3053963.385495028,
+                3053937.0368476845,
+                3053882.0872788955,
+                3053798.8106331425,
+                3053758.100362977,
+                3053697.7475302177,
+                3053598.506642701,
+                3053506.204402668,
+                3053362.5016548187,
+                3053221.078896414,
+                3053087.8205485065,
+                3053052.1285013473,
+                3053030.3641626155,
+                3052998.6002985467,
+                3052905.515975466,
+                3052871.723283108,
+                3052803.5200590864,
+                3052792.6908375025,
+                3052781.854838109,
+                3052741.650089059,
+                3052650.5366372904,
+                3052629.7346819607,
+                3052611.2719914094,
+                3052602.2793500186,
+                3052589.0217954405,
+                3052541.0956135355,
+                3052459.595728386,
+                3052405.553099953,
+                3052354.1378941936,
+                3052322.9867615253,
+                3052312.896123224,
+                3052294.225562582,
+                3052272.5615152866,
+                3052238.8357083136,
+                3052216.226051402,
+                3052200.3439617376,
+                3052186.350975308,
+                3052145.421779718,
+                3052116.6314022243,
+                3052086.28768916,
+                3052080.5922894934,
+                3052062.1771464613,
+                3052043.2829704084,
+                3052033.7550205863,
+                3052025.175083426,
+                3052003.4892655443,
+                3051971.8210584978,
+                3051953.2457975186,
+                3051924.26351292,
+                3051905.434507391
+              ],
+              "constraint_violations": {}
+            },
+            "deliverable": true,
+            "dose_units": "Gy",
+            "plan_id": null,
+            "created_at": null
+          },
+          "geometry_id": "e7e6ac1e-fde9-44d0-8333-84323c499b75",
+          "optimization_id": "322a308b-1ff8-4a26-a066-6cd0e981bde6",
+          "vmat_id": "d2493b02-5a3f-4b0a-8ade-629ad587de42",
+          "beamlets": 1536,
+          "indices": {
+            "target_structure": "PTV70",
+            "prescription_gy": 70.0,
+            "homogeneity_index": 0.1285738722193416,
+            "conformity_index": 0.7693198554023296,
+            "coverage_pct": 95.31396438612933,
+            "hotspot_gy": 79.18737030029297
+          }
+        }
+      },
+      "notes": [
+        "synthetic oropharynx-like GTV between the parotids, PTV70 +8 mm, PTV56 +25 mm outside PTV70 + 3 mm and the brainstem + 5 mm; two full arcs from the fluence of their sector beams (pb Dij), 70/56 Gy in 35 fractions; NCCN head-and-neck template; a research pipeline check, not a plan quality statement"
+      ],
+      "error": null
+    }
+  ]
+}

@@ -223,6 +223,16 @@ TG-101; the results it names are lung VMAT and SBRT plans, a head-and-neck
 - **The Monte Carlo provenance recorded the host name** in a public repository;
   references and run records now record the processor instead.
 
+- **Derived geometries were stored with x and z swapped (found 2026-10-24, fixed in
+  `d458e46`).** The geometry store takes (x, y, z) arrays and the derive step (R4) handed it
+  (z, y, x) ones, so every PTV, ring or override geometry was transposed against its parent.
+  Plans on them were self-consistent and their checks ran, but the anatomy was mirrored against
+  the beams. The four planning cases of the R8 record that derive geometries were rerun on the fix
+  (`docs/validation/2026-10-23-r8/2026-10-24-correction-d458e46/`): every graded check still
+  passes; organ doses change, most where the swapped anatomy had put organs outside the fields.
+  The R4 test used a centred cube, where the swap is invisible; the new one uses a non-cubic grid
+  and an off-centre structure.
+
 ## Consequences
 
 - Photon plans can use either engine; VMAT control-point doses need `pb`.

@@ -14,6 +14,16 @@ and its source; ADR 0015 (`docs/adr/0015-native-pencil-beam-and-vmat.md`) gives 
 decisions and the findings in prose. The R7 record (`../2026-10-22-r7/`) remains the
 record of CCC 1.0.0.
 
+## Correction, 2026-10-24
+
+Four planning cases of this record (`lung_e2e_lctsc`, `lung_sbrt_vmat`, `lung_vmat_lctsc`,
+`hn_sib_vmat`) were planned on derived geometries stored with x and z swapped, a fault present
+since R4 and fixed in commit `d458e46`. Their numbers in the documents below are superseded by
+[`2026-10-24-correction-d458e46/`](2026-10-24-correction-d458e46/README.md), a clean run of the
+four cases on the fix: every graded check still passes, and the organ doses change (spinal cord,
+oesophagus and heart in the lung cases; optic structures and parotids in the head-and-neck case).
+Everything else in this record is unaffected. Please review the four cases from the correction.
+
 ## What to review and sign
 
 | Document | Contents | Signed by |

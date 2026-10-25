@@ -319,7 +319,8 @@ optimization for VMAT; the R8 record for the physicist.
   centroid 46 mm from the clinical one). The R4 test used a centred cube. Fixed: the derive step transposes before
   saving; `DERIVE_VERSION` "2" in its cache key; `test_derived_volumes_keep_the_parent_orientation` (a 40 × 30 × 20
   grid, an off-centre CTV).
-- Affected harness cases (rerun `20261024-114041`): `lung_e2e_lctsc` (R7 and R8 records), `lung_sbrt_vmat`,
+- Affected harness cases (clean run `20261024-152201-d458e46`, the R8 record's correction folder
+  `2026-10-24-correction-d458e46/`, and an erratum in the R7 guide): `lung_e2e_lctsc` (R7 and R8 records), `lung_sbrt_vmat`,
   `lung_vmat_lctsc`, `hn_sib_vmat`. All checks pass as before; organ doses change: spinal cord D0.03cc from
   0–0.7 Gy to 10–20 Gy, heart D0.03cc in the SBRT case from 0.3–0.6 Gy to 17 Gy, and in the head-and-neck case
   the optic structures fall from 16–23 Gy to under 1 Gy while the parotid mean rises from 2–11 Gy to 22–30 Gy.

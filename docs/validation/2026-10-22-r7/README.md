@@ -11,6 +11,16 @@ clean commit, `20261022-150018-20fc3bf` at commit `20fc3bf`. Every check in them
 its source; ADR 0014 (`docs/adr/0014-validation-report.md`) gives the decisions behind
 the cases and the findings in prose.
 
+## Correction, 2026-10-24
+
+The lung end-to-end case (`lung_e2e_lctsc`, in the CCC document) was planned on derived geometries
+(the CTV and PTV) stored with x and z swapped against the CT, a fault present since R4 and fixed in
+commit `d458e46`; its numbers here are not those of the patient's anatomy (it evaluated no organs in R7,
+see the R8 guide, item 7). The case was also run
+with CCC 1.0.0, whose gantry turned opposite to IEC 61217 (fixed in R8). Its corrected numbers, on
+the fix and with CCC 1.1.0, are in the R8 record's correction
+(`../2026-10-23-r8/2026-10-24-correction-d458e46/`). Nothing else in this record derives a geometry.
+
 ## What to review and sign
 
 | Document | Contents | Signed by |
