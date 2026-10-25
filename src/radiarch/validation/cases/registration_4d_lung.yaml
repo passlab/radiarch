@@ -1,0 +1,20 @@
+name: registration_4d_lung
+kind: registration_4d
+description: Deformable registration between breathing phases on 4D-Lung planning 4DCTs, contoured on every phase - the 50 % phase registered to the 0 % phase (rigid only, Demons, B-spline), its tumour and organ contours propagated and compared with the 0 % phase's own contours (Dice, HD95), fiducial markers as graded point landmarks and the carina as an informative one. The reference contours are a clinician's, so their own phase-to-phase variability bounds the agreement. Patients with tumour motion of 4 to 11 mm between the two phases; graded on Demons against AAPM TG-132's tolerances. Fast mode runs one patient at 4 mm.
+data: data/public/4d-lung
+patients: [101_HM10395, 103_HM10395, 105_HM10395, 111_HM10395, 114_HM10395]
+spacing_mm: 2.0
+working_spacing_mm: 3.0
+fixed_phase: 0
+moving_phase: 50
+structures: [Tumor, LN, RLung, LLung, Heart, Esophagus, Cord]
+markers: [MarkerA, MarkerB, MarkerC]
+anatomical_landmarks: [Carina]
+methods: [demons, bspline]
+graded_method: demons
+moved_structure: Tumor
+limits:                     # AAPM TG-132 tolerances, on the graded method
+  Tumor: {dice: 0.80, msd_mm: 3.0}
+  RLung: {dice: 0.90, msd_mm: 3.0}
+  LLung: {dice: 0.90, msd_mm: 3.0}
+  markers: {mean_mm: 2.0}

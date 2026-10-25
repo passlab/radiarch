@@ -58,7 +58,7 @@ ENGINE_CASES: Dict[str, Dict[str, Any]] = {
     "pb": {
         "title": "Native photon pencil-beam engine (radiarch, roadmap R8)",
         "kinds": ("photon_pdd", "photon_profile", "photon_output_vs_field", "pb_vs_mc", "pb_vs_ccc", "dij_consistency", "lung_sbrt_vmat",
-                  "lung_vmat", "hn_sib_vmat"),
+                  "lung_vmat", "hn_sib_vmat", "lung_4d"),
         "limitations": [
             "The kernel is a Monte Carlo pencil kernel of the Mohan 6 MV spectrum in water (the CCC kernels' spectrum), decomposed "
             "into a few depth-weighted components; there is no linac head model (no head scatter or off-axis softening), and the "
@@ -81,10 +81,12 @@ ENGINE_CASES: Dict[str, Dict[str, Any]] = {
         ],
     },
     "services": {
-        "title": "Engine-independent services (geometry, evaluation, DICOM RT)",
-        "kinds": ("geometry_volumes", "dvh_crosscheck", "gamma_crosscheck", "rt_roundtrip"),
+        "title": "Engine-independent services (geometry, registration, evaluation, DICOM RT)",
+        "kinds": ("geometry_volumes", "dvh_crosscheck", "gamma_crosscheck", "rt_roundtrip", "registration_4d", "replan_cbct"),
         "limitations": [
             "Gamma and DVH are checked against independent implementations (pymedphys, dicompyler-core), not against measurement.",
+            "Registration is checked against a clinician's contours and contoured fiducials on another breathing phase, whose own "
+            "phase-to-phase variability bounds the agreement; there is no ground-truth deformation.",
         ],
     },
 }

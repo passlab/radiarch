@@ -491,6 +491,8 @@ from .cases_r7 import KINDS_R7  # noqa: E402
 KINDS.update(KINDS_R7)
 from .cases_r8 import KINDS_R8  # noqa: E402
 KINDS.update(KINDS_R8)
+from .cases_r9 import KINDS_R9  # noqa: E402
+KINDS.update(KINDS_R9)
 
 
 def load_cases() -> Dict[str, dict]:

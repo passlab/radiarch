@@ -1,0 +1,11 @@
+name: replan_pancreas_cbct
+kind: replan_cbct
+description: Pancreatic-CT-CBCT-SEG - the planning CT registered to each cone-beam CT of a treatment day (aligned to the planning CT by the collection and contoured on it) rigid only, B-spline (normalised correlation) and Demons; the planning stomach-duodenum and small bowel propagated and compared with the cone-beam contours; the clinical dose mapped onto the day's anatomy. Graded - the B-spline places the stomach-duodenum better than rigid alignment alone and does not fold; the organ doses of the day are informative. Fast mode runs one patient at 6 mm.
+data: data/public/pancreatic-ct-cbct-seg
+patients: [Pancreas-CT-CB_001, Pancreas-CT-CB_002, Pancreas-CT-CB_003, Pancreas-CT-CB_004, Pancreas-CT-CB_005]
+spacing_mm: 3.0
+working_spacing_mm: 3.0
+organs: {Stomach_duo: Stomach_duo, Bowel_sm: Bowel_sm}
+graded_organ: Stomach_duo
+methods: [bspline, demons]
+graded_method: bspline

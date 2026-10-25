@@ -1,0 +1,28 @@
+name: lung_4d_itv
+kind: lung_4d
+description: The ITV approach on 4D-Lung planning 4DCTs contoured on every phase - the average-intensity CT of the ten phases, the ITV as the union of the tumour drawn on every phase, PTV = ITV + 5 mm, two full VMAT arcs on the average CT (pb), 60 Gy in 30 fractions; the plan recomputed on every phase's CT and accumulated through Demons on the 50 % phase with equal shares. Graded - each phase's own tumour and the accumulated reference tumour receive D95 of at least 95 % of the prescription. Fast mode runs one patient at 6 mm.
+data: data/public/4d-lung
+patients: [101_HM10395, 103_HM10395]
+spacing_mm: 3.0
+working_spacing_mm: 3.0
+beamlet_mm: 5.0
+iterations: 150
+rounds: 3
+prescription_gy: 60.0
+fractions: 30
+reference_phase: 50
+target: Tumor
+ptv_margin_mm: 5.0
+coverage_fraction: 0.95
+machine: synthetic-120
+jaw_margin_mm: 10.0
+ring_near_fraction: 0.9
+ring_far_fraction: 0.5
+organ_goals:
+  SpinalCord: [Dmax, 45.0]
+  Esophagus: [Dmean, 34.0]
+  Heart: [D33, 60.0]
+  Lungs-PTV: [D37, 20.0]
+arcs:
+  - {arc_id: ARC1, start_deg: 181.0, stop_deg: 179.0, direction: CW, sectors: 12, control_point_spacing_deg: 4.0, collimator_deg: 15.0}
+  - {arc_id: ARC2, start_deg: 179.0, stop_deg: 181.0, direction: CC, sectors: 12, control_point_spacing_deg: 4.0, collimator_deg: -15.0}
