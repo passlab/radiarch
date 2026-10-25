@@ -93,6 +93,9 @@ def build_rtdose(ctx: CaseContext, dose_zyx: np.ndarray, origin_mm: Sequence[flo
     ds.ReferencedRTPlanSequence = seq([plan_ref])
     ds.TissueHeterogeneityCorrection = heterogeneity
 
+    # unsigned pixel data: an engine's round-off below zero (the pencil beam's FFT gives -1e-5 Gy) must not wrap to
+    # the top of the range (it did before R9: 2^32 x the scaling, about twice the maximum, at those voxels)
+    dose = np.clip(np.nan_to_num(dose, nan=0.0, posinf=0.0, neginf=0.0), 0.0, None)
     dose_max = float(dose.max()) if dose.size else 0.0
     if dose_max > 0.0:
         scaling = dose_max / float(2**31 - 1)

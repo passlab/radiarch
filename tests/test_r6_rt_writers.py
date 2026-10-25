@@ -151,6 +151,24 @@ def test_rtdose_round_trip(written):
     assert int(ref.ReferencedBeamSequence[0].ReferencedBeamNumber) == 1 and beam.BitsAllocated == 32
 
 
+def test_rtdose_round_off_below_zero_does_not_wrap(tmp_path):
+    """An engine's round-off below zero (the pencil beam's FFT gives about -1e-5 Gy) is written as zero: unsigned
+    pixel data wrapped it to 2^32 x the scaling, about twice the maximum, before R9."""
+    from radiarch.dicom.writers.rtdose import write_rtdose
+
+    dose = np.full((4, 5, 6), 2.0, np.float32)
+    dose[0, 0, :3] = -1.9e-5
+    dose[1, 1, 1] = np.nan
+    dose[2, 2, 2] = 60.0
+    ctx = CaseContext(frame_of_reference_uid="1.2.826.0.1.3680043.8.498.81")
+    rd = write_rtdose(ctx, dose, (0.0, 0.0, 0.0), (3.0, 3.0, 3.0), tmp_path / "RD.dcm", plan_sop_class=SOP.RTPLAN,
+                      plan_sop_instance="1.2.826.0.1.3680043.8.498.82")
+    vol = read_rtdose(rd.path)
+    assert float(vol.dose_zyx.max()) == pytest.approx(60.0, rel=1e-6)
+    assert np.all(vol.dose_zyx[0, 0, :3] == 0.0) and vol.dose_zyx[1, 1, 1] == 0.0
+    assert np.allclose(vol.dose_zyx[3], 2.0, rtol=1e-6)
+
+
 # ---------------------------------------------------------------------------
 # DRR
 # ---------------------------------------------------------------------------

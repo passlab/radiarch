@@ -325,3 +325,12 @@ optimization for VMAT; the R8 record for the physicist.
   0–0.7 Gy to 10–20 Gy, heart D0.03cc in the SBRT case from 0.3–0.6 Gy to 17 Gy, and in the head-and-neck case
   the optic structures fall from 16–23 Gy to under 1 Gy while the parotid mean rises from 2–11 Gy to 22–30 Gy.
   The engine, Monte Carlo, phantom, TG-119 and cross-check cases do not derive geometries and are unchanged.
+
+## RT Dose round-off below zero wrapped (fixed 2026-10-24)
+
+- The RT Dose writer (R6) scaled the dose into unsigned 32-bit pixels without clipping: a voxel at -1.9e-5 Gy (the
+  pencil beam's FFT round-off; 48 682 voxels of a lung VMAT dose) became 2^32 x the scaling, about twice the plan's
+  maximum (133.6 Gy against 66.8 Gy), so every exported RT Dose of such a dose had false hot spots. The writer now
+  clips below zero and NaN to zero; `test_rtdose_round_off_below_zero_does_not_wrap`. Found by a position check
+  before a push (the 95 % dose region of the exported RT Dose 222 mm from the PTV). The validation records are not
+  affected: they grade the dose arrays, not exported RT Doses.
