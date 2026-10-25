@@ -187,6 +187,16 @@ This record covers R9.1 to R9.7.
   cone-beam CTs (Dice 0.06 on that pair). The synthetic tests had passed
   before the fix; one of them now pads its "cone-beam" image the same way.
 
+- **On abdominal cone-beam CTs the B-spline is safe but not yet better than
+  rigid alignment.** Over the ten contoured cone-beam CTs of the five
+  Pancreatic-CT-CBCT-SEG patients, the bounded B-spline never folds, and it
+  places the stomach-duodenum better than rigid alignment in half the pairs
+  (Dice 0.52 to 0.62–0.66 in two patients) and worse in the other half (0.82
+  to 0.72 in one). The organs' day-to-day gas and filling change their
+  intensities, which an intensity-based metric cannot follow; the R9 record
+  grades this as a finding. Better choices to try: a local correlation metric,
+  histogram matching of the cone-beam CT, or contour-guided registration.
+
 ## Consequences
 
 - `services/registration.py`, `models/registration.py`,

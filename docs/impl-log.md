@@ -414,3 +414,8 @@ optimization for VMAT; the R8 record for the physicist.
   0.619). Demons is not for cone-beam CT (Dice 0.06 on that pair): same-calibration only. Cache keys of
   registrations carry the algorithm version, so a change of algorithm needs its bump (a trial reused a cached
   result before it).
+- R9 record `docs/validation/2026-10-25-r9/` from commit `316b6c6`, one case per process (the first attempt in one
+  process was stopped by memory pressure; `lung_4d_itv` needs about 18 GB at 3 mm): `registration_4d_lung` 29 pass,
+  2 fail (patient 111's tumour contours, 11 % apart in volume); `lung_4d_itv` 22 pass; `replan_pancreas_cbct` 15 pass,
+  5 fail (the B-spline above rigid alignment of the stomach-duodenum in five of ten cone-beam CTs; never folds).
+  The replanning case's days had repeated series descriptions; the label now carries the date (`316b6c6`).

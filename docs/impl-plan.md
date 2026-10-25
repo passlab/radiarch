@@ -28,7 +28,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 11 | R12 Versions, lineage, states | done | 3e653f2..fe0573e | 0013 |
 | 12 | R7 Validation report | done; physicist review waiting | 2e21a28..2f7b506 | 0014 |
 | 13 | R8 Native pencil-beam engine, VMAT, SBRT | done; physicist review waiting | 6e73aa2..cc5c047 | 0015 |
-| 14 | R9 Registration, 4D, replanning | done; validation record running | — | 0016 |
+| 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | not started | — | — |
 | 16 | R13 Viewer integration | not started | — | — |
 | 17 | R11 Multi-criteria optimization | not started | — | — |
@@ -159,7 +159,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] Lateral kernel scaling for lung (`pb` 1.1.0; fitted to the 2 × 2 and 10 × 10 cm Monte Carlo lung slabs)
 - [x] Monte Carlo 2 × 2 cm lung-slab reference and the narrow-field lung check
 
-### R9 — Registration, 4D, replanning (done; validation record running)
+### R9 — Registration, 4D, replanning (done; physicist review waiting)
 Data: 4D-Lung (planning 4DCT, ten phases in one frame of reference, contoured on every phase, markers;
 seven weekly 4D cone-beam CTs, each its own frame of reference) and Pancreatic-CT-CBCT-SEG (planning CT,
 CBCTs and RT Dose, each contoured).
@@ -170,7 +170,7 @@ CBCTs and RT Dose, each contoured).
 - [x] R9.5 Replanning: register a re-CT or CBCT (density from the deformed planning CT for CBCT), propagate, recompute the plan, compare goals, re-optimize warm, write a new RT Plan with a predecessor and an accumulated RT Dose
 - [x] R9.6 DICOM Spatial Registration objects; recalculate imported plans across frames of reference (from R2)
 - [x] R9.7 4D robust scenarios (from R3): the phases as scenarios of the accumulated dose, graded worst-case; robust optimization over phases **moved to a later item**
-- [ ] R9 validation record: the R9 cases (`registration_4d_lung`, `lung_4d_itv`, `replan_pancreas_cbct`) from a clean commit
+- [x] R9 validation record `docs/validation/2026-10-25-r9/`: the three R9 cases from commit `316b6c6`, one per process; physicist sign-off open
 
 ### R10 — Scripting SDK and planning protocols (not started)
 - [ ] A Python SDK that mirrors the domain (patient, course, plan, beam set, optimization, evaluation) over the REST API

@@ -1,0 +1,5083 @@
+{
+  "intended_use": "RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.",
+  "radiarch_commit": "316b6c6",
+  "timestamp": "20261025-114942",
+  "fast": false,
+  "cpu": "Intel(R) Xeon(R) W-2255 CPU @ 3.70GHz, 20 logical CPUs",
+  "python": "3.14.3",
+  "results": [
+    {
+      "name": "registration_4d_lung",
+      "kind": "registration_4d",
+      "status": "fail",
+      "seconds": 798.5,
+      "checks": [
+        {
+          "name": "101_HM10395: Tumor 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.671,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Tumor 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 3.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Tumor 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 8.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LN 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.779,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LN 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 2.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LN 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 6.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: RLung 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.914,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: RLung 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 3.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: RLung 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 17.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LLung 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.923,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LLung 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 2.6,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LLung 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 10.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Heart 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.939,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Heart 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 1.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Heart 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 6.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Esophagus 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.818,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Esophagus 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 1.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Esophagus 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 6.4,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Cord 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.997,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Cord 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 0.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Cord 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 0.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: markers (MarkerA, MarkerB, MarkerC) 50 % \u2192 0 %, rigid only: mean centroid error (mm, 5.1 before)",
+          "value": 5.34,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, rigid only: mean centroid error (mm, 6.0 before)",
+          "value": 6.22,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Tumor 50 % \u2192 0 %, demons: Dice",
+          "value": 0.864,
+          "target": ">= 0.8",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Tumor 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 1.3,
+          "target": "<= 3.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Tumor 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 3.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Tumor 50 % \u2192 0 %, demons: Dice above no registration (0.671)",
+          "value": 0.864,
+          "target": "> 0.671",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LN 50 % \u2192 0 %, demons: Dice",
+          "value": 0.858,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LN 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 1.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LN 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 4.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: RLung 50 % \u2192 0 %, demons: Dice",
+          "value": 0.977,
+          "target": ">= 0.9",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: RLung 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 0.9,
+          "target": "<= 3.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: RLung 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 2.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LLung 50 % \u2192 0 %, demons: Dice",
+          "value": 0.978,
+          "target": ">= 0.9",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LLung 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 0.9,
+          "target": "<= 3.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LLung 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 2.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Heart 50 % \u2192 0 %, demons: Dice",
+          "value": 0.905,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Heart 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 2.6,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Heart 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 6.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Esophagus 50 % \u2192 0 %, demons: Dice",
+          "value": 0.832,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Esophagus 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 0.9,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Esophagus 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 2.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Cord 50 % \u2192 0 %, demons: Dice",
+          "value": 0.985,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Cord 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 0.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Cord 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 2.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: markers (MarkerA, MarkerB, MarkerC) 50 % \u2192 0 %, demons: mean centroid error (mm, 5.1 before)",
+          "value": 1.12,
+          "target": "<= 2.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, demons: mean centroid error (mm, 6.0 before)",
+          "value": 2.51,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: demons: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Tumor 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.863,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Tumor 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 1.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Tumor 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 3.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LN 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.857,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LN 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 1.4,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LN 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 4.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: RLung 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.976,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: RLung 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 1.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: RLung 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 2.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LLung 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.977,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LLung 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 0.9,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: LLung 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 2.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Heart 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.903,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Heart 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 2.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Heart 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 8.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Esophagus 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.779,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Esophagus 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 1.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Esophagus 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 3.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Cord 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.979,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Cord 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 0.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: Cord 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 2.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: markers (MarkerA, MarkerB, MarkerC) 50 % \u2192 0 %, bspline: mean centroid error (mm, 5.1 before)",
+          "value": 0.98,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, bspline: mean centroid error (mm, 6.0 before)",
+          "value": 2.34,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "101_HM10395: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Tumor 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.754,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Tumor 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 2.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Tumor 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 7.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LN 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.679,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LN 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 1.9,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LN 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 6.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: RLung 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.893,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: RLung 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 3.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: RLung 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 18.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LLung 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.887,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LLung 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 4.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LLung 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 18.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Heart 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.848,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Heart 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 4.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Heart 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 11.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Esophagus 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.81,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Esophagus 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 1.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Esophagus 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 5.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Cord 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.979,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Cord 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 0.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Cord 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 2.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: markers (MarkerA, MarkerB) 50 % \u2192 0 %, rigid only: mean centroid error (mm, 7.5 before)",
+          "value": 7.68,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, rigid only: mean centroid error (mm, 12.0 before)",
+          "value": 12.21,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Tumor 50 % \u2192 0 %, demons: Dice",
+          "value": 0.826,
+          "target": ">= 0.8",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Tumor 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 1.9,
+          "target": "<= 3.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Tumor 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 4.9,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Tumor 50 % \u2192 0 %, demons: Dice above no registration (0.754)",
+          "value": 0.826,
+          "target": "> 0.754",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LN 50 % \u2192 0 %, demons: Dice",
+          "value": 0.772,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LN 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 1.4,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LN 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 4.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: RLung 50 % \u2192 0 %, demons: Dice",
+          "value": 0.954,
+          "target": ">= 0.9",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: RLung 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 1.6,
+          "target": "<= 3.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: RLung 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 4.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LLung 50 % \u2192 0 %, demons: Dice",
+          "value": 0.958,
+          "target": ">= 0.9",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LLung 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 2.1,
+          "target": "<= 3.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LLung 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 4.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Heart 50 % \u2192 0 %, demons: Dice",
+          "value": 0.936,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Heart 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 2.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Heart 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 6.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Esophagus 50 % \u2192 0 %, demons: Dice",
+          "value": 0.795,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Esophagus 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 1.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Esophagus 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 4.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Cord 50 % \u2192 0 %, demons: Dice",
+          "value": 0.955,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Cord 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 0.4,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Cord 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 2.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: markers (MarkerA, MarkerB) 50 % \u2192 0 %, demons: mean centroid error (mm, 7.5 before)",
+          "value": 1.33,
+          "target": "<= 2.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, demons: mean centroid error (mm, 12.0 before)",
+          "value": 5.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: demons: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Tumor 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.817,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Tumor 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 2.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Tumor 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 4.9,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LN 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.736,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LN 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 1.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LN 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 4.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: RLung 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.946,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: RLung 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 1.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: RLung 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 4.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LLung 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.953,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LLung 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 2.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: LLung 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 6.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Heart 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.932,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Heart 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 2.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Heart 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 6.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Esophagus 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.747,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Esophagus 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 1.6,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Esophagus 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 4.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Cord 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.966,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Cord 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 0.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: Cord 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 2.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: markers (MarkerA, MarkerB) 50 % \u2192 0 %, bspline: mean centroid error (mm, 7.5 before)",
+          "value": 1.66,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, bspline: mean centroid error (mm, 12.0 before)",
+          "value": 4.89,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "103_HM10395: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: Tumor 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.651,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: Tumor 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 2.4,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: Tumor 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 6.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: markers (MarkerA, MarkerB) 50 % \u2192 0 %, rigid only: mean centroid error (mm, 8.3 before)",
+          "value": 8.35,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, rigid only: mean centroid error (mm, 6.3 before)",
+          "value": 6.42,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: Tumor 50 % \u2192 0 %, demons: Dice",
+          "value": 0.833,
+          "target": ">= 0.8",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: Tumor 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 1.3,
+          "target": "<= 3.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: Tumor 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 3.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: Tumor 50 % \u2192 0 %, demons: Dice above no registration (0.651)",
+          "value": 0.833,
+          "target": "> 0.651",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: markers (MarkerA, MarkerB) 50 % \u2192 0 %, demons: mean centroid error (mm, 8.3 before)",
+          "value": 1.09,
+          "target": "<= 2.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, demons: mean centroid error (mm, 6.3 before)",
+          "value": 2.25,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: demons: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: Tumor 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.805,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: Tumor 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 1.4,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: Tumor 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 3.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: markers (MarkerA, MarkerB) 50 % \u2192 0 %, bspline: mean centroid error (mm, 8.3 before)",
+          "value": 2.44,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, bspline: mean centroid error (mm, 6.3 before)",
+          "value": 2.02,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "105_HM10395: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: Tumor 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.789,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: Tumor 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 2.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: Tumor 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 9.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: LN 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.026,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: LN 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 7.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: LN 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 12.6,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, rigid only: mean centroid error (mm, 10.3 before)",
+          "value": 10.43,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: Tumor 50 % \u2192 0 %, demons: Dice",
+          "value": 0.767,
+          "target": ">= 0.8",
+          "passed": false,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: Tumor 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 2.8,
+          "target": "<= 3.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: Tumor 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 9.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: Tumor 50 % \u2192 0 %, demons: Dice above no registration (0.789)",
+          "value": 0.767,
+          "target": "> 0.789",
+          "passed": false,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: LN 50 % \u2192 0 %, demons: Dice",
+          "value": 0.404,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: LN 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 2.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: LN 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 6.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, demons: mean centroid error (mm, 10.3 before)",
+          "value": 2.55,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: demons: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: Tumor 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.751,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: Tumor 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 3.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: Tumor 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 10.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: LN 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.442,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: LN 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 2.6,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: LN 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 6.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, bspline: mean centroid error (mm, 10.3 before)",
+          "value": 2.23,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "111_HM10395: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: Tumor 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.775,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: Tumor 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 3.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: Tumor 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 11.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: LN 50 % \u2192 0 %, rigid only: Dice",
+          "value": 0.752,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: LN 50 % \u2192 0 %, rigid only: mean surface distance (mm)",
+          "value": 1.4,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: LN 50 % \u2192 0 %, rigid only: HD95 (mm)",
+          "value": 4.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, rigid only: mean centroid error (mm, 2.5 before)",
+          "value": 2.76,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: Tumor 50 % \u2192 0 %, demons: Dice",
+          "value": 0.837,
+          "target": ">= 0.8",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: Tumor 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 2.3,
+          "target": "<= 3.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: Tumor 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 6.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: Tumor 50 % \u2192 0 %, demons: Dice above no registration (0.775)",
+          "value": 0.837,
+          "target": "> 0.775",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: LN 50 % \u2192 0 %, demons: Dice",
+          "value": 0.738,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: LN 50 % \u2192 0 %, demons: mean surface distance (mm)",
+          "value": 1.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: LN 50 % \u2192 0 %, demons: HD95 (mm)",
+          "value": 4.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, demons: mean centroid error (mm, 2.5 before)",
+          "value": 2.6,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: demons: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: Tumor 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.834,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: Tumor 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 2.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: Tumor 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 6.6,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: LN 50 % \u2192 0 %, bspline: Dice",
+          "value": 0.716,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: LN 50 % \u2192 0 %, bspline: mean surface distance (mm)",
+          "value": 1.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: LN 50 % \u2192 0 %, bspline: HD95 (mm)",
+          "value": 4.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: anatomical landmarks (Carina) 50 % \u2192 0 %, bspline: mean centroid error (mm, 2.5 before)",
+          "value": 3.48,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "114_HM10395: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        }
+      ],
+      "metrics": {
+        "101_HM10395": {
+          "rigid only": {
+            "seconds": 4.2,
+            "ncc": [
+              0.8921500736391609,
+              0.89417352493298
+            ],
+            "max_displacement_mm": 1.510204867143261,
+            "jacobian": null,
+            "landmarks": [
+              {
+                "fixed_structure": "MarkerA_c00",
+                "moving_structure": "MarkerA_c50",
+                "before_mm": 5.750557057725318,
+                "rigid_mm": 6.04451998457561,
+                "after_mm": 6.044519984575611
+              },
+              {
+                "fixed_structure": "MarkerB_c00",
+                "moving_structure": "MarkerB_c50",
+                "before_mm": 5.182350817490171,
+                "rigid_mm": 5.371815374692698,
+                "after_mm": 5.371815374692701
+              },
+              {
+                "fixed_structure": "MarkerC_c00",
+                "moving_structure": "MarkerC_c50",
+                "before_mm": 4.391527028480342,
+                "rigid_mm": 4.616137570597567,
+                "after_mm": 4.6161375705975685
+              },
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 6.0,
+                "rigid_mm": 6.21636628263045,
+                "after_mm": 6.21636628263045
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.6713304184884448,
+                "hd95_mm": 8.0,
+                "msd_mm": 3.098790441419149,
+                "volume_a_cc": 32.136,
+                "volume_b_cc": 31.904
+              },
+              "unregistered": {
+                "dice": 0.6713304184884448,
+                "hd95_mm": 8.0,
+                "msd_mm": 3.098790441419149,
+                "volume_a_cc": 32.136,
+                "volume_b_cc": 31.904
+              }
+            },
+            "LN": {
+              "after": {
+                "dice": 0.7786240786240787,
+                "hd95_mm": 6.324555320336759,
+                "msd_mm": 2.2321255040619827,
+                "volume_a_cc": 32.04,
+                "volume_b_cc": 33.08
+              },
+              "unregistered": {
+                "dice": 0.7786240786240787,
+                "hd95_mm": 6.324555320336759,
+                "msd_mm": 2.2321255040619827,
+                "volume_a_cc": 32.04,
+                "volume_b_cc": 33.08
+              }
+            },
+            "RLung": {
+              "after": {
+                "dice": 0.913987237380786,
+                "hd95_mm": 16.97056274847714,
+                "msd_mm": 3.303208152437871,
+                "volume_a_cc": 2091.736,
+                "volume_b_cc": 2385.088
+              },
+              "unregistered": {
+                "dice": 0.9140831582407845,
+                "hd95_mm": 16.97056274847714,
+                "msd_mm": 3.298234354902819,
+                "volume_a_cc": 2092.544,
+                "volume_b_cc": 2385.088
+              }
+            },
+            "LLung": {
+              "after": {
+                "dice": 0.922593462614954,
+                "hd95_mm": 10.198039027185569,
+                "msd_mm": 2.612310601249453,
+                "volume_a_cc": 1785.1200000000001,
+                "volume_b_cc": 2056.416
+              },
+              "unregistered": {
+                "dice": 0.9227358455216517,
+                "hd95_mm": 10.198039027185569,
+                "msd_mm": 2.6037663390638346,
+                "volume_a_cc": 1786.608,
+                "volume_b_cc": 2056.416
+              }
+            },
+            "Heart": {
+              "after": {
+                "dice": 0.9386893788185822,
+                "hd95_mm": 6.0,
+                "msd_mm": 1.715727746046199,
+                "volume_a_cc": 527.408,
+                "volume_b_cc": 522.72
+              },
+              "unregistered": {
+                "dice": 0.9403568679161871,
+                "hd95_mm": 6.0,
+                "msd_mm": 1.6653474088769171,
+                "volume_a_cc": 526.856,
+                "volume_b_cc": 522.72
+              }
+            },
+            "Esophagus": {
+              "after": {
+                "dice": 0.8184299245464761,
+                "hd95_mm": 6.401728885430269,
+                "msd_mm": 1.2481571481049438,
+                "volume_a_cc": 24.864,
+                "volume_b_cc": 24.968
+              },
+              "unregistered": {
+                "dice": 0.8184299245464761,
+                "hd95_mm": 6.401728885430269,
+                "msd_mm": 1.2481571481049438,
+                "volume_a_cc": 24.864,
+                "volume_b_cc": 24.968
+              }
+            },
+            "Cord": {
+              "after": {
+                "dice": 0.9966086106800023,
+                "hd95_mm": 0.0,
+                "msd_mm": 0.026814098134070492,
+                "volume_a_cc": 69.56,
+                "volume_b_cc": 69.616
+              },
+              "unregistered": {
+                "dice": 1.0,
+                "hd95_mm": 0.0,
+                "msd_mm": 0.0,
+                "volume_a_cc": 69.616,
+                "volume_b_cc": 69.616
+              }
+            }
+          },
+          "demons": {
+            "seconds": 18.4,
+            "ncc": [
+              0.8921500736391609,
+              0.9358429525463744
+            ],
+            "max_displacement_mm": 20.40446473269218,
+            "jacobian": {
+              "min": 0.5042278786196589,
+              "max": 4.45663905414081,
+              "mean": 0.9929191644666573,
+              "fraction_nonpositive": 0.0
+            },
+            "landmarks": [
+              {
+                "fixed_structure": "MarkerA_c00",
+                "moving_structure": "MarkerA_c50",
+                "before_mm": 5.750557057725318,
+                "rigid_mm": 6.044519984495521,
+                "after_mm": 1.0306864155537538
+              },
+              {
+                "fixed_structure": "MarkerB_c00",
+                "moving_structure": "MarkerB_c50",
+                "before_mm": 5.182350817490171,
+                "rigid_mm": 5.371815374609533,
+                "after_mm": 1.3389573286002108
+              },
+              {
+                "fixed_structure": "MarkerC_c00",
+                "moving_structure": "MarkerC_c50",
+                "before_mm": 4.391527028480342,
+                "rigid_mm": 4.616137570513627,
+                "after_mm": 0.9836116528731802
+              },
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 6.0,
+                "rigid_mm": 6.216366282549157,
+                "after_mm": 2.5095658845804123
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.8636143410852714,
+                "hd95_mm": 3.4641016151377544,
+                "msd_mm": 1.2780311382394216,
+                "volume_a_cc": 34.144,
+                "volume_b_cc": 31.904
+              },
+              "unregistered": {
+                "dice": 0.6713304184884448,
+                "hd95_mm": 8.0,
+                "msd_mm": 3.098790441419149,
+                "volume_a_cc": 32.136,
+                "volume_b_cc": 31.904
+              }
+            },
+            "LN": {
+              "after": {
+                "dice": 0.8581638940234134,
+                "hd95_mm": 4.0,
+                "msd_mm": 1.3081259460413703,
+                "volume_a_cc": 31.84,
+                "volume_b_cc": 33.08
+              },
+              "unregistered": {
+                "dice": 0.7786240786240787,
+                "hd95_mm": 6.324555320336759,
+                "msd_mm": 2.2321255040619827,
+                "volume_a_cc": 32.04,
+                "volume_b_cc": 33.08
+              }
+            },
+            "RLung": {
+              "after": {
+                "dice": 0.9772545127140668,
+                "hd95_mm": 2.0,
+                "msd_mm": 0.9352910281067712,
+                "volume_a_cc": 2386.32,
+                "volume_b_cc": 2385.088
+              },
+              "unregistered": {
+                "dice": 0.9140831582407845,
+                "hd95_mm": 16.97056274847714,
+                "msd_mm": 3.298234354902819,
+                "volume_a_cc": 2092.544,
+                "volume_b_cc": 2385.088
+              }
+            },
+            "LLung": {
+              "after": {
+                "dice": 0.9779189517636794,
+                "hd95_mm": 2.0,
+                "msd_mm": 0.8512962183453964,
+                "volume_a_cc": 2051.36,
+                "volume_b_cc": 2056.416
+              },
+              "unregistered": {
+                "dice": 0.9227358455216517,
+                "hd95_mm": 10.198039027185569,
+                "msd_mm": 2.6037663390638346,
+                "volume_a_cc": 1786.608,
+                "volume_b_cc": 2056.416
+              }
+            },
+            "Heart": {
+              "after": {
+                "dice": 0.9053898867380714,
+                "hd95_mm": 6.324555320336759,
+                "msd_mm": 2.599289702889907,
+                "volume_a_cc": 543.128,
+                "volume_b_cc": 522.72
+              },
+              "unregistered": {
+                "dice": 0.9403568679161871,
+                "hd95_mm": 6.0,
+                "msd_mm": 1.6653474088769171,
+                "volume_a_cc": 526.856,
+                "volume_b_cc": 522.72
+              }
+            },
+            "Esophagus": {
+              "after": {
+                "dice": 0.8323265306122449,
+                "hd95_mm": 2.8284271247461903,
+                "msd_mm": 0.8733993146270702,
+                "volume_a_cc": 24.032,
+                "volume_b_cc": 24.968
+              },
+              "unregistered": {
+                "dice": 0.8184299245464761,
+                "hd95_mm": 6.401728885430269,
+                "msd_mm": 1.2481571481049438,
+                "volume_a_cc": 24.864,
+                "volume_b_cc": 24.968
+              }
+            },
+            "Cord": {
+              "after": {
+                "dice": 0.984766360472414,
+                "hd95_mm": 2.0,
+                "msd_mm": 0.12799242399361072,
+                "volume_a_cc": 70.60000000000001,
+                "volume_b_cc": 69.616
+              },
+              "unregistered": {
+                "dice": 1.0,
+                "hd95_mm": 0.0,
+                "msd_mm": 0.0,
+                "volume_a_cc": 69.616,
+                "volume_b_cc": 69.616
+              }
+            }
+          },
+          "bspline": {
+            "seconds": 48.1,
+            "ncc": [
+              0.8921500736391609,
+              0.9533069076032205
+            ],
+            "max_displacement_mm": 22.721178446540254,
+            "jacobian": {
+              "min": 0.44547585639032317,
+              "max": 1.5255687423094868,
+              "mean": 0.9965957048750295,
+              "fraction_nonpositive": 0.0
+            },
+            "landmarks": [
+              {
+                "fixed_structure": "MarkerA_c00",
+                "moving_structure": "MarkerA_c50",
+                "before_mm": 5.750557057725318,
+                "rigid_mm": 6.044519984523897,
+                "after_mm": 1.5350568086066665
+              },
+              {
+                "fixed_structure": "MarkerB_c00",
+                "moving_structure": "MarkerB_c50",
+                "before_mm": 5.182350817490171,
+                "rigid_mm": 5.371815374636488,
+                "after_mm": 0.727221767268142
+              },
+              {
+                "fixed_structure": "MarkerC_c00",
+                "moving_structure": "MarkerC_c50",
+                "before_mm": 4.391527028480342,
+                "rigid_mm": 4.616137570541314,
+                "after_mm": 0.6914371823442382
+              },
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 6.0,
+                "rigid_mm": 6.216366282573881,
+                "after_mm": 2.337874232778529
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.8634695375581111,
+                "hd95_mm": 3.4641016151377544,
+                "msd_mm": 1.2728455208339324,
+                "volume_a_cc": 33.488,
+                "volume_b_cc": 31.904
+              },
+              "unregistered": {
+                "dice": 0.6713304184884448,
+                "hd95_mm": 8.0,
+                "msd_mm": 3.098790441419149,
+                "volume_a_cc": 32.136,
+                "volume_b_cc": 31.904
+              }
+            },
+            "LN": {
+              "after": {
+                "dice": 0.8571772929974689,
+                "hd95_mm": 4.0,
+                "msd_mm": 1.3556551590762913,
+                "volume_a_cc": 33.296,
+                "volume_b_cc": 33.08
+              },
+              "unregistered": {
+                "dice": 0.7786240786240787,
+                "hd95_mm": 6.324555320336759,
+                "msd_mm": 2.2321255040619827,
+                "volume_a_cc": 32.04,
+                "volume_b_cc": 33.08
+              }
+            },
+            "RLung": {
+              "after": {
+                "dice": 0.9756481311101245,
+                "hd95_mm": 2.8284271247461903,
+                "msd_mm": 0.9837170517530692,
+                "volume_a_cc": 2353.768,
+                "volume_b_cc": 2385.088
+              },
+              "unregistered": {
+                "dice": 0.9140831582407845,
+                "hd95_mm": 16.97056274847714,
+                "msd_mm": 3.298234354902819,
+                "volume_a_cc": 2092.544,
+                "volume_b_cc": 2385.088
+              }
+            },
+            "LLung": {
+              "after": {
+                "dice": 0.9772167018965587,
+                "hd95_mm": 2.0,
+                "msd_mm": 0.8523943182836434,
+                "volume_a_cc": 2042.376,
+                "volume_b_cc": 2056.416
+              },
+              "unregistered": {
+                "dice": 0.9227358455216517,
+                "hd95_mm": 10.198039027185569,
+                "msd_mm": 2.6037663390638346,
+                "volume_a_cc": 1786.608,
+                "volume_b_cc": 2056.416
+              }
+            },
+            "Heart": {
+              "after": {
+                "dice": 0.9029810055198273,
+                "hd95_mm": 8.0,
+                "msd_mm": 2.693179934691272,
+                "volume_a_cc": 548.328,
+                "volume_b_cc": 522.72
+              },
+              "unregistered": {
+                "dice": 0.9403568679161871,
+                "hd95_mm": 6.0,
+                "msd_mm": 1.6653474088769171,
+                "volume_a_cc": 526.856,
+                "volume_b_cc": 522.72
+              }
+            },
+            "Esophagus": {
+              "after": {
+                "dice": 0.7789541225537375,
+                "hd95_mm": 3.4641016151377544,
+                "msd_mm": 1.1588613185650734,
+                "volume_a_cc": 24.904,
+                "volume_b_cc": 24.968
+              },
+              "unregistered": {
+                "dice": 0.8184299245464761,
+                "hd95_mm": 6.401728885430269,
+                "msd_mm": 1.2481571481049438,
+                "volume_a_cc": 24.864,
+                "volume_b_cc": 24.968
+              }
+            },
+            "Cord": {
+              "after": {
+                "dice": 0.979179810725552,
+                "hd95_mm": 2.0,
+                "msd_mm": 0.17203502202791596,
+                "volume_a_cc": 69.864,
+                "volume_b_cc": 69.616
+              },
+              "unregistered": {
+                "dice": 1.0,
+                "hd95_mm": 0.0,
+                "msd_mm": 0.0,
+                "volume_a_cc": 69.616,
+                "volume_b_cc": 69.616
+              }
+            }
+          }
+        },
+        "103_HM10395": {
+          "rigid only": {
+            "seconds": 3.3,
+            "ncc": [
+              0.8479285619873587,
+              0.8542693753786385
+            ],
+            "max_displacement_mm": 0.9135622490668079,
+            "jacobian": null,
+            "landmarks": [
+              {
+                "fixed_structure": "MarkerA_c00",
+                "moving_structure": "MarkerA_c50",
+                "before_mm": 7.671302945972662,
+                "rigid_mm": 7.8612557471959414,
+                "after_mm": 7.86125574719594
+              },
+              {
+                "fixed_structure": "MarkerB_c00",
+                "moving_structure": "MarkerB_c50",
+                "before_mm": 7.275410641331505,
+                "rigid_mm": 7.493194043923701,
+                "after_mm": 7.4931940439237
+              },
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 12.022018367139303,
+                "rigid_mm": 12.209424267868112,
+                "after_mm": 12.20942426786811
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.7536051457620085,
+                "hd95_mm": 7.211102550927978,
+                "msd_mm": 2.65249785516291,
+                "volume_a_cc": 70.368,
+                "volume_b_cc": 83.85600000000001
+              },
+              "unregistered": {
+                "dice": 0.7536051457620085,
+                "hd95_mm": 7.211102550927978,
+                "msd_mm": 2.65249785516291,
+                "volume_a_cc": 70.368,
+                "volume_b_cc": 83.85600000000001
+              }
+            },
+            "LN": {
+              "after": {
+                "dice": 0.6790123456790124,
+                "hd95_mm": 6.0,
+                "msd_mm": 1.9282193057118835,
+                "volume_a_cc": 25.112000000000002,
+                "volume_b_cc": 24.136
+              },
+              "unregistered": {
+                "dice": 0.6790123456790124,
+                "hd95_mm": 6.0,
+                "msd_mm": 1.9282193057118835,
+                "volume_a_cc": 25.112000000000002,
+                "volume_b_cc": 24.136
+              }
+            },
+            "RLung": {
+              "after": {
+                "dice": 0.8925447494101034,
+                "hd95_mm": 18.547236990991408,
+                "msd_mm": 3.520856256664973,
+                "volume_a_cc": 1616.44,
+                "volume_b_cc": 1912.992
+              },
+              "unregistered": {
+                "dice": 0.8925447494101034,
+                "hd95_mm": 18.547236990991408,
+                "msd_mm": 3.520856256664973,
+                "volume_a_cc": 1616.44,
+                "volume_b_cc": 1912.992
+              }
+            },
+            "LLung": {
+              "after": {
+                "dice": 0.8866005027757411,
+                "hd95_mm": 18.2208671582886,
+                "msd_mm": 4.278488273019503,
+                "volume_a_cc": 1648.608,
+                "volume_b_cc": 2017.44
+              },
+              "unregistered": {
+                "dice": 0.8866005027757411,
+                "hd95_mm": 18.2208671582886,
+                "msd_mm": 4.278488273019503,
+                "volume_a_cc": 1648.608,
+                "volume_b_cc": 2017.44
+              }
+            },
+            "Heart": {
+              "after": {
+                "dice": 0.8482447995891034,
+                "hd95_mm": 11.661903789690601,
+                "msd_mm": 4.828993681884528,
+                "volume_a_cc": 822.5360000000001,
+                "volume_b_cc": 797.336
+              },
+              "unregistered": {
+                "dice": 0.8482447995891034,
+                "hd95_mm": 11.661903789690601,
+                "msd_mm": 4.828993681884528,
+                "volume_a_cc": 822.5360000000001,
+                "volume_b_cc": 797.336
+              }
+            },
+            "Esophagus": {
+              "after": {
+                "dice": 0.8102800546448088,
+                "hd95_mm": 5.656854249492381,
+                "msd_mm": 1.22149531726123,
+                "volume_a_cc": 46.328,
+                "volume_b_cc": 47.368
+              },
+              "unregistered": {
+                "dice": 0.8102800546448088,
+                "hd95_mm": 5.656854249492381,
+                "msd_mm": 1.22149531726123,
+                "volume_a_cc": 46.328,
+                "volume_b_cc": 47.368
+              }
+            },
+            "Cord": {
+              "after": {
+                "dice": 0.9786880379934698,
+                "hd95_mm": 2.0,
+                "msd_mm": 0.17790368271954674,
+                "volume_a_cc": 67.70400000000001,
+                "volume_b_cc": 67.056
+              },
+              "unregistered": {
+                "dice": 0.9786880379934698,
+                "hd95_mm": 2.0,
+                "msd_mm": 0.17790368271954674,
+                "volume_a_cc": 67.70400000000001,
+                "volume_b_cc": 67.056
+              }
+            }
+          },
+          "demons": {
+            "seconds": 15.1,
+            "ncc": [
+              0.8479285619873587,
+              0.9073147175515839
+            ],
+            "max_displacement_mm": 23.879714408695577,
+            "jacobian": {
+              "min": 0.5007680774892507,
+              "max": 3.562955696871524,
+              "mean": 0.9948399750627593,
+              "fraction_nonpositive": 0.0
+            },
+            "landmarks": [
+              {
+                "fixed_structure": "MarkerA_c00",
+                "moving_structure": "MarkerA_c50",
+                "before_mm": 7.671302945972662,
+                "rigid_mm": 7.861255747195928,
+                "after_mm": 1.6930507767331076
+              },
+              {
+                "fixed_structure": "MarkerB_c00",
+                "moving_structure": "MarkerB_c50",
+                "before_mm": 7.275410641331505,
+                "rigid_mm": 7.49319404392369,
+                "after_mm": 0.9633558985372166
+              },
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 12.022018367139303,
+                "rigid_mm": 12.2094242678681,
+                "after_mm": 5.099521610161762
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.8255411479051505,
+                "hd95_mm": 4.898979485566356,
+                "msd_mm": 1.8515274141722362,
+                "volume_a_cc": 71.0,
+                "volume_b_cc": 83.85600000000001
+              },
+              "unregistered": {
+                "dice": 0.7536051457620085,
+                "hd95_mm": 7.211102550927978,
+                "msd_mm": 2.65249785516291,
+                "volume_a_cc": 70.368,
+                "volume_b_cc": 83.85600000000001
+              }
+            },
+            "LN": {
+              "after": {
+                "dice": 0.7716484926234766,
+                "hd95_mm": 4.0,
+                "msd_mm": 1.3646800391959164,
+                "volume_a_cc": 25.752,
+                "volume_b_cc": 24.136
+              },
+              "unregistered": {
+                "dice": 0.6790123456790124,
+                "hd95_mm": 6.0,
+                "msd_mm": 1.9282193057118835,
+                "volume_a_cc": 25.112000000000002,
+                "volume_b_cc": 24.136
+              }
+            },
+            "RLung": {
+              "after": {
+                "dice": 0.9538549019123083,
+                "hd95_mm": 4.0,
+                "msd_mm": 1.5934677606519059,
+                "volume_a_cc": 1970.064,
+                "volume_b_cc": 1912.992
+              },
+              "unregistered": {
+                "dice": 0.8925447494101034,
+                "hd95_mm": 18.547236990991408,
+                "msd_mm": 3.520856256664973,
+                "volume_a_cc": 1616.44,
+                "volume_b_cc": 1912.992
+              }
+            },
+            "LLung": {
+              "after": {
+                "dice": 0.9577923421869611,
+                "hd95_mm": 4.47213595499958,
+                "msd_mm": 2.0580846543260827,
+                "volume_a_cc": 2041.16,
+                "volume_b_cc": 2017.44
+              },
+              "unregistered": {
+                "dice": 0.8866005027757411,
+                "hd95_mm": 18.2208671582886,
+                "msd_mm": 4.278488273019503,
+                "volume_a_cc": 1648.608,
+                "volume_b_cc": 2017.44
+              }
+            },
+            "Heart": {
+              "after": {
+                "dice": 0.9355822681640044,
+                "hd95_mm": 6.324555320336759,
+                "msd_mm": 2.1064292211129403,
+                "volume_a_cc": 841.84,
+                "volume_b_cc": 797.336
+              },
+              "unregistered": {
+                "dice": 0.8482447995891034,
+                "hd95_mm": 11.661903789690601,
+                "msd_mm": 4.828993681884528,
+                "volume_a_cc": 822.5360000000001,
+                "volume_b_cc": 797.336
+              }
+            },
+            "Esophagus": {
+              "after": {
+                "dice": 0.7950152594099695,
+                "hd95_mm": 4.47213595499958,
+                "msd_mm": 1.2828007685129579,
+                "volume_a_cc": 47.0,
+                "volume_b_cc": 47.368
+              },
+              "unregistered": {
+                "dice": 0.8102800546448088,
+                "hd95_mm": 5.656854249492381,
+                "msd_mm": 1.22149531726123,
+                "volume_a_cc": 46.328,
+                "volume_b_cc": 47.368
+              }
+            },
+            "Cord": {
+              "after": {
+                "dice": 0.9553368660105981,
+                "hd95_mm": 2.0,
+                "msd_mm": 0.369459280416589,
+                "volume_a_cc": 70.328,
+                "volume_b_cc": 67.056
+              },
+              "unregistered": {
+                "dice": 0.9786880379934698,
+                "hd95_mm": 2.0,
+                "msd_mm": 0.17790368271954674,
+                "volume_a_cc": 67.70400000000001,
+                "volume_b_cc": 67.056
+              }
+            }
+          },
+          "bspline": {
+            "seconds": 46.0,
+            "ncc": [
+              0.8479285619873587,
+              0.8328436815239486
+            ],
+            "max_displacement_mm": 23.63042883480093,
+            "jacobian": {
+              "min": 0.4364171793969232,
+              "max": 1.6006164928273454,
+              "mean": 0.9963834732343411,
+              "fraction_nonpositive": 0.0
+            },
+            "landmarks": [
+              {
+                "fixed_structure": "MarkerA_c00",
+                "moving_structure": "MarkerA_c50",
+                "before_mm": 7.671302945972662,
+                "rigid_mm": 7.861255747195938,
+                "after_mm": 1.6512655731992822
+              },
+              {
+                "fixed_structure": "MarkerB_c00",
+                "moving_structure": "MarkerB_c50",
+                "before_mm": 7.275410641331505,
+                "rigid_mm": 7.493194043923701,
+                "after_mm": 1.662125386174457
+              },
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 12.022018367139303,
+                "rigid_mm": 12.209424267868114,
+                "after_mm": 4.890435314682421
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.8167430237401083,
+                "hd95_mm": 4.898979485566356,
+                "msd_mm": 1.9536920896727723,
+                "volume_a_cc": 69.808,
+                "volume_b_cc": 83.85600000000001
+              },
+              "unregistered": {
+                "dice": 0.7536051457620085,
+                "hd95_mm": 7.211102550927978,
+                "msd_mm": 2.65249785516291,
+                "volume_a_cc": 70.368,
+                "volume_b_cc": 83.85600000000001
+              }
+            },
+            "LN": {
+              "after": {
+                "dice": 0.7358763882182521,
+                "hd95_mm": 4.0,
+                "msd_mm": 1.5331900856444125,
+                "volume_a_cc": 25.568,
+                "volume_b_cc": 24.136
+              },
+              "unregistered": {
+                "dice": 0.6790123456790124,
+                "hd95_mm": 6.0,
+                "msd_mm": 1.9282193057118835,
+                "volume_a_cc": 25.112000000000002,
+                "volume_b_cc": 24.136
+              }
+            },
+            "RLung": {
+              "after": {
+                "dice": 0.9458067558511827,
+                "hd95_mm": 4.47213595499958,
+                "msd_mm": 1.8178280324413825,
+                "volume_a_cc": 1954.944,
+                "volume_b_cc": 1912.992
+              },
+              "unregistered": {
+                "dice": 0.8925447494101034,
+                "hd95_mm": 18.547236990991408,
+                "msd_mm": 3.520856256664973,
+                "volume_a_cc": 1616.44,
+                "volume_b_cc": 1912.992
+              }
+            },
+            "LLung": {
+              "after": {
+                "dice": 0.95290566723058,
+                "hd95_mm": 6.0,
+                "msd_mm": 2.195209321212623,
+                "volume_a_cc": 2035.192,
+                "volume_b_cc": 2017.44
+              },
+              "unregistered": {
+                "dice": 0.8866005027757411,
+                "hd95_mm": 18.2208671582886,
+                "msd_mm": 4.278488273019503,
+                "volume_a_cc": 1648.608,
+                "volume_b_cc": 2017.44
+              }
+            },
+            "Heart": {
+              "after": {
+                "dice": 0.9316204431879268,
+                "hd95_mm": 6.0,
+                "msd_mm": 2.193775176544616,
+                "volume_a_cc": 809.928,
+                "volume_b_cc": 797.336
+              },
+              "unregistered": {
+                "dice": 0.8482447995891034,
+                "hd95_mm": 11.661903789690601,
+                "msd_mm": 4.828993681884528,
+                "volume_a_cc": 822.5360000000001,
+                "volume_b_cc": 797.336
+              }
+            },
+            "Esophagus": {
+              "after": {
+                "dice": 0.7472583094314156,
+                "hd95_mm": 4.47213595499958,
+                "msd_mm": 1.567542711525077,
+                "volume_a_cc": 47.464,
+                "volume_b_cc": 47.368
+              },
+              "unregistered": {
+                "dice": 0.8102800546448088,
+                "hd95_mm": 5.656854249492381,
+                "msd_mm": 1.22149531726123,
+                "volume_a_cc": 46.328,
+                "volume_b_cc": 47.368
+              }
+            },
+            "Cord": {
+              "after": {
+                "dice": 0.9659002687369364,
+                "hd95_mm": 2.0,
+                "msd_mm": 0.28015172211371003,
+                "volume_a_cc": 66.904,
+                "volume_b_cc": 67.056
+              },
+              "unregistered": {
+                "dice": 0.9786880379934698,
+                "hd95_mm": 2.0,
+                "msd_mm": 0.17790368271954674,
+                "volume_a_cc": 67.70400000000001,
+                "volume_b_cc": 67.056
+              }
+            }
+          }
+        },
+        "105_HM10395": {
+          "rigid only": {
+            "seconds": 4.1,
+            "ncc": [
+              0.8804774505530908,
+              0.8802758140153069
+            ],
+            "max_displacement_mm": 0.11375546581925368,
+            "jacobian": null,
+            "landmarks": [
+              {
+                "fixed_structure": "MarkerA_c00",
+                "moving_structure": "MarkerA_c50",
+                "before_mm": 8.289021007877286,
+                "rigid_mm": 8.391364191077711,
+                "after_mm": 8.39136419107771
+              },
+              {
+                "fixed_structure": "MarkerB_c00",
+                "moving_structure": "MarkerB_c50",
+                "before_mm": 8.211120508188886,
+                "rigid_mm": 8.314263464148155,
+                "after_mm": 8.314263464148155
+              },
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 6.324555320336759,
+                "rigid_mm": 6.420549440823518,
+                "after_mm": 6.420549440823518
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.6507936507936508,
+                "hd95_mm": 6.0,
+                "msd_mm": 2.429093354080987,
+                "volume_a_cc": 35.4,
+                "volume_b_cc": 32.136
+              },
+              "unregistered": {
+                "dice": 0.6507936507936508,
+                "hd95_mm": 6.0,
+                "msd_mm": 2.429093354080987,
+                "volume_a_cc": 35.4,
+                "volume_b_cc": 32.136
+              }
+            }
+          },
+          "demons": {
+            "seconds": 18.5,
+            "ncc": [
+              0.8804774505530908,
+              0.9456476257161144
+            ],
+            "max_displacement_mm": 20.201430535904944,
+            "jacobian": {
+              "min": 0.5393078293815164,
+              "max": 5.135300397325356,
+              "mean": 1.006862041182368,
+              "fraction_nonpositive": 0.0
+            },
+            "landmarks": [
+              {
+                "fixed_structure": "MarkerA_c00",
+                "moving_structure": "MarkerA_c50",
+                "before_mm": 8.289021007877286,
+                "rigid_mm": 8.391364191077697,
+                "after_mm": 1.2805932381552663
+              },
+              {
+                "fixed_structure": "MarkerB_c00",
+                "moving_structure": "MarkerB_c50",
+                "before_mm": 8.211120508188886,
+                "rigid_mm": 8.314263464148143,
+                "after_mm": 0.9053450458619082
+              },
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 6.324555320336759,
+                "rigid_mm": 6.420549440823498,
+                "after_mm": 2.2502176005821
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.8325245591194225,
+                "hd95_mm": 3.4641016151377544,
+                "msd_mm": 1.2780434067139486,
+                "volume_a_cc": 35.456,
+                "volume_b_cc": 32.136
+              },
+              "unregistered": {
+                "dice": 0.6507936507936508,
+                "hd95_mm": 6.0,
+                "msd_mm": 2.429093354080987,
+                "volume_a_cc": 35.4,
+                "volume_b_cc": 32.136
+              }
+            }
+          },
+          "bspline": {
+            "seconds": 51.5,
+            "ncc": [
+              0.8804774505530908,
+              0.9439709686289731
+            ],
+            "max_displacement_mm": 20.788402411327727,
+            "jacobian": {
+              "min": 0.48221671067523836,
+              "max": 1.6162541547224012,
+              "mean": 0.9986651582649063,
+              "fraction_nonpositive": 0.0
+            },
+            "landmarks": [
+              {
+                "fixed_structure": "MarkerA_c00",
+                "moving_structure": "MarkerA_c50",
+                "before_mm": 8.289021007877286,
+                "rigid_mm": 8.39136419102334,
+                "after_mm": 2.8031698688009286
+              },
+              {
+                "fixed_structure": "MarkerB_c00",
+                "moving_structure": "MarkerB_c50",
+                "before_mm": 8.211120508188886,
+                "rigid_mm": 8.314263464096767,
+                "after_mm": 2.0864507330499023
+              },
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 6.324555320336759,
+                "rigid_mm": 6.420549440776523,
+                "after_mm": 2.015168686942504
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.8050528361472125,
+                "hd95_mm": 3.4641016151377544,
+                "msd_mm": 1.440725457423486,
+                "volume_a_cc": 33.728,
+                "volume_b_cc": 32.136
+              },
+              "unregistered": {
+                "dice": 0.6507936507936508,
+                "hd95_mm": 6.0,
+                "msd_mm": 2.429093354080987,
+                "volume_a_cc": 35.4,
+                "volume_b_cc": 32.136
+              }
+            }
+          }
+        },
+        "111_HM10395": {
+          "rigid only": {
+            "seconds": 3.1,
+            "ncc": [
+              0.8289788649565614,
+              0.8411514559640905
+            ],
+            "max_displacement_mm": 0.6603081567778679,
+            "jacobian": null,
+            "landmarks": [
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 10.327444558607466,
+                "rigid_mm": 10.425764520984885,
+                "after_mm": 10.425764520984888
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.7891618131172449,
+                "hd95_mm": 9.16515138991168,
+                "msd_mm": 2.5104918585716014,
+                "volume_a_cc": 83.232,
+                "volume_b_cc": 74.72800000000001
+              },
+              "unregistered": {
+                "dice": 0.7891618131172449,
+                "hd95_mm": 9.16515138991168,
+                "msd_mm": 2.5104918585716014,
+                "volume_a_cc": 83.232,
+                "volume_b_cc": 74.72800000000001
+              }
+            },
+            "LN": {
+              "after": {
+                "dice": 0.02622950819672131,
+                "hd95_mm": 12.649110640673518,
+                "msd_mm": 7.527979636844929,
+                "volume_a_cc": 1.304,
+                "volume_b_cc": 1.1360000000000001
+              },
+              "unregistered": {
+                "dice": 0.02622950819672131,
+                "hd95_mm": 12.649110640673518,
+                "msd_mm": 7.527979636844929,
+                "volume_a_cc": 1.304,
+                "volume_b_cc": 1.1360000000000001
+              }
+            }
+          },
+          "demons": {
+            "seconds": 15.3,
+            "ncc": [
+              0.8289788649565614,
+              0.9294124225448801
+            ],
+            "max_displacement_mm": 22.912979353349083,
+            "jacobian": {
+              "min": 0.5867257657016577,
+              "max": 1.4472601084805063,
+              "mean": 0.9980775334499004,
+              "fraction_nonpositive": 0.0
+            },
+            "landmarks": [
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 10.327444558607466,
+                "rigid_mm": 10.425764520960904,
+                "after_mm": 2.5534814106193946
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.7674716710249705,
+                "hd95_mm": 8.955315883994825,
+                "msd_mm": 2.8225442735890462,
+                "volume_a_cc": 81.296,
+                "volume_b_cc": 74.72800000000001
+              },
+              "unregistered": {
+                "dice": 0.7891618131172449,
+                "hd95_mm": 9.16515138991168,
+                "msd_mm": 2.5104918585716014,
+                "volume_a_cc": 83.232,
+                "volume_b_cc": 74.72800000000001
+              }
+            },
+            "LN": {
+              "after": {
+                "dice": 0.40404040404040403,
+                "hd95_mm": 6.324555320336759,
+                "msd_mm": 2.8278017155677637,
+                "volume_a_cc": 1.24,
+                "volume_b_cc": 1.1360000000000001
+              },
+              "unregistered": {
+                "dice": 0.02622950819672131,
+                "hd95_mm": 12.649110640673518,
+                "msd_mm": 7.527979636844929,
+                "volume_a_cc": 1.304,
+                "volume_b_cc": 1.1360000000000001
+              }
+            }
+          },
+          "bspline": {
+            "seconds": 37.8,
+            "ncc": [
+              0.8289788649565614,
+              0.9203532252761356
+            ],
+            "max_displacement_mm": 17.109639309398975,
+            "jacobian": {
+              "min": 0.4973431706167602,
+              "max": 1.4355853210885599,
+              "mean": 1.0027506238091097,
+              "fraction_nonpositive": 0.0
+            },
+            "landmarks": [
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 10.327444558607466,
+                "rigid_mm": 10.425764520960898,
+                "after_mm": 2.2313127772548254
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.7514906518443658,
+                "hd95_mm": 10.0,
+                "msd_mm": 3.0903318434400746,
+                "volume_a_cc": 83.592,
+                "volume_b_cc": 74.72800000000001
+              },
+              "unregistered": {
+                "dice": 0.7891618131172449,
+                "hd95_mm": 9.16515138991168,
+                "msd_mm": 2.5104918585716014,
+                "volume_a_cc": 83.232,
+                "volume_b_cc": 74.72800000000001
+              }
+            },
+            "LN": {
+              "after": {
+                "dice": 0.4416403785488959,
+                "hd95_mm": 6.324555320336759,
+                "msd_mm": 2.604811773934167,
+                "volume_a_cc": 1.4000000000000001,
+                "volume_b_cc": 1.1360000000000001
+              },
+              "unregistered": {
+                "dice": 0.02622950819672131,
+                "hd95_mm": 12.649110640673518,
+                "msd_mm": 7.527979636844929,
+                "volume_a_cc": 1.304,
+                "volume_b_cc": 1.1360000000000001
+              }
+            }
+          }
+        },
+        "114_HM10395": {
+          "rigid only": {
+            "seconds": 3.5,
+            "ncc": [
+              0.7858099487891008,
+              0.7960080217408959
+            ],
+            "max_displacement_mm": 0.6394378204097858,
+            "jacobian": null,
+            "landmarks": [
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 2.5186986621318286,
+                "rigid_mm": 2.758573343993583,
+                "after_mm": 2.7585733439935844
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.775416247625433,
+                "hd95_mm": 11.661903789690601,
+                "msd_mm": 3.450586152766406,
+                "volume_a_cc": 167.4,
+                "volume_b_cc": 190.56
+              },
+              "unregistered": {
+                "dice": 0.775416247625433,
+                "hd95_mm": 11.661903789690601,
+                "msd_mm": 3.450586152766406,
+                "volume_a_cc": 167.4,
+                "volume_b_cc": 190.56
+              }
+            },
+            "LN": {
+              "after": {
+                "dice": 0.752127659574468,
+                "hd95_mm": 4.0,
+                "msd_mm": 1.4327651892413362,
+                "volume_a_cc": 7.168,
+                "volume_b_cc": 7.872
+              },
+              "unregistered": {
+                "dice": 0.752127659574468,
+                "hd95_mm": 4.0,
+                "msd_mm": 1.4327651892413362,
+                "volume_a_cc": 7.168,
+                "volume_b_cc": 7.872
+              }
+            }
+          },
+          "demons": {
+            "seconds": 17.9,
+            "ncc": [
+              0.7858099487891008,
+              0.9200179674377794
+            ],
+            "max_displacement_mm": 21.035955876003396,
+            "jacobian": {
+              "min": 0.4724082063063469,
+              "max": 1.5717922754301066,
+              "mean": 0.9983604900023633,
+              "fraction_nonpositive": 0.0
+            },
+            "landmarks": [
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 2.5186986621318286,
+                "rigid_mm": 2.758573344032999,
+                "after_mm": 2.601987621711501
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.8371462157518763,
+                "hd95_mm": 6.324555320336759,
+                "msd_mm": 2.2788992204684493,
+                "volume_a_cc": 163.328,
+                "volume_b_cc": 190.56
+              },
+              "unregistered": {
+                "dice": 0.775416247625433,
+                "hd95_mm": 11.661903789690601,
+                "msd_mm": 3.450586152766406,
+                "volume_a_cc": 167.4,
+                "volume_b_cc": 190.56
+              }
+            },
+            "LN": {
+              "after": {
+                "dice": 0.7379733879222109,
+                "hd95_mm": 4.0,
+                "msd_mm": 1.5495410115667811,
+                "volume_a_cc": 7.76,
+                "volume_b_cc": 7.872
+              },
+              "unregistered": {
+                "dice": 0.752127659574468,
+                "hd95_mm": 4.0,
+                "msd_mm": 1.4327651892413362,
+                "volume_a_cc": 7.168,
+                "volume_b_cc": 7.872
+              }
+            }
+          },
+          "bspline": {
+            "seconds": 45.4,
+            "ncc": [
+              0.7858099487891008,
+              0.9273650661496379
+            ],
+            "max_displacement_mm": 21.650590190729755,
+            "jacobian": {
+              "min": 0.4861828363948205,
+              "max": 1.5757888256956436,
+              "mean": 1.0044847271486315,
+              "fraction_nonpositive": 0.0
+            },
+            "landmarks": [
+              {
+                "fixed_structure": "Carina_c00",
+                "moving_structure": "Carina_c50",
+                "before_mm": 2.5186986621318286,
+                "rigid_mm": 2.7585733439935907,
+                "after_mm": 3.4810542790778882
+              }
+            ],
+            "Tumor": {
+              "after": {
+                "dice": 0.8339296227525927,
+                "hd95_mm": 6.6332495807108,
+                "msd_mm": 2.288648650144808,
+                "volume_a_cc": 162.736,
+                "volume_b_cc": 190.56
+              },
+              "unregistered": {
+                "dice": 0.775416247625433,
+                "hd95_mm": 11.661903789690601,
+                "msd_mm": 3.450586152766406,
+                "volume_a_cc": 167.4,
+                "volume_b_cc": 190.56
+              }
+            },
+            "LN": {
+              "after": {
+                "dice": 0.7159329140461216,
+                "hd95_mm": 4.47213595499958,
+                "msd_mm": 1.6914881526037335,
+                "volume_a_cc": 7.392,
+                "volume_b_cc": 7.872
+              },
+              "unregistered": {
+                "dice": 0.752127659574468,
+                "hd95_mm": 4.0,
+                "msd_mm": 1.4327651892413362,
+                "volume_a_cc": 7.168,
+                "volume_b_cc": 7.872
+              }
+            }
+          }
+        }
+      },
+      "notes": [],
+      "error": null
+    },
+    {
+      "name": "replan_pancreas_cbct",
+      "kind": "replan_cbct",
+      "status": "fail",
+      "seconds": 1599.5,
+      "checks": [
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Stomach_duo planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.525,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Stomach_duo planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 8.6,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Bowel_sm planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.263,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Bowel_sm planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 13.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Stomach_duo planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.636,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Stomach_duo planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 6.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Stomach_duo D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 70.74,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 40.82 Gy; mean 23.21 Gy, planned 17.08 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Bowel_sm planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.336,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Bowel_sm planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 11.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Bowel_sm D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 40.15,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 39.48 Gy; mean 14.28 Gy, planned 16.53 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Stomach_duo planning \u2192 cone-beam, demons: Dice",
+          "value": 0.062,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Stomach_duo planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 23.6,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Bowel_sm planning \u2192 cone-beam, demons: Dice",
+          "value": 0.062,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Bowel_sm planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 24.9,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned CB07 20120728: Stomach_duo Dice, bspline above rigid only (0.525)",
+          "value": 0.636,
+          "target": "> 0.525",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Stomach_duo planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.569,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Stomach_duo planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 6.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Bowel_sm planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.415,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Bowel_sm planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 16.4,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Stomach_duo planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.656,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Stomach_duo planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 4.9,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Stomach_duo D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 70.16,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 40.82 Gy; mean 20.13 Gy, planned 17.08 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Bowel_sm planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.396,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Bowel_sm planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 16.9,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Bowel_sm D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 61.27,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 39.48 Gy; mean 22.30 Gy, planned 16.53 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Stomach_duo planning \u2192 cone-beam, demons: Dice",
+          "value": 0.106,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Stomach_duo planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 13.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Bowel_sm planning \u2192 cone-beam, demons: Dice",
+          "value": 0.121,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Bowel_sm planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 17.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_001 Aligned resampled CB02 20120719: Stomach_duo Dice, bspline above rigid only (0.569)",
+          "value": 0.656,
+          "target": "> 0.569",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Stomach_duo planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.524,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Stomach_duo planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 10.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Bowel_sm planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.6,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Bowel_sm planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 4.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Stomach_duo planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.622,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Stomach_duo planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 8.6,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Stomach_duo D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 35.2,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 29.46 Gy; mean 8.47 Gy, planned 7.66 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Bowel_sm planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Bowel_sm planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 5.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Bowel_sm D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 37.91,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 28.33 Gy; mean 8.46 Gy, planned 5.82 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Stomach_duo planning \u2192 cone-beam, demons: Dice",
+          "value": 0.608,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Stomach_duo planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 8.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Bowel_sm planning \u2192 cone-beam, demons: Dice",
+          "value": 0.491,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Bowel_sm planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 5.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CBCT01 20120608: Stomach_duo Dice, bspline above rigid only (0.524)",
+          "value": 0.622,
+          "target": "> 0.524",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Stomach_duo planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.782,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Stomach_duo planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 4.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Bowel_sm planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.452,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Bowel_sm planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 11.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Stomach_duo planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.799,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Stomach_duo planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 4.6,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Stomach_duo D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 32.07,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 29.46 Gy; mean 7.39 Gy, planned 7.66 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Bowel_sm planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.443,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Bowel_sm planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 10.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Bowel_sm D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 37.6,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 28.33 Gy; mean 8.25 Gy, planned 5.82 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Stomach_duo planning \u2192 cone-beam, demons: Dice",
+          "value": 0.735,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Stomach_duo planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 5.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Bowel_sm planning \u2192 cone-beam, demons: Dice",
+          "value": 0.345,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Bowel_sm planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 12.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_002 Aligned CT 20120614: Stomach_duo Dice, bspline above rigid only (0.782)",
+          "value": 0.799,
+          "target": "> 0.782",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Stomach_duo planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.821,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Stomach_duo planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 3.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Bowel_sm planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.552,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Bowel_sm planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 4.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Stomach_duo planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.724,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Stomach_duo planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 4.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Stomach_duo D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 61.18,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 57.53 Gy; mean 12.22 Gy, planned 13.97 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Bowel_sm planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.512,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Bowel_sm planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 5.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Bowel_sm D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 38.84,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 40.65 Gy; mean 10.45 Gy, planned 9.60 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Stomach_duo planning \u2192 cone-beam, demons: Dice",
+          "value": 0.711,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Stomach_duo planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 5.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Bowel_sm planning \u2192 cone-beam, demons: Dice",
+          "value": 0.48,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Bowel_sm planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 6.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120211: Stomach_duo Dice, bspline above rigid only (0.821)",
+          "value": 0.724,
+          "target": "> 0.821",
+          "passed": false,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Stomach_duo planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.72,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Stomach_duo planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 4.5,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Bowel_sm planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.484,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Bowel_sm planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 5.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Stomach_duo planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.585,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Stomach_duo planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 6.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Stomach_duo D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 63.13,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 57.53 Gy; mean 15.02 Gy, planned 13.97 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Bowel_sm planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.429,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Bowel_sm planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 7.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Bowel_sm D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 42.1,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 40.65 Gy; mean 9.44 Gy, planned 9.60 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Stomach_duo planning \u2192 cone-beam, demons: Dice",
+          "value": 0.743,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Stomach_duo planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 3.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Bowel_sm planning \u2192 cone-beam, demons: Dice",
+          "value": 0.439,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Bowel_sm planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 11.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_003 Aligned CT 20120218: Stomach_duo Dice, bspline above rigid only (0.720)",
+          "value": 0.585,
+          "target": "> 0.720",
+          "passed": false,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Stomach_duo planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.544,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Stomach_duo planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 7.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Bowel_sm planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.48,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Bowel_sm planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 6.2,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Stomach_duo planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.398,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Stomach_duo planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 10.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Stomach_duo D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 78.55,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 54.33 Gy; mean 35.74 Gy, planned 32.01 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Bowel_sm planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.417,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Bowel_sm planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 7.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Bowel_sm D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 79.01,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 45.88 Gy; mean 34.83 Gy, planned 22.85 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Stomach_duo planning \u2192 cone-beam, demons: Dice",
+          "value": 0.63,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Stomach_duo planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 5.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Bowel_sm planning \u2192 cone-beam, demons: Dice",
+          "value": 0.392,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Bowel_sm planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 7.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120129: Stomach_duo Dice, bspline above rigid only (0.544)",
+          "value": 0.398,
+          "target": "> 0.544",
+          "passed": false,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Stomach_duo planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.641,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Stomach_duo planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 5.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Bowel_sm planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.528,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Bowel_sm planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 6.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Stomach_duo planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.61,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Stomach_duo planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 6.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Stomach_duo D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 75.47,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 54.33 Gy; mean 31.31 Gy, planned 32.01 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Bowel_sm planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.383,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Bowel_sm planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 9.4,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Bowel_sm D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 80.06,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 45.88 Gy; mean 32.58 Gy, planned 22.85 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Stomach_duo planning \u2192 cone-beam, demons: Dice",
+          "value": 0.603,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Stomach_duo planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 6.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Bowel_sm planning \u2192 cone-beam, demons: Dice",
+          "value": 0.345,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Bowel_sm planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 9.6,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_004 Aligned CT - test1 20120206: Stomach_duo Dice, bspline above rigid only (0.641)",
+          "value": 0.61,
+          "target": "> 0.641",
+          "passed": false,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Stomach_duo planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.69,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Stomach_duo planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 5.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Bowel_sm planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.446,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Bowel_sm planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 8.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Stomach_duo planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.712,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Stomach_duo planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 5.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Stomach_duo D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 94.98,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 61.63 Gy; mean 33.84 Gy, planned 32.10 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Bowel_sm planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.344,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Bowel_sm planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 8.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Bowel_sm D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 85.1,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 50.35 Gy; mean 13.23 Gy, planned 17.34 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Stomach_duo planning \u2192 cone-beam, demons: Dice",
+          "value": 0.603,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Stomach_duo planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 7.4,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Bowel_sm planning \u2192 cone-beam, demons: Dice",
+          "value": 0.179,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Bowel_sm planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 17.3,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20121230: Stomach_duo Dice, bspline above rigid only (0.690)",
+          "value": 0.712,
+          "target": "> 0.690",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Stomach_duo planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.607,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Stomach_duo planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 7.4,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Bowel_sm planning \u2192 cone-beam, rigid only: Dice",
+          "value": 0.432,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Bowel_sm planning \u2192 cone-beam, rigid only: mean surface distance (mm)",
+          "value": 12.7,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Stomach_duo planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.604,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Stomach_duo planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 7.0,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Stomach_duo D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 91.41,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 61.63 Gy; mean 31.92 Gy, planned 32.10 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Bowel_sm planning \u2192 cone-beam, bspline: Dice",
+          "value": 0.168,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Bowel_sm planning \u2192 cone-beam, bspline: mean surface distance (mm)",
+          "value": 14.8,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Bowel_sm D0.03cc (Gy) of the day (cone-beam contour, mapped dose)",
+          "value": 93.89,
+          "target": "informative",
+          "passed": null,
+          "note": "planned 50.35 Gy; mean 14.37 Gy, planned 17.34 Gy"
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: bspline: body voxels where the field folds (%)",
+          "value": 0.0,
+          "target": "0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Stomach_duo planning \u2192 cone-beam, demons: Dice",
+          "value": 0.516,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Stomach_duo planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 9.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Bowel_sm planning \u2192 cone-beam, demons: Dice",
+          "value": 0.329,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Bowel_sm planning \u2192 cone-beam, demons: mean surface distance (mm)",
+          "value": 19.1,
+          "target": "informative",
+          "passed": null,
+          "note": ""
+        },
+        {
+          "name": "Pancreas-CT-CB_005 Aligned CT - test1 20130107: Stomach_duo Dice, bspline above rigid only (0.607)",
+          "value": 0.604,
+          "target": "> 0.607",
+          "passed": false,
+          "note": ""
+        }
+      ],
+      "metrics": {
+        "Pancreas-CT-CB_001 Aligned CB07 20120728": {
+          "rigid only": {
+            "seconds": 3.9,
+            "ncc": [
+              0.2674129299975885,
+              0.286040908690383
+            ],
+            "jacobian": null,
+            "Stomach_duo": {
+              "dice": 0.5247183979974969,
+              "hd95_mm": 21.213203435596427,
+              "msd_mm": 8.63334909870692,
+              "volume_a_cc": 275.076,
+              "volume_b_cc": 415.26
+            },
+            "Bowel_sm": {
+              "dice": 0.26261173327853693,
+              "hd95_mm": 35.4964786985977,
+              "msd_mm": 12.988478213902987,
+              "volume_a_cc": 426.573,
+              "volume_b_cc": 361.8
+            }
+          },
+          "bspline": {
+            "seconds": 95.4,
+            "ncc": [
+              0.2674129299975885,
+              0.3306017044734633
+            ],
+            "jacobian": {
+              "min": 0.2993516559855769,
+              "max": 2.877124540641884,
+              "mean": 1.0809713430822485,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.6356359773908425,
+              "hd95_mm": 16.15549442140351,
+              "msd_mm": 6.547665974615322,
+              "volume_a_cc": 296.487,
+              "volume_b_cc": 415.26
+            },
+            "Bowel_sm": {
+              "dice": 0.33571903476866516,
+              "hd95_mm": 32.863353450309965,
+              "msd_mm": 11.75532458439505,
+              "volume_a_cc": 328.563,
+              "volume_b_cc": 361.8
+            }
+          },
+          "demons": {
+            "seconds": 20.5,
+            "ncc": [
+              0.2674129299975885,
+              0.07135485429530647
+            ],
+            "jacobian": {
+              "min": 0.3997662897416084,
+              "max": 4.633416090697538,
+              "mean": 1.9899265749050752,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.06161610851164502,
+              "hd95_mm": 48.093658625644196,
+              "msd_mm": 23.63438153327821,
+              "volume_a_cc": 98.307,
+              "volume_b_cc": 415.26
+            },
+            "Bowel_sm": {
+              "dice": 0.06237455612166126,
+              "hd95_mm": 47.81213235152768,
+              "msd_mm": 24.936611147915333,
+              "volume_a_cc": 162.837,
+              "volume_b_cc": 361.8
+            }
+          }
+        },
+        "Pancreas-CT-CB_001 Aligned resampled CB02 20120719": {
+          "rigid only": {
+            "seconds": 4.3,
+            "ncc": [
+              0.25944863386867767,
+              0.2773614024399876
+            ],
+            "jacobian": null,
+            "Stomach_duo": {
+              "dice": 0.5694276744747645,
+              "hd95_mm": 15.0,
+              "msd_mm": 6.164567418931531,
+              "volume_a_cc": 277.209,
+              "volume_b_cc": 170.019
+            },
+            "Bowel_sm": {
+              "dice": 0.41515845460589496,
+              "hd95_mm": 59.84981202978001,
+              "msd_mm": 16.432515446969084,
+              "volume_a_cc": 427.842,
+              "volume_b_cc": 303.156
+            }
+          },
+          "bspline": {
+            "seconds": 83.2,
+            "ncc": [
+              0.25944863386867767,
+              0.343706750208168
+            ],
+            "jacobian": {
+              "min": 0.32147186168308955,
+              "max": 2.479749123419617,
+              "mean": 1.1086652651300255,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.6562749800159872,
+              "hd95_mm": 13.416407864998739,
+              "msd_mm": 4.930783098688659,
+              "volume_a_cc": 235.305,
+              "volume_b_cc": 170.019
+            },
+            "Bowel_sm": {
+              "dice": 0.3958780969085727,
+              "hd95_mm": 60.07495318350236,
+              "msd_mm": 16.868985295343922,
+              "volume_a_cc": 312.579,
+              "volume_b_cc": 303.156
+            }
+          },
+          "demons": {
+            "seconds": 20.7,
+            "ncc": [
+              0.25944863386867767,
+              0.09565219103190643
+            ],
+            "jacobian": {
+              "min": 0.3929355702410731,
+              "max": 4.7516013670611725,
+              "mean": 1.995149082858293,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.10590105304987085,
+              "hd95_mm": 30.59411708155671,
+              "msd_mm": 13.834801746570545,
+              "volume_a_cc": 101.763,
+              "volume_b_cc": 170.019
+            },
+            "Bowel_sm": {
+              "dice": 0.12138188608776844,
+              "hd95_mm": 40.47221268969612,
+              "msd_mm": 17.675962714656787,
+              "volume_a_cc": 159.516,
+              "volume_b_cc": 303.156
+            }
+          }
+        },
+        "Pancreas-CT-CB_002 Aligned CBCT01 20120608": {
+          "rigid only": {
+            "seconds": 3.8,
+            "ncc": [
+              0.38826078665311714,
+              0.407836245542338
+            ],
+            "jacobian": null,
+            "Stomach_duo": {
+              "dice": 0.5240002224817844,
+              "hd95_mm": 30.0,
+              "msd_mm": 9.971344685518343,
+              "volume_a_cc": 543.699,
+              "volume_b_cc": 427.167
+            },
+            "Bowel_sm": {
+              "dice": 0.5997199110305627,
+              "hd95_mm": 12.0,
+              "msd_mm": 4.231427155399964,
+              "volume_a_cc": 178.281,
+              "volume_b_cc": 149.472
+            }
+          },
+          "bspline": {
+            "seconds": 72.2,
+            "ncc": [
+              0.38826078665311714,
+              0.4884877768905341
+            ],
+            "jacobian": {
+              "min": 0.2642053082435076,
+              "max": 2.8681796680539295,
+              "mean": 0.972804142557682,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.6224808465703565,
+              "hd95_mm": 27.0,
+              "msd_mm": 8.635011505892296,
+              "volume_a_cc": 774.576,
+              "volume_b_cc": 427.167
+            },
+            "Bowel_sm": {
+              "dice": 0.49970184853905786,
+              "hd95_mm": 17.233687939614086,
+              "msd_mm": 5.766067547922171,
+              "volume_a_cc": 122.202,
+              "volume_b_cc": 149.472
+            }
+          },
+          "demons": {
+            "seconds": 18.5,
+            "ncc": [
+              0.38826078665311714,
+              0.4306770592667022
+            ],
+            "jacobian": {
+              "min": 0.33528107139134816,
+              "max": 2.826115571919593,
+              "mean": 1.2547689448239827,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.6079085278704145,
+              "hd95_mm": 27.0,
+              "msd_mm": 8.293609256578252,
+              "volume_a_cc": 536.274,
+              "volume_b_cc": 427.167
+            },
+            "Bowel_sm": {
+              "dice": 0.4913952357802625,
+              "hd95_mm": 12.0,
+              "msd_mm": 4.984958593806767,
+              "volume_a_cc": 128.22299999999998,
+              "volume_b_cc": 149.472
+            }
+          }
+        },
+        "Pancreas-CT-CB_002 Aligned CT 20120614": {
+          "rigid only": {
+            "seconds": 3.7,
+            "ncc": [
+              0.3671258451103415,
+              0.38646531118402555
+            ],
+            "jacobian": null,
+            "Stomach_duo": {
+              "dice": 0.782364464584956,
+              "hd95_mm": 15.0,
+              "msd_mm": 4.833901431735826,
+              "volume_a_cc": 542.862,
+              "volume_b_cc": 601.101
+            },
+            "Bowel_sm": {
+              "dice": 0.4521350823332403,
+              "hd95_mm": 48.92851929090027,
+              "msd_mm": 11.496017348506912,
+              "volume_a_cc": 178.416,
+              "volume_b_cc": 111.807
+            }
+          },
+          "bspline": {
+            "seconds": 104.5,
+            "ncc": [
+              0.3671258451103415,
+              0.4985081327529505
+            ],
+            "jacobian": {
+              "min": 0.26646735798351856,
+              "max": 2.434916242440408,
+              "mean": 0.9825281449354129,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.7987834498489873,
+              "hd95_mm": 12.0,
+              "msd_mm": 4.588728727345687,
+              "volume_a_cc": 677.268,
+              "volume_b_cc": 601.101
+            },
+            "Bowel_sm": {
+              "dice": 0.44322753687974964,
+              "hd95_mm": 43.37049688440288,
+              "msd_mm": 10.501702101834502,
+              "volume_a_cc": 129.789,
+              "volume_b_cc": 111.807
+            }
+          },
+          "demons": {
+            "seconds": 17.9,
+            "ncc": [
+              0.3671258451103415,
+              0.4846006067661931
+            ],
+            "jacobian": {
+              "min": 0.4136166403210845,
+              "max": 3.0947203974965363,
+              "mean": 1.294464652668838,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.734987283957025,
+              "hd95_mm": 17.74823934929885,
+              "msd_mm": 5.788145927729436,
+              "volume_a_cc": 439.317,
+              "volume_b_cc": 601.101
+            },
+            "Bowel_sm": {
+              "dice": 0.3449616589264499,
+              "hd95_mm": 41.677331968349414,
+              "msd_mm": 12.533932544062058,
+              "volume_a_cc": 138.186,
+              "volume_b_cc": 111.807
+            }
+          }
+        },
+        "Pancreas-CT-CB_003 Aligned CT 20120211": {
+          "rigid only": {
+            "seconds": 3.7,
+            "ncc": [
+              0.5931476929492844,
+              0.5942101354456883
+            ],
+            "jacobian": null,
+            "Stomach_duo": {
+              "dice": 0.820538699299817,
+              "hd95_mm": 7.3484692283495345,
+              "msd_mm": 3.1446058428891392,
+              "volume_a_cc": 382.104,
+              "volume_b_cc": 473.95799999999997
+            },
+            "Bowel_sm": {
+              "dice": 0.5522982265653276,
+              "hd95_mm": 12.727922061357855,
+              "msd_mm": 4.538816533469602,
+              "volume_a_cc": 297.513,
+              "volume_b_cc": 299.295
+            }
+          },
+          "bspline": {
+            "seconds": 139.0,
+            "ncc": [
+              0.5931476929492844,
+              0.6459526561489749
+            ],
+            "jacobian": {
+              "min": 0.3804377668850703,
+              "max": 2.565369662908247,
+              "mean": 1.0365319958053687,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.7244910398634646,
+              "hd95_mm": 12.0,
+              "msd_mm": 4.80243729919484,
+              "volume_a_cc": 411.966,
+              "volume_b_cc": 473.95799999999997
+            },
+            "Bowel_sm": {
+              "dice": 0.5116891990824345,
+              "hd95_mm": 15.0,
+              "msd_mm": 5.127461686753499,
+              "volume_a_cc": 253.908,
+              "volume_b_cc": 299.295
+            }
+          },
+          "demons": {
+            "seconds": 22.6,
+            "ncc": [
+              0.5931476929492844,
+              0.37863091902661067
+            ],
+            "jacobian": {
+              "min": 0.37878866845052445,
+              "max": 3.125599999600413,
+              "mean": 1.396168761139956,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.7110330336536805,
+              "hd95_mm": 16.15549442140351,
+              "msd_mm": 5.088872733296904,
+              "volume_a_cc": 309.879,
+              "volume_b_cc": 473.95799999999997
+            },
+            "Bowel_sm": {
+              "dice": 0.4803622081605935,
+              "hd95_mm": 18.0,
+              "msd_mm": 6.464875301173142,
+              "volume_a_cc": 195.669,
+              "volume_b_cc": 299.295
+            }
+          }
+        },
+        "Pancreas-CT-CB_003 Aligned CT 20120218": {
+          "rigid only": {
+            "seconds": 5.1,
+            "ncc": [
+              0.381813854857118,
+              0.391590486752062
+            ],
+            "jacobian": null,
+            "Stomach_duo": {
+              "dice": 0.7195849334095923,
+              "hd95_mm": 12.0,
+              "msd_mm": 4.532259011429189,
+              "volume_a_cc": 382.104,
+              "volume_b_cc": 278.802
+            },
+            "Bowel_sm": {
+              "dice": 0.48447814114895704,
+              "hd95_mm": 17.233687939614086,
+              "msd_mm": 5.702579081553982,
+              "volume_a_cc": 297.513,
+              "volume_b_cc": 418.284
+            }
+          },
+          "bspline": {
+            "seconds": 135.7,
+            "ncc": [
+              0.381813854857118,
+              0.5842412580360856
+            ],
+            "jacobian": {
+              "min": 0.23533651330750732,
+              "max": 2.585627855341227,
+              "mean": 1.0636221366991387,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.5846153846153846,
+              "hd95_mm": 16.97056274847714,
+              "msd_mm": 6.661264420011758,
+              "volume_a_cc": 435.483,
+              "volume_b_cc": 278.802
+            },
+            "Bowel_sm": {
+              "dice": 0.4291859559998361,
+              "hd95_mm": 19.44222209522358,
+              "msd_mm": 7.069274826433818,
+              "volume_a_cc": 240.759,
+              "volume_b_cc": 418.284
+            }
+          },
+          "demons": {
+            "seconds": 25.1,
+            "ncc": [
+              0.381813854857118,
+              0.37911681100631694
+            ],
+            "jacobian": {
+              "min": 0.4392382718248746,
+              "max": 3.0529562750053922,
+              "mean": 1.4452851549607777,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.7434178567958807,
+              "hd95_mm": 10.392304845413264,
+              "msd_mm": 3.800494355302292,
+              "volume_a_cc": 277.02,
+              "volume_b_cc": 278.802
+            },
+            "Bowel_sm": {
+              "dice": 0.43935531262152705,
+              "hd95_mm": 31.89043743820395,
+              "msd_mm": 10.976072102196255,
+              "volume_a_cc": 206.577,
+              "volume_b_cc": 418.284
+            }
+          }
+        },
+        "Pancreas-CT-CB_004 Aligned CT - test1 20120129": {
+          "rigid only": {
+            "seconds": 4.5,
+            "ncc": [
+              0.3693032150552943,
+              0.47124058459668056
+            ],
+            "jacobian": null,
+            "Stomach_duo": {
+              "dice": 0.5437646720643894,
+              "hd95_mm": 18.49324200890693,
+              "msd_mm": 7.112080911522466,
+              "volume_a_cc": 258.606,
+              "volume_b_cc": 304.965
+            },
+            "Bowel_sm": {
+              "dice": 0.4804336329984135,
+              "hd95_mm": 17.924471804789608,
+              "msd_mm": 6.171018637493552,
+              "volume_a_cc": 86.535,
+              "volume_b_cc": 117.693
+            }
+          },
+          "bspline": {
+            "seconds": 211.8,
+            "ncc": [
+              0.3693032150552943,
+              0.5237030659011674
+            ],
+            "jacobian": {
+              "min": 0.3175271438361161,
+              "max": 2.1177194396027073,
+              "mean": 0.9463821423350871,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.39763412816691507,
+              "hd95_mm": 27.0,
+              "msd_mm": 9.965894782459692,
+              "volume_a_cc": 274.779,
+              "volume_b_cc": 304.965
+            },
+            "Bowel_sm": {
+              "dice": 0.4171215168055157,
+              "hd95_mm": 20.346989949375804,
+              "msd_mm": 7.336550963675245,
+              "volume_a_cc": 70.281,
+              "volume_b_cc": 117.693
+            }
+          },
+          "demons": {
+            "seconds": 22.9,
+            "ncc": [
+              0.3693032150552943,
+              0.40565167044301
+            ],
+            "jacobian": {
+              "min": 0.1916807917597814,
+              "max": 3.342854992904673,
+              "mean": 1.2154088697695993,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.6301873664330798,
+              "hd95_mm": 15.297058540778355,
+              "msd_mm": 5.749428899937476,
+              "volume_a_cc": 238.302,
+              "volume_b_cc": 304.965
+            },
+            "Bowel_sm": {
+              "dice": 0.39211391018619934,
+              "hd95_mm": 19.8997487421324,
+              "msd_mm": 7.716594067352618,
+              "volume_a_cc": 54.864,
+              "volume_b_cc": 117.693
+            }
+          }
+        },
+        "Pancreas-CT-CB_004 Aligned CT - test1 20120206": {
+          "rigid only": {
+            "seconds": 2.4,
+            "ncc": [
+              0.30373367297434406,
+              0.34981369090691367
+            ],
+            "jacobian": null,
+            "Stomach_duo": {
+              "dice": 0.6412648531866837,
+              "hd95_mm": 13.74772708486752,
+              "msd_mm": 5.6527512814809935,
+              "volume_a_cc": 258.714,
+              "volume_b_cc": 291.168
+            },
+            "Bowel_sm": {
+              "dice": 0.5279558011049724,
+              "hd95_mm": 16.15549442140351,
+              "msd_mm": 6.773465510027901,
+              "volume_a_cc": 86.67,
+              "volume_b_cc": 157.68
+            }
+          },
+          "bspline": {
+            "seconds": 130.4,
+            "ncc": [
+              0.30373367297434406,
+              0.45403259208438546
+            ],
+            "jacobian": {
+              "min": 0.22647190822922014,
+              "max": 2.3365542634685466,
+              "mean": 0.9207897234070294,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.6100722373072391,
+              "hd95_mm": 15.297058540778355,
+              "msd_mm": 6.0121949255592115,
+              "volume_a_cc": 235.845,
+              "volume_b_cc": 291.168
+            },
+            "Bowel_sm": {
+              "dice": 0.38278228321896446,
+              "hd95_mm": 21.213203435596427,
+              "msd_mm": 9.38461904201243,
+              "volume_a_cc": 58.725,
+              "volume_b_cc": 157.68
+            }
+          },
+          "demons": {
+            "seconds": 20.9,
+            "ncc": [
+              0.30373367297434406,
+              0.3678720998040047
+            ],
+            "jacobian": {
+              "min": 0.14927037287218212,
+              "max": 3.543358765681723,
+              "mean": 1.2297677592553624,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.6025754884547069,
+              "hd95_mm": 18.973665961010276,
+              "msd_mm": 6.293316829839711,
+              "volume_a_cc": 195.264,
+              "volume_b_cc": 291.168
+            },
+            "Bowel_sm": {
+              "dice": 0.3452577975811585,
+              "hd95_mm": 21.633307652783937,
+              "msd_mm": 9.583984301307101,
+              "volume_a_cc": 54.405,
+              "volume_b_cc": 157.68
+            }
+          }
+        },
+        "Pancreas-CT-CB_005 Aligned CT - test1 20121230": {
+          "rigid only": {
+            "seconds": 1.7,
+            "ncc": [
+              0.45547573642948436,
+              0.48186586554319183
+            ],
+            "jacobian": null,
+            "Stomach_duo": {
+              "dice": 0.690419708029197,
+              "hd95_mm": 15.588457268119896,
+              "msd_mm": 5.730857190483261,
+              "volume_a_cc": 213.057,
+              "volume_b_cc": 378.783
+            },
+            "Bowel_sm": {
+              "dice": 0.44601870218192124,
+              "hd95_mm": 24.919871588754223,
+              "msd_mm": 8.06726287435766,
+              "volume_a_cc": 33.723,
+              "volume_b_cc": 61.56
+            }
+          },
+          "bspline": {
+            "seconds": 54.6,
+            "ncc": [
+              0.45547573642948436,
+              0.5510114465357557
+            ],
+            "jacobian": {
+              "min": 0.3455485558620951,
+              "max": 2.463328485369836,
+              "mean": 1.036114182237404,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.7116166421589828,
+              "hd95_mm": 12.36931687685298,
+              "msd_mm": 5.1169816355539,
+              "volume_a_cc": 245.511,
+              "volume_b_cc": 378.783
+            },
+            "Bowel_sm": {
+              "dice": 0.34407915735716565,
+              "hd95_mm": 24.73863375370596,
+              "msd_mm": 8.671208923658819,
+              "volume_a_cc": 23.031,
+              "volume_b_cc": 61.56
+            }
+          },
+          "demons": {
+            "seconds": 15.4,
+            "ncc": [
+              0.45547573642948436,
+              0.523402149325375
+            ],
+            "jacobian": {
+              "min": 0.5310555335114595,
+              "max": 3.105133860497417,
+              "mean": 1.3858112286045383,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.6028860028860029,
+              "hd95_mm": 19.672315572906,
+              "msd_mm": 7.431366834094069,
+              "volume_a_cc": 182.547,
+              "volume_b_cc": 378.783
+            },
+            "Bowel_sm": {
+              "dice": 0.17903645833333334,
+              "hd95_mm": 43.22991841387146,
+              "msd_mm": 17.337793931360306,
+              "volume_a_cc": 21.384,
+              "volume_b_cc": 61.56
+            }
+          }
+        },
+        "Pancreas-CT-CB_005 Aligned CT - test1 20130107": {
+          "rigid only": {
+            "seconds": 2.7,
+            "ncc": [
+              0.28807693530390666,
+              0.31405431509288134
+            ],
+            "jacobian": null,
+            "Stomach_duo": {
+              "dice": 0.6073559533351144,
+              "hd95_mm": 20.12461179749811,
+              "msd_mm": 7.369877878202443,
+              "volume_a_cc": 212.922,
+              "volume_b_cc": 393.444
+            },
+            "Bowel_sm": {
+              "dice": 0.43209876543209874,
+              "hd95_mm": 39.45883931389772,
+              "msd_mm": 12.736082526105175,
+              "volume_a_cc": 34.425,
+              "volume_b_cc": 92.42099999999999
+            }
+          },
+          "bspline": {
+            "seconds": 29.9,
+            "ncc": [
+              0.28807693530390666,
+              0.38465341410647924
+            ],
+            "jacobian": {
+              "min": 0.40710692932644216,
+              "max": 2.541146476404604,
+              "mean": 1.0358099692612932,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.6040426981603452,
+              "hd95_mm": 18.0,
+              "msd_mm": 7.038809889366659,
+              "volume_a_cc": 200.96099999999998,
+              "volume_b_cc": 393.444
+            },
+            "Bowel_sm": {
+              "dice": 0.1681788006196061,
+              "hd95_mm": 36.26153082459998,
+              "msd_mm": 14.785135495153938,
+              "volume_a_cc": 29.592,
+              "volume_b_cc": 92.42099999999999
+            }
+          },
+          "demons": {
+            "seconds": 14.7,
+            "ncc": [
+              0.28807693530390666,
+              0.11665098308915556
+            ],
+            "jacobian": {
+              "min": 0.24430292917258292,
+              "max": 3.971129166665546,
+              "mean": 1.6868326251354715,
+              "fraction_nonpositive": 0.0
+            },
+            "Stomach_duo": {
+              "dice": 0.5161956254608012,
+              "hd95_mm": 23.043437243605826,
+              "msd_mm": 9.133388623041581,
+              "volume_a_cc": 155.871,
+              "volume_b_cc": 393.444
+            },
+            "Bowel_sm": {
+              "dice": 0.32946195780990756,
+              "hd95_mm": 47.43416490252569,
+              "msd_mm": 19.07416522995393,
+              "volume_a_cc": 21.492,
+              "volume_b_cc": 92.42099999999999
+            }
+          }
+        }
+      },
+      "notes": [],
+      "error": null
+    },
+    {
+      "name": "lung_4d_itv",
+      "kind": "lung_4d",
+      "status": "pass",
+      "seconds": 1618.4,
+      "checks": [
+        {
+          "name": "101_HM10395: ITV over 10 phases / reference tumour (volume)",
+          "value": 1.49,
+          "target": "informative",
+          "passed": null,
+          "note": "ITV 47.5 cc; PTV = ITV + 5.0 mm; planned on the average CT"
+        },
+        {
+          "name": "101_HM10395: planned PTV D95 (Gy)",
+          "value": 60.12,
+          "target": "informative",
+          "passed": null,
+          "note": "normalised by 1.035; arcs deliverable: True"
+        },
+        {
+          "name": "101_HM10395: phase 0 %: its tumour D95 (Gy)",
+          "value": 60.48,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "101_HM10395: phase 10 %: its tumour D95 (Gy)",
+          "value": 60.6,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "101_HM10395: phase 20 %: its tumour D95 (Gy)",
+          "value": 60.53,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "101_HM10395: phase 30 %: its tumour D95 (Gy)",
+          "value": 60.58,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "101_HM10395: phase 40 %: its tumour D95 (Gy)",
+          "value": 60.37,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "101_HM10395: phase 50 %: its tumour D95 (Gy)",
+          "value": 60.32,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "101_HM10395: phase 60 %: its tumour D95 (Gy)",
+          "value": 60.38,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "101_HM10395: phase 70 %: its tumour D95 (Gy)",
+          "value": 60.27,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "101_HM10395: phase 80 %: its tumour D95 (Gy)",
+          "value": 60.34,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "101_HM10395: phase 90 %: its tumour D95 (Gy)",
+          "value": 60.33,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "101_HM10395: accumulated over 10 phases: reference tumour D95 (Gy)",
+          "value": 60.97,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "Demons to phase 50 %, equal shares; planned on the average CT 60.45 Gy, worst single phase 60.27 Gy"
+        },
+        {
+          "name": "101_HM10395: Lungs V20Gy (%), accumulated / planned",
+          "value": 10.26,
+          "target": "informative",
+          "passed": null,
+          "note": "planned on the average CT 10.92"
+        },
+        {
+          "name": "101_HM10395: SpinalCord Dmax (Gy), accumulated / planned",
+          "value": 23.73,
+          "target": "informative",
+          "passed": null,
+          "note": "planned on the average CT 24.00"
+        },
+        {
+          "name": "103_HM10395: ITV over 10 phases / reference tumour (volume)",
+          "value": 1.47,
+          "target": "informative",
+          "passed": null,
+          "note": "ITV 95.3 cc; PTV = ITV + 5.0 mm; planned on the average CT"
+        },
+        {
+          "name": "103_HM10395: planned PTV D95 (Gy)",
+          "value": 60.12,
+          "target": "informative",
+          "passed": null,
+          "note": "normalised by 1.045; arcs deliverable: True"
+        },
+        {
+          "name": "103_HM10395: phase 0 %: its tumour D95 (Gy)",
+          "value": 61.14,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "103_HM10395: phase 10 %: its tumour D95 (Gy)",
+          "value": 61.05,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "103_HM10395: phase 20 %: its tumour D95 (Gy)",
+          "value": 60.73,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "103_HM10395: phase 30 %: its tumour D95 (Gy)",
+          "value": 60.42,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "103_HM10395: phase 40 %: its tumour D95 (Gy)",
+          "value": 60.13,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "103_HM10395: phase 50 %: its tumour D95 (Gy)",
+          "value": 60.08,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "103_HM10395: phase 60 %: its tumour D95 (Gy)",
+          "value": 59.9,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "103_HM10395: phase 70 %: its tumour D95 (Gy)",
+          "value": 60.1,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "103_HM10395: phase 80 %: its tumour D95 (Gy)",
+          "value": 60.64,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "103_HM10395: phase 90 %: its tumour D95 (Gy)",
+          "value": 61.01,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "the plan recomputed on this phase's CT (pb, apertures)"
+        },
+        {
+          "name": "103_HM10395: accumulated over 10 phases: reference tumour D95 (Gy)",
+          "value": 61.09,
+          "target": ">= 57.0",
+          "passed": true,
+          "note": "Demons to phase 50 %, equal shares; planned on the average CT 60.45 Gy, worst single phase 59.90 Gy"
+        },
+        {
+          "name": "103_HM10395: Lungs V20Gy (%), accumulated / planned",
+          "value": 17.68,
+          "target": "informative",
+          "passed": null,
+          "note": "planned on the average CT 18.73"
+        },
+        {
+          "name": "103_HM10395: SpinalCord Dmax (Gy), accumulated / planned",
+          "value": 35.95,
+          "target": "informative",
+          "passed": null,
+          "note": "planned on the average CT 35.90"
+        }
+      ],
+      "metrics": {
+        "101_HM10395": {
+          "phases": [
+            0,
+            10,
+            20,
+            30,
+            40,
+            50,
+            60,
+            70,
+            80,
+            90
+          ],
+          "itv_cc": 47.493,
+          "k": 1.0351020429609357,
+          "vmat_id": "7866986a-abe6-4e85-b60c-79a81c4aa15e",
+          "accumulated_dose_id": "f7e2d762-af00-483b-b832-66d13dded155",
+          "history": [
+            {
+              "round": 1,
+              "normalisation": 1.0080887931409448,
+              "failed": []
+            },
+            {
+              "arc_round": 1,
+              "normalisation": 1.0351020429609357,
+              "failed": []
+            }
+          ]
+        },
+        "103_HM10395": {
+          "phases": [
+            0,
+            10,
+            20,
+            30,
+            40,
+            50,
+            60,
+            70,
+            80,
+            90
+          ],
+          "itv_cc": 95.256,
+          "k": 1.0451156450459038,
+          "vmat_id": "27e9adb5-f4b4-4288-8a2d-d57c7de55e87",
+          "accumulated_dose_id": "99965b65-d4f9-43e6-b4c3-6e33fae3ca6f",
+          "history": [
+            {
+              "round": 1,
+              "normalisation": 1.0089639284818004,
+              "failed": []
+            },
+            {
+              "arc_round": 1,
+              "normalisation": 1.0451156450459038,
+              "failed": []
+            }
+          ]
+        }
+      },
+      "notes": [],
+      "error": null
+    }
+  ],
+  "runs": {
+    "one_case_per_process": [
+      "20261025-114942-316b6c6",
+      "20261025-121624-316b6c6",
+      "20261025-142024-316b6c6"
+    ],
+    "commit": "316b6c6"
+  }
+}
