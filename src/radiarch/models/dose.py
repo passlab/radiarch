@@ -431,6 +431,8 @@ class DoseResult(ResearchArtifact):
     # Robust evaluation — populated only when the request carried a non-null
     # ScenarioSetSpec. Each entry mirrors a single scenario's stats.
     scenario_doses: Optional[List["ScenarioDoseEntry"]] = None
+    mapped_from: Optional[Dict[str, str]] = Field(
+        default=None, description="A dose mapped through a registration (R9): the source dose_id and the registration_id.")
 
     cache_key: str
     created_at: Optional[datetime] = None

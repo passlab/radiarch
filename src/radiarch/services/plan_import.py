@@ -95,14 +95,35 @@ def isocenter_inside(plan: Union[PhotonPlan, ProtonPlan], geometry: GeometryResu
     return all(np.all((np.asarray(i) >= lo) & (np.asarray(i) <= hi)) for i in isos)
 
 
+def plan_into_frame(plan: Union[PhotonPlan, ProtonPlan], to_geometry: np.ndarray) -> Tuple[Union[PhotonPlan, ProtonPlan], float]:
+    """The plan with its isocenters moved by ``to_geometry`` (4 x 4, plan-frame points into the geometry's frame), as
+    the couch shift that sets the patient up does; the gantry, collimator and couch angles stay, so the rotation part
+    is left uncorrected and returned (degrees) for the caller to report."""
+    m = np.asarray(to_geometry, float)
+    if m.shape != (4, 4):
+        raise PlanImportError("the frame transform must be 4 x 4")
+    beams = [b.model_copy(update={"isocenter_mm": tuple(float(v) for v in (m[:3, :3] @ np.asarray(b.isocenter_mm, float) + m[:3, 3]))})
+             for b in plan.beams]
+    cos = np.clip((np.trace(m[:3, :3]) - 1.0) / 2.0, -1.0, 1.0)
+    return plan.model_copy(update={"beams": beams}), float(np.degrees(np.arccos(cos)))
+
+
 def import_rtplan(source: Union[str, Path], geometry: GeometryResult, store: BeamModelStore, *,
                   machine_model_id: str = "default", beamlet_spacing_mm: Tuple[float, float] = (5.0, 5.0),
-                  strict_frame_of_reference: bool = True) -> ImportedPlan:
-    """Read ``source`` (an RT Plan or RT Ion Plan file) and store it as a beam model of ``geometry``."""
+                  strict_frame_of_reference: bool = True, to_geometry: Optional[np.ndarray] = None) -> ImportedPlan:
+    """Read ``source`` (an RT Plan or RT Ion Plan file) and store it as a beam model of ``geometry``.
+
+    ``to_geometry`` (R9): a plan made in another frame of reference, brought into the geometry's by a registration's
+    rigid matrix (plan-frame points into the geometry's frame); its isocenters move, its angles stay."""
     plan = read_rtplan(source, beamlet_spacing_mm)
-    warning = check_frame_of_reference(plan, geometry, strict_frame_of_reference)
-    if warning:
-        logger.warning(warning)
+    if to_geometry is not None:
+        plan, rotation = plan_into_frame(plan, to_geometry)
+        if rotation > 1.0:
+            logger.warning("imported plan {}: the registration rotates by {:.1f} deg, which the couch shift leaves uncorrected", plan.name, rotation)
+    else:
+        warning = check_frame_of_reference(plan, geometry, strict_frame_of_reference)
+        if warning:
+            logger.warning(warning)
     if not isocenter_inside(plan, geometry):
         logger.warning("imported plan {}: an isocenter lies outside the geometry grid", plan.name)
 
@@ -116,7 +137,7 @@ def import_rtplan(source: Union[str, Path], geometry: GeometryResult, store: Bea
     digest.update(b"rtplan-import|")
     digest.update(geometry.geometry_id.encode())
     digest.update(b"|" + machine_model_id.encode() + b"|")
-    digest.update(plan.model_dump_json(exclude={"dicom": {"source_path"}}).encode())
+    digest.update(plan.model_dump_json(exclude={"dicom": {"source_path"}}).encode())        # moved isocenters included
     cache_key = digest.hexdigest()
     cached = store.lookup_by_cache_key(cache_key)
     if cached is not None and cached.plan_weights_uri and Path(cached.plan_weights_uri).is_file():
@@ -162,4 +183,4 @@ def find_rtplan_files(directory: Union[str, Path]) -> List[Path]:
 
 
 __all__ = ["PlanImportError", "ImportedPlan", "import_rtplan", "find_rtplan_files",
-           "fluence_elements_of", "plan_weights", "check_frame_of_reference", "PLAN_WEIGHTS_FILENAME"]
+           "fluence_elements_of", "plan_weights", "check_frame_of_reference", "plan_into_frame", "PLAN_WEIGHTS_FILENAME"]

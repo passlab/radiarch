@@ -5,8 +5,10 @@ rigid (or affine) 4 × 4 matrices that map that frame into the object's own
 frame of reference; successive matrices in a ``MatrixSequence`` compose. A
 Deformable Spatial Registration adds, per source frame, a vector grid of
 displacements (mm, LPS) stored ``[z][y][x][3]`` with optional pre- and
-post-deformation matrices. Registration is roadmap R9's work; here the
-objects are read into plain structures the services can use.
+post-deformation matrices; it is applied to points of the registered frame
+(where its grid lies) and yields points of the source frame (PS3.3 C.20.3),
+the direction of ITK's and radiarch's own registrations. Here the objects are
+read into plain structures; ``writers/reg.py`` writes radiarch's (R9).
 """
 
 from __future__ import annotations
@@ -57,7 +59,9 @@ class SpatialRegistration:
 
 @dataclass
 class DeformableRegistration:
-    """One deformation: ``post @ (x + displacement(pre @ x))`` maps the source frame into the registered frame."""
+    """One deformation: a point ``x`` of the registered frame maps to ``post @ (y + displacement(y))`` of the source
+    frame, with ``y = pre @ x`` (PS3.3 C.20.3); the grid lies in the registered frame. (Before R9 this docstring
+    gave the opposite direction; no code used it.)"""
 
     frame_of_reference_uid: str
     source_frame_of_reference_uid: str

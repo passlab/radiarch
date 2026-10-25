@@ -115,10 +115,12 @@ class LineageService:
         from .evaluation import EvaluationService
         from .geometry import GeometryService
         from .optimization import OptimizationService
+        from .registration import RegistrationStore
         from .rt_export import RTExportService
         from ..core.store import store as plan_store
 
         dose = DoseService()
+        registrations = RegistrationStore(Path(get_settings().artifact_dir) / "registrations")
 
         def plan_ids() -> List[str]:
             return [p.id for p in plan_store.list_plans()]
@@ -138,6 +140,7 @@ class LineageService:
             "evaluation": (EvaluationService().store.get_by_id, EvaluationService().store.list_ids),
             "rt_export": (RTExportService().get, rt_export_ids),
             "plan": (plan_store.get_plan, plan_ids),
+            "registration": (registrations.get_by_id, registrations.list_ids),
         }
 
     def get(self, ref: VersionRef) -> Optional[Any]:
@@ -188,6 +191,29 @@ class LineageService:
 
         if ref.kind == "geometry":
             add("geometry", g("parent_geometry_id"))
+            # the operations this geometry added (a derived geometry inherits its parent's list): propagation through a
+            # registration and the 4D operations name further parents (R9)
+            own = list(g("derived_operations") or [])
+            parent = self.get(VersionRef(kind="geometry", id=str(g("parent_geometry_id")))) if g("parent_geometry_id") else None
+            if parent is not None:
+                own = own[len(getattr(parent, "derived_operations", None) or []):]
+            for op in own:
+                if not isinstance(op, dict):
+                    continue
+                if op.get("op") == "propagate":
+                    add("registration", op.get("registration_id"))
+                elif op.get("op") == "average_ct":
+                    for gid in op.get("geometry_ids") or []:
+                        if gid != g("parent_geometry_id"):
+                            add("geometry", gid)
+                elif op.get("op") == "density_from_registration":
+                    add("geometry", op.get("geometry_id"))
+                    add("registration", op.get("registration_id"))
+                elif op.get("op") == "itv":
+                    for src in op.get("sources") or []:
+                        if src.get("geometry_id") != g("parent_geometry_id"):
+                            add("geometry", src.get("geometry_id"))
+                        add("registration", src.get("registration_id"))
             attr.hu_model = g("hu_to_density_model")
             attr.dataset = self._dataset_of_geometry(obj)
             summary = {"structures": sorted(dict(g("structure_index") or {})), "grid": list(g("grid_spec").size or []) if g("grid_spec") else None,
@@ -197,6 +223,8 @@ class LineageService:
             ck = str(g("cache_key") or "")
             if ck.startswith(APERTURE_PREFIX):
                 add("sequence", ck[len(APERTURE_PREFIX):])
+            if ck.startswith("replan:"):                        # the plan moved onto a later image (R9)
+                add("beam_model", ck.split(":")[1])
             attr.machine_model_id = g("machine_model_id")
             attr.modality = _enum_value(g("modality"))
             imported = g("imported_plan")
@@ -206,6 +234,13 @@ class LineageService:
         elif ref.kind in ("influence", "dose"):
             add("geometry", g("geometry_id"))
             add("beam_model", g("beam_model_id"))
+            mapped = g("mapped_from")
+            if mapped:                                            # a dose mapped through a registration (R9)
+                add("dose", mapped.get("dose_id"))
+                add("registration", mapped.get("registration_id"))
+            for part in g("accumulated_from") or []:              # a dose accumulated over breathing phases (R9)
+                add("dose", part.get("dose_id"))
+                add("registration", part.get("registration_id"))
             ck = str(g("cache_key") or "")
             if ck.startswith(APERTURE_PREFIX):
                 add("sequence", ck[len(APERTURE_PREFIX):])
@@ -252,6 +287,14 @@ class LineageService:
             attr.dataset.frame_of_reference_uid = str(g("frame_of_reference_uid") or "")
             attr.dataset.rtstruct_uid = str(g("rtstruct_uid") or "")
             summary = {"objects": [o.kind for o in g("objects") or []], "plan_uid": g("plan_sop_instance_uid"), "pushed": g("pushed")}
+        elif ref.kind == "registration":
+            add("geometry", g("fixed_geometry_id"))
+            add("geometry", g("moving_geometry_id"))
+            attr.engine_name, attr.engine_version = "registration", g("algorithm_version")
+            q = g("quality")
+            summary = {"deformable": _enum_value(g("deformable")), "jacobian_min": getattr(getattr(q, "jacobian", None), "min", None),
+                       "landmarks_after_mm": [round(l.after_mm, 2) for l in getattr(q, "landmarks", [])],
+                       "max_displacement_mm": getattr(q, "max_displacement_mm", None)}
         elif ref.kind == "plan":
             qa = dict(g("qa_summary") or {})
             add("geometry", qa.get("geometryId"))

@@ -165,6 +165,11 @@ class BeamModelImportRequest(BaseModel):
     machine_model_id: str = Field(default="default", max_length=64)
     beamlet_spacing_mm: Tuple[float, float] = Field(default=(5.0, 5.0), description="Beamlet pixel size for photon apertures.")
     strict_frame_of_reference: bool = Field(default=True, description="Refuse a plan whose frame of reference is not the geometry's.")
+    registration_id: Optional[str] = Field(default=None, max_length=36,
+                                           description="A plan made on another CT: a registration with this geometry fixed and that CT "
+                                                       "moving; its rigid part moves the plan's isocenters into this frame (R9).")
+    registration_path: Optional[str] = Field(default=None, description="Or a DICOM Spatial Registration in this geometry's frame of "
+                                                                       "reference with a matrix for the plan's frame (server-side path).")
 
 
 def _locate_plan_file(request: BeamModelImportRequest) -> Path:
@@ -192,6 +197,39 @@ def _locate_plan_file(request: BeamModelImportRequest) -> Path:
     return plans[0]
 
 
+def _frame_transform(request: BeamModelImportRequest, geometry, plan_path: Path):
+    """The 4 x 4 that moves the plan's frame into the geometry's, from a radiarch registration or a DICOM one; None
+    when neither is given."""
+    import numpy as np
+
+    if request.registration_id and request.registration_path:
+        raise ValueError("give registration_id or registration_path, not both")
+    if not (request.registration_id or request.registration_path):
+        return None
+    from ...dicom.rtplan import read_rtplan
+
+    plan_for = (read_rtplan(plan_path).dicom.frame_of_reference_uid or "") if plan_path else ""
+    if request.registration_id:
+        from ...services.registration import RegistrationService
+
+        reg = RegistrationService().get(request.registration_id)
+        if reg.fixed_geometry_id != geometry.geometry_id:
+            raise ValueError(f"registration {reg.registration_id} has {reg.fixed_geometry_id} fixed, not this geometry")
+        if plan_for and reg.moving_frame_of_reference_uid and plan_for != reg.moving_frame_of_reference_uid:
+            raise ValueError(f"the plan's frame of reference {plan_for} is not the registration's moving frame {reg.moving_frame_of_reference_uid}")
+        return np.linalg.inv(np.asarray(reg.rigid_matrix, float))           # radiarch's matrix maps fixed → moving
+    from ...dicom.reg import SpatialRegistration, read_registration
+
+    sreg = read_registration(Path(request.registration_path).expanduser())
+    if not isinstance(sreg, SpatialRegistration):
+        raise ValueError("registration_path must be a (rigid) Spatial Registration")
+    if geometry.frame_of_reference_uid and sreg.frame_of_reference_uid != geometry.frame_of_reference_uid:
+        raise ValueError(f"the registration is in frame {sreg.frame_of_reference_uid}, not the geometry's {geometry.frame_of_reference_uid}")
+    if plan_for not in sreg.matrices:
+        raise ValueError(f"the registration has no matrix for the plan's frame of reference {plan_for}")
+    return sreg.matrices[plan_for]
+
+
 @router.post(
     "/import",
     response_model=BeamModelResult,
@@ -217,6 +255,7 @@ async def import_plan(request: BeamModelImportRequest) -> BeamModelResult:
             machine_model_id=request.machine_model_id,
             beamlet_spacing_mm=request.beamlet_spacing_mm,
             strict_frame_of_reference=request.strict_frame_of_reference,
+            to_geometry=_frame_transform(request, geometry, path),
         )
     except (ValueError, PlanImportError, RTPlanError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
