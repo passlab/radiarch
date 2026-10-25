@@ -334,3 +334,83 @@ optimization for VMAT; the R8 record for the physicist.
   clips below zero and NaN to zero; `test_rtdose_round_off_below_zero_does_not_wrap`. Found by a position check
   before a push (the 95 % dose region of the exported RT Dose 222 mm from the PTV). The validation records are not
   affected: they grade the dose arrays, not exported RT Doses.
+
+## R9 — registration, contour propagation, dose mapping, 4D, replanning (2026-10-24)
+
+- `services/registration.py` (SimpleITK 2.5): rigid Euler 3D with Mattes MI over a pyramid, then diffeomorphic
+  Demons (CT to CT) or B-spline with normalised correlation and L-BFGS-B (CT to CBCT); the composite written as one displacement field
+  on the fixed grid; quality after TG-132 (similarity inside the body before, after rigid, after; Jacobian and
+  folding; landmark errors between structure centroids; largest displacement). `RegistrationStore` with a cache
+  index; fixed metric seeds.
+- Propagation: a derived geometry of the fixed one with the moving structures pulled back through the field
+  (partial-volume level 0.5); a name clash needs a suffix. Dose mapping: a new dose on the fixed geometry with
+  `mapped_from` (source dose, registration).
+- `registration` is a lineage kind: a registration derives from both geometries, a propagated geometry from the
+  fixed geometry and the registration, a mapped dose from its source dose and the registration.
+- Routes: `POST /registrations`, `GET /registrations/{id}`, `GET …/field`, `POST …/propagate`,
+  `POST …/map-dose`, `DELETE`. ADR 0016.
+- `services/contour_metrics.py`: Dice, HD95 and mean surface distance.
+- B-spline metric: normalised correlation. Mattes MI was OOM-killed on a thorax (its derivative buffers,
+  bins^2 x parameters per work unit, passed 10 GB for ~11k parameters and follow ITK's global thread count, not
+  the method's); joint-histogram MI used 0.4 GB but did not move the B-spline. Correlation: 0.04 mm on the test
+  phantom with a linear "cone-beam" recalibration, 3 s, 0.3 GB.
+- Harness `registration_4d_lung` (`cases_r9.py`): 4D-Lung, phase 50 % registered to 0 % for five patients with
+  4–11 mm tumour motion; propagated contours against the 0 % contours, markers and carina as landmarks; rigid
+  only, Demons, B-spline; graded on Demons against TG-132 tolerances (markers as point landmarks; the carina,
+  a contoured region whose centroid moves 2–3 mm with the extent drawn, informative). Patient 111's tumour
+  contours differ by 11 % in volume between the phases (83 and 75 cc): Demons and B-spline give a lower tumour
+  Dice than no registration (0.77 and 0.73 against 0.79) while its lymph node goes from 0.03 to 0.40; kept as a
+  graded finding, not tuned away. Data findings: patient 118's 0 % and 50 %
+  images are identical (contours differ by 6 mm), skipped by an NCC guard; 109 and 112 have the same tumour
+  contour on both phases; markers only on 100–106; organs on both phases only on 100–103.
+- Tests: `tests/test_r9_registration.py` (a synthetic thorax: rigid recovery, Demons without folding, B-spline,
+  volume mapping, the API with propagation, dose mapping and lineage).
+- 4D (`services/four_d.py`, routes `/four-d/…`): the average-intensity CT (mean HU of phases on one grid and frame of
+  reference, a derived geometry of the reference phase), the ITV (union of the drawn tumours, or propagated ones
+  through registrations), a plan's metersets recomputed on each phase (photon apertures through the engine's
+  aperture path), accumulation through registrations with equal or given shares (`DoseResult.accumulated_from`).
+  Lineage: a geometry's parents now come from the operations it added itself (a derived geometry inherits its
+  parent's list), so the phases of an average CT or ITV are parents of that geometry only.
+- Harness `lung_4d_itv` (`cases_r9.run_lung_4d`): plan on the average CT with PTV = ITV + 5 mm, every phase's tumour
+  D95 and the accumulated reference tumour D95 graded at 95 % of the prescription.
+- Tests: `tests/test_r9_four_d.py` (three synthetic breathing phases: average CT, ITV drawn and propagated, phase
+  doses of an open-field plan, accumulation through Demons equal to the mean of the phase doses at the tumour, the
+  routes and the lineage).
+- Replanning (`services/replan.py`, `POST /replan/assess`): the day's image fixed, the planning CT moving; planning
+  structures propagated; for a cone-beam CT the planning CT's HU deformed onto it as the density (a derived geometry,
+  op `density_from_registration`); the isocenter moved by the rigid part (the couch shift), the rotation reported; the
+  plan recomputed on the day; goals planned and of the day side by side; the planned dose mapped. The day's beam
+  model keeps the planned one in its cache key (`replan:{beam model}:…`), which the lineage reads.
+- Accumulation with absolute weights (`AccumulateRequest.absolute`) for a course: a plan's whole-course dose times
+  the fraction of it delivered.
+- RT export: `predecessor_plan_uid` (ReferencedRTPlanSequence, RTPlanRelationship PREDECESSOR) and a MULTI_PLAN RT
+  Dose referencing every plan it sums (`dose_summation`, `summed_plan_uids`).
+- Harness `replan_pancreas_cbct` (`cases_r9.run_replan_cbct`): planning CT to each contoured cone-beam CT, propagated
+  stomach-duodenum and bowel against the cone-beam contours, the clinical dose mapped onto the day.
+- Tests: `tests/test_r9_replan.py` (a shifted, recalibrated "cone-beam" day: the couch shift recovered within 1 mm,
+  the planning HU as density, the tumour dose of the day within 3 % of planned, cache and lineage; a course with
+  absolute weights; the writers' predecessor and MULTI_PLAN references).
+- DICOM registrations (`dicom/writers/reg.py`, `POST /registrations/{id}/dicom`): a Spatial Registration with the
+  rigid part (source points into the registered frame, the inverse of radiarch's matrix) and a Deformable Spatial
+  Registration with the whole field, in the fixed geometry's frame. The standard (PS3.3 C.20.3) applies the deformable
+  grid to registered-frame points and yields source points, as ITK does; the R2 reader's docstring said the opposite
+  and is corrected (nothing used it).
+- Imports across frames of reference: `import_rtplan(to_geometry=…)` and the import route's `registration_id` or
+  `registration_path` move the plan's isocenters into the geometry's frame (angles kept, rotation over 1 degree
+  logged).
+- Test: `test_dicom_registration_objects_round_trip_and_bring_a_plan_across_frames` (read back with the R2 reader;
+  the deformable vector at the fixed tumour lands on the moving tumour; a plan from the moving frame imports onto
+  the fixed tumour through either registration; without one it is refused).
+- 4D robust evaluation: `AccumulateRequest.phases_as_scenarios` keeps each mapped phase dose as a scenario of the
+  accumulated dose, so `include_scenarios` evaluation grades each goal's worst phase
+  (`test_phases_as_scenarios_give_the_worst_phase`). Robust optimization over phases is left for a later item.
+- Cone-beam finding (registration 1.1.0): on the first pancreas pair the B-spline diverged (stomach-duodenum Dice
+  0.38 rigid → 0.17, the field folding in 44 % of body voxels, 22 minutes): the aligned cone-beam CT is 83 % padding
+  at -1000 outside its field of view, where the planning CT has tissue. Fixed: the metric masked to the fixed body
+  plus 10 mm (rigid and B-spline), and the B-spline coefficients bounded to 0.4 of the control-point spacing (a
+  sufficient condition for a one-to-one cubic B-spline, Choi and Lee 2000). Rigid 0.525, B-spline 0.635, no
+  folding. A body-only mask, or one that drops voxels at the image minimum, let the rigid step slide 2 cm (the
+  collection clips air at -1000 too). `bspline_sampling` (default 10 %: 94 s; 20 %: 210 s, Dice 0.635; 5 %: 68 s,
+  0.619). Demons is not for cone-beam CT (Dice 0.06 on that pair): same-calibration only. Cache keys of
+  registrations carry the algorithm version, so a change of algorithm needs its bump (a trial reused a cached
+  result before it).

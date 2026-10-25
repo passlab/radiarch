@@ -27,8 +27,8 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 10 | R6 RT object writer | done | d3deb77..a9b8cce | 0012 |
 | 11 | R12 Versions, lineage, states | done | 3e653f2..fe0573e | 0013 |
 | 12 | R7 Validation report | done; physicist review waiting | 2e21a28..2f7b506 | 0014 |
-| 13 | R8 Native pencil-beam engine, VMAT, SBRT | in progress (uncommitted) | — | 0015 |
-| 14 | R9 Registration, 4D, replanning | not started | — | — |
+| 13 | R8 Native pencil-beam engine, VMAT, SBRT | done; physicist review waiting | 6e73aa2..cc5c047 | 0015 |
+| 14 | R9 Registration, 4D, replanning | done; validation record running | — | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | not started | — | — |
 | 16 | R13 Viewer integration | not started | — | — |
 | 17 | R11 Multi-criteria optimization | not started | — | — |
@@ -140,7 +140,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [ ] matRad cross-check **(open; needs MATLAB)**
 - [ ] New CCC kernels **(open; R8's pencil beam addresses the same errors)**
 
-### R8 — Native pencil-beam engine, VMAT, SBRT (in progress)
+### R8 — Native pencil-beam engine, VMAT, SBRT (done; committed 6e73aa2..cc5c047)
 - [x] CCC gantry turned as IEC 61217 (CCC 1.1.0); engine versions in every cache key
 - [x] Pencil kernel from OpenGATE (Monte Carlo run of the Mohan 6 MV spectrum)
 - [x] Kernel table (integral-conserving, SVD of the cumulative kernel) and the engine `pb`: dose path, influence matrix with unbiased sampling, per-segment doses, scenarios, calibration
@@ -159,12 +159,18 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] Lateral kernel scaling for lung (`pb` 1.1.0; fitted to the 2 × 2 and 10 × 10 cm Monte Carlo lung slabs)
 - [x] Monte Carlo 2 × 2 cm lung-slab reference and the narrow-field lung check
 
-### R9 — Registration, 4D, replanning (not started)
-- [ ] Rigid and deformable registration (SimpleITK) and contour propagation
-- [ ] ITV from 4DCT phases; per-phase dose with deformable accumulation
-- [ ] Replanning: register a re-CT or CBCT, propagate, recompute the plan, compare goals, re-optimize warm, write a new RT Plan with a predecessor and an accumulated RT Dose
-- [ ] Recalculate imported plans across frames of reference (from R2)
-- [ ] 4D robust scenarios (from R3)
+### R9 — Registration, 4D, replanning (done; validation record running)
+Data: 4D-Lung (planning 4DCT, ten phases in one frame of reference, contoured on every phase, markers;
+seven weekly 4D cone-beam CTs, each its own frame of reference) and Pancreatic-CT-CBCT-SEG (planning CT,
+CBCTs and RT Dose, each contoured).
+- [x] R9.1 Registration service (SimpleITK): rigid, then Demons (CT to CT) or B-spline with normalised correlation (CT to CBCT); the total transform as a displacement field on the fixed grid; quality after AAPM TG-132 (similarity before and after, Jacobian and folding, landmark error); `POST /registrations`
+- [x] R9.2 Contour propagation (a derived geometry on the fixed CT) and dose mapping between grids
+- [x] R9.3 Harness case on 4D-Lung: propagated contours against the clinician's (Dice, HD95, mean surface distance), marker landmark error, rigid-only baseline
+- [x] R9.4 4D: average-intensity CT, ITV over phases (from contours or propagated), per-phase dose and deformable accumulation; a lung 4D case
+- [x] R9.5 Replanning: register a re-CT or CBCT (density from the deformed planning CT for CBCT), propagate, recompute the plan, compare goals, re-optimize warm, write a new RT Plan with a predecessor and an accumulated RT Dose
+- [x] R9.6 DICOM Spatial Registration objects; recalculate imported plans across frames of reference (from R2)
+- [x] R9.7 4D robust scenarios (from R3): the phases as scenarios of the accumulated dose, graded worst-case; robust optimization over phases **moved to a later item**
+- [ ] R9 validation record: the R9 cases (`registration_4d_lung`, `lung_4d_itv`, `replan_pancreas_cbct`) from a clean commit
 
 ### R10 — Scripting SDK and planning protocols (not started)
 - [ ] A Python SDK that mirrors the domain (patient, course, plan, beam set, optimization, evaluation) over the REST API
