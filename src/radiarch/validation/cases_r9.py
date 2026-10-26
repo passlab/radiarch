@@ -336,7 +336,6 @@ def run_replan_cbct(spec: dict, ctx: Context) -> CaseResult:
     from ..services.contour_metrics import compare
     from ..services.geometry_bundle import load_geometry_arrays
     from ..services.registration import RegistrationService
-    from .cases_r7 import _dose_at
 
     root = data_root() / Path(spec["data"]).name
     if not root.is_dir():

@@ -20,6 +20,7 @@ from ..models.dose import DoseJobStatus, DoseStage
 from ..models.optimization import OptimizationJobStatus, OptimizationStage
 from ..models.bao import BAOJobStatus, BAOStage
 from ..models.evaluation import EvaluationJobStatus, EvaluationStage
+from ..models.protocol import AutoplanJobStatus, AutoplanStage
 
 
 def _utcnow():
@@ -222,6 +223,31 @@ class StoreBase(abc.ABC):
     @abc.abstractmethod
     def list_evaluation_jobs(self) -> List[EvaluationJobStatus]: ...
 
+    # ---- Auto-planning async jobs (R10) ---------------------------------------
+
+    @abc.abstractmethod
+    def create_autoplan_job(self, cache_key: str) -> AutoplanJobStatus:
+        """Record a new queued protocol run."""
+        ...
+
+    @abc.abstractmethod
+    def get_autoplan_job(self, job_id: str) -> Optional[AutoplanJobStatus]: ...
+
+    @abc.abstractmethod
+    def update_autoplan_job(
+        self,
+        job_id: str,
+        *,
+        state: Optional[JobState] = None,
+        progress: Optional[float] = None,
+        message: Optional[str] = None,
+        stage: Optional[AutoplanStage] = None,
+        run_id: Optional[str] = None,
+    ) -> Optional[AutoplanJobStatus]: ...
+
+    @abc.abstractmethod
+    def list_autoplan_jobs(self) -> List[AutoplanJobStatus]: ...
+
 
 # ---------------------------------------------------------------------------
 # In-memory implementation (used in tests & dev)
@@ -238,6 +264,7 @@ class InMemoryStore(StoreBase):
         self._optimization_jobs: Dict[str, OptimizationJobStatus] = {}
         self._bao_jobs: Dict[str, BAOJobStatus] = {}
         self._evaluation_jobs: Dict[str, EvaluationJobStatus] = {}
+        self._autoplan_jobs: Dict[str, AutoplanJobStatus] = {}
 
     def create_plan(self, payload: PlanRequest) -> tuple[PlanDetail, JobStatus]:
         plan_id = str(uuid.uuid4())
@@ -676,6 +703,54 @@ class InMemoryStore(StoreBase):
 
     def list_evaluation_jobs(self) -> List[EvaluationJobStatus]:
         return list(self._evaluation_jobs.values())
+
+    def create_autoplan_job(self, cache_key: str) -> AutoplanJobStatus:
+        job_id = str(uuid.uuid4())
+        job = AutoplanJobStatus(
+            id=job_id, cache_key=cache_key, state=JobState.queued,
+            progress=0.0, stage=AutoplanStage.queued, created_at=_utcnow(),
+        )
+        self._autoplan_jobs[job_id] = job
+        return job
+
+    def get_autoplan_job(self, job_id: str) -> Optional[AutoplanJobStatus]:
+        return self._autoplan_jobs.get(job_id)
+
+    def update_autoplan_job(
+        self,
+        job_id: str,
+        *,
+        state: Optional[JobState] = None,
+        progress: Optional[float] = None,
+        message: Optional[str] = None,
+        stage: Optional[AutoplanStage] = None,
+        run_id: Optional[str] = None,
+    ) -> Optional[AutoplanJobStatus]:
+        job = self._autoplan_jobs.get(job_id)
+        if not job:
+            return None
+        data = job.model_dump()
+        now = _utcnow()
+        if state:
+            data["state"] = state
+            if state == JobState.running and not data.get("started_at"):
+                data["started_at"] = now
+            if state in {JobState.succeeded, JobState.failed, JobState.cancelled}:
+                data["finished_at"] = now
+        if progress is not None:
+            data["progress"] = progress
+        if message is not None:
+            data["message"] = message
+        if stage is not None:
+            data["stage"] = stage
+        if run_id is not None:
+            data["run_id"] = run_id
+        updated = AutoplanJobStatus(**data)
+        self._autoplan_jobs[job_id] = updated
+        return updated
+
+    def list_autoplan_jobs(self) -> List[AutoplanJobStatus]:
+        return list(self._autoplan_jobs.values())
 
 
 # ---------------------------------------------------------------------------
@@ -1432,6 +1507,98 @@ class SQLStore(StoreBase):
             stage=row.stage,
             message=row.message,
             evaluation_id=row.evaluation_id,
+            started_at=row.started_at,
+            finished_at=row.finished_at,
+            created_at=row.created_at,
+        )
+
+    def create_autoplan_job(self, cache_key: str) -> AutoplanJobStatus:
+        from .db_models import AutoplanJobRow
+
+        job_id = str(uuid.uuid4())
+        now = _utcnow()
+        session = self._session()
+        try:
+            row = AutoplanJobRow(
+                id=job_id, cache_key=cache_key, state=JobState.queued.value,
+                progress=0.0, stage=AutoplanStage.queued.value, created_at=now,
+            )
+            session.add(row)
+            session.commit()
+            return self._autoplan_job_row_to_status(row)
+        finally:
+            session.close()
+
+    def get_autoplan_job(self, job_id: str) -> Optional[AutoplanJobStatus]:
+        from .db_models import AutoplanJobRow
+
+        session = self._session()
+        try:
+            row = session.query(AutoplanJobRow).filter_by(id=job_id).first()
+            if not row:
+                return None
+            return self._autoplan_job_row_to_status(row)
+        finally:
+            session.close()
+
+    def update_autoplan_job(
+        self,
+        job_id: str,
+        *,
+        state: Optional[JobState] = None,
+        progress: Optional[float] = None,
+        message: Optional[str] = None,
+        stage: Optional[AutoplanStage] = None,
+        run_id: Optional[str] = None,
+    ) -> Optional[AutoplanJobStatus]:
+        from .db_models import AutoplanJobRow
+
+        session = self._session()
+        try:
+            row = session.query(AutoplanJobRow).filter_by(id=job_id).first()
+            if not row:
+                return None
+            now = _utcnow()
+            if state:
+                row.state = state.value if hasattr(state, "value") else state
+                if state == JobState.running and not row.started_at:
+                    row.started_at = now
+                if state in {JobState.succeeded, JobState.failed, JobState.cancelled}:
+                    row.finished_at = now
+            if progress is not None:
+                row.progress = progress
+            if message is not None:
+                row.message = message
+            if stage is not None:
+                row.stage = stage.value if hasattr(stage, "value") else stage
+            if run_id is not None:
+                row.run_id = run_id
+            session.commit()
+            return self._autoplan_job_row_to_status(row)
+        finally:
+            session.close()
+
+    def list_autoplan_jobs(self) -> List[AutoplanJobStatus]:
+        from .db_models import AutoplanJobRow
+
+        session = self._session()
+        try:
+            rows = (session.query(AutoplanJobRow)
+                    .order_by(AutoplanJobRow.created_at.desc()).all())
+            return [self._autoplan_job_row_to_status(r) for r in rows]
+        finally:
+            session.close()
+
+    @staticmethod
+    def _autoplan_job_row_to_status(row) -> AutoplanJobStatus:
+        return AutoplanJobStatus(
+            id=row.id,
+            cache_key=row.cache_key,
+            state=row.state,
+            progress=row.progress or 0.0,
+            stage=row.stage,
+            message=row.message,
+            run_id=row.run_id,
             started_at=row.started_at,
             finished_at=row.finished_at,
             created_at=row.created_at,

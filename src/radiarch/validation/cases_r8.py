@@ -13,8 +13,7 @@ import numpy as np
 
 from . import phantoms as ph
 from .cases_r7 import (
-    NORMALISATION_HEADROOM, OAR_WEIGHT, _cax3, _cached_ccc_dose, _dose_at, _goal_met, _mc_reference, _normalise_to_goal,
-    _objectives, _phantom_for, _read_volume, _resample_to, _services, _structure_extent_mm, _write_volume, _case_dir_with_gtv,
+    NORMALISATION_HEADROOM, OAR_WEIGHT, _cax3, _cached_ccc_dose, _dose_at, _mc_reference, _phantom_for, _resample_to, _services, _write_volume, _case_dir_with_gtv,
 )
 from .common import CaseResult, Context, Skip, _ccc_engine, _open_field_plan, _within, data_root
 
@@ -318,77 +317,11 @@ def _peripheral_gtv_centre(lung_zyx: np.ndarray, origin: Sequence[float], s: flo
 
 def _plan_vmat(geo, arrays, target: str, rx: float, goals: List[dict], extra: list, arcs, beamlet: float, iterations: int, rounds: int,
                fractions: int, spec: dict) -> dict:
-    """Sector beams around every target (the field covers them from every angle of the arcs), fluence optimization
-    with the pb Dij and goal-driven reweighting rounds, then arcs (VMAT service); the arc dose normalised so the
-    main target's D95 meets its prescription. Returns bm, opt, vm, dose, k, history, objectives."""
-    from ..models.beam_model import BeamModelBuildRequest, BeamSetSpec, BeamSpec, DeliveryParams, Modality
-    from ..models.dose import EngineSpec
-    from ..models.optimization import OptimizationRunRequest, SolverConfig
-    from ..models.vmat import ArcRequest, sector_beams
-    from ..services.beam_model import BeamModelService
-    from ..services.dose import DoseService
-    from ..services.optimization import OptimizationService
-    from ..services.vmat import VMATService
+    """VMAT goal-driven planning: the auto-planning service's loop (``services.autoplan.plan_vmat``).
+    Returns bm, opt, vm, dose, k, history, objectives."""
+    from ..services.autoplan import plan_vmat
 
-    target_mask = arrays.mask_zyx(arrays.structure_index[target])
-    union = np.zeros(arrays.shape_zyx, bool)
-    for t in {target} | {g["structure"] for g in goals if g["op"].startswith(">")}:
-        union |= arrays.mask_zyx(arrays.structure_index[t])
-    lo, hi = _structure_extent_mm(union, arrays.origin_mm, arrays.spacing_mm)
-    iso = tuple(float(v) for v in (lo + hi) / 2.0)
-    margin = float(spec.get("jaw_margin_mm", 10.0))
-    jaw_x = float(np.hypot(hi[0] - lo[0], hi[1] - lo[1]) + 2 * margin)
-    jaw_y = float(hi[2] - lo[2] + 2 * margin)
-    machine = spec.get("machine", "synthetic-120")
-    engine = EngineSpec(name="pb", params=dict(spec.get("pb_params", {})))
-    bm = BeamModelService().build(BeamModelBuildRequest(
-        geometry_id=geo.geometry_id, modality=Modality.photon_imrt, machine_model_id=machine,
-        beam_set=BeamSetSpec(isocenter_mm=iso, beams=[BeamSpec(beam_id=b, gantry_deg=g, couch_deg=c, collimator_deg=col)
-                                                      for b, g, c, col in sector_beams(arcs)]),
-        delivery_params=DeliveryParams(jaw_opening_mm=(jaw_x, jaw_y), beamlet_size_mm=(beamlet, beamlet))))
-    masks = {g["structure"]: arrays.mask_zyx(arrays.structure_index[g["structure"]]) for g in goals if g["structure"] in arrays.structure_index}
-    targets = {g["structure"] for g in goals if g["op"].startswith(">")}
-    scale: Dict[int, float] = {}
-    level: Dict[int, float] = {}
-    init = None
-    history: List[dict] = []
-    objectives: list = []
-    opt = None
-    for r in range(max(1, rounds)):
-        objectives = _objectives(arrays, target, rx, goals, scale, level) + list(extra)
-        opt = OptimizationService().run(OptimizationRunRequest(
-            geometry_id=geo.geometry_id, beam_model_id=bm.beam_model_id, dose_engine=engine,
-            objectives=objectives, solver=SolverConfig(method="L-BFGS-B", max_iterations=iterations), init_weights_uri=init))
-        fmo = _read_volume(opt.dose_ref_uri)
-        dose, k = _normalise_to_goal(fmo, fmo[target_mask], "D95", rx * NORMALISATION_HEADROOM)
-        failed = [i for i, g in enumerate(goals) if g["structure"] in masks and not _goal_met(dose[masks[g["structure"]]], g)]
-        history.append({"round": r + 1, "normalisation": k, "failed": [f"{goals[i]['structure']} {goals[i]['metric']}" for i in failed]})
-        if not failed:
-            break
-        for i in failed:
-            scale[i] = scale.get(i, 1.0) * 3.0
-            if goals[i]["structure"] not in targets:
-                level[i] = level.get(i, 1.0) * 0.9
-        init = opt.weights_ref_uri
-    # arcs: the sector fluence swept by the leaves, control-point doses recomputed, metersets re-optimized; the arcs
-    # reproduce the sector fluence only approximately, so the same goal-driven rounds run on the arc metersets
-    vm = arc_dose = None
-    k = 1.0
-    for r in range(max(1, int(spec.get("arc_rounds", 3)))):
-        vm = VMATService().arcs(opt.optimization_id, ArcRequest(objectives=objectives, arcs=arcs, max_iterations=iterations, fractions=fractions,
-                                                                machine_model_id=machine, dose_engine=engine))
-        raw = _read_volume(DoseService().dose_store.get_by_id(vm.dose_id).dose_grid_uri)
-        arc_dose, k = _normalise_to_goal(raw, raw[target_mask], "D95", rx * NORMALISATION_HEADROOM)
-        failed = [i for i, g in enumerate(goals) if g["structure"] in masks and not _goal_met(arc_dose[masks[g["structure"]]], g)]
-        history.append({"arc_round": r + 1, "normalisation": k, "failed": [f"{goals[i]['structure']} {goals[i]['metric']}" for i in failed]})
-        if not failed:
-            break
-        for i in failed:
-            scale[i] = scale.get(i, 1.0) * 3.0
-            if goals[i]["structure"] not in targets:
-                level[i] = level.get(i, 1.0) * 0.95
-        objectives = _objectives(arrays, target, rx, goals, scale, level) + list(extra)
-    return {"bm": bm, "opt": opt, "vm": vm, "dose": arc_dose, "k": k, "history": history, "objectives": objectives}
+    return plan_vmat(geo, arrays, target, rx, goals, extra, arcs, beamlet, iterations, rounds, fractions, spec)
 
 
 def run_lung_sbrt_vmat(spec: dict, ctx: Context) -> CaseResult:

@@ -12,18 +12,23 @@ import json
 import math
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence
 
 import numpy as np
 from loguru import logger
 
 from . import phantoms as ph
 from .common import CaseResult, Context, Skip, _ccc_engine, _open_field_plan, _within, data_root, load_reference
+# the goal-driven planning moved into the auto-planning service (R10); the cases use it under their old names
+from ..services.autoplan import (  # noqa: E402,F401
+    NORMALISATION_HEADROOM, OAR_WEIGHT, dose_at as _dose_at, goal_met as _goal_met, goal_value as _goal_value,
+    normalise_to_goal as _normalise_to_goal, objectives_for as _objectives, structure_extent_mm as _structure_extent_mm,
+    target_names as _target_names,
+)
 
 RADIARCH_ROOT = Path(__file__).resolve().parents[3]
 MC_DIR = Path(__file__).resolve().parent / "references" / "mc"
 SIMPLEFANTOM = RADIARCH_ROOT / "tests" / "data" / "SimpleFantomWithStruct"
-OAR_WEIGHT = 200.0        # an OAR goal term against the target's uniform term at weight 100
 
 
 # ---------------------------------------------------------------------------
@@ -53,9 +58,6 @@ def _read_volume(uri: str) -> np.ndarray:
     return sitk.GetArrayFromImage(sitk.ReadImage(path)).astype(np.float32)
 
 
-def _dose_at(doses: np.ndarray, pct: float) -> float:
-    from ..services.dvh import dose_at_volume
-    return float(dose_at_volume(doses, pct))
 
 
 def _agreement(direct: np.ndarray, via: np.ndarray, lit_frac: float = 0.01, high_frac: float = 0.5) -> Dict[str, float]:
@@ -433,149 +435,28 @@ def run_proton_bragg_peak(spec: dict, ctx: Context) -> CaseResult:
 # tg119_planning — the four TG-119 structure sets planned by radiarch, scored against the goals
 # ---------------------------------------------------------------------------
 
-def _structure_extent_mm(mask_zyx: np.ndarray, origin: Sequence[float], spacing: Sequence[float]) -> Tuple[np.ndarray, np.ndarray]:
-    idx = np.argwhere(mask_zyx)
-    lo = origin[::-1] + idx.min(axis=0) * np.asarray(spacing[::-1]); hi = origin[::-1] + idx.max(axis=0) * np.asarray(spacing[::-1])
-    return lo[::-1], hi[::-1]       # (x, y, z)
 
 
-def _goal_value(doses: np.ndarray, metric: str) -> float:
-    m = metric.strip()
-    if m.lower() == "dmax":
-        return float(doses.max())
-    if m.lower() == "dmean":
-        return float(doses.mean())
-    if m.upper().startswith("D"):
-        return _dose_at(doses, float(m[1:]))
-    raise ValueError(f"unsupported goal metric {metric}")
 
 
-NORMALISATION_HEADROOM = 1.002   # plans are normalised 0.2 % above the coverage goal, so percentile rounding cannot fail it
 
 
-def _goal_met(doses: np.ndarray, goal: dict) -> bool:
-    value = _goal_value(doses, goal["metric"])
-    return value >= float(goal["gy"]) - 1e-6 if goal["op"].startswith(">") else value <= float(goal["gy"]) + 1e-6
 
 
-def _target_names(target: str, goals: List[dict]) -> List[str]:
-    """The case's targets: the named one and every structure with a coverage (>=) goal."""
-    return list(dict.fromkeys([target] + [g["structure"] for g in goals if g["op"].startswith(">")]))
 
 
-def _objectives(arrays, target: str, rx_gy: float, goals: List[dict], scale: Dict[int, float], level: Dict[int, float]):
-    """The objective set for a goal list. Every target (a structure with a coverage goal) gets a uniform term
-    between its coverage goal and its hot-spot limit (the prescription for the main target without a limit),
-    a DVH-minimum term for coverage and a DVH-maximum term for its hot spot; organs get a DVH-maximum and a
-    maximum-dose term. ``scale`` multiplies a goal's weight and ``level`` an organ limit's dose (the rounds)."""
-    from ..models.optimization import ObjectiveSpec
-
-    targets = set(_target_names(target, goals))
-    objectives = []
-    for t in _target_names(target, goals):
-        if t not in arrays.structure_index:
-            continue
-        cover = [float(g["gy"]) for g in goals if g["structure"] == t and g["op"].startswith(">")]
-        hot = [float(g["gy"]) for g in goals if g["structure"] == t and g["op"].startswith("<")]
-        if cover and hot and min(hot) > max(cover):
-            uniform = (max(cover) + min(hot)) / 2.0
-        elif t == target:
-            uniform = rx_gy
-        else:
-            uniform = max(cover) * 1.05 if cover else rx_gy
-        objectives.append(ObjectiveSpec(type="DUniform", structure_name=t, dose_gy=uniform, weight=100.0 if t == target else 60.0))
-    for i, g in enumerate(goals):
-        st, metric, op, val = g["structure"], g["metric"].strip(), g["op"], float(g["gy"])
-        if st not in arrays.structure_index:
-            continue
-        w, lv = scale.get(i, 1.0), level.get(i, 1.0)
-        on_target = st in targets
-        if op.startswith(">"):
-            frac = float(metric[1:]) / 100.0 if metric.upper().startswith("D") and metric[1:].replace(".", "", 1).isdigit() else 0.99
-            objectives.append(ObjectiveSpec(type="DVHMin", structure_name=st, dose_gy=val, weight=100.0 * w, volume_fraction=frac))
-        elif metric.lower() == "dmax":
-            objectives.append(ObjectiveSpec(type="DMax", structure_name=st, dose_gy=val * lv, weight=(30.0 if on_target else OAR_WEIGHT) * w))
-        elif metric.lower() == "dmean":
-            objectives.append(ObjectiveSpec(type="DVHMax", structure_name=st, dose_gy=val * lv, weight=OAR_WEIGHT * w, volume_fraction=0.5))
-        elif metric.upper().startswith("D"):
-            frac = float(metric[1:]) / 100.0
-            if on_target:
-                objectives.append(ObjectiveSpec(type="DVHMax", structure_name=st, dose_gy=val, weight=30.0 * w, volume_fraction=frac))
-            else:
-                objectives.append(ObjectiveSpec(type="DVHMax", structure_name=st, dose_gy=val * lv, weight=OAR_WEIGHT * w, volume_fraction=frac))
-                if g.get("dmax_term", True):     # parallel organs around the target (the lungs) opt out: their maximum is the target's
-                    objectives.append(ObjectiveSpec(type="DMax", structure_name=st, dose_gy=min(val * 1.25, rx_gy) * lv, weight=OAR_WEIGHT * w / 4))
-    return objectives
 
 
 def _plan_case(ctx: Context, geo, target: str, rx_gy: float, goals: List[dict], beams: dict, beamlet_mm: float, iterations: int,
                jaw_margin_mm: float = 20.0, engine_name: str = "ccc", n_jobs: int = 8, rounds: int = 4):
-    """Beam model → CCC Dij → optimization, then goal-driven reweighting rounds (the rule-based auto-planning a
-    planner does by hand: a goal that fails gets three times the weight and, for an organ's limit, a 10 % lower dose
-    level, and the optimizer restarts from the previous weights). Every round's plan is normalised to the target's first
-    coverage goal. Returns (bm, opt, normalised dose_zyx, arrays, history)."""
-    from ..models.beam_model import BeamModelBuildRequest, BeamSetSpec, BeamSpec, DeliveryParams, Modality
-    from ..models.dose import EngineSpec
-    from ..models.optimization import OptimizationRunRequest, SolverConfig
-    from ..services.beam_model import BeamModelService
-    from ..services.geometry_bundle import load_geometry_arrays
-    from ..services.optimization import OptimizationService
+    """Static-field goal-driven planning: the auto-planning service's loop (``services.autoplan.plan_static``).
+    Returns (bm, opt, normalised dose_zyx, arrays, history)."""
+    from ..services.autoplan import plan_static
 
-    arrays = load_geometry_arrays(geo)
-    # the field covers every target: the multi-target case has three
-    targets = [t for t in _target_names(target, goals) if t in arrays.structure_index]
-    union = np.zeros(arrays.shape_zyx, dtype=bool)
-    for t in targets:
-        union |= arrays.mask_zyx(arrays.structure_index[t])
-    lo, hi = _structure_extent_mm(union, arrays.origin_mm, arrays.spacing_mm)
-    jaw_x = float(max(hi[0] - lo[0], hi[1] - lo[1]) + 2 * jaw_margin_mm)
-    jaw_y = float(hi[2] - lo[2] + 2 * jaw_margin_mm)
-    centre = tuple(float(v) for v in (lo + hi) / 2.0)
-    n_beams = int(beams.get("count", 7)); spacing = float(beams.get("spacing_deg", 360.0 / n_beams)); start = float(beams.get("start_deg", 0.0))
-    bm = BeamModelService().build(BeamModelBuildRequest(
-        geometry_id=geo.geometry_id, modality=Modality.photon_imrt, machine_model_id="synthetic-120",
-        beam_set=BeamSetSpec(isocenter_mm=centre, beams=[BeamSpec(beam_id=f"G{(start + i * spacing) % 360:g}", gantry_deg=(start + i * spacing) % 360.0) for i in range(n_beams)]),
-        delivery_params=DeliveryParams(jaw_opening_mm=(jaw_x, jaw_y), beamlet_size_mm=(beamlet_mm, beamlet_mm))))
-    cover = next((g for g in goals if g["structure"] == target and g["op"].startswith(">")), None)
-    masks = {g["structure"]: arrays.mask_zyx(arrays.structure_index[g["structure"]]) for g in goals if g["structure"] in arrays.structure_index}
-    scale: Dict[int, float] = {}
-    level: Dict[int, float] = {}
-    history: List[dict] = []
-    init = None
-    opt = dose = None
-    for r in range(max(1, int(rounds))):
-        opt = OptimizationService().run(OptimizationRunRequest(
-            geometry_id=geo.geometry_id, beam_model_id=bm.beam_model_id, dose_engine=EngineSpec(name=engine_name, params={"n_jobs": n_jobs}),
-            objectives=_objectives(arrays, target, rx_gy, goals, scale, level), solver=SolverConfig(method="L-BFGS-B", max_iterations=iterations),
-            init_weights_uri=init))
-        dose = _read_volume(opt.dose_ref_uri)
-        k = 1.0
-        if cover is not None:
-            dose, k = _normalise_to_goal(dose, dose[masks[cover["structure"]]], cover["metric"], float(cover["gy"]) * NORMALISATION_HEADROOM)
-        failed = [i for i, g in enumerate(goals) if g["structure"] in masks and not _goal_met(dose[masks[g["structure"]]], g)]
-        history.append({"round": r + 1, "optimization_id": opt.optimization_id, "normalisation": k,
-                        "failed": [f"{goals[i]['structure']} {goals[i]['metric']}" for i in failed]})
-        if not failed:
-            break
-        target_names = set(targets)
-        for i in failed:
-            scale[i] = scale.get(i, 1.0) * 3.0
-            # an organ's limit also moves 10 % lower; a target's hot-spot limit only gains weight (lowering it
-            # pushes the plan cold, and the normalisation then raises everything, the hot spot included)
-            if not goals[i]["op"].startswith(">") and goals[i]["structure"] not in target_names:
-                level[i] = level.get(i, 1.0) * 0.9
-        init = opt.weights_ref_uri
-    return bm, opt, dose, arrays, history
+    return plan_static(geo, target, rx_gy, goals, beams, beamlet_mm, iterations, jaw_margin_mm=jaw_margin_mm, engine_name=engine_name,
+                       n_jobs=n_jobs, rounds=rounds)
 
 
-def _normalise_to_goal(dose: np.ndarray, target_doses: np.ndarray, metric: str, goal_gy: float) -> Tuple[np.ndarray, float]:
-    """Scale the plan so the target's coverage metric meets its goal exactly (plan normalisation,
-    as TG-119 and clinical practice do); returns the scaled dose and the factor."""
-    value = _goal_value(target_doses, metric)
-    if value <= 0:
-        return dose, 1.0
-    k = float(goal_gy / value)
-    return dose * k, k
 
 
 def _write_volume(ctx: Context, name: str, dose: np.ndarray, arrays) -> str:

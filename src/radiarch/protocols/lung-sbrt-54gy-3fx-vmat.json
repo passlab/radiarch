@@ -1,0 +1,160 @@
+{
+  "protocol_id": "lung-sbrt-54gy-3fx-vmat",
+  "name": "Lung SBRT, 54 Gy in 3 fractions, one VMAT arc",
+  "site": "lung",
+  "version": "1",
+  "description": "Peripheral early-stage lung: PTV = GTV + 5 mm, 54 Gy in 3 fractions, one 200-degree arc on the tumour's side (here the right), a far ring to the skin for the dose fall-off; the plan the R8 harness case lung_sbrt_vmat makes. For a left-sided tumour, mirror the arc.",
+  "source": "AAPM TG-101 organ limits for 3 fractions; RTOG 0813/0915 conformality; radiarch goal template sbrt-lung-54gy-3fx",
+  "prescription": {
+    "target": "PTV",
+    "dose_gy": 54.0,
+    "fractions": 3
+  },
+  "structure_aliases": {
+    "GTV": [
+      "GTV",
+      "GTV_Primary",
+      "Tumor",
+      "Tumour",
+      "GTVp"
+    ],
+    "SpinalCord": [
+      "SpinalCord",
+      "Spinal_Cord",
+      "Cord",
+      "SPINAL_CORD"
+    ],
+    "Esophagus": [
+      "Esophagus",
+      "Oesophagus",
+      "ESOPHAGUS"
+    ],
+    "Heart": [
+      "Heart",
+      "HEART"
+    ],
+    "Lung_L": [
+      "Lung_L",
+      "LLung",
+      "Lung_Left",
+      "LUNG_L",
+      "Left_Lung"
+    ],
+    "Lung_R": [
+      "Lung_R",
+      "RLung",
+      "Lung_Right",
+      "LUNG_R",
+      "Right_Lung"
+    ]
+  },
+  "structures": [
+    {
+      "op": "expand",
+      "name": "PTV",
+      "source": "GTV",
+      "margin_mm": 5.0
+    },
+    {
+      "op": "ring",
+      "name": "RingNear",
+      "source": "PTV",
+      "inner_mm": 3.0,
+      "outer_mm": 12.0
+    },
+    {
+      "op": "ring",
+      "name": "RingFar",
+      "source": "PTV",
+      "inner_mm": 20.0,
+      "outer_mm": 400.0
+    },
+    {
+      "op": "union",
+      "name": "Lungs",
+      "sources": [
+        "Lung_L",
+        "Lung_R"
+      ]
+    },
+    {
+      "op": "subtract",
+      "name": "Lungs-GTV",
+      "source": "Lungs",
+      "sources": [
+        "GTV"
+      ]
+    },
+    {
+      "op": "subtract",
+      "name": "Lungs-PTV",
+      "source": "Lungs",
+      "sources": [
+        "PTV"
+      ]
+    }
+  ],
+  "goals": [
+    {
+      "structure": "PTV",
+      "metric": "D95",
+      "op": ">=",
+      "gy": 54.0
+    },
+    {
+      "structure": "SpinalCord",
+      "metric": "Dmax",
+      "op": "<=",
+      "gy": 21.9
+    },
+    {
+      "structure": "Esophagus",
+      "metric": "Dmax",
+      "op": "<=",
+      "gy": 25.2
+    },
+    {
+      "structure": "Heart",
+      "metric": "Dmax",
+      "op": "<=",
+      "gy": 30.0
+    }
+  ],
+  "extra_objectives": [
+    {
+      "type": "DMax",
+      "structure_name": "RingNear",
+      "dose_gy": 45.9,
+      "weight": 100.0
+    },
+    {
+      "type": "DMax",
+      "structure_name": "RingFar",
+      "dose_gy": 21.6,
+      "weight": 200.0
+    }
+  ],
+  "beams": {
+    "technique": "vmat",
+    "arcs": [
+      {
+        "arc_id": "ARC1",
+        "start_deg": 180.0,
+        "stop_deg": 20.0,
+        "direction": "CW",
+        "sectors": 10,
+        "control_point_spacing_deg": 4.0
+      }
+    ]
+  },
+  "machine": "synthetic-120",
+  "engine": {
+    "name": "pb"
+  },
+  "beamlet_mm": 5.0,
+  "jaw_margin_mm": 10.0,
+  "iterations": 150,
+  "rounds": 3,
+  "arc_rounds": 3,
+  "evaluation_template": "sbrt-lung-54gy-3fx"
+}

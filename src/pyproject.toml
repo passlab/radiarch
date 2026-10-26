@@ -64,6 +64,7 @@ include = ["radiarch*"]
 radiarch = [
     "machines/*.json",
     "goals/*.json",
+    "protocols/*.json",
     "services/dose_engines/*.txt",
     "validation/cases/*.yaml",
     "validation/references/*.json",

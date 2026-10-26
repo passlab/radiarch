@@ -1,0 +1,200 @@
+{
+  "protocol_id": "hn-70-56gy-35fx-vmat",
+  "name": "Head and neck, 70/56 Gy integrated boost, two VMAT arcs",
+  "site": "head-neck",
+  "version": "1",
+  "description": "Oropharynx-like primary: PTV70 = GTV + 8 mm; PTV56 = GTV + 25 mm outside PTV70 + 3 mm and the brainstem + 5 mm; 70/56 Gy in 35 fractions, two full arcs; the plan the R8 harness case hn_sib_vmat makes. Organs that overlap PTV70 should have their goals removed for a given patient.",
+  "source": "NCCN head-and-neck dose limits; radiarch goal template nccn-head-neck",
+  "prescription": {
+    "target": "PTV70",
+    "dose_gy": 70.0,
+    "fractions": 35
+  },
+  "structure_aliases": {
+    "GTV": [
+      "GTV",
+      "GTV_Primary",
+      "GTVp"
+    ],
+    "Brainstem": [
+      "Brainstem",
+      "BrainStem",
+      "Brain_Stem"
+    ],
+    "Parotid_L": [
+      "Parotid_L",
+      "Parotid_Left",
+      "LParotid"
+    ],
+    "Parotid_R": [
+      "Parotid_R",
+      "Parotid_Right",
+      "RParotid"
+    ],
+    "OpticChiasm": [
+      "OpticChiasm",
+      "Chiasm",
+      "Optic_Chiasm"
+    ],
+    "OpticNrv_L": [
+      "OpticNrv_L",
+      "OpticNerve_L"
+    ],
+    "OpticNrv_R": [
+      "OpticNrv_R",
+      "OpticNerve_R"
+    ],
+    "Bone_Mandible": [
+      "Bone_Mandible",
+      "Mandible"
+    ]
+  },
+  "structures": [
+    {
+      "op": "expand",
+      "name": "PTV70",
+      "source": "GTV",
+      "margin_mm": 8.0
+    },
+    {
+      "op": "expand",
+      "name": "CTV56_full",
+      "source": "GTV",
+      "margin_mm": 25.0
+    },
+    {
+      "op": "expand",
+      "name": "PTV70_3mm",
+      "source": "PTV70",
+      "margin_mm": 3.0
+    },
+    {
+      "op": "expand",
+      "name": "Brainstem_PRV",
+      "source": "Brainstem",
+      "margin_mm": 5.0
+    },
+    {
+      "op": "subtract",
+      "name": "PTV56",
+      "source": "CTV56_full",
+      "sources": [
+        "PTV70_3mm",
+        "Brainstem_PRV"
+      ]
+    },
+    {
+      "op": "ring",
+      "name": "Ring",
+      "source": "CTV56_full",
+      "inner_mm": 10.0,
+      "outer_mm": 30.0
+    }
+  ],
+  "goals": [
+    {
+      "structure": "PTV70",
+      "metric": "D95",
+      "op": ">=",
+      "gy": 70.0
+    },
+    {
+      "structure": "PTV70",
+      "metric": "D2",
+      "op": "<=",
+      "gy": 74.9
+    },
+    {
+      "structure": "PTV56",
+      "metric": "D95",
+      "op": ">=",
+      "gy": 57.12
+    },
+    {
+      "structure": "Parotid_L",
+      "metric": "Dmean",
+      "op": "<=",
+      "gy": 26.0
+    },
+    {
+      "structure": "Parotid_R",
+      "metric": "Dmean",
+      "op": "<=",
+      "gy": 26.0
+    },
+    {
+      "structure": "Brainstem_PRV",
+      "metric": "Dmax",
+      "op": "<=",
+      "gy": 54.0
+    },
+    {
+      "structure": "OpticChiasm",
+      "metric": "Dmax",
+      "op": "<=",
+      "gy": 54.0
+    },
+    {
+      "structure": "OpticNrv_L",
+      "metric": "Dmax",
+      "op": "<=",
+      "gy": 54.0
+    },
+    {
+      "structure": "OpticNrv_R",
+      "metric": "Dmax",
+      "op": "<=",
+      "gy": 54.0
+    },
+    {
+      "structure": "Bone_Mandible",
+      "metric": "Dmax",
+      "op": "<=",
+      "gy": 70.0
+    }
+  ],
+  "extra_objectives": [
+    {
+      "type": "DMax",
+      "structure_name": "Ring",
+      "dose_gy": 44.8,
+      "weight": 100.0
+    }
+  ],
+  "beams": {
+    "technique": "vmat",
+    "arcs": [
+      {
+        "arc_id": "ARC1",
+        "start_deg": 181.0,
+        "stop_deg": 179.0,
+        "direction": "CW",
+        "sectors": 8,
+        "control_point_spacing_deg": 4.0,
+        "collimator_deg": 15.0
+      },
+      {
+        "arc_id": "ARC2",
+        "start_deg": 179.0,
+        "stop_deg": 181.0,
+        "direction": "CC",
+        "sectors": 8,
+        "control_point_spacing_deg": 4.0,
+        "collimator_deg": -15.0
+      }
+    ]
+  },
+  "machine": "synthetic-120",
+  "engine": {
+    "name": "pb",
+    "params": {
+      "cutoff_mm": 50.0
+    }
+  },
+  "beamlet_mm": 10.0,
+  "jaw_margin_mm": 10.0,
+  "iterations": 150,
+  "rounds": 3,
+  "arc_rounds": 3,
+  "evaluation_template": "nccn-head-neck"
+}

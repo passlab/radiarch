@@ -200,3 +200,24 @@ class EvaluationJobRow(Base):
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+
+class AutoplanJobRow(Base):
+    """Async tracking row for one ``POST /protocols/run`` invocation (R10).
+
+    Mirrors :class:`OptimizationJobRow`; ``run_id`` is populated on
+    success.
+    """
+
+    __tablename__ = "autoplan_jobs"
+
+    id = Column(String(36), primary_key=True)
+    cache_key = Column(String(64), nullable=False, index=True)
+    state = Column(String(20), nullable=False, default="queued")
+    progress = Column(Float, default=0.0)
+    stage = Column(String(32), nullable=True, default="queued")
+    message = Column(Text, nullable=True)
+    run_id = Column(String(36), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)

@@ -30,6 +30,7 @@ celery_app = Celery(
         "radiarch.tasks.bao_tasks",
         # Service 6 — async plan evaluation (DVH / indices / gamma).
         "radiarch.tasks.evaluation_tasks",
+        "radiarch.tasks.autoplan_tasks",
         "radiarch.tasks.cleanup_tasks",
     ],
 )
@@ -43,6 +44,7 @@ celery_app.conf.task_routes = {
     "radiarch.optimize.*": {"queue": "optimize"},
     "radiarch.bao.*": {"queue": "optimize"},
     "radiarch.evaluate.*": {"queue": "evaluate"},
+    "radiarch.autoplan.*": {"queue": "optimize"},
     "radiarch.cleanup.*": {"queue": "maintenance"},
 }
 
@@ -68,6 +70,12 @@ celery_app.conf.task_annotations = {
     "radiarch.bao.run": {
         # BAO scores many angle sets, each a (short) fluence optimization —
         # the heaviest task overall. Give it the largest budget.
+        "soft_time_limit": settings.bao_soft_time_limit_s,
+        "time_limit": settings.bao_hard_time_limit_s,
+        "rate_limit": settings.bao_rate_limit,
+    },
+    "radiarch.autoplan.run": {
+        # A protocol run is several optimizations, sequencing or arcs, and an evaluation: the beam-angle budget.
         "soft_time_limit": settings.bao_soft_time_limit_s,
         "time_limit": settings.bao_hard_time_limit_s,
         "rate_limit": settings.bao_rate_limit,

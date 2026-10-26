@@ -223,7 +223,7 @@ class LineageService:
             ck = str(g("cache_key") or "")
             if ck.startswith(APERTURE_PREFIX):
                 add("sequence", ck[len(APERTURE_PREFIX):])
-            if ck.startswith("replan:"):                        # the plan moved onto a later image (R9)
+            if ck.startswith(("replan:", "scaled:")):           # the plan moved onto a later image (R9); normalised by auto-planning (R10)
                 add("beam_model", ck.split(":")[1])
             attr.machine_model_id = g("machine_model_id")
             attr.modality = _enum_value(g("modality"))
