@@ -1,0 +1,1372 @@
+{
+  "intended_use": "RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.",
+  "radiarch_commit": "92ce40d",
+  "timestamp": "20261026-150400",
+  "fast": false,
+  "cpu": "Intel(R) Xeon(R) W-2255 CPU @ 3.70GHz, 20 logical CPUs",
+  "python": "3.14.3",
+  "results": [
+    {
+      "name": "protocol_lung_vmat",
+      "kind": "protocol_reproduces",
+      "status": "pass",
+      "seconds": 1075.5,
+      "checks": [
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: prescription (Gy, fractions)",
+          "value": "[60.0, 30]",
+          "target": "[60.0, 30]",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: CTV margin (mm)",
+          "value": "5.0",
+          "target": "5.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: PTV margin (mm)",
+          "value": "5.0",
+          "target": "5.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: PTV from",
+          "value": "\"CTV\"",
+          "target": "\"CTV\"",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: far ring outer edge (mm)",
+          "value": "45.0",
+          "target": "45.0",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: near ring limit (Gy, weight)",
+          "value": "[54.0, 100.0]",
+          "target": "[54.0, 100.0]",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: far ring limit (Gy, weight)",
+          "value": "[30.0, 200.0]",
+          "target": "[30.0, 200.0]",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: coverage goal",
+          "value": "[\">=\", 60.0]",
+          "target": "[\">=\", 60.0]",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: arcs",
+          "value": "[{\"arc_id\": \"ARC1\", \"start_deg\": 181.0, \"stop_deg\": 179.0, \"direction\": \"CW\", \"sectors\": 12, \"control_point_spacing_deg\": 4.0, \"couch_deg\": 0.0, \"collimator_deg\": 15.0}, {\"arc_id\": \"ARC2\", \"start_deg\": 179.0, \"stop_deg\": 181.0, \"direction\": \"CC\", \"sectors\": 12, \"control_point_spacing_deg\": 4.0, \"couch_deg\": 0.0, \"collimator_deg\": -15.0}]",
+          "target": "[{\"arc_id\": \"ARC1\", \"start_deg\": 181.0, \"stop_deg\": 179.0, \"direction\": \"CW\", \"sectors\": 12, \"control_point_spacing_deg\": 4.0, \"couch_deg\": 0.0, \"collimator_deg\": 15.0}, {\"arc_id\": \"ARC2\", \"start_deg\": 179.0, \"stop_deg\": 181.0, \"direction\": \"CC\", \"sectors\": 12, \"control_point_spacing_deg\": 4.0, \"couch_deg\": 0.0, \"collimator_deg\": -15.0}]",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: beamlet (mm), iterations, rounds",
+          "value": "[5.0, 150, 3]",
+          "target": "[5.0, 150, 3]",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: machine, jaw margin (mm)",
+          "value": "[\"synthetic-120\", 10.0]",
+          "target": "[\"synthetic-120\", 10.0]",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: evaluation template",
+          "value": "\"rtog-0617\"",
+          "target": "\"rtog-0617\"",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: SpinalCord Dmax goal (Gy, maximum term)",
+          "value": "[45.0, true]",
+          "target": "[45.0, true]",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: Esophagus Dmean goal (Gy, maximum term)",
+          "value": "[34.0, true]",
+          "target": "[34.0, true]",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: Heart D33 goal (Gy, maximum term)",
+          "value": "[60.0, true]",
+          "target": "[60.0, true]",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: Lungs-PTV D37 goal (Gy, maximum term)",
+          "value": "[20.0, false]",
+          "target": "[20.0, false]",
+          "passed": true,
+          "note": ""
+        },
+        {
+          "name": "LCTSC-Test-S1-101: protocol run deliverable",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "normalised by 1.0369"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV V60Gy[%] >= 95.0 (protocol)",
+          "value": 95.66,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV V60Gy[%] >= 95.0: protocol against the recorded harness run",
+          "value": 95.66,
+          "target": "95.66 \u00b1 0.96",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV D0.03cc[Gy] <= 72.0 (protocol)",
+          "value": 65.9,
+          "target": "<= 72.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV D0.03cc[Gy] <= 72.0: protocol against the recorded harness run",
+          "value": 65.9,
+          "target": "65.9 \u00b1 0.66",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs-GTV V20Gy[%] <= 37.0 (protocol)",
+          "value": 13.72,
+          "target": "<= 37.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs-GTV V20Gy[%] <= 37.0: protocol against the recorded harness run",
+          "value": 13.72,
+          "target": "13.72 \u00b1 0.14",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs-GTV Dmean[Gy] <= 20.0 (protocol)",
+          "value": 7.85,
+          "target": "<= 20.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs-GTV Dmean[Gy] <= 20.0: protocol against the recorded harness run",
+          "value": 7.85,
+          "target": "7.85 \u00b1 0.08",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: SpinalCord D0.03cc[Gy] <= 50.5 (protocol)",
+          "value": 17.89,
+          "target": "<= 50.5",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: SpinalCord D0.03cc[Gy] <= 50.5: protocol against the recorded harness run",
+          "value": 17.89,
+          "target": "17.89 \u00b1 0.18",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Esophagus Dmean[Gy] <= 34.0 (protocol)",
+          "value": 2.72,
+          "target": "<= 34.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Esophagus Dmean[Gy] <= 34.0: protocol against the recorded harness run",
+          "value": 2.72,
+          "target": "2.72 \u00b1 0.05",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart V60Gy[%] <= 33.0 (protocol)",
+          "value": 0.0,
+          "target": "<= 33.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart V60Gy[%] <= 33.0: protocol against the recorded harness run",
+          "value": 0.0,
+          "target": "0.0 \u00b1 0.05",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart V45Gy[%] <= 66.0 (protocol)",
+          "value": 0.0,
+          "target": "<= 66.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart V45Gy[%] <= 66.0: protocol against the recorded harness run",
+          "value": 0.0,
+          "target": "0.0 \u00b1 0.05",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart V40Gy[%] <= 100.0 (protocol)",
+          "value": 0.0,
+          "target": "<= 100.0",
+          "passed": null,
+          "note": "rtog-0617 priority 3"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart V40Gy[%] <= 100.0: protocol against the recorded harness run",
+          "value": 0.0,
+          "target": "0.0 \u00b1 0.05",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: protocol run deliverable",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "normalised by 1.0376"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV V60Gy[%] >= 95.0 (protocol)",
+          "value": 95.74,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV V60Gy[%] >= 95.0: protocol against the recorded harness run",
+          "value": 95.74,
+          "target": "95.74 \u00b1 0.96",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV D0.03cc[Gy] <= 72.0 (protocol)",
+          "value": 66.87,
+          "target": "<= 72.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV D0.03cc[Gy] <= 72.0: protocol against the recorded harness run",
+          "value": 66.87,
+          "target": "66.87 \u00b1 0.67",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs-GTV V20Gy[%] <= 37.0 (protocol)",
+          "value": 13.18,
+          "target": "<= 37.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs-GTV V20Gy[%] <= 37.0: protocol against the recorded harness run",
+          "value": 13.18,
+          "target": "13.18 \u00b1 0.13",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs-GTV Dmean[Gy] <= 20.0 (protocol)",
+          "value": 8.28,
+          "target": "<= 20.0",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs-GTV Dmean[Gy] <= 20.0: protocol against the recorded harness run",
+          "value": 8.28,
+          "target": "8.28 \u00b1 0.08",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: SpinalCord D0.03cc[Gy] <= 50.5 (protocol)",
+          "value": 20.19,
+          "target": "<= 50.5",
+          "passed": true,
+          "note": "rtog-0617 priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: SpinalCord D0.03cc[Gy] <= 50.5: protocol against the recorded harness run",
+          "value": 20.19,
+          "target": "20.19 \u00b1 0.20",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Esophagus Dmean[Gy] <= 34.0 (protocol)",
+          "value": 3.24,
+          "target": "<= 34.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Esophagus Dmean[Gy] <= 34.0: protocol against the recorded harness run",
+          "value": 3.24,
+          "target": "3.24 \u00b1 0.05",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart V60Gy[%] <= 33.0 (protocol)",
+          "value": 0.0,
+          "target": "<= 33.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart V60Gy[%] <= 33.0: protocol against the recorded harness run",
+          "value": 0.0,
+          "target": "0.0 \u00b1 0.05",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart V45Gy[%] <= 66.0 (protocol)",
+          "value": 0.11,
+          "target": "<= 66.0",
+          "passed": null,
+          "note": "rtog-0617 priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart V45Gy[%] <= 66.0: protocol against the recorded harness run",
+          "value": 0.11,
+          "target": "0.11 \u00b1 0.05",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart V40Gy[%] <= 100.0 (protocol)",
+          "value": 0.31,
+          "target": "<= 100.0",
+          "passed": null,
+          "note": "rtog-0617 priority 3"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart V40Gy[%] <= 100.0: protocol against the recorded harness run",
+          "value": 0.31,
+          "target": "0.31 \u00b1 0.05",
+          "passed": true,
+          "note": "the harness case's run in the R8 record's correction"
+        }
+      ],
+      "metrics": {
+        "LCTSC-Test-S1-101": {
+          "run_id": "f55bb214-d11c-40aa-abda-1adc5c150e3d",
+          "normalisation": 1.0368845915755884,
+          "seconds": 535.9,
+          "history": [
+            {
+              "round": 1,
+              "normalisation": 1.02092106204156,
+              "failed": []
+            },
+            {
+              "arc_round": 1,
+              "normalisation": 1.0368845915755884,
+              "failed": []
+            }
+          ],
+          "goals": [
+            {
+              "structure": "PTV",
+              "metric": "D95",
+              "op": ">=",
+              "gy": 60.0,
+              "achieved": 60.119998931884766,
+              "passed": true
+            },
+            {
+              "structure": "SpinalCord",
+              "metric": "Dmax",
+              "op": "<=",
+              "gy": 45.0,
+              "achieved": 18.101573944091797,
+              "passed": true
+            },
+            {
+              "structure": "Esophagus",
+              "metric": "Dmean",
+              "op": "<=",
+              "gy": 34.0,
+              "achieved": 2.7207858562469482,
+              "passed": true
+            },
+            {
+              "structure": "Heart",
+              "metric": "D33",
+              "op": "<=",
+              "gy": 60.0,
+              "achieved": 3.109013557434082,
+              "passed": true
+            },
+            {
+              "structure": "Lungs-PTV",
+              "metric": "D37",
+              "op": "<=",
+              "gy": 20.0,
+              "achieved": 4.11453914642334,
+              "passed": true
+            }
+          ]
+        },
+        "LCTSC-Test-S2-101": {
+          "run_id": "a3f4d588-61e4-409e-a6fd-bc1a8b0348c2",
+          "normalisation": 1.037636494609031,
+          "seconds": 496.7,
+          "history": [
+            {
+              "round": 1,
+              "normalisation": 1.0142211643611831,
+              "failed": []
+            },
+            {
+              "arc_round": 1,
+              "normalisation": 1.037636494609031,
+              "failed": []
+            }
+          ],
+          "goals": [
+            {
+              "structure": "PTV",
+              "metric": "D95",
+              "op": ">=",
+              "gy": 60.0,
+              "achieved": 60.12000274658203,
+              "passed": true
+            },
+            {
+              "structure": "SpinalCord",
+              "metric": "Dmax",
+              "op": "<=",
+              "gy": 45.0,
+              "achieved": 20.730876922607422,
+              "passed": true
+            },
+            {
+              "structure": "Esophagus",
+              "metric": "Dmean",
+              "op": "<=",
+              "gy": 34.0,
+              "achieved": 3.2359707355499268,
+              "passed": true
+            },
+            {
+              "structure": "Heart",
+              "metric": "D33",
+              "op": "<=",
+              "gy": 60.0,
+              "achieved": 7.913567543029785,
+              "passed": true
+            },
+            {
+              "structure": "Lungs-PTV",
+              "metric": "D37",
+              "op": "<=",
+              "gy": 20.0,
+              "achieved": 5.630606651306152,
+              "passed": true
+            }
+          ]
+        }
+      },
+      "notes": [],
+      "error": null
+    },
+    {
+      "name": "protocol_batch_lctsc",
+      "kind": "protocol_batch",
+      "status": "pass",
+      "seconds": 1108.6,
+      "checks": [
+        {
+          "name": "radiarch batch over 6 LCTSC thoraces: cases planned",
+          "value": 6,
+          "target": "= 6",
+          "passed": true,
+          "note": "exit code 0"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: deliverable",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "normalised by 1.0993"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV D95 (Gy)",
+          "value": 54.11,
+          "target": ">= 54.0",
+          "passed": true,
+          "note": "met by normalisation"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: planning goal SpinalCord Dmax <= 21.9",
+          "value": 11.36,
+          "target": "<= 21.9",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: planning goal Esophagus Dmax <= 25.2",
+          "value": 2.58,
+          "target": "<= 25.2",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: planning goal Heart Dmax <= 30.0",
+          "value": 17.14,
+          "target": "<= 30.0",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV V100%[%] >= 95.0",
+          "value": 95.27,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV V90%[%] >= 99.0",
+          "value": 100.0,
+          "target": ">= 99.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: PTV D0.03cc[%] <= 140.0",
+          "value": 117.95,
+          "target": "<= 140.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs-GTV V20Gy[%] <= 10.0",
+          "value": 2.6,
+          "target": "<= 10.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: SpinalCord D0.03cc[Gy] <= 21.9",
+          "value": 11.16,
+          "target": "<= 21.9",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: SpinalCord D0.35cc[Gy] <= 18.0",
+          "value": 9.25,
+          "target": "<= 18.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: SpinalCord D1.2cc[Gy] <= 12.3",
+          "value": 8.23,
+          "target": "<= 12.3",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Esophagus D0.03cc[Gy] <= 25.2",
+          "value": 2.57,
+          "target": "<= 25.2",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Esophagus D5cc[Gy] <= 17.7",
+          "value": 0.64,
+          "target": "<= 17.7",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart D0.03cc[Gy] <= 30.0",
+          "value": 16.99,
+          "target": "<= 30.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Heart D15cc[Gy] <= 24.0",
+          "value": 10.68,
+          "target": "<= 24.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs D1500cc[Gy] <= 11.6",
+          "value": 0.55,
+          "target": "<= 11.6",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs D1000cc[Gy] <= 12.4",
+          "value": 1.15,
+          "target": "<= 12.4",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-101: Lungs V12.5Gy[cc] <= 1000.0",
+          "value": 229.85,
+          "target": "<= 1000.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: deliverable",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "normalised by 1.0873"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: PTV D95 (Gy)",
+          "value": 54.11,
+          "target": ">= 54.0",
+          "passed": true,
+          "note": "met by normalisation"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: planning goal SpinalCord Dmax <= 21.9",
+          "value": 11.66,
+          "target": "<= 21.9",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: planning goal Esophagus Dmax <= 25.2",
+          "value": 3.91,
+          "target": "<= 25.2",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: planning goal Heart Dmax <= 30.0",
+          "value": 20.35,
+          "target": "<= 30.0",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: PTV V100%[%] >= 95.0",
+          "value": 95.27,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: PTV V90%[%] >= 99.0",
+          "value": 100.0,
+          "target": ">= 99.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: PTV D0.03cc[%] <= 140.0",
+          "value": 115.54,
+          "target": "<= 140.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: Lungs-GTV V20Gy[%] <= 10.0",
+          "value": 3.11,
+          "target": "<= 10.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: SpinalCord D0.03cc[Gy] <= 21.9",
+          "value": 11.6,
+          "target": "<= 21.9",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: SpinalCord D0.35cc[Gy] <= 18.0",
+          "value": 10.87,
+          "target": "<= 18.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: SpinalCord D1.2cc[Gy] <= 12.3",
+          "value": 9.08,
+          "target": "<= 12.3",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: Esophagus D0.03cc[Gy] <= 25.2",
+          "value": 3.89,
+          "target": "<= 25.2",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: Esophagus D5cc[Gy] <= 17.7",
+          "value": 1.61,
+          "target": "<= 17.7",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: Heart D0.03cc[Gy] <= 30.0",
+          "value": 20.28,
+          "target": "<= 30.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: Heart D15cc[Gy] <= 24.0",
+          "value": 10.87,
+          "target": "<= 24.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: Lungs D1500cc[Gy] <= 11.6",
+          "value": 0.63,
+          "target": "<= 11.6",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: Lungs D1000cc[Gy] <= 12.4",
+          "value": 1.28,
+          "target": "<= 12.4",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S1-102: Lungs V12.5Gy[cc] <= 1000.0",
+          "value": 227.23,
+          "target": "<= 1000.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: deliverable",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "normalised by 1.0808"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV D95 (Gy)",
+          "value": 54.11,
+          "target": ">= 54.0",
+          "passed": true,
+          "note": "met by normalisation"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: planning goal SpinalCord Dmax <= 21.9",
+          "value": 10.07,
+          "target": "<= 21.9",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: planning goal Esophagus Dmax <= 25.2",
+          "value": 6.42,
+          "target": "<= 25.2",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: planning goal Heart Dmax <= 30.0",
+          "value": 17.69,
+          "target": "<= 30.0",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV V100%[%] >= 95.0",
+          "value": 96.18,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV V90%[%] >= 99.0",
+          "value": 100.0,
+          "target": ">= 99.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: PTV D0.03cc[%] <= 140.0",
+          "value": 115.2,
+          "target": "<= 140.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs-GTV V20Gy[%] <= 10.0",
+          "value": 2.66,
+          "target": "<= 10.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: SpinalCord D0.03cc[Gy] <= 21.9",
+          "value": 9.99,
+          "target": "<= 21.9",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: SpinalCord D0.35cc[Gy] <= 18.0",
+          "value": 8.86,
+          "target": "<= 18.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: SpinalCord D1.2cc[Gy] <= 12.3",
+          "value": 7.35,
+          "target": "<= 12.3",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Esophagus D0.03cc[Gy] <= 25.2",
+          "value": 6.22,
+          "target": "<= 25.2",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Esophagus D5cc[Gy] <= 17.7",
+          "value": 1.77,
+          "target": "<= 17.7",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart D0.03cc[Gy] <= 30.0",
+          "value": 17.5,
+          "target": "<= 30.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Heart D15cc[Gy] <= 24.0",
+          "value": 10.47,
+          "target": "<= 24.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs D1500cc[Gy] <= 11.6",
+          "value": 0.62,
+          "target": "<= 11.6",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs D1000cc[Gy] <= 12.4",
+          "value": 1.22,
+          "target": "<= 12.4",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-101: Lungs V12.5Gy[cc] <= 1000.0",
+          "value": 211.98,
+          "target": "<= 1000.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: deliverable",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "normalised by 1.0998"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: PTV D95 (Gy)",
+          "value": 54.11,
+          "target": ">= 54.0",
+          "passed": true,
+          "note": "met by normalisation"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: planning goal SpinalCord Dmax <= 21.9",
+          "value": 10.75,
+          "target": "<= 21.9",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: planning goal Esophagus Dmax <= 25.2",
+          "value": 3.06,
+          "target": "<= 25.2",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: planning goal Heart Dmax <= 30.0",
+          "value": 11.4,
+          "target": "<= 30.0",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: PTV V100%[%] >= 95.0",
+          "value": 95.2,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: PTV V90%[%] >= 99.0",
+          "value": 100.0,
+          "target": ">= 99.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: PTV D0.03cc[%] <= 140.0",
+          "value": 118.11,
+          "target": "<= 140.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: Lungs-GTV V20Gy[%] <= 10.0",
+          "value": 1.87,
+          "target": "<= 10.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: SpinalCord D0.03cc[Gy] <= 21.9",
+          "value": 10.69,
+          "target": "<= 21.9",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: SpinalCord D0.35cc[Gy] <= 18.0",
+          "value": 10.04,
+          "target": "<= 18.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: SpinalCord D1.2cc[Gy] <= 12.3",
+          "value": 9.26,
+          "target": "<= 12.3",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: Esophagus D0.03cc[Gy] <= 25.2",
+          "value": 3.05,
+          "target": "<= 25.2",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: Esophagus D5cc[Gy] <= 17.7",
+          "value": 1.84,
+          "target": "<= 17.7",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: Heart D0.03cc[Gy] <= 30.0",
+          "value": 11.38,
+          "target": "<= 30.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: Heart D15cc[Gy] <= 24.0",
+          "value": 6.95,
+          "target": "<= 24.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: Lungs D1500cc[Gy] <= 11.6",
+          "value": 0.91,
+          "target": "<= 11.6",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: Lungs D1000cc[Gy] <= 12.4",
+          "value": 1.99,
+          "target": "<= 12.4",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S2-102: Lungs V12.5Gy[cc] <= 1000.0",
+          "value": 217.73,
+          "target": "<= 1000.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: deliverable",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "normalised by 1.0668"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: PTV D95 (Gy)",
+          "value": 54.11,
+          "target": ">= 54.0",
+          "passed": true,
+          "note": "met by normalisation"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: planning goal SpinalCord Dmax <= 21.9",
+          "value": 3.87,
+          "target": "<= 21.9",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: planning goal Esophagus Dmax <= 25.2",
+          "value": 3.63,
+          "target": "<= 25.2",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: planning goal Heart Dmax <= 30.0",
+          "value": 19.07,
+          "target": "<= 30.0",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: PTV V100%[%] >= 95.0",
+          "value": 95.29,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: PTV V90%[%] >= 99.0",
+          "value": 100.0,
+          "target": ">= 99.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: PTV D0.03cc[%] <= 140.0",
+          "value": 114.76,
+          "target": "<= 140.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: Lungs-GTV V20Gy[%] <= 10.0",
+          "value": 3.92,
+          "target": "<= 10.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: SpinalCord D0.03cc[Gy] <= 21.9",
+          "value": 3.45,
+          "target": "<= 21.9",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: SpinalCord D0.35cc[Gy] <= 18.0",
+          "value": 3.06,
+          "target": "<= 18.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: SpinalCord D1.2cc[Gy] <= 12.3",
+          "value": 2.68,
+          "target": "<= 12.3",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: Esophagus D0.03cc[Gy] <= 25.2",
+          "value": 3.28,
+          "target": "<= 25.2",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: Esophagus D5cc[Gy] <= 17.7",
+          "value": 1.92,
+          "target": "<= 17.7",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: Heart D0.03cc[Gy] <= 30.0",
+          "value": 18.96,
+          "target": "<= 30.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: Heart D15cc[Gy] <= 24.0",
+          "value": 9.08,
+          "target": "<= 24.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: Lungs D1500cc[Gy] <= 11.6",
+          "value": 0.25,
+          "target": "<= 11.6",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: Lungs D1000cc[Gy] <= 12.4",
+          "value": 0.62,
+          "target": "<= 12.4",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-101: Lungs V12.5Gy[cc] <= 1000.0",
+          "value": 185.92,
+          "target": "<= 1000.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: deliverable",
+          "value": true,
+          "target": "True",
+          "passed": true,
+          "note": "normalised by 1.0678"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: PTV D95 (Gy)",
+          "value": 54.11,
+          "target": ">= 54.0",
+          "passed": true,
+          "note": "met by normalisation"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: planning goal SpinalCord Dmax <= 21.9",
+          "value": 11.08,
+          "target": "<= 21.9",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: planning goal Esophagus Dmax <= 25.2",
+          "value": 5.73,
+          "target": "<= 25.2",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: planning goal Heart Dmax <= 30.0",
+          "value": 19.55,
+          "target": "<= 30.0",
+          "passed": null,
+          "note": "the protocol's planning goal (informative; the template grades)"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: PTV V100%[%] >= 95.0",
+          "value": 95.51,
+          "target": ">= 95.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: PTV V90%[%] >= 99.0",
+          "value": 100.0,
+          "target": ">= 99.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: PTV D0.03cc[%] <= 140.0",
+          "value": 113.49,
+          "target": "<= 140.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: Lungs-GTV V20Gy[%] <= 10.0",
+          "value": 2.59,
+          "target": "<= 10.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 2"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: SpinalCord D0.03cc[Gy] <= 21.9",
+          "value": 11.0,
+          "target": "<= 21.9",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: SpinalCord D0.35cc[Gy] <= 18.0",
+          "value": 10.03,
+          "target": "<= 18.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: SpinalCord D1.2cc[Gy] <= 12.3",
+          "value": 8.21,
+          "target": "<= 12.3",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: Esophagus D0.03cc[Gy] <= 25.2",
+          "value": 5.59,
+          "target": "<= 25.2",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: Esophagus D5cc[Gy] <= 17.7",
+          "value": 3.06,
+          "target": "<= 17.7",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: Heart D0.03cc[Gy] <= 30.0",
+          "value": 19.2,
+          "target": "<= 30.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: Heart D15cc[Gy] <= 24.0",
+          "value": 8.22,
+          "target": "<= 24.0",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: Lungs D1500cc[Gy] <= 11.6",
+          "value": 0.5,
+          "target": "<= 11.6",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: Lungs D1000cc[Gy] <= 12.4",
+          "value": 1.22,
+          "target": "<= 12.4",
+          "passed": true,
+          "note": "sbrt-lung-54gy-3fx priority 1"
+        },
+        {
+          "name": "LCTSC-Test-S3-102: Lungs V12.5Gy[cc] <= 1000.0",
+          "value": 232.71,
+          "target": "<= 1000.0",
+          "passed": null,
+          "note": "sbrt-lung-54gy-3fx priority 3"
+        }
+      ],
+      "metrics": {
+        "LCTSC-Test-S1-101": {
+          "run_id": "b549aeb6-8781-4681-aafd-0edaa62f362f",
+          "normalisation": 1.0992564605136945,
+          "seconds": 130.0
+        },
+        "LCTSC-Test-S1-102": {
+          "run_id": "48f705c4-a0c8-4cc1-9b2a-2a7614c697d3",
+          "normalisation": 1.0873340282702035,
+          "seconds": 148.1
+        },
+        "LCTSC-Test-S2-101": {
+          "run_id": "756ee0cb-3af5-4e82-a752-e6ed78d9c979",
+          "normalisation": 1.080820601118167,
+          "seconds": 141.4
+        },
+        "LCTSC-Test-S2-102": {
+          "run_id": "a01c773b-6e42-4653-a651-cb0e63b71b1a",
+          "normalisation": 1.0998086087406176,
+          "seconds": 161.8
+        },
+        "LCTSC-Test-S3-101": {
+          "run_id": "4381f4a6-0cd5-44c2-b664-7b8a6b50d391",
+          "normalisation": 1.0668138078429283,
+          "seconds": 231.0
+        },
+        "LCTSC-Test-S3-102": {
+          "run_id": "e316f9fb-58b6-478d-a86a-487eeab70c14",
+          "normalisation": 1.0678111250718005,
+          "seconds": 204.7
+        }
+      },
+      "notes": [],
+      "error": null
+    }
+  ],
+  "runs": {
+    "one_case_per_process": [
+      "20261026-150400-92ce40d",
+      "20261026-152231-92ce40d"
+    ],
+    "commit": "92ce40d"
+  }
+}

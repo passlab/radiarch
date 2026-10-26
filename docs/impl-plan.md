@@ -29,7 +29,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 12 | R7 Validation report | done; physicist review waiting | 2e21a28..2f7b506 | 0014 |
 | 13 | R8 Native pencil-beam engine, VMAT, SBRT | done; physicist review waiting | 6e73aa2..cc5c047 | 0015 |
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
-| 15 | R10 Scripting SDK and planning protocols | in progress | — | 0017 |
+| 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
 | 16 | R13 Viewer integration | not started | — | — |
 | 17 | R11 Multi-criteria optimization | not started | — | — |
 
@@ -172,7 +172,7 @@ CBCTs and RT Dose, each contoured).
 - [x] R9.7 4D robust scenarios (from R3): the phases as scenarios of the accumulated dose, graded worst-case; robust optimization over phases **moved to a later item**
 - [x] R9 validation record `docs/validation/2026-10-25-r9/`: the three R9 cases from commit `316b6c6`, one per process; physicist sign-off open
 
-### R10 — Scripting SDK and planning protocols (in progress)
+### R10 — Scripting SDK and planning protocols (done; physicist review waiting)
 A Python SDK over the REST API, planning protocols that drive end-to-end auto-planning, and the tools to run
 them in batches and from workflow engines.
 - [x] R10.1 SDK `radiarch.sdk`: one client over HTTP or in process; domain objects (geometry, beam model,
@@ -188,7 +188,7 @@ them in batches and from workflow engines.
   goals.
 - [x] R10.4 Command line and wrappers: `radiarch plan`, `radiarch batch` (a protocol over a list of cases, a summary
   table of goals per case), `radiarch protocols`; CWL tool descriptions for workflow engines.
-- [ ] R10.5 Harness and record: a protocol run reproduces its harness case; a batch case over the LCTSC thoraces;
+- [x] R10.5 Harness and record (`docs/validation/2026-10-26-r10/`, commit `92ce40d`): a protocol run reproduces its harness case; a batch case over the LCTSC thoraces;
   ADR 0017.
 
 ### R13 — Viewer integration (not started)

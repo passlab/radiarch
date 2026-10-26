@@ -451,7 +451,7 @@ optimization for VMAT; the R8 record for the physicist.
 - Nightly MCsquare: the hosted runner is shut down after about 22 minutes inside `test_mcsquare_dij_matches_direct_dose`
   since 2026-10-21 (radiarch's own spot placement); not yet resolved.
 
-## R10 — scripting SDK, auto-planning, planning protocols, command line (2026-10-25 to 2026-10-26, in progress)
+## R10 — scripting SDK, auto-planning, planning protocols, command line (2026-10-25 to 2026-10-26)
 
 - SDK `radiarch.sdk`: `Radiarch` over HTTP or in process (`Radiarch.local()`, the app through Starlette's test client);
   `submit` follows a 202 answer through the service's jobs route to the result; domain objects (`Geometry`,
@@ -476,3 +476,7 @@ optimization for VMAT; the R8 record for the physicist.
   16 shared settings compared, all equal; then its run on the case's patients against the recorded harness run, within
   1 %) and `protocol_batch_lctsc` (the SBRT protocol through `radiarch batch` over every LCTSC thorax on disk, each with
   a synthetic peripheral GTV). Smoke run (fast): 21 and 27 pass, none fail. ADR 0017.
+- R10 record `docs/validation/2026-10-26-r10/` from commit `92ce40d`, one case per process: `protocol_lung_vmat` 44 pass
+  (the 16 settings equal; every RTOG 0617 goal value equal to the recorded harness run on both patients),
+  `protocol_batch_lctsc` 79 pass (six thoraces planned and deliverable, PTV D95 54.1 Gy, the SBRT template's priority-1
+  goals met).
