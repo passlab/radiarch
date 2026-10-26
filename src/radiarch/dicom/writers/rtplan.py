@@ -4,9 +4,10 @@ A :class:`PhotonPlan` is written as a step-and-shoot RT Plan: every segment
 becomes a pair of control points (the aperture at a cumulative meterset
 weight, then the same aperture after its meterset has been delivered), so
 ``2 n`` control points for ``n`` segments, the leaves moving between pairs at
-zero meterset. Meterset weights are in MU, the fraction group's
-``BeamMeterset`` is the beam's MU, and radiarch's reader gives the same
-segments back. A :class:`ProtonPlan` is written as an RT Ion Plan with one
+zero meterset. Meterset weights are in MU and the fraction group's
+``BeamMeterset`` is the beam's MU for one fraction (DICOM's convention; radiarch's
+photon plans hold the course's, divided here by the fractions planned), and
+radiarch's reader gives the same segments back. A :class:`ProtonPlan` is written as an RT Ion Plan with one
 energy layer per pair of ion control points (spot weights, then zeros), as
 planning systems write them.
 
@@ -26,7 +27,7 @@ from pydicom.dataset import Dataset
 from ...models.photon_plan import MLCRow, PhotonBeam, PhotonPlan
 from ...models.proton_plan import ProtonBeam, ProtonPlan
 from ..uids import SOP
-from .common import CaseContext, ds_list, new_dataset, ref, research_text, save, seq, stable_uid
+from .common import CaseContext, ds_list, new_dataset, per_fraction, ref, research_text, save, seq, stable_uid
 
 
 @dataclass
@@ -133,7 +134,7 @@ def _fraction_group(ds: Dataset, metersets: Dict[int, float], n_fractions: int, 
     for number, mu in metersets.items():
         r = Dataset()
         r.ReferencedBeamNumber = number
-        r.BeamMeterset = float(f"{mu:.6g}")
+        r.BeamMeterset = float(f"{mu:.10g}")
         dose = opt.beam_doses_gy.get(beam_ids[number])
         if dose is not None:
             r.BeamDose = float(f"{float(dose):.6g}")
@@ -220,7 +221,7 @@ def _arc_control_points(arc, beam: PhotonBeam, bounds: Optional[Sequence[float]]
         cp.BeamLimitingDevicePositionSequence = seq(positions)
         _angles(cp, c.gantry_deg, arc.collimator_deg, beam.couch_deg, beam.isocenter_mm)
         cp.GantryRotationDirection = arc.direction if k < last else "NONE"
-        cp.CumulativeMetersetWeight = float(f"{c.cumulative_mu:.6g}")
+        cp.CumulativeMetersetWeight = float(f"{c.cumulative_mu:.10g}")
         if opt.prescription is not None:
             rd = Dataset(); rd.ReferencedDoseReferenceNumber = 1
             rd.CumulativeDoseReferenceCoefficient = float(f"{c.cumulative_mu / total:.6g}") if total > 0 else 0.0
@@ -232,6 +233,7 @@ def _arc_control_points(arc, beam: PhotonBeam, bounds: Optional[Sequence[float]]
 def build_rtplan(ctx: CaseContext, plan: PhotonPlan, *, rtstruct_uid: str, options: Optional[PlanWriteOptions] = None) -> Dataset:
     opt = options or PlanWriteOptions()
     n_fractions = int(opt.prescription.fractions) if opt.prescription else 1
+    plan = per_fraction(plan, n_fractions)          # DICOM's metersets are one fraction's; radiarch's photon plans hold the course's
     ds = new_dataset(ctx, SOP.RTPLAN, "RTPLAN", series_number=opt.series_number, series_instance_uid=opt.series_instance_uid,
                      sop_instance_uid=opt.sop_instance_uid)
     _general_plan(ds, ctx, opt, rtstruct_uid, n_fractions)
@@ -302,13 +304,13 @@ def build_rtplan(ctx: CaseContext, plan: PhotonPlan, *, rtstruct_uid: str, optio
                 _angles(cp, beam.gantry_deg, seg.collimator_deg, beam.couch_deg, beam.isocenter_mm)
                 if phase == 1:
                     cmw += float(seg.mu)
-                cp.CumulativeMetersetWeight = float(f"{cmw:.6g}")
+                cp.CumulativeMetersetWeight = float(f"{cmw:.10g}")
                 if opt.prescription is not None:
                     rd = Dataset(); rd.ReferencedDoseReferenceNumber = 1
                     rd.CumulativeDoseReferenceCoefficient = float(f"{cmw / total:.6g}")
                     cp.ReferencedDoseReferenceSequence = seq([rd])
                 cps.append(cp)
-        bd.FinalCumulativeMetersetWeight = float(f"{cmw:.6g}")
+        bd.FinalCumulativeMetersetWeight = float(f"{cmw:.10g}")
         bd.NumberOfControlPoints = len(cps)
         bd.ControlPointSequence = seq(cps)
         beams.append(bd)
@@ -348,6 +350,7 @@ def _ion_angles(cp: Dataset, beam: ProtonBeam, opt: PlanWriteOptions) -> None:
 def build_rtionplan(ctx: CaseContext, plan: ProtonPlan, *, rtstruct_uid: str, options: Optional[PlanWriteOptions] = None) -> Dataset:
     opt = options or PlanWriteOptions()
     n_fractions = int(opt.prescription.fractions) if opt.prescription else int(plan.n_fractions)
+    plan = per_fraction(plan, n_fractions)          # one fraction's spot metersets
     ds = new_dataset(ctx, SOP.RTIONPLAN, "RTPLAN", series_number=opt.series_number, series_instance_uid=opt.series_instance_uid,
                      sop_instance_uid=opt.sop_instance_uid)
     _general_plan(ds, ctx, opt, rtstruct_uid, n_fractions)
@@ -425,7 +428,7 @@ def build_rtionplan(ctx: CaseContext, plan: ProtonPlan, *, rtstruct_uid: str, op
                     cp.RangeShifterSettingsSequence = seq([st])
                 if phase == 1:
                     cmw += layer_mu
-                cp.CumulativeMetersetWeight = float(f"{cmw:.6g}")
+                cp.CumulativeMetersetWeight = float(f"{cmw:.10g}")
                 if opt.prescription is not None:
                     rd = Dataset(); rd.ReferencedDoseReferenceNumber = 1
                     rd.CumulativeDoseReferenceCoefficient = float(f"{cmw / total:.6g}")
@@ -433,7 +436,7 @@ def build_rtionplan(ctx: CaseContext, plan: ProtonPlan, *, rtstruct_uid: str, op
                 cps.append(cp)
         if not cps:
             continue
-        bd.FinalCumulativeMetersetWeight = float(f"{cmw:.6g}")
+        bd.FinalCumulativeMetersetWeight = float(f"{cmw:.10g}")
         bd.NumberOfControlPoints = len(cps)
         bd.IonControlPointSequence = seq(cps)
         beams.append(bd)

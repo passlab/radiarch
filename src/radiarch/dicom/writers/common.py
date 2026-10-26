@@ -267,3 +267,20 @@ __all__ = [
     "seq", "ref", "new_dataset", "with_frame_of_reference", "label_research", "research_text",
     "ct_image_refs", "save", "ds_list",
 ]
+
+
+def per_fraction(plan, n_fractions: int):
+    """The plan with one fraction's metersets, as DICOM's fraction group and treatment records state them.
+
+    A photon plan's metersets are the whole course's (radiarch optimizes against the course dose), so one fraction's
+    are a ``1 / n_fractions`` share. A proton plan carries its own fraction count (its spot metersets times it make
+    the course), so one fraction's are ``plan.n_fractions / n_fractions`` of its own."""
+    from ...models.photon_plan import PhotonPlan
+
+    n = max(1, int(n_fractions))
+    if isinstance(plan, PhotonPlan):
+        return plan.scaled(1.0 / n) if n > 1 else plan
+    own = max(1, int(getattr(plan, "n_fractions", 1) or 1))
+    if own == n:
+        return plan
+    return plan.with_spot_mus(plan.spot_mus * (own / n)).model_copy(update={"n_fractions": n})

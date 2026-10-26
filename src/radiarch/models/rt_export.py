@@ -102,7 +102,7 @@ class RTExportResult(ResearchArtifact):
     plan_sop_class_uid: Optional[str] = None
     plan_sop_instance_uid: Optional[str] = None
     beam_numbers: Dict[str, int] = Field(default_factory=dict)
-    beam_metersets: Dict[str, float] = Field(default_factory=dict)
+    beam_metersets: Dict[str, float] = Field(default_factory=dict, description="MU per beam for one fraction, as the RT Plan states them (DICOM).")
     n_fractions: int = 1
     prescription: Optional[PrescriptionSpec] = None
     machine_name: str = "RADIARCH"

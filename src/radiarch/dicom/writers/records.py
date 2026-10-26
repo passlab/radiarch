@@ -24,7 +24,7 @@ from pydicom.dataset import Dataset
 from ...models.photon_plan import PhotonPlan
 from ...models.proton_plan import ProtonPlan
 from ..uids import SOP
-from .common import CaseContext, ds_list, new_dataset, ref, research_text, save, seq
+from .common import CaseContext, ds_list, new_dataset, per_fraction, ref, research_text, save, seq
 from .rtplan import PlanWriteOptions, _beam_boundaries, _leaf_positions
 
 
@@ -106,6 +106,7 @@ def build_beams_record(ctx: CaseContext, plan: PhotonPlan, session: Session, *, 
                      series_instance_uid=series_instance_uid, sop_instance_uid=sop_instance_uid,
                      instance_number=session.fraction_number)
     _general_record(ds, ctx, session, SOP.RTPLAN, plan_sop_instance, session.machine_name)
+    plan = per_fraction(plan, int(opt.prescription.fractions) if opt.prescription else 1)     # a session delivers one fraction
 
     items = []
     for number, beam in enumerate(plan.beams, start=1):
@@ -128,8 +129,8 @@ def build_beams_record(ctx: CaseContext, plan: PhotonPlan, session: Session, *, 
         tb.TreatmentTerminationStatus = session.termination
         tb.TreatmentVerificationStatus = session.verification
         tb.ReferencedPatientSetupNumber = 1
-        tb.SpecifiedPrimaryMeterset = float(f"{specified:.6g}")
-        tb.DeliveredPrimaryMeterset = float(f"{specified * frac:.6g}")
+        tb.SpecifiedPrimaryMeterset = float(f"{specified:.10g}")
+        tb.DeliveredPrimaryMeterset = float(f"{specified * frac:.10g}")
         tb.SpecifiedTreatmentTime = float(f"{specified / opt.dose_rate_mu_min * 60.0:.6g}")
         tb.DeliveredTreatmentTime = float(f"{specified * frac / opt.dose_rate_mu_min * 60.0:.6g}")
 
@@ -151,8 +152,8 @@ def build_beams_record(ctx: CaseContext, plan: PhotonPlan, session: Session, *, 
                 cp.TreatmentControlPointTime = session.treatment_time
                 if phase == 1:
                     cmw += float(seg.mu)
-                cp.SpecifiedMeterset = float(f"{cmw:.6g}")
-                cp.DeliveredMeterset = float(f"{cmw * frac:.6g}")
+                cp.SpecifiedMeterset = float(f"{cmw:.10g}")
+                cp.DeliveredMeterset = float(f"{cmw * frac:.10g}")
                 cp.DoseRateSet = float(opt.dose_rate_mu_min)
                 cp.DoseRateDelivered = float(opt.dose_rate_mu_min)
                 positions = []
@@ -195,6 +196,7 @@ def build_ion_beams_record(ctx: CaseContext, plan: ProtonPlan, session: Session,
                      series_instance_uid=series_instance_uid, sop_instance_uid=sop_instance_uid,
                      instance_number=session.fraction_number)
     _general_record(ds, ctx, session, SOP.RTIONPLAN, plan_sop_instance, session.machine_name)
+    plan = per_fraction(plan, int(opt.prescription.fractions) if opt.prescription else int(plan.n_fractions))
 
     items = []
     for number, beam in enumerate(plan.beams, start=1):
@@ -221,8 +223,8 @@ def build_ion_beams_record(ctx: CaseContext, plan: ProtonPlan, session: Session,
         tb.TreatmentTerminationStatus = session.termination
         tb.TreatmentVerificationStatus = session.verification
         tb.ReferencedPatientSetupNumber = 1
-        tb.SpecifiedPrimaryMeterset = float(f"{specified:.6g}")
-        tb.DeliveredPrimaryMeterset = float(f"{specified * frac:.6g}")
+        tb.SpecifiedPrimaryMeterset = float(f"{specified:.10g}")
+        tb.DeliveredPrimaryMeterset = float(f"{specified * frac:.10g}")
         if beam.range_shifter_id:
             rs = Dataset(); rs.ReferencedRangeShifterNumber = 1; rs.RangeShifterID = str(beam.range_shifter_id)[:16]
             tb.RecordedRangeShifterSequence = seq([rs])
@@ -241,8 +243,8 @@ def build_ion_beams_record(ctx: CaseContext, plan: ProtonPlan, session: Session,
                 cp.TreatmentControlPointTime = session.treatment_time
                 if phase == 1:
                     cmw += layer_mu
-                cp.SpecifiedMeterset = float(f"{cmw:.6g}")
-                cp.DeliveredMeterset = float(f"{cmw * frac:.6g}")
+                cp.SpecifiedMeterset = float(f"{cmw:.10g}")
+                cp.DeliveredMeterset = float(f"{cmw * frac:.10g}")
                 cp.NominalBeamEnergy = float(f"{layer.energy_mev:.6g}")
                 cp.ScanSpotTuneID = opt.scan_spot_tune_id[:16]
                 cp.NumberOfScanSpotPositions = len(spots)

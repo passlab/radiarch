@@ -143,7 +143,8 @@ def test_export_an_aperture_sequence(env):
     for b0, b1 in zip(plan.beams, back.beams):
         assert [s.mu for s in b1.segments] == pytest.approx([s.mu for s in b0.segments], rel=1e-5)
         assert b1.gantry_deg == b0.gantry_deg and b1.isocenter_mm == pytest.approx(b0.isocenter_mm)
-    assert res.beam_metersets == pytest.approx({b.beam_id: sum(s.mu for s in b.segments) for b in plan.beams}, rel=1e-5)
+    # the RT Plan states one fraction's metersets (DICOM); the plan holds the course's, over 2 fractions
+    assert res.beam_metersets == pytest.approx({b.beam_id: sum(s.mu for s in b.segments) / 2 for b in plan.beams}, rel=1e-5)
     ds = pydicom.dcmread(svc.file_path(res.export_id, "RP.dcm"))
     assert int(ds.FractionGroupSequence[0].NumberOfFractionsPlanned) == 2 and ds.RTPlanLabel == "R6TEST"
     rois = {str(r.ROIName): int(r.ROINumber) for r in pydicom.dcmread(svc.file_path(res.export_id, "RS.dcm")).StructureSetROISequence}

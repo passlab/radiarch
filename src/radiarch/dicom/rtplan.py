@@ -4,7 +4,9 @@ Photon plans
 ------------
 Every treatment beam with a non-zero meterset in the fraction group becomes
 segments, one per control-point interval: the meterset of the interval is its
-share of the cumulative meterset weight times the beam meterset, the aperture
+share of the cumulative meterset weight times the beam meterset times the
+fractions planned (DICOM states one fraction's metersets; radiarch's photon
+plans hold the course's), the aperture
 is the jaw and MLC state at the start of the interval (for a static,
 step-and-shoot plan) or the mean of its two ends (a sliding-window or VMAT
 interval, where the leaves move linearly). A beam whose gantry angle is the
@@ -177,7 +179,9 @@ def _arc_beam(cps, states, bounds, final_cmw: float, mu_total: float, name: str,
 def read_photon_plan(src: Source, beamlet_spacing_mm: Tuple[float, float] = (5.0, 5.0),
                      leaf_width_without_mlc_mm: float = 10.0) -> PhotonPlan:
     ds, path = _dataset(src)
-    metersets = _beam_metersets(ds)
+    # DICOM's beam metersets are one fraction's; a radiarch photon plan holds the course's
+    n_fractions = _n_fractions(ds)
+    metersets = {k: v * n_fractions for k, v in _beam_metersets(ds).items()}
     beams: List[PhotonBeam] = []
     for b in getattr(ds, "BeamSequence", []):
         if str(getattr(b, "TreatmentDeliveryType", "TREATMENT")).upper() != "TREATMENT":

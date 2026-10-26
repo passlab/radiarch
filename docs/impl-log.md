@@ -335,6 +335,21 @@ optimization for VMAT; the R8 record for the physicist.
   before a push (the 95 % dose region of the exported RT Dose 222 mm from the PTV). The validation records are not
   affected: they grade the dose arrays, not exported RT Doses.
 
+## RT Plan metersets per fraction (fixed 2026-10-25)
+
+- DICOM's fraction group states one fraction's metersets (`BeamMeterset`, the control points' cumulative weights,
+  a session's specified meterset in a treatment record). radiarch's photon plans hold the course's MU (they are
+  optimized against the course dose), and the R6 writer wrote them as they were: a 60 Gy in 30 fractions VMAT
+  plan said 26 200 MU per fraction for one arc instead of 873. The R2 photon reader did the reverse (an imported
+  plan's metersets taken as the course's, so its recomputed dose was one fraction's). Proton plans were consistent
+  on import (the plan's fraction count multiplies the dose) but written the same way on export.
+- Fixed: `per_fraction(plan, n)` (photon: MU / n; proton: MU × the plan's own fractions / n) at the entry of the RT
+  Plan, RT Ion Plan and both treatment-record writers; the photon reader multiplies by the fractions planned;
+  metersets written to 10 significant digits (the conversion made 6 too few for a round trip).
+  `PhotonPlan.scaled`. The R6 tests that asserted course MU in the files now assert one fraction's.
+- Found by the R10 protocol test, which compared an exported plan's metersets with its plan's. The validation
+  records are not affected (they grade dose arrays); every exported RT Plan was.
+
 ## R9 — registration, contour propagation, dose mapping, 4D, replanning (2026-10-24)
 
 - `services/registration.py` (SimpleITK 2.5): rigid Euler 3D with Mattes MI over a pyramid, then diffeomorphic

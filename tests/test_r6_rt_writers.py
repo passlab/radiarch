@@ -124,8 +124,9 @@ def test_photon_plan_round_trip(written):
     assert back.dicom.n_fractions == 30 and back.dicom.structure_set_uid == written["rs"].sop_instance_uid
     ds = pydicom.dcmread(str(written["out"] / "RP.dcm"))
     ap = ds.BeamSequence[0]
-    assert int(ap.NumberOfControlPoints) == 4 and float(ap.FinalCumulativeMetersetWeight) == 80.0
-    assert [float(r.BeamMeterset) for r in ds.FractionGroupSequence[0].ReferencedBeamSequence] == [80.0, 40.0]
+    # one fraction's metersets in the file (DICOM); the plan holds the course's (80 and 40 MU over 30 fractions)
+    assert int(ap.NumberOfControlPoints) == 4 and float(ap.FinalCumulativeMetersetWeight) == pytest.approx(80.0 / 30, rel=1e-9)
+    assert [float(r.BeamMeterset) for r in ds.FractionGroupSequence[0].ReferencedBeamSequence] == pytest.approx([80.0 / 30, 40.0 / 30], rel=1e-9)
     assert float(ds.DoseReferenceSequence[0].TargetPrescriptionDose) == 60.0 and int(ds.DoseReferenceSequence[0].ReferencedROINumber) == 1
     assert ap.ReferencedReferenceImageSequence[0].ReferencedSOPInstanceUID == written["im"].sop_instance_uid
     assert ds.RTPlanGeometry == "PATIENT" and ds.ApprovalStatus == "UNAPPROVED" and ds.PlanIntent == "RESEARCH"
@@ -204,13 +205,16 @@ def test_drr_sees_the_bone(written):
 # ---------------------------------------------------------------------------
 
 def test_treatment_records(written):
-    assert written["r1"].delivered_metersets == {"AP": 80.0, "LAT": 40.0} and written["r2"].delivered_metersets == {"AP": 40.0, "LAT": 20.0}
-    assert written["ri"].delivered_metersets == {"G90": 18.0}
+    # a session delivers one fraction's metersets: the photon plan holds the course's (80 and 40 MU over 30 fractions);
+    # the proton plan states its own 30 fractions, so its 18 MU are one fraction's already
+    assert written["r1"].delivered_metersets == pytest.approx({"AP": 80.0 / 30, "LAT": 40.0 / 30}, rel=1e-6)
+    assert written["r2"].delivered_metersets == pytest.approx({"AP": 40.0 / 30, "LAT": 20.0 / 30}, rel=1e-6)
+    assert written["ri"].delivered_metersets == pytest.approx({"G90": 18.0}, rel=1e-6)
     r2 = pydicom.dcmread(str(written["out"] / "RT2.dcm"))
     assert r2.ReferencedTreatmentRecordSequence[0].ReferencedSOPInstanceUID == written["r1"].sop_instance_uid
     beam = r2.TreatmentSessionBeamSequence[0]
     assert beam.TreatmentTerminationStatus == "OPERATOR" and int(beam.CurrentFractionNumber) == 2
-    assert float(beam.ControlPointDeliverySequence[-1].DeliveredMeterset) == 40.0 and float(beam.ControlPointDeliverySequence[-1].SpecifiedMeterset) == 80.0
+    assert float(beam.ControlPointDeliverySequence[-1].DeliveredMeterset) == pytest.approx(40.0 / 30) and float(beam.ControlPointDeliverySequence[-1].SpecifiedMeterset) == pytest.approx(80.0 / 30)
     ri = pydicom.dcmread(str(written["out"] / "RTI1.dcm"))
     ion = ri.TreatmentSessionIonBeamSequence[0]
     assert ion.RecordedRangeShifterSequence[0].RangeShifterID == "RS40" and len(ion.IonControlPointDeliverySequence) == 4

@@ -37,7 +37,12 @@ objects need.
    segment is a pair of control points (aperture at a cumulative meterset,
    then the same after its MU), leaves moving at zero meterset; weights are
    in MU and the fraction group's `BeamMeterset` is the beam's MU, so the
-   R2 reader returns the same segments. The MLC is the machine's leaf
+   R2 reader returns the same segments. *(Corrected 2026-10-25: DICOM states
+   one fraction's metersets, while radiarch's photon plans hold the whole
+   course's; the writer divides by the fractions planned and the reader
+   multiplies back. Until then exported plans stated the course's MU per
+   fraction. A proton plan carries its own fraction count; see
+   `writers/common.per_fraction`.)* The MLC is the machine's leaf
    pairs when the plan's rows are among them (unused pairs parked at X1),
    else the pairs the rows define; jaws-only plans get X and Y devices only.
    Proton layers become pairs of ion control points (spot weights, then

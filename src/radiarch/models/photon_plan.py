@@ -348,6 +348,20 @@ class PhotonPlan(BaseModel):
         """The first beam's isocenter (all beams share it in v1)."""
         return tuple(float(v) for v in self.beams[0].isocenter_mm)
 
+    def scaled(self, factor: float) -> "PhotonPlan":
+        """Every meterset times ``factor`` (a plan normalised, or a course's MU as one fraction's)."""
+        k = float(factor)
+        beams = []
+        for b in self.beams:
+            if b.arc is not None:
+                cps = [cp.model_copy(update={"cumulative_mu": float(cp.cumulative_mu) * k}) for cp in b.arc.control_points]
+                arc = b.arc.model_copy(update={"control_points": cps})
+                beams.append(PhotonBeam.from_arc(b.beam_id, arc, couch_deg=b.couch_deg, isocenter_mm=b.isocenter_mm, sad_mm=b.sad_mm,
+                                                 energy_mv=b.energy_mv, beamlet_spacing_mm=b.segments[0].beamlet_spacing_mm))
+            else:
+                beams.append(b.model_copy(update={"segments": [sg.model_copy(update={"mu": float(sg.mu) * k}) for sg in b.segments]}))
+        return self.model_copy(update={"beams": beams})
+
     def to_json(self) -> str:
         return self.model_dump_json(indent=2)
 
