@@ -1,0 +1,8 @@
+name: protocol_batch_lctsc
+kind: protocol_batch
+description: The shipped protocol lung-sbrt-54gy-3fx-vmat through `radiarch batch` over every LCTSC thorax on disk (six; two of them the harness's), each with a synthetic peripheral GTV of 12 mm in the right lung - every case planned and deliverable, its coverage met by normalisation, the lung SBRT template's priority-1 goals graded; the protocol's own planning goals informative. Fast mode runs two patients at 6 mm.
+data: data/public/lctsc
+protocol: lung-sbrt-54gy-3fx-vmat
+spacing_mm: 3.0
+gtv_radius_mm: 12.0
+gtv_position: peripheral

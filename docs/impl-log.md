@@ -456,3 +456,7 @@ optimization for VMAT; the R8 record for the physicist.
   CWL tools `cwl/radiarch-plan.cwl`, `cwl/radiarch-batch.cwl` (`cwltool --validate` passes).
 - Tests: `test_r10_sdk.py`, `test_r10_protocols.py` (which found the per-fraction meterset fault, fixed in
   `3a98b85`), `test_r10_cli.py`.
+- R10.5 harness (`cases_r10.py`): `protocol_lung_vmat` (the shipped lung protocol against the harness case it encodes:
+  16 shared settings compared, all equal; then its run on the case's patients against the recorded harness run, within
+  1 %) and `protocol_batch_lctsc` (the SBRT protocol through `radiarch batch` over every LCTSC thorax on disk, each with
+  a synthetic peripheral GTV). Smoke run (fast): 21 and 27 pass, none fail. ADR 0017.

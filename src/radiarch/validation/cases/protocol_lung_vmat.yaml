@@ -1,0 +1,6 @@
+name: protocol_lung_vmat
+kind: protocol_reproduces
+description: The shipped protocol lung-60gy-30fx-vmat against the harness case it encodes (lung_vmat_lctsc) - every shared setting compared (prescription, margins, rings, goals, arcs, loop settings, template), then the protocol run on the case's LCTSC patients with its synthetic GTV, its RTOG 0617 template goals graded and compared with the recorded run of the harness case (the R8 record's correction, within 1 %). Fast mode runs one patient and does not compare with the record.
+protocol: lung-60gy-30fx-vmat
+case: lung_vmat_lctsc
+record: docs/validation/2026-10-23-r8/2026-10-24-correction-d458e46/results.json

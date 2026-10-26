@@ -97,3 +97,15 @@ def test_shipped_protocols_and_refusals(rx):
     with pytest.raises(Exception, match="coverage goal"):
         from radiarch.models.protocol import PlanningProtocol
         PlanningProtocol(**{**PROTOCOL, "goals": [{"structure": "Cord", "metric": "Dmax", "op": "<=", "gy": 1.0}]})
+
+
+def test_the_shipped_lung_protocol_encodes_its_harness_case():
+    """Every setting the lung protocol shares with the R8 harness case it reproduces is equal (the validation case
+    ``protocol_lung_vmat`` then runs it; this part needs no patient data)."""
+    from radiarch.services.autoplan import load_protocol
+    from radiarch.validation.cases_r10 import _normalise, _protocol_matches_case
+    from radiarch.validation.run import load_cases
+
+    pairs = _protocol_matches_case(load_protocol("lung-60gy-30fx-vmat"), load_cases()["lung_vmat_lctsc"])
+    assert len(pairs) >= 15
+    assert [what for what, ours, theirs in pairs if _normalise(ours) != _normalise(theirs)] == []

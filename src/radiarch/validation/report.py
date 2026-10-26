@@ -58,7 +58,7 @@ ENGINE_CASES: Dict[str, Dict[str, Any]] = {
     "pb": {
         "title": "Native photon pencil-beam engine (radiarch, roadmap R8)",
         "kinds": ("photon_pdd", "photon_profile", "photon_output_vs_field", "pb_vs_mc", "pb_vs_ccc", "dij_consistency", "lung_sbrt_vmat",
-                  "lung_vmat", "hn_sib_vmat", "lung_4d"),
+                  "lung_vmat", "hn_sib_vmat", "lung_4d", "protocol_reproduces", "protocol_batch"),
         "limitations": [
             "The kernel is a Monte Carlo pencil kernel of the Mohan 6 MV spectrum in water (the CCC kernels' spectrum), decomposed "
             "into a few depth-weighted components; there is no linac head model (no head scatter or off-axis softening), and the "
