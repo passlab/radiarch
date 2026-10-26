@@ -57,6 +57,9 @@ dev = [
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
+[project.scripts]
+radiarch = "radiarch.cli:main"
+
 [tool.setuptools.packages.find]
 include = ["radiarch*"]
 
@@ -65,6 +68,7 @@ radiarch = [
     "machines/*.json",
     "goals/*.json",
     "protocols/*.json",
+    "cwl/*.cwl",
     "services/dose_engines/*.txt",
     "validation/cases/*.yaml",
     "validation/references/*.json",
