@@ -434,3 +434,25 @@ optimization for VMAT; the R8 record for the physicist.
   2 fail (patient 111's tumour contours, 11 % apart in volume); `lung_4d_itv` 22 pass; `replan_pancreas_cbct` 15 pass,
   5 fail (the B-spline above rigid alignment of the stomach-duodenum in five of ten cone-beam CTs; never folds).
   The replanning case's days had repeated series descriptions; the label now carries the date (`316b6c6`).
+
+## R10 — scripting SDK, auto-planning, planning protocols, command line (2026-10-25 to 2026-10-26, in progress)
+
+- SDK `radiarch.sdk`: `Radiarch` over HTTP or in process (`Radiarch.local()`, the app through Starlette's test client);
+  `submit` follows a 202 answer through the service's jobs route to the result; domain objects (`Geometry`,
+  `BeamModel`, `Optimization`, `Sequence`, `Arcs`, `Dose`, `Evaluation`, `Export`, `Registration`, `ProtocolRun`)
+  wrap the services' own result models and chain the planning steps; `ops` shorthands for structure operations and
+  objectives; `RadiarchError` carries the service's detail. The R0 `client.py` stays for the plan and workflow routes.
+- Auto-planning `services/autoplan.py`: the harness's goal-driven loops (`plan_static`, R7; `plan_vmat`, R8) and their
+  helpers moved there unchanged (each function diffed against its original; the harness calls them under its old
+  names, so the recorded plans are the service's). `plan_static` gained extra objectives and engine parameters,
+  defaulting to what the harness used. `AutoplanService` runs a protocol: aliases copied to the protocol's names,
+  its derivations, the loop, apertures or arcs, the plan normalised in its metersets (a `scaled:` beam model and its
+  dose; the harness had scaled only the dose array), goals, the template evaluation. A job like optimization's
+  (`autoplan_jobs` table, `radiarch.autoplan.run` on the optimize queue, the beam-angle time budget).
+- Protocols `models/protocol.py`, routes `/protocols` (list, show, run, jobs, runs); shipped
+  `lung-60gy-30fx-vmat`, `lung-sbrt-54gy-3fx-vmat`, `hn-70-56gy-35fx-vmat`, the three R8 harness plans as data.
+- Command line `radiarch` (`protocols`, `protocol`, `plan`, `batch`), in process or against a server; `batch` writes
+  a summary table, the runs as JSON lines and optionally each case's RT objects, recording a failed case and going on.
+  CWL tools `cwl/radiarch-plan.cwl`, `cwl/radiarch-batch.cwl` (`cwltool --validate` passes).
+- Tests: `test_r10_sdk.py`, `test_r10_protocols.py` (which found the per-fraction meterset fault, fixed in
+  `3a98b85`), `test_r10_cli.py`.
