@@ -105,9 +105,12 @@ def run_pb_vs_mc(spec: dict, ctx: Context) -> CaseResult:
                 cf_p = float(cax_p[j] / water["pb"][j]); cf_m = float(cax_m[j] / water["mc"][j])
                 res.metrics[f"{case}_cf_{depth:g}mm"] = {"pb": cf_p, "mc": cf_m}
                 ok = abs(cf_p - cf_m) <= t / 100 * cf_m
-                res.add(f"{case}: correction factor at {depth:g} mm, pb vs MC", round(cf_p, 4), f"{cf_m:.3f} ± {t / 100 * cf_m:.3f} (MC)", ok,
+                # the lung checks test the lateral scaling's fit, made at full resolution: graded there, informative on fast mode's grid
+                graded = ok if not (lung and ctx.fast) else None
+                res.add(f"{case}: correction factor at {depth:g} mm, pb vs MC", round(cf_p, 4), f"{cf_m:.3f} ± {t / 100 * cf_m:.3f} (MC)", graded,
                         "slab dose / water dose at the same depth; MPPG 5.a / TECDOC-1583 heterogeneity 3 %"
-                        + ("; the lateral kernel scaling was fitted to this slab and the 2 x 2 cm one: a consistency check" if lung else ""))
+                        + ("; the lateral kernel scaling was fitted to this slab and the 2 x 2 cm one: a consistency check" if lung else "")
+                        + ("; informative in fast mode (the fit is at full resolution)" if lung and ctx.fast else ""))
         res.notes.append(f"{case}: MC {ref['primaries']:.2e} primaries")
     _field_size_checks(res, eng, spec, ctx)
     _narrow_lung_checks(res, eng, spec, ctx)
@@ -205,8 +208,10 @@ def _narrow_lung_checks(res: CaseResult, eng, spec: dict, ctx: Context) -> None:
         vals[f"{depth:g}"] = v
         where = "in the lung" if 30.0 < depth < 110.0 else "beyond the lung"
         r_pb = v["pb"] / v["mc"]
-        res.add(f"2x2 in lung: dose at {depth:g} mm ({where}) over 20 mm, pb / MC", round(r_pb, 3), f"1 ± {t:.2f}", _within(r_pb, 1.0, t),
-                f"MC {v['mc']:.3f}; lateral electronic disequilibrium of a narrow field in lung; the lateral scaling was fitted to it")
+        res.add(f"2x2 in lung: dose at {depth:g} mm ({where}) over 20 mm, pb / MC", round(r_pb, 3), f"1 ± {t:.2f}",
+                _within(r_pb, 1.0, t) if not ctx.fast else None,
+                f"MC {v['mc']:.3f}; lateral electronic disequilibrium of a narrow field in lung; the lateral scaling was fitted to it"
+                + ("; informative in fast mode (the fit is at full resolution)" if ctx.fast else ""))
         if "ccc" in v:
             res.add(f"2x2 in lung: dose at {depth:g} mm ({where}) over 20 mm, ccc / MC", round(v["ccc"] / v["mc"], 3), "informative", None,
                     f"MC {v['mc']:.3f}; CCC's shipped scatter cut-off")

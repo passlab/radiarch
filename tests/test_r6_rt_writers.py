@@ -266,6 +266,23 @@ def test_iod_validation_with_dicom_validator(written):
     assert out.count("Validating DICOM file") == len(_files(written))
 
 
+# Where dicom3tools' tables (Ubuntu 24.04, 1.00~20240118) and the current standard disagree, radiarch follows the
+# standard and these messages are not errors of radiarch's:
+#  - Treatment Verification Status (3008,002C): PS3.3 C.8.8.21 lists VERIFIED, VERIFIED_OVR and NOT_VERIFIED; the tables
+#    accept only VERIFIED_OVR of them;
+#  - Modulated Scan Mode Type (300A,0309): PS3.3 C.8.8.25 requires it only for Scan Mode MODULATED_SPEC; the tables
+#    require it for MODULATED (radiarch's spot scanning) and reject it with MODULATED_SPEC.
+VALIDATOR_TABLE_DISAGREEMENTS = (
+    "Unrecognized enumerated value <VERIFIED> for value 1 of attribute <Treatment Verification Status>",
+    "Unrecognized enumerated value <NOT_VERIFIED> for value 1 of attribute <Treatment Verification Status>",
+    "Missing attribute Type 1C Conditional Element=<ModulatedScanModeType>",
+)
+
+
+def _validator_table_disagrees(line: str) -> bool:
+    return any(d in line for d in VALIDATOR_TABLE_DISAGREEMENTS)
+
+
 def test_iod_validation_with_dciodvfy(written):
     exe = shutil.which("dciodvfy")
     if not exe:
@@ -275,7 +292,7 @@ def test_iod_validation_with_dciodvfy(written):
     errors = {}
     for f in _files(written):
         proc = subprocess.run([exe, f], capture_output=True, text=True, timeout=120)
-        lines = [l for l in (proc.stdout + proc.stderr).splitlines() if l.startswith("Error")]
+        lines = [l for l in (proc.stdout + proc.stderr).splitlines() if l.startswith("Error") and not _validator_table_disagrees(l)]
         if lines:
             errors[Path(f).name] = lines
     assert not errors, errors

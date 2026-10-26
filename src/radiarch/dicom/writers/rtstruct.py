@@ -26,7 +26,8 @@ import numpy as np
 from pydicom.dataset import Dataset
 
 from ..uids import SOP
-from .common import DETACHED_STUDY_SOP_CLASS, CaseContext, ct_image_refs, ds_list, new_dataset, ref, research_text, save, seq
+from .common import (DETACHED_STUDY_SOP_CLASS, CaseContext, ct_image_refs, ds_list, new_dataset, ref, research_text, save, seq,
+                     with_frame_of_reference)
 
 # A palette that keeps neighbouring structures apart on screen.
 PALETTE = [
@@ -133,6 +134,8 @@ def build_rtstruct(ctx: CaseContext, structures: Sequence[Structure], *, origin_
                          "(rebuild the geometry with this radiarch, or give the CT directory)")
     ds = new_dataset(ctx, SOP.RTSTRUCT, "RTSTRUCT", series_number=series_number, series_instance_uid=series_instance_uid,
                      sop_instance_uid=sop_instance_uid)
+    # the Frame of Reference module (U in the RT Structure Set IOD, PS3.3 A.19.3), complete: the set has one frame of reference
+    with_frame_of_reference(ds, ctx)
 
     # Structure Set
     ds.StructureSetLabel = label[:16]

@@ -435,6 +435,22 @@ optimization for VMAT; the R8 record for the physicist.
   5 fail (the B-spline above rigid alignment of the stomach-duodenum in five of ten cone-beam CTs; never folds).
   The replanning case's days had repeated series descriptions; the label now carries the date (`316b6c6`).
 
+## CI red since 2026-10-21 (fixed 2026-10-26)
+
+- Full tests: one test failed on every push, `test_iod_validation_with_dciodvfy` (dicom3tools is on the CI runner,
+  not on the workstation, where it skipped). Reproduced with Ubuntu 24.04's dciodvfy in a container. Fixed: the RT
+  Structure Set carries a complete Frame of Reference module (U in the IOD, PS3.3 A.19.3; its UID is Type 1 once the
+  module is there); a DRR no longer writes ReportedValuesOrigin (PS3.3 C.8.8.2: SIMULATOR and PORTAL images only).
+  Two messages are the validator's tables against the current standard and are listed in the test with their
+  sections: Treatment Verification Status VERIFIED (C.8.8.21 lists it; the tables accept only VERIFIED_OVR) and
+  Modulated Scan Mode Type with Scan Mode MODULATED (C.8.8.25 requires it only for MODULATED_SPEC).
+- Nightly validation harness: red by design, as any graded failure failed it, the recorded CCC findings included.
+  `known_findings.yaml` names the failures the records explain; `run --known-findings` (CI) fails only on errors and
+  on graded failures not listed (`tests/test_validation_known_findings.py`). In fast mode the two pencil-beam lung
+  consistency checks are informative: the lateral scaling was fitted at full resolution.
+- Nightly MCsquare: the hosted runner is shut down after about 22 minutes inside `test_mcsquare_dij_matches_direct_dose`
+  since 2026-10-21 (radiarch's own spot placement); not yet resolved.
+
 ## R10 — scripting SDK, auto-planning, planning protocols, command line (2026-10-25 to 2026-10-26, in progress)
 
 - SDK `radiarch.sdk`: `Radiarch` over HTTP or in process (`Radiarch.local()`, the app through Starlette's test client);

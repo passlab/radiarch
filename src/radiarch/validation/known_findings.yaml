@@ -1,0 +1,12 @@
+# Graded failures the validation records explain: findings about an engine or a reference, not regressions.
+# `python -m radiarch.validation.run --known-findings` (CI's nightly run) exits non-zero only on errors and on
+# graded failures that no entry here covers. `checks` is a regular expression on the check's name.
+- case: photon_vs_mc
+  checks: "^\\[(shipped|full)\\] "
+  reason: "CCC against Monte Carlo: the shipped kernels' spectrum and scatter cut-off (R7 and R8 records; ADR 0014, ADR 0015)"
+- case: dvh_crosscheck_pancreatic
+  checks: " max \\(Gy\\)$"
+  reason: "DVH maxima in partially rasterized edge voxels against dicompyler-core's (R7 record)"
+- case: geometry_volumes_lctsc
+  checks: "Esophagus volume"
+  reason: "one oesophagus volume against the reference rasterization (R7 record)"

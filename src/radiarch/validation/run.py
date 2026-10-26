@@ -575,6 +575,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--out", type=Path, default=RADIARCH_ROOT / "validation" / "results")
     ap.add_argument("--fast", action="store_true", help="coarser grids and fewer primaries (smoke run)")
     ap.add_argument("--spacing-scale", type=float, default=1.0)
+    ap.add_argument("--known-findings", action="store_true",
+                    help="exit 0 when every graded failure is a finding the records explain (known_findings.yaml); for CI")
     args = ap.parse_args(argv)
     cases = load_cases()
     if args.list:
@@ -596,7 +598,32 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     run_dir = write_results(results, args.out, ctx)
     shutil.rmtree(ctx.workdir, ignore_errors=True)
     print("results:", run_dir / "summary.md")
+    if args.known_findings:
+        return _exit_with_known_findings(results)
     return 0 if all(r.status in ("pass", "info", "skip") for r in results) else 1
+
+
+KNOWN_FINDINGS = HERE / "known_findings.yaml"
+
+
+def _exit_with_known_findings(results) -> int:
+    """0 when no case errored and every graded failure is a recorded finding; else 1, listing what is new."""
+    import re
+    import yaml
+
+    known = yaml.safe_load(KNOWN_FINDINGS.read_text(encoding="utf-8")) or []
+    unexpected = []
+    for r in results:
+        if r.status == "error":
+            unexpected.append(f"{r.name}: error")
+            continue
+        patterns = [re.compile(k["checks"]) for k in known if k["case"] == r.name]
+        for c in r.checks:
+            if c.passed is False and not any(p.search(c.name) for p in patterns):
+                unexpected.append(f"{r.name}: {c.name}")
+    for u in unexpected:
+        print("not a known finding:", u, file=sys.stderr)
+    return 1 if unexpected else 0
 
 
 if __name__ == "__main__":

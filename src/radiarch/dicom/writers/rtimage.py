@@ -80,7 +80,7 @@ def build_rtimage(ctx: CaseContext, drr: DRR, *, beam_number: int, beam_name: st
     ds.ReferencedRTPlanSequence = seq([ref(plan_sop_class, plan_sop_instance)])
     ds.ReferencedBeamNumber = int(beam_number)
     ds.ReferencedFractionGroupNumber = 1
-    ds.ReportedValuesOrigin = "ACTUAL"
+    # no ReportedValuesOrigin: PS3.3 C.8.8.2 allows it only for SIMULATOR and PORTAL images, not a DRR
     return ds
 
 

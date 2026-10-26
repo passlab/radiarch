@@ -140,7 +140,8 @@ jobs:
       - name: Install uv (pymedphys runs in its own Python 3.12 environment)
         uses: astral-sh/setup-uv@v5
       - name: Run the harness (fast mode)
-        run: python -m radiarch.validation.run --all --fast --out validation/results
+        # fails on errors and on graded failures the records do not explain (validation/known_findings.yaml)
+        run: python -m radiarch.validation.run --all --fast --known-findings --out validation/results
       - name: Regression goldens
         run: python -m pytest tests/test_goldens.py -v --tb=short
       - name: Validation document per engine (R7)

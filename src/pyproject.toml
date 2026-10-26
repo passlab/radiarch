@@ -71,6 +71,7 @@ radiarch = [
     "cwl/*.cwl",
     "services/dose_engines/*.txt",
     "validation/cases/*.yaml",
+    "validation/known_findings.yaml",
     "validation/references/*.json",
     "validation/references/spectra/*",
     "validation/references/mc/*.npz",
