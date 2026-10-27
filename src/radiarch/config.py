@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     dicomweb_client_id: str = Field(default="", description="OAuth2 client id for the DICOMweb push")
     dicomweb_client_secret: Optional[SecretStr] = Field(default=None, description="OAuth2 client secret for the DICOMweb push")
     dicomweb_token_scope: str = Field(default="", description="OAuth2 scope to request; empty = the client's default")
+    # A DICOMweb viewer (OHIF) that reads from the push destination: a pushed export carries a link that opens its study
+    viewer_url: str = Field(default="", description="OHIF base URL, e.g. http://localhost:3000; empty = no viewer link")
 
     # Job queue
     broker_url: str = Field(default="redis://localhost:6379/0")

@@ -11,6 +11,7 @@ Radiarch is research software, not for clinical use. Start with the design, then
 | [`impl-log.md`](impl-log.md) | What each roadmap item did, file by file, with its fixes, tests, open points and commits |
 | [`demo.md`](demo.md) | A fifteen-minute walk through the services on the bundled phantom |
 | [`PRODUCTION.md`](PRODUCTION.md) | Running radiarch in production: workers, limits, the API key, the audit log, storage |
+| [`viewing.md`](viewing.md) | Viewing the RT objects: what OHIF 3.13 and 3D Slicer show, the push to a DICOMweb server, the viewer link |
 
 ## Decisions
 

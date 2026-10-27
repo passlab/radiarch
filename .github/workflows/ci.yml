@@ -57,6 +57,16 @@ jobs:
     name: Full Tests (Services 1-6, analytic engine)
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # R13: an Orthanc with its DICOMweb plugin, the server a viewer (OHIF) reads; the push and
+    # read-back test (tests/test_r13_viewer.py) uses it through RADIARCH_TEST_DICOMWEB_URL.
+    services:
+      orthanc:
+        image: orthancteam/orthanc:24.6.2
+        ports:
+          - 8042:8042
+        env:
+          ORTHANC__AUTHENTICATION_ENABLED: "false"
+          DICOM_WEB_PLUGIN_ENABLED: "true"
     # Runs on PRs, pushes, and the nightly schedule / manual dispatch.
     if: >-
       github.event_name == 'push' || github.event_name == 'pull_request'
@@ -79,8 +89,15 @@ jobs:
       - name: Install dicom3tools (dciodvfy for the RT objects radiarch writes)
         run: sudo apt-get update -qq && sudo apt-get install -y -qq dicom3tools
 
+      - name: Wait for Orthanc's DICOMweb plugin
+        run: |
+          for i in $(seq 60); do curl -sf http://localhost:8042/dicom-web/studies >/dev/null && exit 0; sleep 2; done
+          echo "Orthanc did not answer"; exit 1
+
       - name: Run full suite (MCsquare V4 validation auto-skips)
         run: python -m pytest tests/ -v --tb=short
+        env:
+          RADIARCH_TEST_DICOMWEB_URL: http://localhost:8042/dicom-web
 
       - name: dciodvfy on the written RT objects
         run: python -m pytest tests/test_r6_rt_writers.py -v --tb=short -k dciodvfy

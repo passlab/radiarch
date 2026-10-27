@@ -30,7 +30,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 13 | R8 Native pencil-beam engine, VMAT, SBRT | done; physicist review waiting | 6e73aa2..cc5c047 | 0015 |
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
-| 16 | R13 Viewer integration | not started | — | — |
+| 16 | R13 Viewer integration | in progress | — | — |
 | 17 | R11 Multi-criteria optimization | not started | — | — |
 
 ## Before the roadmap (done by 2026-10-20)
@@ -191,9 +191,18 @@ them in batches and from workflow engines.
 - [x] R10.5 Harness and record (`docs/validation/2026-10-26-r10/`, commit `92ce40d`): a protocol run reproduces its harness case; a batch case over the LCTSC thoraces;
   ADR 0017.
 
-### R13 — Viewer integration (not started)
-- [ ] RT objects to an OHIF deployment through DICOMweb (works today by push; to be documented and tested)
-- [ ] A viewer panel with DVH, clinical goals and the plan summary from `/evaluate`
+### R13 — Viewer integration (in progress)
+Viewing stays outside radiarch: the RT objects go to a DICOMweb server that OHIF reads, and a radiarch
+OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH, goals).
+- [x] R13.1 RT objects to OHIF through DICOMweb (`docs/viewing.md`): what OHIF 3.13.13 and 3D Slicer show
+  (OHIF draws the structure set; it has no RT Dose or RT Plan handler); the structure set checked against
+  what OHIF's RT loader reads; `RADIARCH_VIEWER_URL` and `viewer_url` on a pushed export; STOW-RS push and
+  QIDO/WADO read-back against Orthanc in CI (`tests/test_r13_viewer.py`, an Orthanc service in Full Tests)
+- [ ] R13.2 A radiarch OHIF extension for OHIF 3.13.13: the RT Dose as an overlay on the CT, and a panel
+  with the DVH, the clinical goals and the plan summary from `/evaluate`; built as an ordinary extension
+  and mode package, with its build and tests in CI
+- [ ] R13.3 Record: the objects and the extension checked by hand in OHIF and 3D Slicer (also closes R6's
+  open hand check); ADR
 
 ### R11 — Multi-criteria optimization (not started)
 - [ ] Pareto surface generation on the objective set

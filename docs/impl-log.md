@@ -484,3 +484,14 @@ optimization for VMAT; the R8 record for the physicist.
   (the 16 settings equal; every RTOG 0617 goal value equal to the recorded harness run on both patients),
   `protocol_batch_lctsc` 79 pass (six thoraces planned and deliverable, PTV D95 54.1 Gy, the SBRT template's priority-1
   goals met).
+
+## R13 — viewer integration (2026-10-27, in progress)
+
+- R13.1: OHIF 3.13.13's SOP class handlers (read at tag `v3.13.13`) cover the RT Structure Set, not RT Dose or RT
+  Plan; `docs/viewing.md` says what OHIF and 3D Slicer show and how to set up the push and the viewer. Setting
+  `RADIARCH_VIEWER_URL`; `viewer_url` on `RTExportResult` and `RTPushResult` after a successful push
+  (`services/rt_export.viewer_link`). `tests/test_r13_viewer.py`: the structure set's references as OHIF's RT
+  loader walks them (it iterates Contour Image Sequence unguarded), contour planes on CT slices, the viewer link,
+  and a STOW-RS push of a CT and an export with QIDO/WADO read-back (`RADIARCH_TEST_DICOMWEB_URL`). CI: an
+  Orthanc service container (DICOMweb plugin) in Full Tests. Local run against a throwaway Orthanc: 3 pass.
+

@@ -196,6 +196,7 @@ class RTExportService:
         if request.push:
             ok, err = self._push([o.path for o in objects])
             result.pushed, result.push_error = ok, err
+            result.viewer_url = viewer_link(result.study_instance_uid) if ok else None
         self._save(result)
         logger.info("RT export {}: {} objects in {}", export_id, len(objects), out)
         return result
@@ -292,8 +293,9 @@ class RTExportService:
         except Exception as exc:
             return RTPushResult(export_id=export_id, pushed=0, url=notifier._url or "", error=str(exc))
         result.pushed, result.push_error = True, None
+        result.viewer_url = viewer_link(result.study_instance_uid)
         self._save(result)
-        return RTPushResult(export_id=export_id, pushed=len(paths), url=notifier._url or "")
+        return RTPushResult(export_id=export_id, pushed=len(paths), url=notifier._url or "", viewer_url=result.viewer_url)
 
     def _push(self, paths: Sequence[str]) -> Tuple[bool, Optional[str]]:
         from ..adapters.dicomweb import get_dicomweb_notifier
@@ -529,6 +531,12 @@ class RTExportService:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def viewer_link(study_instance_uid: str) -> Optional[str]:
+    """A link that opens the study in the configured DICOMweb viewer (OHIF's study route); None without one."""
+    base = get_settings().viewer_url.strip().rstrip("/")
+    return f"{base}/viewer?StudyInstanceUIDs={study_instance_uid}" if base else None
+
 
 def _read_volume(uri: str) -> np.ndarray:
     path = uri[len("file://"):] if uri.startswith("file://") else uri

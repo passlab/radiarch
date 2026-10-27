@@ -133,6 +133,7 @@ All settings use `RADIARCH_` prefix. Place them in `.env` or export as env vars.
 | `RADIARCH_ORTHANC_BASE_URL` | `http://localhost:8042` | Orthanc REST/DICOMweb URL |
 | `RADIARCH_BROKER_URL` | `redis://localhost:6379/0` | Celery broker (Redis) |
 | `RADIARCH_DICOMWEB_URL` | `""` | DICOMweb STOW-RS URL for artifact push; empty = disabled |
+| `RADIARCH_VIEWER_URL` | `""` | OHIF base URL; a successful push returns a `viewer_url` that opens the study (`docs/viewing.md`) |
 | `RADIARCH_API_KEY` | `""` | `X-API-Key` required on every `/api/v1` route except `/info`; empty disables auth (dev only) |
 | `RADIARCH_ALLOW_TEST_ENGINES` | unset | Permit the test-only `analytic` engine (wrong physics by design). Unset = only when `RADIARCH_ENVIRONMENT=dev` |
 | `RADIARCH_DATA_ROOT` | `""` | DICOM (CT + RTSTRUCT) directory read when no upload or PACS study is given; empty = the bundled `tests/data/SimpleFantomWithStruct` |

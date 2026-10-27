@@ -110,6 +110,7 @@ class RTExportResult(ResearchArtifact):
     objects: List[RTObjectRef] = Field(default_factory=list)
     pushed: bool = False
     push_error: Optional[str] = None
+    viewer_url: Optional[str] = Field(default=None, description="Opens the study in the configured viewer once pushed (RADIARCH_VIEWER_URL).")
     created_at: Optional[datetime] = None
 
 
@@ -160,6 +161,7 @@ class RTPushResult(BaseModel):
     error: Optional[str] = None
     http_status: Optional[int] = Field(default=None, description="The server's HTTP status when it refused the push.")
     response: Optional[Any] = Field(default=None, description="The refusal body, parsed when it is JSON (a gateway's findings).")
+    viewer_url: Optional[str] = Field(default=None, description="Opens the study in the configured viewer (RADIARCH_VIEWER_URL).")
 
 
 __all__ = ["OBJECT_KINDS", "PrescriptionSpec", "RTExportRequest", "RTObjectRef", "RTExportResult", "SessionSpec",

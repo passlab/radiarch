@@ -98,6 +98,8 @@ Give `kinds` to push only what the endpoint accepts (for example `["RTSTRUCT", "
 When the server refuses the push, the result carries `http_status` and `response` (the body, parsed
 when it is JSON), so its findings say why. The export's `label` (default `RESEARCH`) becomes the RT
 Plan and Structure Set labels (16 characters); research endpoints may require RESEARCH in them.
+With `RADIARCH_VIEWER_URL` set to an OHIF that reads the same server, a successful push returns
+`viewer_url`, which opens the study; `viewing.md` covers what OHIF and 3D Slicer show.
 
 ## Resource limits (D7.1)
 
