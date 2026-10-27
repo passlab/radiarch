@@ -65,7 +65,8 @@ def written(tmp_path_factory):
     opt = PlanWriteOptions(label="SMOKE", prescription=Prescription(dose_gy=60, fractions=30, target_name="PTV", target_roi_number=1),
                            drr_refs={"AP": (SOP.RTIMAGE, im.sop_instance_uid)}, sop_instance_uid=plan_uid)
     rp = write_rtplan(ctx, pplan, out / "RP.dcm", rtstruct_uid=rs.sop_instance_uid, options=opt)
-    rd = write_rtdose(ctx, dose, ORIGIN, SP, out / "RD.dcm", plan_sop_class=rp.sop_class_uid, plan_sop_instance=rp.sop_instance_uid)
+    rd = write_rtdose(ctx, dose, ORIGIN, SP, out / "RD.dcm", plan_sop_class=rp.sop_class_uid, plan_sop_instance=rp.sop_instance_uid,
+                      rtstruct_uid=rs.sop_instance_uid, dvh_rois=[(rs.roi_numbers["PTV"], ptv), (rs.roi_numbers["Body"], body)])   # with the RT DVH module (R13)
     rdb = write_rtdose(ctx, dose * 0.5, ORIGIN, SP, out / "RD_B1.dcm", plan_sop_class=rp.sop_class_uid, plan_sop_instance=rp.sop_instance_uid,
                        summation="BEAM", beam_number=1, rbe=1.1, dose_units="Gy(RBE)")
     ip = write_rtplan(ctx, iplan, out / "RP_ion.dcm", rtstruct_uid=rs.sop_instance_uid,

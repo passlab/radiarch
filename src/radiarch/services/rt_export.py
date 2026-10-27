@@ -99,6 +99,27 @@ class RTExportService:
                 return Path(obj.path)
         return None
 
+    def find(self, *, study_instance_uid: Optional[str] = None, series_instance_uid: Optional[str] = None,
+             sop_instance_uid: Optional[str] = None, limit: int = 50) -> List[RTExportResult]:
+        """Exports matching DICOM UIDs, newest first: a viewer that opened a study, a series or an instance finds the
+        export (and through it the geometry, plan, dose and lineage) radiarch made it from. Every filter given must match."""
+        found = []
+        for p in self.base_dir.glob(f"*/{MANIFEST}"):
+            try:
+                r = RTExportResult.model_validate_json(p.read_text())
+            except ValueError:
+                continue
+            if study_instance_uid and r.study_instance_uid != study_instance_uid:
+                continue
+            if series_instance_uid and all(o.series_instance_uid != series_instance_uid for o in r.objects):
+                continue
+            if sop_instance_uid and all(o.sop_instance_uid != sop_instance_uid for o in r.objects):
+                continue
+            found.append(r)
+        epoch = datetime.min.replace(tzinfo=timezone.utc)
+        found.sort(key=lambda r: r.created_at or epoch, reverse=True)
+        return found[:max(0, int(limit))]
+
     def _save(self, result: RTExportResult) -> None:
         d = self.directory(result.export_id)
         d.mkdir(parents=True, exist_ok=True)
@@ -123,6 +144,7 @@ class RTExportService:
         # 1. structures
         rtstruct_uid = request.rtstruct_uid
         roi_numbers: Dict[str, int] = {}
+        structures: List[Structure] = []
         if "rtstruct" in request.objects:
             names = request.structures or sorted(arrays.structure_index, key=lambda n: arrays.structure_index[n])
             missing = [n for n in names if n not in arrays.structure_index]
@@ -171,10 +193,13 @@ class RTExportService:
                 raise RTExportError("no dose to write: give dose_id with the beam model, or export a sequence or optimization")
             if tuple(src.dose_zyx.shape) != tuple(arrays.shape_zyx):
                 raise RTExportError(f"dose shape {src.dose_zyx.shape} differs from the geometry grid {arrays.shape_zyx}")
+            dvh_rois = [(roi_numbers[s.name], s.mask_zyx) for s in structures
+                        if s.name in roi_numbers and s.mask_zyx is not None] if request.dvh else []
             rd = write_rtdose(ctx, src.dose_zyx, origin, spacing, out / "RD.dcm", plan_sop_class=plan_sop_class, plan_sop_instance=plan_uid,
                               rbe=src.rbe, dose_units=src.dose_units, comment=f"engine {src.engine_name}" if src.engine_name else "",
                               series_instance_uid=_series_uid(export_id, "rtdose"), summation=request.dose_summation,
-                              other_plans=[(plan_sop_class, u) for u in request.summed_plan_uids])
+                              other_plans=[(plan_sop_class, u) for u in request.summed_plan_uids],
+                              rtstruct_uid=rtstruct_uid if dvh_rois else None, dvh_rois=dvh_rois)
             objects.append(self._ref("RTDOSE", rd.path, SOP.RTDOSE, rd.sop_instance_uid, rd.series_instance_uid, summation=request.dose_summation))
             if request.per_beam_dose:
                 for n, (beam, dose) in enumerate(zip(beams, self._beam_doses(request, src)), start=1):

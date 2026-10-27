@@ -494,4 +494,12 @@ optimization for VMAT; the R8 record for the physicist.
   loader walks them (it iterates Contour Image Sequence unguarded), contour planes on CT slices, the viewer link,
   and a STOW-RS push of a CT and an export with QIDO/WADO read-back (`RADIARCH_TEST_DICOMWEB_URL`). CI: an
   Orthanc service container (DICOMweb plugin) in Full Tests. Local run against a throwaway Orthanc: 3 pass.
+- R13.2a (ADR 0018, the viewer as one OHIF extension, standalone or embedded): `RTExportService.find` and
+  `GET /rt/exports` (by study, series or SOP instance UID, every filter must match, newest first; SDK
+  `find_exports`), so a viewer finds the export of what it shows. The plan dose carries the RT DVH module
+  (`dicom/writers/rtdose.dvh_items`): per exported ROI a cumulative DVH in cm³ from the dose as stored, uniform
+  bins (`dvh_bin_width`: 1, 2 or 5 × 10^k Gy, at least 0.01 Gy, at most 1000 bins, as DVH Data is DS and capped at
+  64 KiB in explicit VR), minimum, maximum and mean; `RTExportRequest.dvh` (default true). dciodvfy passes on the
+  writers' test dose with DVHs. Tests: `tests/test_r13_viewer.py` (the DVH against `dvh_on_bins` on the
+  geometry's masks, bin widths, the lookup through service, API and SDK).
 

@@ -1,6 +1,7 @@
 """FastAPI routes of the RT object export (roadmap R6).
 
 ``POST /api/v1/rt/export``                          — write the RT objects of a plan.
+``GET  /api/v1/rt/exports``                         — exports by DICOM UID (study, series, instance), newest first.
 ``GET  /api/v1/rt/exports/{export_id}``             — the manifest.
 ``GET  /api/v1/rt/exports/{export_id}/files/{name}``— one object (application/dicom).
 ``POST /api/v1/rt/exports/{export_id}/records``     — treatment records for sessions, and the summary.
@@ -11,7 +12,9 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from fastapi import APIRouter, HTTPException
+from typing import List, Optional
+
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from ...models.rt_export import RTExportRequest, RTExportResult, RTPushRequest, RTPushResult, RTRecordRequest, RTRecordResult
@@ -36,6 +39,16 @@ async def export_rt_objects(request: RTExportRequest) -> RTExportResult:
         raise HTTPException(status_code=404 if "not found" in str(exc) else 422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/exports", response_model=List[RTExportResult], summary="Exports by DICOM UID, newest first.",
+            description="A viewer that shows a study, series or instance finds the export radiarch wrote it in; every filter given must match.")
+async def find_exports(study_instance_uid: Optional[str] = Query(default=None, max_length=64),
+                       series_instance_uid: Optional[str] = Query(default=None, max_length=64),
+                       sop_instance_uid: Optional[str] = Query(default=None, max_length=64),
+                       limit: int = Query(default=50, ge=1, le=500)) -> List[RTExportResult]:
+    return _service().find(study_instance_uid=study_instance_uid, series_instance_uid=series_instance_uid,
+                           sop_instance_uid=sop_instance_uid, limit=limit)
 
 
 @router.get("/exports/{export_id}", response_model=RTExportResult, summary="The manifest of an export.")

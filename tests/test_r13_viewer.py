@@ -174,3 +174,82 @@ def test_push_to_a_dicomweb_server_and_read_back(env, tmp_path):
     rd = meta("RTDOSE")
     assert rd.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID == res.plan_sop_instance_uid in instances
     assert rd.FrameOfReferenceUID == rs.ReferencedFrameOfReferenceSequence[0].FrameOfReferenceUID == vol.frameOfReferenceUID
+
+
+# --- R13.2a: what a viewer needs from radiarch beyond the objects -------------------------------------------------
+
+def test_the_plan_dose_carries_each_structures_dvh(env):
+    from radiarch.dicom.writers.rtdose import DVH_MAX_BINS, dvh_bin_width
+    from radiarch.services.dvh import dvh_on_bins
+
+    svc, res = _export()
+    rd = pydicom.dcmread(svc.file_path(res.export_id, "RD.dcm"))
+    rs = pydicom.dcmread(svc.file_path(res.export_id, "RS.dcm"))
+    assert rd.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID == res.rtstruct_uid
+    rois = {int(r.ROINumber): str(r.ROIName) for r in rs.StructureSetROISequence}
+    dvhs = {int(i.DVHReferencedROISequence[0].ReferencedROINumber): i for i in rd.DVHSequence}
+    assert set(dvhs) == set(rois)
+
+    dose = np.frombuffer(rd.PixelData, dtype=np.uint32).reshape(int(rd.NumberOfFrames), rd.Rows, rd.Columns) * float(rd.DoseGridScaling)
+    voxel_cc = float(rd.PixelSpacing[0]) * float(rd.PixelSpacing[1]) * float(rd.SliceThickness) / 1000.0
+    from radiarch.services.geometry import GeometryService
+    from radiarch.services.geometry_bundle import load_geometry_arrays
+
+    arrays = load_geometry_arrays(GeometryService().store.get_by_id(res.geometry_id))
+    masks = {name: arrays.mask_zyx(index) for name, index in arrays.structure_index.items()}
+    width = dvh_bin_width(float(dose.max()))
+    for number, item in dvhs.items():
+        mask = masks[rois[number]]
+        assert (item.DVHType, item.DoseUnits, item.DVHVolumeUnits, item.DoseType) == ("CUMULATIVE", "GY", "CM3", rd.DoseType)
+        data = np.asarray(item.DVHData, dtype=float).reshape(-1, 2)
+        assert len(data) == int(item.DVHNumberOfBins) <= DVH_MAX_BINS and np.all(data[:, 0] == width)
+        volume = data[:, 1]
+        assert volume[0] == pytest.approx(mask.sum() * voxel_cc, rel=1e-5)          # the whole ROI at 0 Gy
+        assert np.all(np.diff(volume) <= 1e-9) and volume[-1] > 0                     # cumulative, the last bin holds the maximum
+        expected = dvh_on_bins(dose, mask, np.arange(len(volume)) * width) / 100.0 * mask.sum() * voxel_cc
+        assert np.allclose(volume, expected, rtol=1e-5, atol=1e-6)
+        assert float(item.DVHMaximumDose) == pytest.approx(dose[mask].max(), rel=1e-5)
+        assert float(item.DVHMeanDose) == pytest.approx(dose[mask].mean(), rel=1e-5)
+
+    # without the structure set in the export, or when asked not to, no DVH
+    _svc, res2 = _export_with(dvh=False)
+    assert "DVHSequence" not in pydicom.dcmread(_svc.file_path(res2.export_id, "RD.dcm"))
+
+
+def _export_with(**request):
+    from radiarch.services.rt_export import RTExportService
+
+    _geo, _bm, _opt, seq = _photon_pipeline()
+    svc = RTExportService()
+    return svc, svc.export(RTExportRequest(sequence_id=seq.sequence_id, **request))
+
+
+def test_dvh_bin_width():
+    from radiarch.dicom.writers.rtdose import DVH_MAX_BINS, dvh_bin_width
+
+    assert [dvh_bin_width(x) for x in (0.0, 5.0, 20.0, 60.0, 74.0, 300.0)] == [0.01, 0.01, 0.05, 0.1, 0.1, 0.5]
+    for x in (0.3, 9.99, 61.2, 123.0, 999.0):
+        assert x / dvh_bin_width(x) < DVH_MAX_BINS
+
+
+def test_a_viewer_finds_the_export_of_what_it_shows(env, monkeypatch):
+    import radiarch.app as radiarch_app
+    from radiarch.sdk import Radiarch
+
+    monkeypatch.setattr(radiarch_app, "init_db", lambda: None)
+    svc, a = _export()
+    _svc, b = _export()
+    vol = _loaded_ct().ct
+    dose_a = next(o for o in a.objects if o.kind == "RTDOSE")
+
+    assert [r.export_id for r in svc.find(study_instance_uid=vol.studyInstanceUID)] == [b.export_id, a.export_id]   # newest first
+    assert [r.export_id for r in svc.find(sop_instance_uid=a.plan_sop_instance_uid)] == [a.export_id]
+    assert [r.export_id for r in svc.find(series_instance_uid=dose_a.series_instance_uid)] == [a.export_id]
+    assert svc.find(study_instance_uid="1.2.3.4") == [] and len(svc.find(limit=1)) == 1
+    assert svc.find(study_instance_uid=vol.studyInstanceUID, sop_instance_uid="1.2.3.4") == []     # every filter must match
+
+    with Radiarch.local(poll_interval=0.01) as rx:
+        found = rx.find_exports(sop_instance_uid=dose_a.sop_instance_uid)
+        assert [e.id for e in found] == [a.export_id] and found[0].result.dose_id == a.dose_id
+        assert len(rx.find_exports(study_instance_uid=vol.studyInstanceUID)) == 2
+        assert rx.request("GET", "/rt/exports", params={"limit": 0}, expect=(422,)).status_code == 422

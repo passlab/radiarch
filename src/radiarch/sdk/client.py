@@ -8,7 +8,7 @@ the result, which ``GET /{service}/{id}`` returns. :meth:`Radiarch.submit` hides
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Optional, Type, TypeVar
+from typing import Any, Dict, List, Optional, Type, TypeVar
 
 import httpx
 from pydantic import BaseModel
@@ -183,6 +183,15 @@ class Radiarch:
         from ..models.rt_export import RTExportResult
         from .objects import Export
         return Export(self, self.get(f"/rt/exports/{export_id}", RTExportResult))
+
+    def find_exports(self, *, study_instance_uid: Optional[str] = None, series_instance_uid: Optional[str] = None,
+                     sop_instance_uid: Optional[str] = None, limit: int = 50) -> List[Any]:
+        """Exports by DICOM UID, newest first (what a viewer showing that study, series or instance came from)."""
+        from ..models.rt_export import RTExportResult
+        from .objects import Export
+        params = {k: v for k, v in {"study_instance_uid": study_instance_uid, "series_instance_uid": series_instance_uid,
+                                    "sop_instance_uid": sop_instance_uid, "limit": limit}.items() if v is not None}
+        return [Export(self, RTExportResult.model_validate(r)) for r in self.get("/rt/exports", **params)]
 
     def protocols(self) -> Any:
         """The shipped planning protocols."""

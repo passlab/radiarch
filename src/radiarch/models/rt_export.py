@@ -44,6 +44,7 @@ class RTExportRequest(BaseModel):
     prescription: Optional[PrescriptionSpec] = None
     structures: Optional[List[str]] = Field(default=None, max_length=64, description="Structures to write; null = every structure of the geometry.")
     objects: List[str] = Field(default_factory=lambda: list(OBJECT_KINDS), description="Which objects to write.")
+    dvh: bool = Field(default=True, description="Write each structure's cumulative DVH into the plan dose (RT DVH module), when the structure set is written too.")
     per_beam_dose: bool = Field(default=False, description="Also write one BEAM-summation dose per beam (an engine run per beam, cached).")
     engine: Optional[EngineSpec] = Field(default=None, description="Engine for the per-beam doses; null = the plan's dose engine.")
     drr_size_mm: Tuple[float, float] = Field(default=(300.0, 300.0))

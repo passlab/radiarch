@@ -19,8 +19,9 @@ Radiarch is research software, not for clinical use. Start with the design, then
 optimizer and beam-angle search (0002, 0003), evaluation metrics (0004), owning the core (0005),
 the MCsquare driver (0006), DICOM RT readers (0007), the core without OpenTPS (0008), robust
 protons (0009), machine model and apertures (0010), clinical goals and radiobiology (0011), the
-RT object writer (0012), versions and lineage (0013), the validation report (0014), and the
-native pencil-beam engine with VMAT and SBRT (0015).
+RT object writer (0012), versions and lineage (0013), the validation report (0014), the
+native pencil-beam engine with VMAT and SBRT (0015), registration, 4D and replanning (0016), the
+SDK and planning protocols (0017), and the viewer as an OHIF extension, standalone or embedded (0018).
 
 ## Reports
 

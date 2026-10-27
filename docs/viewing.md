@@ -10,7 +10,7 @@ Research use only; nothing here is for clinical use.
 |---|---|---|
 | CT (from the source PACS) | yes | yes |
 | RT Structure Set | yes: contours over the CT (`cornerstone-dicom-rt`) | yes |
-| RT Dose | **no**: OHIF has no RT Dose handler; the series is listed but not drawn | yes: dose colour wash, isodoses, DVH |
+| RT Dose | **no**: OHIF has no RT Dose handler; the series is listed but not drawn | yes: dose colour wash, isodoses, DVH (radiarch's, from the file) |
 | RT Plan, RT Ion Plan | no (no handler) | yes: beams |
 | RT Image (DRR) | as an image series | yes |
 | RT treatment records | no | no |
@@ -34,6 +34,23 @@ Contours are written on the geometry's grid. When the geometry was resampled fro
 planes can fall between CT slices; on the CT's own grid they lie on the slices.
 
 `tests/test_r13_viewer.py` checks all of this on every push to GitHub.
+
+## What a viewer gets beyond the objects (R13.2a)
+
+- **Radiarch's DVH in the RT Dose.** The plan dose of an export carries the RT DVH module:
+  - one cumulative DVH per ROI of the exported structure set, in cm³, with each ROI's minimum,
+    maximum and mean dose;
+  - computed from the dose as stored, on radiarch's grid;
+  - bins 1, 2 or 5 × 10^k Gy wide, at most 1000.
+  3D Slicer and the radiarch OHIF extension read it from the file. Turn it off with `"dvh": false` on
+  the export.
+- **The export behind what is on screen.** `GET /api/v1/rt/exports?sop_instance_uid=<uid>` returns the
+  export that wrote that instance. `series_instance_uid` and `study_instance_uid` work the same way,
+  and every filter given must match. Results are newest first; the SDK call is `rx.find_exports(...)`.
+  An export names its geometry, plan and dose, from which the evaluation and the lineage follow.
+
+The design of the viewer itself, one OHIF extension used standalone or inside another OHIF, is
+ADR 0018.
 
 ## Setting it up
 

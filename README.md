@@ -217,10 +217,11 @@ roadmap R9). Arcs are discretized per control-point interval at the mid-angle.
 `radiarch.dicom.writers` writes the RT objects of a case on one shared context, every one labelled
 research use only (ADR 0012): the RT Structure Set of a geometry (masks → closed planar contours),
 the RT Plan (photon step-and-shoot with MLC control points and MU) or RT Ion Plan (spots per energy
-layer), the RT Dose (PLAN, and BEAM per beam on request), one DRR RT Image per beam
+layer), the RT Dose (PLAN with each structure's DVH, and BEAM per beam on request), one DRR RT Image per beam
 (`radiarch.dicom.drr`, ray marching), and the RT (Ion) Beams Treatment Record per session plus the
 RT Treatment Summary Record. `POST /rt/export` assembles them from an aperture sequence, a proton
-optimization or a beam model with its own metersets; `POST /rt/exports/{id}/records` adds sessions;
+optimization or a beam model with its own metersets; `GET /rt/exports?sop_instance_uid=…` finds the export
+that wrote an object (`docs/viewing.md`); `POST /rt/exports/{id}/records` adds sessions;
 `push` or `POST /rt/exports/{id}/push` sends them with STOW-RS (`RADIARCH_DICOMWEB_URL`):
 
 ```bash

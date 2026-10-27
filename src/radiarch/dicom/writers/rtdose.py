@@ -8,19 +8,72 @@ scaled by ``DoseGridScaling`` over 31 bits (a 70 Gy plan resolves to
 PHYSICAL otherwise; the RBE and the units go into ``DoseComment``. Summation
 PLAN references the plan, BEAM references the plan, its fraction group and
 the beam.
+
+Given the structure set's ROI numbers and masks on the dose grid, the dose also
+carries the RT DVH module (R13): one cumulative DVH per ROI in cm³, bins of a
+uniform width from 0 Gy, with each ROI's minimum, maximum and mean dose, so a
+viewer shows radiarch's DVH without its API.
 """
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional, Sequence, Tuple, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from pydicom.dataset import Dataset
 
 from ..uids import SOP
 from .common import CaseContext, ds_list, new_dataset, ref, research_text, save, seq, with_frame_of_reference
+
+
+DVH_MAX_BINS = 1000        # DVH Data is DS, whose explicit-VR length field caps it at 64 KiB: 1000 pairs fit
+DVH_MIN_BIN_GY = 0.01
+
+
+def dvh_bin_width(dose_max_gy: float) -> float:
+    """The DVH bin width: 1, 2 or 5 × 10^k Gy, at least 0.01 Gy, so the maximum dose fits in DVH_MAX_BINS bins."""
+    target = max(DVH_MIN_BIN_GY, float(dose_max_gy) / (DVH_MAX_BINS - 1))
+    k = math.floor(math.log10(target))
+    for m in (1.0, 2.0, 5.0, 10.0):
+        if m * 10**k >= target * (1 - 1e-9):
+            return float(f"{m * 10**k:.6g}")
+    return float(10 ** (k + 1))
+
+
+def dvh_items(dose_zyx: np.ndarray, rois: Sequence[Tuple[int, np.ndarray]], voxel_cc: float, dose_type: str) -> List[Dataset]:
+    """DVH Sequence items: per ROI, the cumulative DVH (volume in cm³ at or above each bin's lower edge)."""
+    from ...services.dvh import dvh_on_bins
+
+    dose = np.asarray(dose_zyx, dtype=np.float64)
+    width = dvh_bin_width(float(dose.max()) if dose.size else 0.0)
+    items = []
+    for number, mask in rois:
+        m = np.asarray(mask, dtype=bool)
+        if m.shape != dose.shape:
+            raise ValueError(f"ROI {number}: mask shape {m.shape} != dose shape {dose.shape}")
+        if not m.any():
+            continue
+        d = dose[m]
+        n_bins = int(math.floor(float(d.max()) / width)) + 1
+        volume = dvh_on_bins(dose, m, np.arange(n_bins) * width) / 100.0 * m.sum() * voxel_cc
+        item = Dataset()
+        roi = Dataset()
+        roi.ReferencedROINumber = int(number)
+        roi.DVHROIContributionType = "INCLUDED"
+        item.DVHReferencedROISequence = seq([roi])
+        item.DVHType = "CUMULATIVE"
+        item.DoseUnits = "GY"
+        item.DoseType = dose_type
+        item.DVHDoseScaling = 1.0
+        item.DVHVolumeUnits = "CM3"
+        item.DVHNumberOfBins = n_bins
+        item.DVHData = [v for pair in zip([width] * n_bins, ds_list(volume)) for v in pair]
+        item.DVHMinimumDose, item.DVHMaximumDose, item.DVHMeanDose = ds_list([d.min(), d.max(), d.mean()])
+        items.append(item)
+    return items
 
 
 @dataclass
@@ -38,7 +91,8 @@ def build_rtdose(ctx: CaseContext, dose_zyx: np.ndarray, origin_mm: Sequence[flo
                  fraction_group_number: int = 1, rbe: float = 1.0, dose_units: str = "Gy", comment: str = "",
                  series_number: int = 300, series_instance_uid: Optional[str] = None,
                  sop_instance_uid: Optional[str] = None, instance_number: int = 1,
-                 heterogeneity: str = "IMAGE", other_plans: Sequence[Tuple[str, str]] = ()) -> Dataset:
+                 heterogeneity: str = "IMAGE", other_plans: Sequence[Tuple[str, str]] = (),
+                 rtstruct_uid: Optional[str] = None, dvh_rois: Sequence[Tuple[int, np.ndarray]] = ()) -> Dataset:
     dose = np.asarray(dose_zyx, dtype=np.float32)
     if dose.ndim != 3:
         raise ValueError("dose must be a (z, y, x) volume")
@@ -48,6 +102,8 @@ def build_rtdose(ctx: CaseContext, dose_zyx: np.ndarray, origin_mm: Sequence[flo
         raise ValueError("a BEAM dose needs the beam number")
     if other_plans and summation != "MULTI_PLAN":
         raise ValueError("only a MULTI_PLAN dose references other plans")
+    if dvh_rois and not rtstruct_uid:
+        raise ValueError("DVHs reference the structure set: give rtstruct_uid")
     nz, ny, nx = dose.shape
     sx, sy, sz = (float(v) for v in spacing_mm)
     ox, oy, oz = (float(v) for v in origin_mm)
@@ -107,6 +163,13 @@ def build_rtdose(ctx: CaseContext, dose_zyx: np.ndarray, origin_mm: Sequence[flo
         scaled = np.zeros(dose.shape, dtype=np.uint32)
     ds.DoseGridScaling = float(f"{scaling:.10g}")
     ds.PixelData = np.ascontiguousarray(scaled).tobytes()
+
+    # RT DVH: from the dose as stored (the scaled integers), so it is the DVH of what a reader of this file gets
+    if dvh_rois:
+        items = dvh_items(scaled.astype(np.float64) * float(ds.DoseGridScaling), dvh_rois, sx * sy * sz / 1000.0, str(ds.DoseType))
+        if items:
+            ds.ReferencedStructureSetSequence = seq([ref(SOP.RTSTRUCT, rtstruct_uid)])
+            ds.DVHSequence = seq(items)
     return ds
 
 
@@ -119,4 +182,4 @@ def write_rtdose(ctx: CaseContext, dose_zyx: np.ndarray, origin_mm: Sequence[flo
                         max_gy=float(np.asarray(dose_zyx, dtype=np.float32).max()) if np.asarray(dose_zyx).size else 0.0)
 
 
-__all__ = ["RTDoseResult", "build_rtdose", "write_rtdose"]
+__all__ = ["RTDoseResult", "build_rtdose", "write_rtdose", "dvh_items", "dvh_bin_width"]

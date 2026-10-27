@@ -30,7 +30,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 13 | R8 Native pencil-beam engine, VMAT, SBRT | done; physicist review waiting | 6e73aa2..cc5c047 | 0015 |
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
-| 16 | R13 Viewer integration | in progress (R13.1 done) | fc7473d | — |
+| 16 | R13 Viewer integration | in progress (R13.1, R13.2a done) | fc7473d | 0018 |
 | 17 | R11 Multi-criteria optimization | not started | — | — |
 
 ## Before the roadmap (done by 2026-10-20)
@@ -118,7 +118,8 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] Export service, STOW-RS push, conformance checks in CI
 - [x] RT Plan with VMAT arcs (DYNAMIC beams) — done in R8
 - [ ] Objects checked by hand in OHIF and 3D Slicer **(open)**
-- [ ] Wedges, compensators, blocks, bolus; DVH sequence in RT Dose **(open)**
+- [ ] Wedges, compensators, blocks, bolus **(open)**
+- [x] DVH sequence in RT Dose (R13.2a)
 
 ### R12 — Versions, lineage, states
 - [x] Lineage graph over every store; descendants; attribution
@@ -198,11 +199,18 @@ OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH
   (OHIF draws the structure set; it has no RT Dose or RT Plan handler); the structure set checked against
   what OHIF's RT loader reads; `RADIARCH_VIEWER_URL` and `viewer_url` on a pushed export; STOW-RS push and
   QIDO/WADO read-back against Orthanc in CI (`tests/test_r13_viewer.py`, an Orthanc service in Full Tests)
-- [ ] R13.2 A radiarch OHIF extension for OHIF 3.13.13: the RT Dose as an overlay on the CT, and a panel
-  with the DVH, the clinical goals and the plan summary from `/evaluate`; built as an ordinary extension
-  and mode package, with its build and tests in CI
+- [x] R13.2a What a viewer needs from the server (ADR 0018): `GET /rt/exports` by study, series or instance
+  UID (service, API, SDK `find_exports`); the plan dose carries the RT DVH module, one cumulative DVH per
+  exported ROI from the dose as stored (`dvh: true`, the default)
+- [ ] R13.2b The dose layer of the OHIF extension (`viewer/`, OHIF 3.13.13): an RT Dose handler and volume
+  loader, the dose as a colour wash and isodoses over the CT, the DVH (the file's, else computed and labelled);
+  unit tests and the build against OHIF in CI
+- [ ] R13.2c The radiarch panel (goals, radiarch's DVH, plan summary, evaluate against a template) through
+  the export lookup, and the plan review mode; the API base URL and headers from the host
+- [ ] R13.2d The standalone delivery: a `radiarch-viewer` image and a compose profile, one proxy for OHIF,
+  Orthanc's DICOMweb and radiarch's API that adds the API key server-side; a browser smoke test in CI
 - [ ] R13.3 Record: the objects and the extension checked by hand in OHIF and 3D Slicer (also closes R6's
-  open hand check); ADR
+  open hand check)
 
 ### R11 — Multi-criteria optimization (not started)
 - [ ] Pareto surface generation on the objective set
