@@ -448,8 +448,12 @@ optimization for VMAT; the R8 record for the physicist.
   `known_findings.yaml` names the failures the records explain; `run --known-findings` (CI) fails only on errors and
   on graded failures not listed (`tests/test_validation_known_findings.py`). In fast mode the two pencil-beam lung
   consistency checks are informative: the lateral scaling was fitted at full resolution.
-- Nightly MCsquare: the hosted runner is shut down after about 22 minutes inside `test_mcsquare_dij_matches_direct_dose`
-  since 2026-10-21 (radiarch's own spot placement); not yet resolved.
+- Nightly MCsquare: red on every night on record (from 2026-08-28), either the runner shut down after about 22 minutes
+  inside `test_mcsquare_dij_matches_direct_dose` or a high-dose disagreement of 36 %. One cause: MCsquare's
+  Num_Primaries is per beamlet in beamlet mode and per plan otherwise, and the test gave both runs 1e5, so the Dij
+  carried 1e5 primaries per spot on the 200³ CT grid (out of memory; over 8 GB already at 2e3) and the direct dose
+  about 120 per spot. Fixed in the test (the services were right: the proton workflow already uses separate beamlet
+  and final primaries): 2e3 per spot in both, a 4 mm dose grid; 18 pass in 28 s, 1 GB, high-dose p95 3 %.
 
 ## R10 — scripting SDK, auto-planning, planning protocols, command line (2026-10-25 to 2026-10-26)
 

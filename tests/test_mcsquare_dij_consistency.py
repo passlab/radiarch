@@ -493,7 +493,7 @@ class TestMCsquareDijConsistency:
             DeliveryParams, Modality,
         )
         from radiarch.models.geometry import (
-            GeometryBuildRequest, HUDensityModel, PatientRef,
+            GeometryBuildRequest, GridSpec, HUDensityModel, PatientRef,
         )
         from radiarch.services.beam_model import BeamModelService
         from radiarch.services.geometry import GeometryService
@@ -503,7 +503,9 @@ class TestMCsquareDijConsistency:
 
         geo = gs.build(GeometryBuildRequest(
             patient_ref=PatientRef(dicom_study_uid="demo-study-001"),
-            grid_spec=None,
+            # A 4 mm dose grid (50^3 voxels): the CT grid (200^3) made the Dij too
+            # large for the hosted runner, which was shut down mid-test.
+            grid_spec=GridSpec(spacing_mm=(4.0, 4.0, 4.0)),
             hu_to_density_model=HUDensityModel.stoichiometric,
         ))
 
@@ -534,10 +536,13 @@ class TestMCsquareDijConsistency:
         geo, bm = self._build_synthfantom_pipeline(tmp_path)
         ds = DoseService()
 
-        # Need higher nb_primaries than the default (1e4) so MC noise
-        # doesn't dominate the comparison; 1e5 is a reasonable
-        # compromise between speed (~30s) and signal-to-noise (~2%).
-        engine_params = {"nb_primaries": 1e5}
+        # MCsquare's Num_Primaries is per beamlet in beamlet mode and for the
+        # whole plan otherwise, so the direct run gets per_spot × spots to
+        # match the Dij's statistics. With 1e5 in both, the direct dose had
+        # ~120 primaries per spot (high-dose p95 36 %) and the Dij 1e5 per spot
+        # (out of memory on the runner). 2e3 per spot on the 4 mm grid: about
+        # 15 s and 1 GB here, high-dose p95 about 3 %.
+        per_spot = 2e3
 
         # Load the bundled geometry + beam-model from the service
         # caches via the public path (build is idempotent).
@@ -557,12 +562,12 @@ class TestMCsquareDijConsistency:
 
         # Direct
         direct = engine.compute_dose(
-            geom_bundle, bm_bundle, weights, params=engine_params,
+            geom_bundle, bm_bundle, weights, params={"nb_primaries": per_spot * n},
         ).dose
 
         # Via Dij
         influence = engine.build_influence(
-            geom_bundle, bm_bundle, params=engine_params,
+            geom_bundle, bm_bundle, params={"nb_primaries": per_spot},
         )
         via_dij = engine.apply_influence(
             influence, weights, geom_bundle.density.shape,
