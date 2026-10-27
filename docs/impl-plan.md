@@ -202,9 +202,12 @@ OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH
 - [x] R13.2a What a viewer needs from the server (ADR 0018): `GET /rt/exports` by study, series or instance
   UID (service, API, SDK `find_exports`); the plan dose carries the RT DVH module, one cumulative DVH per
   exported ROI from the dose as stored (`dvh: true`, the default)
-- [ ] R13.2b The dose layer of the OHIF extension (`viewer/`, OHIF 3.13.13): an RT Dose handler and volume
-  loader, the dose as a colour wash and isodoses over the CT, the DVH (the file's, else computed and labelled);
-  unit tests and the build against OHIF in CI
+- [x] R13.2b The dose layer (`viewer/`): `rt-dose-core` (RT Dose volume, resampling onto the CT, the file's
+  DVHs, prescription and isodose colour wash; Node tests against radiarch's and synthetic doses through
+  `tests/test_r13_viewer_core.py`) and `ohif-extension-rt-dose` (RT Dose display sets, the dose viewport, the DVH
+  panel); `viewer/scripts/build-ohif.sh` and the CI job "Viewer" build it inside OHIF 3.13.13
+- [ ] R13.2b′ DVHs computed in the browser for an RT Dose without the DVH module (structure rasterization),
+  labelled as such
 - [ ] R13.2c The radiarch panel (goals, radiarch's DVH, plan summary, evaluate against a template) through
   the export lookup, and the plan review mode; the API base URL and headers from the host
 - [ ] R13.2d The standalone delivery: a `radiarch-viewer` image and a compose profile, one proxy for OHIF,

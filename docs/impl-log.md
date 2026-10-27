@@ -502,4 +502,27 @@ optimization for VMAT; the R8 record for the physicist.
   64 KiB in explicit VR), minimum, maximum and mean; `RTExportRequest.dvh` (default true). dciodvfy passes on the
   writers' test dose with DVHs. Tests: `tests/test_r13_viewer.py` (the DVH against `dvh_on_bins` on the
   geometry's masks, bin widths, the lookup through service, API and SDK).
+- R13.2b: `viewer/rt-dose-core` (plain JavaScript, no dependencies):
+  - `readDose`: grid from IPP, IOP, Pixel Spacing and Grid Frame Offset Vector (relative or absolute, uneven frames);
+    16- or 32-bit, signed or not, × Dose Grid Scaling;
+  - `resampleToGrid`: trilinear onto any oriented grid, zero outside;
+  - `readDVHs` and `roiInfo`: the file's DVHs, cumulative or differential, named and coloured by the structure set;
+  - `referenceDose`: the plan's target prescription, else the maximum;
+  - `isodoseLevels`, `doseColormap`: Cornerstone takes opacity points as data values but rescales RGB points onto
+    the window, so the map returns its range.
+  `tests/test_r13_viewer_core.py` writes fixtures and runs `core.test.js` with Node: radiarch's export plus synthetic
+  doses (rotated orientation with absolute uneven offsets and 16-bit pixels; prone orientation with 32-bit signed
+  pixels), checked against Python's stored doses, indices, scipy trilinear interpolation onto an axial and a
+  rotated grid, and DVH curves. A mutation (row and column spacing swapped) fails two tests.
+  `viewer/ohif-extension-rt-dose` (OHIF 3.13.13):
+  - RT Dose display sets with Modality `PMAP`, since OHIF's cache service draws a derived overlay volume only for
+    that pseudo-modality;
+  - the dose resampled onto the CT of its frame of reference, in % of the prescription;
+  - the isodose colormap registered at preRegistration; the dose viewport, modelled on OHIF's parametric map
+    viewport; a DVH panel.
+  `viewer/scripts/build-ohif.sh` puts the packages in a clean OHIF 3.13.13 workspace and builds; the CI job
+  "Viewer" runs it on every push. Built locally: OHIF 3.13.13 with the extension compiles (rspack, its own three
+  size and chunk warnings only), the app imports `@radiarch/ohif-extension-rt-dose`, peak 2.6 GB. The script runs the
+  pnpm OHIF pins through npx (corepack before 0.35 cannot unpack pnpm 12) and OHIF's plain `build`, since `build:ci`
+  also bumps OHIF's release version.
 
