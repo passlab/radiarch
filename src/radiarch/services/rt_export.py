@@ -444,7 +444,9 @@ class RTExportService:
                 engine_version = str(getattr(get_engine(engine_name), "version", "") or "") or None
             except Exception:
                 engine_version = None
-        return {"capability_id": "radiarch", "capability_version": radiarch_version(), "engine_name": engine_name,
+        from ..build import commit
+
+        return {"capability_id": "radiarch", "capability_version": radiarch_version(), "capability_commit": commit(), "engine_name": engine_name,
                 "engine_version": engine_version, "machine_model_id": src.beam_model.machine_model_id,
                 "hu_model": getattr(src.geometry, "hu_to_density_model", None), "modality": str(getattr(src.beam_model.modality, "value", src.beam_model.modality))}
 

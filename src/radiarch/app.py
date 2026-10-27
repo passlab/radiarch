@@ -20,9 +20,11 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    from .build import release
+
     app = FastAPI(
         title=settings.project_name,
-        version="0.1.0",
+        version=release(),
         lifespan=lifespan,
         docs_url=f"{settings.api_prefix}/docs",
         openapi_url=f"{settings.api_prefix}/openapi.json",

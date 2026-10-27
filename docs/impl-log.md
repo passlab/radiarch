@@ -545,3 +545,17 @@ optimization for VMAT; the R8 record for the physicist.
   - `build-ohif.sh` puts the five packages in the workspace and registers both extensions and the mode; local
     build passes. CI checks all three in the bundle.
 
+## Release and commit in every output (2026-10-27)
+
+- Asked after a withdrawal of defective outputs had to fall back on run dates, because every object said 0.1.0.
+- `radiarch/build.py`: `release()` (the package version), `commit()` (`RADIARCH_BUILD_COMMIT`, else the git
+  checkout, `-dirty` with uncommitted changes to tracked files), `software_versions()`, `describe()`.
+- Software Versions is now `[release, "git <commit>"]` in every written object, and the private attribution line
+  reads `radiarch <release> (git <commit>)`.
+- Exports' attribution gains `capability_commit`; `/info` gives `version` and `commit`; the app and the
+  validation report take the release from the same place.
+- Dockerfile and docker-compose pass `RADIARCH_BUILD_COMMIT` as a build argument.
+- Release 0.2.0: the first stamped one, after the output-changing fixes and features since 0.1.0. From now on a fix
+  that changes output raises the patch number and a feature the minor number (`docs/PRODUCTION.md`).
+- Tests: `tests/test_build_version.py`.
+

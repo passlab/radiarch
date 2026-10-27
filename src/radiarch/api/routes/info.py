@@ -1,10 +1,12 @@
 from fastapi import APIRouter
 
+from ...build import commit, release
 from ...config import get_settings
 from ...models.common import RESEARCH_USE_ONLY
 from ...services.dose_engines.registry import engine_health
 
 router = APIRouter(tags=["info"])
+
 settings = get_settings()
 
 
@@ -13,7 +15,8 @@ async def service_info():
     """Service identity. Open (no API key): it carries the intended-use statement."""
     return {
         "name": settings.project_name,
-        "version": "0.1.0",
+        "version": release(),
+        "commit": commit(),
         "environment": settings.environment,
         "intended_use": RESEARCH_USE_ONLY,
         "models": {

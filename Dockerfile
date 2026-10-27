@@ -34,6 +34,11 @@ RUN chmod +x /app/engines/mcsquare/MCsquare* /app/engines/ccc/CCC_DoseEngine/CCC
 # Create data directories
 RUN mkdir -p /data/artifacts /data/sessions
 
+# The commit the image is built from (no git history in the image): it goes into every DICOM object's Software
+# Versions. RADIARCH_BUILD_COMMIT=$(git rev-parse --short=7 HEAD) docker compose build
+ARG RADIARCH_BUILD_COMMIT=""
+ENV RADIARCH_BUILD_COMMIT=${RADIARCH_BUILD_COMMIT}
+
 # Default environment
 ENV RADIARCH_ENVIRONMENT=production \
     RADIARCH_MCSQUARE_DIR=/app/engines/mcsquare \

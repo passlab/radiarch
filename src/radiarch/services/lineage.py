@@ -48,11 +48,8 @@ class VersionLocked(LineageError):
 
 
 def radiarch_version() -> str:
-    try:
-        from importlib.metadata import version
-        return version("radiarch")
-    except Exception:  # pragma: no cover
-        return "0.1.0"
+    from ..build import release
+    return release()
 
 
 # ---------------------------------------------------------------------------

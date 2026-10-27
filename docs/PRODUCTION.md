@@ -84,6 +84,22 @@ full list; what follows is what *must* change from defaults.
 | `RADIARCH_CORS_ORIGINS` | Explicit list of allowed origins | Default `*` is wrong for production. |
 | `RADIARCH_PB_DEVICE` | `auto` on a host with a CUDA GPU (install the `gpu` extra) | The pencil-beam engine runs on the GPU when it can. |
 
+### Which radiarch wrote an object
+
+Every DICOM object radiarch writes states the release and the commit in Software Versions
+(0018,1020), for example `["0.2.0", "git d4190d2"]`. Export attributions and `/api/v1/info`
+carry them too.
+
+An image has no git history, so build it with the commit:
+
+```bash
+RADIARCH_BUILD_COMMIT=$(git rev-parse --short=7 HEAD) docker compose build
+```
+
+Without the commit, objects state the release alone. The release is raised with every change that
+changes output: the patch number for a fix, the minor number for a feature. A defective output can
+then be withdrawn by version and commit.
+
 ### Pushing RT objects (DICOMweb STOW-RS)
 
 `POST /api/v1/rt/exports/{id}/push` sends an export's objects to `RADIARCH_DICOMWEB_URL`, or to

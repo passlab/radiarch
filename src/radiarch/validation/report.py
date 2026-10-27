@@ -125,11 +125,8 @@ def _mcsquare_binary(root: Path) -> Optional[Path]:
 def engine_identity(engine: str) -> Dict[str, Any]:
     """What exactly was tested: versions, digests, build notes."""
     out: Dict[str, Any] = {"engine": engine, "radiarch_commit": _git("rev-parse", "--short", "HEAD"), "radiarch_describe": _git("describe", "--always", "--dirty")}
-    try:
-        from importlib.metadata import version
-        out["radiarch_version"] = version("radiarch")
-    except Exception:
-        out["radiarch_version"] = "0.1.0"
+    from ..build import release
+    out["radiarch_version"] = release()
     if engine == "ccc":
         from ..services.dose_engines.ccc import CCCEngine
         from ..services.dose_engines.ccc_driver import CCCDriver

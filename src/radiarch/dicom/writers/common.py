@@ -39,11 +39,15 @@ DETACHED_STUDY_SOP_CLASS = "1.2.840.10008.3.1.2.3.1"
 
 
 def software_version() -> str:
-    try:
-        from importlib.metadata import version
-        return version("radiarch")
-    except Exception:  # pragma: no cover
-        return "0.1.0"
+    """The release alone (see ``radiarch.build``)."""
+    from ...build import release
+    return release()
+
+
+def software_versions() -> List[str]:
+    """Software Versions: the release and ``git <commit>`` (``radiarch.build``)."""
+    from ...build import software_versions as versions
+    return versions()
 
 
 def stable_uid(*parts: str) -> str:
@@ -215,7 +219,7 @@ def new_dataset(ctx: CaseContext, sop_class: str, modality: str, *, series_numbe
     ds.ManufacturerModelName = MODEL_NAME
     ds.InstitutionName = ctx.institution_name
     ds.StationName = ctx.station_name
-    ds.SoftwareVersions = software_version()
+    ds.SoftwareVersions = software_versions()
 
     label_research(ds, engine=ctx.engine, machine=ctx.machine)
     return ds
@@ -232,7 +236,8 @@ def label_research(ds: Dataset, engine: str = "", machine: str = "") -> Dataset:
     (radiarch version, engine, machine model) in the same private block."""
     block = ds.private_block(PRIVATE_GROUP, PRIVATE_CREATOR, create=True)
     block.add_new(0x01, "LO", NOT_FOR_CLINICAL_USE)
-    block.add_new(0x02, "LO", f"radiarch {software_version()}"[:64])
+    from ...build import describe
+    block.add_new(0x02, "LO", describe()[:64])
     if engine:
         block.add_new(0x03, "LO", f"engine {engine}"[:64])
     if machine:
@@ -263,7 +268,7 @@ def ds_list(values: Sequence[float]) -> List[float]:
 
 
 __all__ = [
-    "CaseContext", "MANUFACTURER", "DETACHED_STUDY_SOP_CLASS", "stable_uid", "software_version",
+    "CaseContext", "MANUFACTURER", "DETACHED_STUDY_SOP_CLASS", "stable_uid", "software_version", "software_versions",
     "seq", "ref", "new_dataset", "with_frame_of_reference", "label_research", "research_text",
     "ct_image_refs", "save", "ds_list",
 ]
