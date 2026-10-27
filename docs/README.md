@@ -29,6 +29,7 @@ SDK and planning protocols (0017), and the viewer as an OHIF extension, standalo
 |---|---|
 | [`reports/tps-evaluation-and-roadmap.md`](reports/tps-evaluation-and-roadmap.md) | Evaluation against a commercial TPS, the engine strategy and the roadmap R0–R15 (2026-10-20; its status is kept in `impl-plan.md`) |
 | [`reports/validation-data-and-test-plan.md`](reports/validation-data-and-test-plan.md) | Which data and tests validate the planning services; the R7a harness and the R7 results (2026-10-21/22) |
+| [`reports/ohif-overlay-volume-proposal.md`](reports/ohif-overlay-volume-proposal.md) | Draft proposal to OHIF: overlay volumes for any SOP class handler, so the RT Dose extension needs no `PMAP` label (2026-10-27, not filed) |
 
 ## Validation records
 

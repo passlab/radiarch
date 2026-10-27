@@ -88,9 +88,7 @@ def viewer(api):  # noqa: F811
             (Path(os.environ["RADIARCH_TEST_ARTIFACTS"]) / "viewer-nginx.log").write_text(logs)
 
 
-# Software WebGL for headless Chromium (no GPU on the runner). It draws the CT; it does not draw a second volume, so the
-# dose is checked inside OHIF (its values on the CT's grid, its isodose colours and opacities) rather than in pixels;
-# the colour wash on screen is checked by hand (R13.3).
+# Software WebGL for headless Chromium (no GPU on the runner): it draws the CT and the dose over it.
 CHROMIUM_ARGS = ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"]
 
 VIEWPORT_STATE = """() => {
@@ -102,9 +100,26 @@ VIEWPORT_STATE = """() => {
     const of = a.actor.getProperty().getScalarOpacity(0);
     const at = v => { const c = [0, 0, 0]; tf.getColor(v, c); return { value: v, rgb: c.map(x => +x.toFixed(2)), opacity: +of.getValue(v).toFixed(3) }; };
     return { id: a.referencedId, dims: d.dimensions, range: d.voxelManager.getRange(), colormap: props.colormap?.name ?? null,
-             voi: props.voiRange, samples: [20, 40, 60, 75, 85, 92, 97, 103, 110].map(at) };
+             voi: props.voiRange, unitDistance: a.actor.getProperty().getScalarOpacityUnitDistance(0),
+             samples: [20, 40, 60, 75, 85, 92, 97, 103, 110].map(at) };
   });
 }"""
+
+
+HIDE_DOSE = """() => { const vp = window.services.cornerstoneViewportService.getRenderingEngine().getViewports()[0];
+  vp.getActors()[1].actor.setVisibility(false); vp.render(); }"""
+SHOW_DOSE = HIDE_DOSE.replace("setVisibility(false)", "setVisibility(true)")
+
+
+def _changed_pixels(a: bytes, b: bytes) -> float:
+    """The fraction of two same-sized screenshots' pixels that differ visibly (the dose drawn, or not)."""
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    x, y = (np.asarray(Image.open(io.BytesIO(p)).convert("RGB")).astype(int) for p in (a, b))
+    return float((np.abs(x - y).max(axis=2) > 30).mean())
 
 
 def _grey_pixels(png: bytes) -> int:
@@ -160,7 +175,17 @@ def test_a_plan_in_the_standalone_viewer(env, viewer, tmp_path):  # noqa: F811
             expect(page.get_by_text("DVHs from the RT Dose file")).to_be_visible(timeout=60000)
             expect(page.locator("td", has_text="PTV").first).to_be_visible()
             page.wait_for_timeout(5000)
-            assert _grey_pixels(page.locator("[data-viewportid=\"rtDose\"]").screenshot()) > 1000, "the CT is not drawn"
+            shot = page.locator("[data-viewportid=\"rtDose\"]").screenshot()
+            assert _grey_pixels(shot) > 1000, "the CT is not drawn"
+            # the dose (52 to 75 % of the prescription everywhere here) washes the CT in band colours: coloured pixels
+            # with the dose drawn, none without it
+            page.evaluate(HIDE_DOSE)
+            page.wait_for_timeout(1500)
+            without = page.locator("[data-viewportid=\"rtDose\"]").screenshot()
+            page.evaluate(SHOW_DOSE)
+            changed = _changed_pixels(shot, without)
+            (artifacts / "viewer-dose-changed.txt").write_text(str(changed))
+            assert changed > 0.25, f"the dose changes {changed:.0%} of the viewport"
             page.screenshot(path=str(artifacts / "viewer-dose.png"))
 
             # inside OHIF: the CT, then the dose on the CT's grid in % of the prescription with the isodose colours
@@ -168,7 +193,7 @@ def test_a_plan_in_the_standalone_viewer(env, viewer, tmp_path):  # noqa: F811
             assert ct_actor["range"] == [-1000, 0] and dose_actor["id"].startswith("rtdose.")
             assert dose_actor["dims"] == ct_actor["dims"]
             assert dose_actor["range"] == pytest.approx([float(pct.min()), float(pct.max())], abs=0.05)
-            assert dose_actor["colormap"] == "radiarch-isodose"
+            assert dose_actor["colormap"] == "radiarch-isodose" and dose_actor["unitDistance"] == pytest.approx(0.15)
             assert dose_actor["voi"]["lower"] == 0 and dose_actor["voi"]["upper"] == pytest.approx(120, abs=1.5)
             by_value = {s["value"]: s for s in dose_actor["samples"]}
             assert by_value[20]["opacity"] == 0 and all(by_value[v]["opacity"] > 0 for v in (40, 60, 75, 85, 92, 97, 103, 110))
@@ -191,3 +216,37 @@ def test_a_plan_in_the_standalone_viewer(env, viewer, tmp_path):  # noqa: F811
         finally:
             browser.close()
     assert not [e for e in errors if "Error loading displaySet" in e or "RT Dose:" in e], errors
+
+
+def test_a_dose_without_dvhs_gets_them_computed_in_the_browser(env, viewer, tmp_path):  # noqa: F811
+    """Another system's RT Dose often carries no DVH module: the dose panel computes the DVHs from the structure set."""
+    from playwright.sync_api import expect, sync_playwright
+
+    from radiarch.adapters.dicomweb import DICOMwebNotifier
+    from test_r13_viewer import _export_with
+
+    vol = _loaded_ct().ct
+    _forget_study(vol.studyInstanceUID)
+    ct_dir = tmp_path / "ct"
+    ct_dir.mkdir()
+    assert DICOMwebNotifier(url=DICOMWEB).store_instances([str(p) for p in _ct_slices(ct_dir)], raise_errors=True)
+    from radiarch.models.rt_export import PrescriptionSpec
+    svc, res = _export_with(dvh=False, prescription=PrescriptionSpec(dose_gy=2.0, fractions=2))
+    assert svc.push(res.export_id, url=DICOMWEB, kinds=["RTSTRUCT", "RTPLAN", "RTDOSE"]).error is None
+
+    artifacts = Path(os.environ.get("RADIARCH_TEST_ARTIFACTS", tmp_path))
+    artifacts.mkdir(parents=True, exist_ok=True)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(args=CHROMIUM_ARGS)
+        page = browser.new_page(viewport={"width": 1600, "height": 1000})
+        try:
+            page.goto(f"{viewer}/plan-review?StudyInstanceUIDs={vol.studyInstanceUID}", wait_until="domcontentloaded")
+            expect(page.get_by_text("DVHs computed in the browser from the structure set")).to_be_visible(timeout=90000)
+            expect(page.locator("td", has_text="PTV").first).to_be_visible()
+            expect(page.locator("td", has_text="OAR").first).to_be_visible()
+            page.screenshot(path=str(artifacts / "viewer-computed-dvh.png"))
+        except Exception:
+            page.screenshot(path=str(artifacts / "viewer-computed-dvh-failure.png"))
+            raise
+        finally:
+            browser.close()

@@ -130,6 +130,7 @@ Headless Chromium then opens the plan review mode and checks:
 - the CT is drawn;
 - inside OHIF, the dose is a second volume on the CT's grid:
   - its values are the file's dose in % of the prescription;
+  - its opacity unit distance is 0.15 mm (see "How the dose is shown" in `viewer/README.md`);
   - the colour map is the isodose map, transparent below 30 %;
   - the window runs from 0 to 120 %;
   - each isodose band has its own colour;
@@ -137,10 +138,9 @@ Headless Chromium then opens the plan review mode and checks:
 
 On failure it keeps screenshots, the page and the console.
 
-One limit: headless Chromium has no GPU on the runner. With software WebGL (SwiftShader) it draws the
-CT but not a second volume, and with this machine's GPU it reads nothing back. So the test checks the
-dose inside OHIF, not in the screenshot. The colour wash on screen is checked by hand in a browser with
-a GPU (R13.3).
+The test also checks the colour wash in pixels. It takes screenshots of the viewport with the dose shown
+and hidden, and the dose must change at least a quarter of the viewport's pixels. Headless Chromium on the
+runner draws through software WebGL (SwiftShader).
 Locally it skips unless the variable points at a server, for example a throwaway
 `docker run --rm -p 127.0.0.1:18042:8042 -e DICOM_WEB_PLUGIN_ENABLED=true -e ORTHANC__AUTHENTICATION_ENABLED=false orthancteam/orthanc:24.6.2`
 with `RADIARCH_TEST_DICOMWEB_URL=http://127.0.0.1:18042/dicom-web`.

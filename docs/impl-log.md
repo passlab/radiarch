@@ -580,4 +580,30 @@ optimization for VMAT; the R8 record for the physicist.
     on EGL or Vulkan) it reads nothing back. So the overlay on screen goes to the hand check (R13.3).
   - CI's Viewer job: builds the image, checks the bundle in it, installs radiarch with `viewer-test` (Playwright
     1.64.1, Pillow) and Chromium, runs the test against an Orthanc service, and uploads screenshots.
+- R13.2b′ and panel fixes (2026-10-27):
+  - `rt-dose-core/src/rasterize.js`: each closed planar contour goes to the dose frame within half a frame of its plane;
+    a scanline fills voxel centres with the even-odd rule, so holes work. `computeDVHs` gives cumulative DVHs in cm³ and
+    % with radiarch's bin rule (`dvhBinWidth`), marked `source: 'computed in the browser'`.
+  - The dose extension uses them when a dose has no DVH module. It finds the structure set through the dose, its plan,
+    or the study's structure set of the same frame of reference, and fetches the whole object when OHIF's metadata holds
+    the contour points as bulk data.
+  - Tests:
+    - in `core.test.js`, on radiarch's fixtures the computed DVHs equal the written ones bin for bin; a contour inside
+      another is a hole;
+    - in `test_r13_viewer_browser.py`, a second case exports without DVHs and checks the panel computes and labels them.
+  - The goals table shows the priority, the structure with its goal beneath it, and the achieved value with its status,
+    so it fits the sidebar.
+  - `docs/reports/ohif-overlay-volume-proposal.md`: a draft proposal to OHIF, not filed.
+- R13.3 hand check, first finding (2026-10-27): the project lead saw no colour wash in a browser with a GPU, so it was not a
+  headless limit. The cause: Cornerstone's ray caster scales opacity by sample distance / opacity unit distance
+  (default 1 mm). Through a 0.05 mm MPR slab the bands' 0.45 came to about 0.03, nearly black, and only faintly visible
+  in air.
+  - Found by hiding the CT in the browser: the dose was drawn in the right shape, but almost black.
+  - The fix: the dose viewport sets the actor's opacity unit distance to 0.15 mm when OHIF mounts the volumes
+    (`VIEWPORT_VOLUMES_CHANGED`) and marks the opacity function modified. Cornerstone caches the opacity texture by
+    that function's time stamp, which is why changing the property alone did nothing. 0.15 mm was chosen against 0.05
+    and 0.3 on the lung plan.
+  - The browser test now checks the unit distance and that the dose changes 90 % of the viewport's pixels (threshold
+    25 %), comparing screenshots with the dose shown and hidden. Headless SwiftShader does draw the second volume:
+    the earlier "no second volume" was this same opacity.
 

@@ -206,8 +206,11 @@ OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH
   DVHs, prescription and isodose colour wash; Node tests against radiarch's and synthetic doses through
   `tests/test_r13_viewer_core.py`) and `ohif-extension-rt-dose` (RT Dose display sets, the dose viewport, the DVH
   panel); `viewer/scripts/build-ohif.sh` and the CI job "Viewer" build it inside OHIF 3.13.13
-- [ ] R13.2b′ DVHs computed in the browser for an RT Dose without the DVH module (structure rasterization),
-  labelled as such
+- [x] R13.2b′ DVHs computed in the browser for an RT Dose without the DVH module: `rasterize.js` (closed planar
+  contours on the dose grid, even-odd), `computeDVHs` with radiarch's bins; the structure set found through the dose,
+  its plan, or the frame of reference; labelled as computed; reproduces radiarch's written DVHs bin for bin
+- [ ] Draft proposal to OHIF for overlay volumes without the `PMAP` label (`docs/reports/ohif-overlay-volume-proposal.md`);
+  filing it is the project lead's decision
 - [x] R13.2c The radiarch panel and the plan review mode: `radiarch-client` (tested from Node against a live
   radiarch, API key required: `tests/test_r13_viewer_client.py`), `ohif-extension-radiarch` (plan summary, goal
   template, goals graded and radiarch's DVHs through the export lookup; API URL from the config, headers from the
@@ -216,7 +219,7 @@ OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH
 - [x] R13.2d The standalone delivery: `viewer/standalone` (an OHIF build and nginx; one origin for OHIF,
   Orthanc's DICOMweb and radiarch's API; the API key added by the proxy), the compose profile `viewer`, and
   the browser test `tests/test_r13_viewer_browser.py` in CI's Viewer job (headless Chromium through the plan
-  review mode; the dose checked inside OHIF, as headless software GL does not draw a second volume)
+  review mode; the dose checked inside OHIF and in pixels, shown against hidden)
 - [ ] R13.3 Record: the objects and the extension checked by hand in OHIF and 3D Slicer (also closes R6's
   open hand check)
 
