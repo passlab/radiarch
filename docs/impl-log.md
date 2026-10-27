@@ -525,4 +525,23 @@ optimization for VMAT; the R8 record for the physicist.
   size and chunk warnings only), the app imports `@radiarch/ohif-extension-rt-dose`, peak 2.6 GB. The script runs the
   pnpm OHIF pins through npx (corepack before 0.35 cannot unpack pnpm 12) and OHIF's plain `build`, since `build:ci`
   also bumps OHIF's release version.
+- R13.2c:
+  - `viewer/radiarch-client` (plain JavaScript): `createClient({apiUrl, headers})` with `findExports`,
+    `goalTemplates`, `evaluateExport` (follows a 202 through `/evaluate/jobs/{id}`; refuses an export without a dose
+    or a prescription before any request) and `lineage`; `planSummary`, `goalRows`, `evaluationCurves`.
+    `tests/test_r13_viewer_client.py` serves radiarch with uvicorn in a thread (API key required, route service
+    caches cleared), writes an export, and runs the Node tests against it:
+    - a 401 without the host's headers;
+    - the export found by the plan instance and by the dose series;
+    - the summary's metersets;
+    - an evaluation through the job, then from the cache, which is the evaluation radiarch's service holds.
+  - `viewer/ohif-extension-radiarch`: the panel finds the export of the dose in the active viewport and shows the
+    plan; it evaluates against a chosen template (remembered in the browser) and shows the goals and radiarch's
+    DVHs with the structure set's colours. The API URL comes from the extension's configuration or the app
+    config's `radiarch` block (default `/radiarch/api/v1`); headers come from OHIF's user authentication service.
+  - `viewer/ohif-mode-plan-review`: OHIF's basic mode with the RT Dose handler first, the dose viewport, the DVH,
+    plan and segmentation panels, valid for CT + RT Dose, and the hanging protocol `radiarch-rt-dose` (registered
+    by the dose extension).
+  - `build-ohif.sh` puts the five packages in the workspace and registers both extensions and the mode; local
+    build passes. CI checks all three in the bundle.
 

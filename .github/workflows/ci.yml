@@ -107,7 +107,7 @@ jobs:
   viewer-build:
     # R13 (ADR 0018): radiarch's OHIF extension built inside the pinned OHIF release, so a change on either side that
     # breaks the build is caught on the push. The dose core's own tests run in Full Tests (tests/test_r13_viewer_core.py).
-    name: Viewer (OHIF 3.13.13 with radiarch's extension)
+    name: Viewer (OHIF 3.13.13 with radiarch's extensions and mode)
     runs-on: ubuntu-latest
     timeout-minutes: 40
     if: >-
@@ -122,14 +122,21 @@ jobs:
         with:
           node-version: "24"
 
-      - name: Core tests without fixtures (colormap, DVH parsing)
-        run: node --test viewer/rt-dose-core/test/core.test.js
+      - name: Package tests without fixtures or a server (colormap, DVH parsing, goal rows)
+        run: |
+          node --test viewer/rt-dose-core/test/core.test.js
+          node --test viewer/radiarch-client/test/client.test.js
 
       - name: Build OHIF with the extension
         run: viewer/scripts/build-ohif.sh "$RUNNER_TEMP/ohif"
 
-      - name: The extension is in the bundle
-        run: grep -rlq "radiarch-isodose" "$RUNNER_TEMP/ohif/Viewers/platform/app/dist" && echo "radiarch extension bundled"
+      - name: The extensions and the mode are in the bundle
+        run: |
+          dist="$RUNNER_TEMP/ohif/Viewers/platform/app/dist"
+          grep -rlq "radiarch-isodose" "$dist"
+          grep -rlq "radiarch.goalTemplate" "$dist"
+          grep -rlq "Plan review (radiarch, research)" "$dist"
+          echo "radiarch extensions and mode bundled"
 
   mcsquare-validation:
     # Opt-in V4 gate: real MCsquare Monte Carlo on the SimpleFantom (Dij vs dose
