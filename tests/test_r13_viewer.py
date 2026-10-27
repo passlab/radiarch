@@ -37,9 +37,11 @@ def _export(push: bool = False):
     return svc, res
 
 
-def _ct_slices(out: Path):
-    """The stub CT of the export tests as DICOM CT images, one file per slice, with the UIDs the export references."""
+def _ct_slices(out: Path, hu=None):
+    """The stub CT of the export tests as DICOM CT images, one file per slice, with the UIDs the export references.
+    ``hu`` replaces its values (a (z, y, x) array), e.g. so a viewer has something to draw."""
     vol = _loaded_ct().ct
+    image = vol.imageArray if hu is None else np.asarray(hu, dtype=np.int16)
     nz, ny, nx = vol.imageArray.shape
     paths = []
     for k in range(nz):
@@ -61,7 +63,7 @@ def _ct_slices(out: Path):
         ds.Rows, ds.Columns, ds.SamplesPerPixel, ds.PhotometricInterpretation = ny, nx, 1, "MONOCHROME2"
         ds.BitsAllocated, ds.BitsStored, ds.HighBit, ds.PixelRepresentation = 16, 16, 15, 1
         ds.RescaleIntercept, ds.RescaleSlope, ds.KVP = 0, 1, 120
-        ds.PixelData = np.ascontiguousarray(vol.imageArray[k], dtype=np.int16).tobytes()
+        ds.PixelData = np.ascontiguousarray(image[k], dtype=np.int16).tobytes()
         p = out / f"CT{k:03d}.dcm"
         ds.save_as(str(p), enforce_file_format=True)
         paths.append(p)

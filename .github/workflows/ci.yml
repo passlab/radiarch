@@ -105,14 +105,23 @@ jobs:
           RADIARCH_REQUIRE_DCIODVFY: "1"
 
   viewer-build:
-    # R13 (ADR 0018): radiarch's OHIF extension built inside the pinned OHIF release, so a change on either side that
-    # breaks the build is caught on the push. The dose core's own tests run in Full Tests (tests/test_r13_viewer_core.py).
-    name: Viewer (OHIF 3.13.13 with radiarch's extensions and mode)
+    # R13 (ADR 0018): the standalone viewer image (OHIF 3.13.13 built with radiarch's extensions and mode, nginx with the
+    # proxy), then the browser test: a CT and a plan in Orthanc, radiarch's API with a key, the image in front of both,
+    # headless Chromium through the plan review mode. The dose core's and the client's tests run in Full Tests.
+    name: Viewer (image and browser test)
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     if: >-
       github.event_name == 'push' || github.event_name == 'pull_request'
       || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    services:
+      orthanc:
+        image: orthancteam/orthanc:24.6.2
+        ports:
+          - 8042:8042
+        env:
+          ORTHANC__AUTHENTICATION_ENABLED: "false"
+          DICOM_WEB_PLUGIN_ENABLED: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -127,16 +136,46 @@ jobs:
           node --test viewer/rt-dose-core/test/core.test.js
           node --test viewer/radiarch-client/test/client.test.js
 
-      - name: Build OHIF with the extension
-        run: viewer/scripts/build-ohif.sh "$RUNNER_TEMP/ohif"
+      - name: Build the viewer image (OHIF with radiarch's packages, nginx)
+        run: docker build -f viewer/standalone/Dockerfile -t radiarch-viewer:ci viewer/
 
       - name: The extensions and the mode are in the bundle
         run: |
-          dist="$RUNNER_TEMP/ohif/Viewers/platform/app/dist"
-          grep -rlq "radiarch-isodose" "$dist"
-          grep -rlq "radiarch.goalTemplate" "$dist"
-          grep -rlq "Plan review (radiarch, research)" "$dist"
-          echo "radiarch extensions and mode bundled"
+          docker run --rm --entrypoint sh radiarch-viewer:ci -c '
+            cd /usr/share/nginx/html &&
+            grep -rlq "radiarch-isodose" . && grep -rlq "radiarch.goalTemplate" . &&
+            grep -rlq "Plan review (radiarch, research)" . && echo "radiarch extensions and mode bundled"'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install radiarch and the browser
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install -e "./src[dev,viewer-test]"
+          python -m playwright install --with-deps chromium
+
+      - name: Wait for Orthanc's DICOMweb plugin
+        run: |
+          for i in $(seq 60); do curl -sf http://localhost:8042/dicom-web/studies >/dev/null && exit 0; sleep 2; done
+          echo "Orthanc did not answer"; exit 1
+
+      - name: Browser test of the standalone viewer
+        env:
+          RADIARCH_TEST_VIEWER_IMAGE: radiarch-viewer:ci
+          RADIARCH_TEST_DICOMWEB_URL: http://127.0.0.1:8042/dicom-web
+          RADIARCH_TEST_ARTIFACTS: ${{ runner.temp }}/viewer-artifacts
+        run: python -m pytest tests/test_r13_viewer_browser.py -v --tb=short -rs
+
+      - name: Screenshots and logs of the browser test
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: viewer-browser-test
+          path: ${{ runner.temp }}/viewer-artifacts
+          if-no-files-found: ignore
 
   mcsquare-validation:
     # Opt-in V4 gate: real MCsquare Monte Carlo on the SimpleFantom (Dij vs dose

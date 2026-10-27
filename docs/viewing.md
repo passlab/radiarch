@@ -52,6 +52,37 @@ planes can fall between CT slices; on the CT's own grid they lie on the slices.
 The design of the viewer itself, one OHIF extension used standalone or inside another OHIF, is
 ADR 0018.
 
+## The standalone viewer (R13.2d)
+
+One container serves OHIF 3.13.13 with radiarch's dose extension, radiarch plan panel and plan review
+mode. Its nginx proxy puts Orthanc's DICOMweb (`/dicom-web`) and radiarch's API (`/radiarch/api`) on
+the same origin and adds radiarch's API key to every API request, so the browser never holds the key.
+
+```bash
+docker compose --profile viewer up -d          # api, worker, orthanc, and the viewer on 127.0.0.1:3000
+# push an export (RADIARCH_DICOMWEB_URL=http://orthanc:8042/dicom-web), then open
+#   http://localhost:3000/plan-review?StudyInstanceUIDs=<study>
+```
+
+The image is `viewer/standalone/Dockerfile` (built from `viewer/`). It is configured by these
+environment variables:
+
+| Variable | What it sets |
+|---|---|
+| `ORTHANC_URL` | Orthanc's base URL |
+| `ORTHANC_AUTHORIZATION` | an Authorization header for Orthanc, or empty |
+| `RADIARCH_URL` | radiarch's base URL |
+| `RADIARCH_API_KEY` | the key the proxy adds to API requests |
+| `VIEWER_PORT` | the port nginx listens on |
+
+Whoever reaches the viewer uses radiarch with that key. Compose therefore publishes it on localhost
+only. To serve it to more people, put an authenticating proxy in front of it.
+
+The plan review mode opens the plan dose over its CT. On the right are three panels:
+- the dose's DVHs and isodose legend;
+- the radiarch plan: summary, a goal template, Evaluate;
+- the structures.
+
 ## Setting it up
 
 1. **A DICOMweb server holding the CT.** Orthanc with its DICOMweb plugin
@@ -87,6 +118,29 @@ curl -H "X-API-Key: $KEY" -X POST $API/rt/exports/<export id>/push
     instances on the server.
 
 The Full Tests job in CI runs an Orthanc service container with the DICOMweb plugin for this test.
+
+`tests/test_r13_viewer_browser.py` is the browser test (CI's Viewer job, on every push). It
+assembles the whole deployment:
+- a CT (water in air) and an export are pushed to Orthanc;
+- radiarch's API is served with an API key required;
+- the viewer image is put in front of both.
+Headless Chromium then opens the plan review mode and checks:
+- the hanging protocol opens the dose over its CT, labelled with the 2 Gy prescription;
+- the dose panel shows the RT Dose's own DVHs, named by the structure set;
+- the CT is drawn;
+- inside OHIF, the dose is a second volume on the CT's grid:
+  - its values are the file's dose in % of the prescription;
+  - the colour map is the isodose map, transparent below 30 %;
+  - the window runs from 0 to 120 %;
+  - each isodose band has its own colour;
+- the radiarch panel finds the plan, and Evaluate grades the RTOG 0617 goals and draws radiarch's DVHs.
+
+On failure it keeps screenshots, the page and the console.
+
+One limit: headless Chromium has no GPU on the runner. With software WebGL (SwiftShader) it draws the
+CT but not a second volume, and with this machine's GPU it reads nothing back. So the test checks the
+dose inside OHIF, not in the screenshot. The colour wash on screen is checked by hand in a browser with
+a GPU (R13.3).
 Locally it skips unless the variable points at a server, for example a throwaway
 `docker run --rm -p 127.0.0.1:18042:8042 -e DICOM_WEB_PLUGIN_ENABLED=true -e ORTHANC__AUTHENTICATION_ENABLED=false orthancteam/orthanc:24.6.2`
 with `RADIARCH_TEST_DICOMWEB_URL=http://127.0.0.1:18042/dicom-web`.

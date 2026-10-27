@@ -213,8 +213,10 @@ OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH
   template, goals graded and radiarch's DVHs through the export lookup; API URL from the config, headers from the
   host), `ohif-mode-plan-review` (on OHIF's basic mode; hanging protocol `radiarch-rt-dose` in the dose extension);
   all built in OHIF 3.13.13 by the CI job "Viewer"
-- [ ] R13.2d The standalone delivery: a `radiarch-viewer` image and a compose profile, one proxy for OHIF,
-  Orthanc's DICOMweb and radiarch's API that adds the API key server-side; a browser smoke test in CI
+- [x] R13.2d The standalone delivery: `viewer/standalone` (an OHIF build and nginx; one origin for OHIF,
+  Orthanc's DICOMweb and radiarch's API; the API key added by the proxy), the compose profile `viewer`, and
+  the browser test `tests/test_r13_viewer_browser.py` in CI's Viewer job (headless Chromium through the plan
+  review mode; the dose checked inside OHIF, as headless software GL does not draw a second volume)
 - [ ] R13.3 Record: the objects and the extension checked by hand in OHIF and 3D Slicer (also closes R6's
   open hand check)
 

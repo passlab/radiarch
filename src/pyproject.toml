@@ -41,6 +41,12 @@ gpu = [
     "cupy-cuda12x>=13",
 ]
 
+# The standalone viewer's browser test (tests/test_r13_viewer_browser.py): headless Chromium and screenshots
+viewer-test = [
+    "playwright==1.64.1",
+    "pillow>=10",
+]
+
 
 dev = [
     "pytest~=8.1",

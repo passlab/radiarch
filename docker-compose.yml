@@ -116,6 +116,28 @@ services:
       - orthanc-data:/var/lib/orthanc/db
     restart: unless-stopped
 
+
+  # ---- Viewer (profile "viewer") ----
+  # OHIF with radiarch's extensions and plan review mode; Orthanc's DICOMweb and radiarch's API behind one origin, the
+  # API key added by the proxy (docs/viewing.md). Published on localhost only: whoever reaches it uses radiarch.
+  #   docker compose --profile viewer up -d   ->  http://localhost:3000/plan-review?StudyInstanceUIDs=<study>
+  viewer:
+    profiles: ["viewer"]
+    build:
+      context: ./viewer
+      dockerfile: standalone/Dockerfile
+    ports:
+      - "127.0.0.1:3000:80"
+    environment:
+      ORTHANC_URL: http://orthanc:8042
+      ORTHANC_AUTHORIZATION: "Basic cmFkaWFyY2g6cmFkaWFyY2g="   # radiarch:radiarch, the Orthanc user above
+      RADIARCH_URL: http://api:8000
+      RADIARCH_API_KEY: ${RADIARCH_API_KEY:-}
+    depends_on:
+      - api
+      - orthanc
+    restart: unless-stopped
+
 volumes:
   radiarch-data:
   redis-data:

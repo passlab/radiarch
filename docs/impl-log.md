@@ -558,4 +558,26 @@ optimization for VMAT; the R8 record for the physicist.
 - Release 0.2.0: the first stamped one, after the output-changing fixes and features since 0.1.0. From now on a fix
   that changes output raises the patch number and a feature the minor number (`docs/PRODUCTION.md`).
 - Tests: `tests/test_build_version.py`.
+- R13.2d:
+  - `viewer/standalone`: a Dockerfile (node 24 runs `build-ohif.sh`; nginx 1.27.5-alpine serves the dist) and
+    `default.conf.template` (`/dicom-web` to Orthanc with the Host kept, so Orthanc's bulk data URIs point back at
+    the proxy; `/radiarch/api` to radiarch with `X-API-Key` added; empty variables leave a header out). `app-config.js`
+    points at the same origin and sets `radiarch.apiUrl`. Compose profile `viewer` on 127.0.0.1:3000.
+  - Fixes found with the browser:
+    - the mode names its hanging protocol; offered with `default`, it lost on score;
+    - the protocol matches RTDOSE studies;
+    - the dose volume is invalidated and marked modified after its data is set;
+    - the panels no longer overflow the sidebar: a long goal template name had widened the radiarch panel;
+    - the DVH chart scales to its panel, with tick labels at the chart's precision.
+  - `tests/test_r13_viewer_browser.py`:
+    - a patterned CT (`_ct_slices(hu=...)`) and an export pushed to Orthanc;
+    - radiarch with an API key; the image on the host network;
+    - headless Chromium with SwiftShader through the plan review mode;
+    - checks: the hanging protocol, the DVH panel, the CT drawn, the dose volume inside OHIF (values = the file's
+      dose in % of the prescription, the isodose map, opacity, window, one colour per band), the radiarch panel's
+      plan and an RTOG 0617 evaluation.
+  - Found while debugging: headless Chromium draws the CT but no second volume with SwiftShader; with the GPU (ANGLE
+    on EGL or Vulkan) it reads nothing back. So the overlay on screen goes to the hand check (R13.3).
+  - CI's Viewer job: builds the image, checks the bundle in it, installs radiarch with `viewer-test` (Playwright
+    1.64.1, Pillow) and Chromium, runs the test against an Orthanc service, and uploads screenshots.
 
