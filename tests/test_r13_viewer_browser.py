@@ -188,6 +188,12 @@ def test_a_plan_in_the_standalone_viewer(env, viewer, tmp_path):  # noqa: F811
             assert changed > 0.25, f"the dose changes {changed:.0%} of the viewport"
             page.screenshot(path=str(artifacts / "viewer-dose.png"))
 
+            # the viewport opened on the slice through the dose maximum (within half a slice)
+            off_plane = page.evaluate("""() => { const vp = window.services.cornerstoneViewportService.getRenderingEngine().getViewports()[0];
+              const ds = window.services.displaySetService.getActiveDisplaySets().find(d => d.isRTDose); const c = vp.getCamera();
+              return Math.abs([0, 1, 2].reduce((s, a) => s + (ds.hotspotWorld[a] - c.focalPoint[a]) * c.viewPlaneNormal[a], 0)); }""")
+            assert off_plane <= vol.spacing[2] / 2 + 1e-3, off_plane
+
             # inside OHIF: the CT, then the dose on the CT's grid in % of the prescription with the isodose colours
             ct_actor, dose_actor = page.evaluate(VIEWPORT_STATE)
             assert ct_actor["range"] == [-1000, 0] and dose_actor["id"].startswith("rtdose.")

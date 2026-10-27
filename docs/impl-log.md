@@ -606,4 +606,12 @@ optimization for VMAT; the R8 record for the physicist.
   - The browser test now checks the unit distance and that the dose changes 90 % of the viewport's pixels (threshold
     25 %), comparing screenshots with the dose shown and hidden. Headless SwiftShader does draw the second volume:
     the earlier "no second volume" was this same opacity.
+- R13.3 hand check, second finding (2026-10-27): still no colour wash in the project lead's browser, while full
+  Chromium on this workstation's NVIDIA GPU (ANGLE on Vulkan) showed it.
+  - The cause was the view: the hanging protocol opened the middle slice, at the edge of this tumour. There the dose is
+    30–64 %, drawn as dark blue and teal, invisible over black lung.
+  - The dose viewport now opens on the slice through the dose maximum (`hotspotWorld`, set when the dose loads; the
+    camera moves along the view-plane normal once).
+  - The 30 % and 50 % bands are lighter: (0.35, 0.5, 1) and (0, 0.8, 1).
+  - The browser test checks the opening slice is within half a slice of the maximum.
 
