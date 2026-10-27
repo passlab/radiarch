@@ -615,3 +615,37 @@ optimization for VMAT; the R8 record for the physicist.
   - The 30 % and 50 % bands are lighter: (0.35, 0.5, 1) and (0, 0.8, 1).
   - The browser test checks the opening slice is within half a slice of the maximum.
 
+## Launch from a fresh clone (2026-10-27)
+
+A fresh clone was taken through the README's Docker Compose quick start, the smoke test and a new viewer walkthrough.
+That found the following, now fixed.
+- **The Orthanc adapter's DICOMweb root.** The adapter gave the DICOMweb client Orthanc's base URL, where Orthanc
+  answers its own REST API, so no study was ever found in a real Orthanc (the tests used the mock). It now uses
+  `orthanc_dicomweb_root` (`/dicom-web`). `tests/test_orthanc_fetch.py`: the root, and a geometry built from Orthanc
+  in CI; it fails without the fix.
+- **HTTP basic pushes.** These passed `username` and `password` to dicomweb-client, which takes neither, so every
+  basic-auth push failed. They now go through a requests session. `tests/test_dicomweb_push_auth.py` covers basic auth.
+- **The compose file.**
+  - The API and the worker had no DICOMweb login for its Orthanc; they now get `RADIARCH_DICOMWEB_USERNAME` and
+    `RADIARCH_DICOMWEB_PASSWORD`.
+  - They now get `RADIARCH_VIEWER_URL` and `RADIARCH_VIEWER_ROUTE=plan-review`.
+- **The viewer link.** It always used OHIF's generic `/viewer` route, which does not load the dose extension. The
+  route is now `RADIARCH_VIEWER_ROUTE`: `viewer` by default, `plan-review` for radiarch's viewer.
+- **The dose display set's CT.** It was matched by Frame of Reference UID only. The bundled phantom's CT has none,
+  which other CTs can share. It now falls back to the image series the dose's structure set refers to, then to the
+  study's only CT. A browser test covers a CT without a frame of reference.
+- **The smoke test** planned a study absent from the compose stack's Orthanc. `scripts/load-phantom.sh` now puts the
+  phantom in as one study and completes it on the way in. The OpenTPS phantom's CT has no Frame of Reference UID, and
+  its structure set has its own study, Modality RTDOSE and no CT reference.
+- **`.dockerignore`** let virtual environments (`src/.venv` in the README's own local-dev step) into the API image.
+- **New:**
+  - `radiarch plan --push`, which pushes the RT objects and prints the viewer link;
+  - the shipped `demo-phantom-imrt` protocol;
+  - `scripts/demo-viewer.sh`;
+  - the README's quick starts, which state prerequisites, the viewer profile, the build commit and Docker Hub's pull
+    limit;
+  - `docs/demo.md` section 5.
+- **Verified on the fresh clone:** build, start, the smoke test (proton plan by MCsquare), and the demo (5-field IMRT
+  by the pencil-beam engine, every goal met, 8 RT objects pushed). The printed link, opened in Chromium on an NVIDIA
+  GPU, shows the dose wash on the maximum's slice, the DVHs and the radiarch plan panel, with no console errors.
+

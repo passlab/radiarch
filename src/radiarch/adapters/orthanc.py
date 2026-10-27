@@ -109,6 +109,15 @@ class FakeOrthancAdapter(OrthancAdapterBase):
         )
 
 
+def dicomweb_url(settings: Settings) -> str:
+    """Orthanc's DICOMweb root: the base URL with ``orthanc_dicomweb_root`` (``/dicom-web``) unless it ends with it.
+    The client used to be given the base URL itself, where Orthanc answers its own REST API, so studies were never
+    found."""
+    base = str(settings.orthanc_base_url).rstrip("/")
+    root = "/" + settings.orthanc_dicomweb_root.strip("/") if settings.orthanc_dicomweb_root.strip("/") else ""
+    return base if not root or base.endswith(root) else base + root
+
+
 class OrthancAdapter(OrthancAdapterBase):
     def __init__(self, settings: Settings):
         if DICOMwebClient is None:
@@ -119,10 +128,7 @@ class OrthancAdapter(OrthancAdapterBase):
         if settings.orthanc_username and settings.orthanc_password:
             session.auth = (settings.orthanc_username, settings.orthanc_password)
 
-        self.client = DICOMwebClient(
-            url=str(settings.orthanc_base_url),
-            session=session,
-        )
+        self.client = DICOMwebClient(url=dicomweb_url(settings), session=session)
 
     def get_study(self, study_instance_uid: str) -> Optional[StudyMetadata]:
         logger.debug("Fetching study metadata from Orthanc: %s", study_instance_uid)

@@ -3,6 +3,7 @@
     radiarch protocols                                   the shipped protocols
     radiarch protocol lung-60gy-30fx-vmat                one in full (JSON)
     radiarch plan --protocol lung-60gy-30fx-vmat --study 1.2.3 --data /dicom/case1 --export rt --json run.json
+    radiarch plan --protocol demo-phantom-imrt --study <uid> --push    the RT objects to the server's DICOMweb, and a viewer link
     radiarch batch --protocol lung-60gy-30fx-vmat --cases cases.csv --out results
 
 A protocol is a shipped id or a JSON file. Without ``--server`` (or ``RADIARCH_SERVER``) the planning runs in this
@@ -84,9 +85,19 @@ def cmd_plan(args) -> int:
     with _client(args) as rx:
         run = _plan_one(rx, _protocol(args.protocol), args.study, args.data, args.spacing)
         _print_goals(run)
-        if args.export:
-            files = run.export(label=args.label).download(args.export)
-            print(f"RT objects: {', '.join(str(f) for f in files)}")
+        if args.export or args.push:
+            exp = run.export(label=args.label, push=bool(args.push))
+            if args.export:
+                files = exp.download(args.export)
+                print(f"RT objects: {', '.join(str(f) for f in files)}")
+            if args.push:
+                r = exp.result
+                if not r.pushed:
+                    print(f"push failed: {r.push_error}", file=sys.stderr)
+                    return 3
+                print(f"pushed {len(r.objects)} RT objects of study {r.study_instance_uid} (export {r.export_id})")
+                if r.viewer_url:
+                    print(f"open in the viewer: {r.viewer_url}")
         if args.json:
             Path(args.json).write_text(run.result.model_dump_json(indent=2), encoding="utf-8")
     return 0 if (run.passed or not args.strict) else 2
@@ -175,6 +186,8 @@ def build_parser() -> argparse.ArgumentParser:
             s.add_argument("--study", required=True, help="the DICOM study instance UID")
             s.add_argument("--data", help="a directory with the CT series and its structure set")
             s.add_argument("--export", help="write the RT objects into this directory")
+            s.add_argument("--push", action="store_true",
+                           help="push the RT objects to the server's DICOMweb destination (RADIARCH_DICOMWEB_URL) and print the viewer link")
             s.add_argument("--json", help="write the run (plan, dose, goals) as JSON")
             s.add_argument("--strict", action="store_true", help="exit 2 when a goal is not met")
         else:

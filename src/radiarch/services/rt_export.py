@@ -560,9 +560,12 @@ class RTExportService:
 # ---------------------------------------------------------------------------
 
 def viewer_link(study_instance_uid: str) -> Optional[str]:
-    """A link that opens the study in the configured DICOMweb viewer (OHIF's study route); None without one."""
-    base = get_settings().viewer_url.strip().rstrip("/")
-    return f"{base}/viewer?StudyInstanceUIDs={study_instance_uid}" if base else None
+    """A link that opens the study in the configured DICOMweb viewer (OHIF: ``RADIARCH_VIEWER_ROUTE``, ``viewer`` or
+    radiarch's ``plan-review`` mode); None without one."""
+    settings = get_settings()
+    base = settings.viewer_url.strip().rstrip("/")
+    route = settings.viewer_route.strip().strip("/") or "viewer"
+    return f"{base}/{route}?StudyInstanceUIDs={study_instance_uid}" if base else None
 
 
 def _read_volume(uri: str) -> np.ndarray:

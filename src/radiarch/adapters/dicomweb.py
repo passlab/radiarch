@@ -119,11 +119,14 @@ class DICOMwebNotifier:
             return DICOMwebClient(url=self._url, headers={"Authorization": f"Bearer {self._token.get()}"})
         if self._client is not None:
             return self._client
-        kwargs = {"url": self._url}
+        # HTTP basic through a requests session: dicomweb-client takes no username or password itself (passing them
+        # failed every authenticated push until 2026-10-27)
+        import requests
+
+        session = requests.Session()
         if self._username:
-            kwargs["username"] = self._username
-            kwargs["password"] = self._password
-        self._client = DICOMwebClient(**kwargs)
+            session.auth = (self._username, self._password or "")
+        self._client = DICOMwebClient(url=self._url, session=session)
         return self._client
 
     def store_instances(self, instances, raise_errors: bool = False) -> bool:

@@ -37,9 +37,10 @@ def _export(push: bool = False):
     return svc, res
 
 
-def _ct_slices(out: Path, hu=None):
+def _ct_slices(out: Path, hu=None, frame_of_reference: bool = True):
     """The stub CT of the export tests as DICOM CT images, one file per slice, with the UIDs the export references.
-    ``hu`` replaces its values (a (z, y, x) array), e.g. so a viewer has something to draw."""
+    ``hu`` replaces its values (a (z, y, x) array), e.g. so a viewer has something to draw; without
+    ``frame_of_reference`` the images carry none (some CTs do not)."""
     vol = _loaded_ct().ct
     image = vol.imageArray if hu is None else np.asarray(hu, dtype=np.int16)
     nz, ny, nx = vol.imageArray.shape
@@ -53,7 +54,9 @@ def _ct_slices(out: Path, hu=None):
         ds.SOPClassUID, ds.SOPInstanceUID, ds.Modality = CT_IMAGE, vol.sopInstanceUIDs[k], "CT"
         ds.PatientName, ds.PatientID = vol.patient.name, vol.patient.id
         ds.PatientBirthDate, ds.PatientSex = vol.patient.birth_date, vol.patient.sex
-        ds.StudyInstanceUID, ds.SeriesInstanceUID, ds.FrameOfReferenceUID = vol.studyInstanceUID, vol.seriesInstanceUID, vol.frameOfReferenceUID
+        ds.StudyInstanceUID, ds.SeriesInstanceUID = vol.studyInstanceUID, vol.seriesInstanceUID
+        if frame_of_reference:
+            ds.FrameOfReferenceUID = vol.frameOfReferenceUID
         ds.StudyDate, ds.StudyTime, ds.StudyID, ds.AccessionNumber = vol.studyDate, "120000", "1", ""
         ds.ReferringPhysicianName, ds.SeriesNumber, ds.InstanceNumber = "", 1, k + 1
         ds.PatientPosition, ds.ImageType = vol.patientPosition, ["ORIGINAL", "PRIMARY", "AXIAL"]
@@ -125,6 +128,12 @@ def test_a_pushed_export_links_to_its_study(env, monkeypatch):
     # pushed while exporting: the export carries the link; a failed push carries none
     _svc, res2 = _export(push=True)
     assert res2.pushed and res2.viewer_url == link
+
+    monkeypatch.setenv("RADIARCH_VIEWER_ROUTE", "/plan-review/")       # radiarch's viewer
+    get_settings.cache_clear()
+    assert svc.push(res.export_id).viewer_url == f"http://ohif.invalid:3000/plan-review?StudyInstanceUIDs={res.study_instance_uid}"
+    monkeypatch.delenv("RADIARCH_VIEWER_ROUTE")
+    get_settings.cache_clear()
 
     def refuse(self, paths, raise_errors=False):
         raise RuntimeError("unreachable")

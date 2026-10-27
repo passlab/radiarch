@@ -78,6 +78,13 @@ environment variables:
 Whoever reaches the viewer uses radiarch with that key. Compose therefore publishes it on localhost
 only. To serve it to more people, put an authenticating proxy in front of it.
 
+`./scripts/demo-viewer.sh` makes a plan to look at:
+1. It puts the bundled phantom into the stack's Orthanc.
+2. It plans it with the shipped `demo-phantom-imrt` protocol (`radiarch plan --push` in the API container).
+3. It prints the link.
+
+The compose file sets `RADIARCH_VIEWER_ROUTE=plan-review`, so radiarch's own links open this mode.
+
 The plan review mode opens the plan dose over its CT. On the right are three panels:
 - the dose's DVHs and isodose legend;
 - the radiarch plan: summary, a goal template, Evaluate;

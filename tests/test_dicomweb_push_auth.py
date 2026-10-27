@@ -40,7 +40,8 @@ class _Server:
                     state.tokens_issued += 1
                     return self._send(200, {"access_token": f"tok{state.tokens_issued}", "expires_in": state.expires_in, "token_type": "Bearer"})
                 state.auth_headers.append(self.headers.get("Authorization"))
-                if not (self.headers.get("Authorization") or "").startswith("Bearer tok"):
+                auth = self.headers.get("Authorization") or ""
+                if not (auth.startswith("Bearer tok") or auth == "Basic dTpw"):          # a token, or HTTP basic u:p
                     return self._send(401, {"message": "missing or bad token"})
                 if state.refuse:
                     return self._send(409, {"message": "batch refused", "target": "lung@v3",
@@ -109,6 +110,14 @@ def test_settings_turn_on_the_bearer_token_and_keep_the_secret_out_of_repr(serve
         assert DICOMwebNotifier(url=server.url).store_instances([_instance()], raise_errors=True)
     finally:
         get_settings.cache_clear()
+
+
+def test_http_basic_push_reaches_the_server(server):
+    """A plain PACS with a username and password (Orthanc in the compose file): the credentials go through a requests
+    session, as dicomweb-client takes no username itself (every basic-auth push failed before 2026-10-27)."""
+    n = DICOMwebNotifier(url=server.url, username="u", password="p")
+    assert n.auth == "basic" and n.store_instances([_instance()], raise_errors=True)
+    assert server.auth_headers[-1] == "Basic dTpw"
 
 
 def test_a_refusal_carries_the_status_and_the_findings(server):

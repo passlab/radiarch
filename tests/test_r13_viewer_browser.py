@@ -256,3 +256,33 @@ def test_a_dose_without_dvhs_gets_them_computed_in_the_browser(env, viewer, tmp_
             raise
         finally:
             browser.close()
+
+
+def test_a_ct_without_a_frame_of_reference_still_carries_the_dose(env, viewer, tmp_path):  # noqa: F811
+    """Some CTs (the bundled phantom among them) carry no Frame of Reference UID, so the dose's matches none: the dose
+    goes on the image series its structure set refers to."""
+    from playwright.sync_api import expect, sync_playwright
+
+    from radiarch.adapters.dicomweb import DICOMwebNotifier
+
+    vol = _loaded_ct().ct
+    _forget_study(vol.studyInstanceUID)
+    ct_dir = tmp_path / "ct"
+    ct_dir.mkdir()
+    assert DICOMwebNotifier(url=DICOMWEB).store_instances([str(p) for p in _ct_slices(ct_dir, frame_of_reference=False)],
+                                                          raise_errors=True)
+    svc, res = _export()
+    assert svc.push(res.export_id, url=DICOMWEB, kinds=["RTSTRUCT", "RTPLAN", "RTDOSE"]).error is None
+
+    errors = []
+    with sync_playwright() as p:
+        browser = p.chromium.launch(args=CHROMIUM_ARGS)
+        page = browser.new_page(viewport={"width": 1600, "height": 1000})
+        page.on("console", lambda m: errors.append(m.text) if m.type == "error" else None)
+        try:
+            page.goto(f"{viewer}/plan-review?StudyInstanceUIDs={vol.studyInstanceUID}", wait_until="domcontentloaded")
+            expect(page.get_by_text("Isodoses in % of the prescription (2.00 Gy)")).to_be_visible(timeout=90000)
+            expect(page.get_by_text("DVHs from the RT Dose file")).to_be_visible(timeout=60000)
+        finally:
+            browser.close()
+    assert not [e for e in errors if "RT Dose:" in e], errors

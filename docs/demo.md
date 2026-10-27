@@ -169,13 +169,18 @@ carries the `disclaimer` field. `src/radiarch/client.py` wraps them for Python.
 
 ## 5. Seeing the dose in a viewer
 
-Radiarch ships no viewer. Doses from the legacy `/plans` workflows are written as
-DICOM RTDOSE (labelled `NOT FOR CLINICAL USE` in the series description, the
-dose comment and a private block) and pushed to Orthanc over STOW-RS when
-`RADIARCH_DICOMWEB_URL` is set; from there any DICOM viewer with RT support (an
-OHIF deployment, 3D Slicer with SlicerRT) can overlay them on the CT. The
-service results are NIfTI volumes, which Slicer and ITK-SNAP open directly. RTDOSE
-export for the service results is roadmap item R6.
+The RT objects radiarch writes (structure set, plan, dose with its DVHs, images; `POST /api/v1/rt/export`) go to
+a DICOMweb server, and the viewer shows them. With the Docker Compose stack and its viewer profile:
+
+```bash
+docker compose --profile viewer up -d --build
+./scripts/demo-viewer.sh          # the phantom into Orthanc, a plan with the demo protocol, its objects pushed
+```
+
+and open the link it prints (`http://localhost:3000/plan-review?StudyInstanceUIDs=...`). The plan review mode shows
+the dose as isodose bands over the CT, the DVHs, and the radiarch plan with its goals. `docs/viewing.md` covers
+the viewer, and 3D Slicer with SlicerRT for the same objects. The service results are also NIfTI volumes, which
+Slicer and ITK-SNAP open directly.
 
 ## 6. Your own data
 

@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     # Orthanc / PACS configuration
     orthanc_base_url: AnyUrl | str = Field(default="http://localhost:8042")
+    orthanc_dicomweb_root: str = Field(default="/dicom-web", description="Orthanc's DICOMweb path under the base URL (QIDO, WADO, STOW)")
     orthanc_username: Optional[str] = Field(default=None)
     orthanc_password: Optional[str] = Field(default=None)
     orthanc_use_mock: bool = Field(default=True, description="Use fake Orthanc adapter for development")
@@ -46,6 +47,7 @@ class Settings(BaseSettings):
     dicomweb_token_scope: str = Field(default="", description="OAuth2 scope to request; empty = the client's default")
     # A DICOMweb viewer (OHIF) that reads from the push destination: a pushed export carries a link that opens its study
     viewer_url: str = Field(default="", description="OHIF base URL, e.g. http://localhost:3000; empty = no viewer link")
+    viewer_route: str = Field(default="viewer", description="OHIF route the link opens: 'viewer' (any OHIF) or 'plan-review' (radiarch's mode)")
 
     # Job queue
     broker_url: str = Field(default="redis://localhost:6379/0")

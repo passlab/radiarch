@@ -1,6 +1,10 @@
+# The API image needs src/ and engines/ only (Dockerfile); the viewer image is built from viewer/.
 .git
 .gitignore
 .env
+**/.venv
+**/venv
+**/node_modules
 *.pyc
 __pycache__
 .pytest_cache
@@ -9,11 +13,11 @@ __pycache__
 *.egg-info
 dist
 build
-MONAILabel
-Viewers
 data
 docs
+validation/results
+validation/r8-work
+validation/mc
+viewer
+tests
 *.md
-!service/README.md
-service/.venv
-service/radiarch.db

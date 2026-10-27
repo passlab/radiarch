@@ -53,6 +53,35 @@ def test_plan_one_patient(cli_env, tmp_path, capsys):
     assert rp.RTPlanLabel == "RESEARCH" and int(rp.FractionGroupSequence[0].NumberOfFractionsPlanned) == 2
 
 
+def test_plan_and_push_prints_the_viewer_link(cli_env, tmp_path, capsys, monkeypatch):
+    from radiarch.adapters import dicomweb
+    from radiarch.config import get_settings
+
+    sent = []
+    monkeypatch.setattr(dicomweb.DICOMwebNotifier, "store_instances", lambda self, paths, raise_errors=False: sent.extend(paths) or True)
+    monkeypatch.setenv("RADIARCH_DICOMWEB_URL", "http://pacs.invalid/dicom-web")
+    monkeypatch.setenv("RADIARCH_VIEWER_URL", "http://localhost:3000")
+    get_settings.cache_clear()
+    code = main(["plan", "--protocol", str(cli_env), "--study", "1.2.3", "--push", "--poll", "0.01"])
+    out = capsys.readouterr().out
+    assert code == 0 and sent and "pushed" in out
+    assert "open in the viewer: http://localhost:3000/viewer?StudyInstanceUIDs=1.2.826.0.1.3680043.8.498.6000" in out
+
+    def refuse(self, paths, raise_errors=False):
+        raise RuntimeError("PACS unreachable")
+    monkeypatch.setattr(dicomweb.DICOMwebNotifier, "store_instances", refuse)
+    code = main(["plan", "--protocol", str(cli_env), "--study", "1.2.3", "--push", "--poll", "0.01"])
+    assert code == 3 and "PACS unreachable" in capsys.readouterr().err
+    get_settings.cache_clear()
+
+
+def test_the_demo_protocol_ships():
+    from radiarch.services.autoplan import load_protocol
+
+    p = load_protocol("demo-phantom-imrt")
+    assert p.prescription.target == "PTV" and "TargetVolume" in p.structure_aliases["Target"] and p.engine.name == "pb"
+
+
 def test_batch_goes_on_past_a_failed_case(cli_env, tmp_path, capsys):
     cases = tmp_path / "cases.csv"
     cases.write_text("case_id,study_uid,data_root\nA,1.2.3,a\nB,9.9.9-missing,b\nC,1.2.4,c\n", encoding="utf-8")

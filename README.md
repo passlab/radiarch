@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/passlab/radiarch/actions/workflows/ci.yml/badge.svg)](https://github.com/passlab/radiarch/actions/workflows/ci.yml)
 
-Radiarch is a FastAPI-based research treatment-planning service modeled after the MONAILabel server pattern. Its core (DICOM in, contour rasterization, calibration, spot and beamlet placement, optimization, evaluation) is its own; dose comes from two engines run as separate programs over files, [MCsquare](https://gitlab.com/openmcsquare/MCsquare) for protons and the WiscPlan collapsed-cone engine for photons (`engines/`), and from radiarch's own photon pencil-beam engine. It communicates with PACS providers such as Orthanc over DICOMweb and ships no viewer: an OHIF deployment does the viewing against this API.
+Radiarch is a FastAPI-based research treatment-planning service modeled after the MONAILabel server pattern. Its core (DICOM in, contour rasterization, calibration, spot and beamlet placement, optimization, evaluation) is its own; dose comes from two engines run as separate programs over files, [MCsquare](https://gitlab.com/openmcsquare/MCsquare) for protons and the WiscPlan collapsed-cone engine for photons (`engines/`), and from radiarch's own photon pencil-beam engine. It communicates with PACS providers such as Orthanc over DICOMweb. Plans are viewed in OHIF through radiarch's viewer packages (`viewer/`): a dose extension, a plan panel and a plan review mode, standalone or in another OHIF build (`docs/viewing.md`).
 
 ## Intended use
 
@@ -19,8 +19,11 @@ The dose engines are research engines with no site commissioning; see the valida
 ```
 radiarch/
   Dockerfile            # Multi-stage container build
-  docker-compose.yml    # Full stack: API + Worker + Redis + Postgres + Orthanc
+  docker-compose.yml    # Full stack: API + Worker + Redis + Postgres + Orthanc (+ the viewer, profile "viewer")
   .env.example          # Documented env var template
+  scripts/              # smoke_test.sh, demo-viewer.sh (a plan into the viewer), install-dev.sh, fetch-engines.sh
+  viewer/               # OHIF packages: rt-dose-core, the RT Dose and radiarch extensions, the plan review mode,
+                        # standalone/ (the viewer image: OHIF + nginx proxy) (viewer/README.md)
   demo/                 # CLI demos per service (show_*.py) + compare_engines.py; walkthrough in docs/demo.md
   engines/              # Dose engine assets run as subprocesses (engines/README.md)
     mcsquare/           # MCsquare launcher + Linux binaries, Materials/, BDL/, Scanners/ (Apache 2.0)
@@ -35,7 +38,10 @@ radiarch/
       dicom/            # CT, RT Structure Set, RT Plan, RT Dose, registration readers (pydicom);
                         # writers/ for every RT object radiarch writes; drr.py
       app.py            # FastAPI factory
-      client.py         # RadiarchClient Python library
+      client.py         # RadiarchClient Python library (legacy /plans)
+      sdk/              # the SDK: every service as Python objects (R10)
+      cli.py            # the `radiarch` command: protocols, plan, batch; cwl/ for workflow engines
+      protocols/        # shipped planning protocols (JSON)
       config.py         # Pydantic settings
       api/routes/       # /info, /workflows, /plans, /jobs, /artifacts, /sessions, /uploads,
                         # /geometry, /beam-model, /dose, /optimize, /bao, /evaluate, /rt, /lineage
@@ -53,45 +59,78 @@ radiarch/
 
 ## Quick Start — Docker Compose
 
-The fastest way to run the entire stack:
+Needs a Linux x86-64 machine (Ubuntu 22.04 or 24.04 works) with `git` and Docker Engine with the compose
+plugin (`docker compose version`; Docker's install guide for Ubuntu, then `sudo usermod -aG docker $USER`
+and log in again). The first build downloads and builds about 10 GB of images and takes 10 to 20 minutes;
+the stack then needs about 4 GB of memory. No GPU on the server; the viewer draws in your browser.
 
 ```bash
-cp .env.example .env        # Edit as needed
-docker compose up -d        # Starts all 5 services
-curl http://localhost:8000/api/v1/info
+git clone https://github.com/passlab/radiarch.git && cd radiarch
+cp .env.example .env                                   # as shipped: no API key, for a machine only you use
+export RADIARCH_BUILD_COMMIT=$(git rev-parse --short=7 HEAD)   # stamped into every DICOM object radiarch writes
+docker compose --profile viewer up -d --build          # api, worker, redis, postgres, orthanc and the viewer
+curl http://localhost:8000/api/v1/info                 # the API answers once its container is up
 ```
 
-### Smoke test (recommended)
+Without `--profile viewer` the viewer is left out (and its OHIF build skipped). If the build stops with
+`429 Too Many Requests` from Docker Hub, its anonymous pull limit was reached (shared networks hit it): `docker login`
+with a free Docker Hub account and run the command again.
 
-After the stack is up, run an end-to-end API smoke test (plan → job → artifacts):
+### A plan in the viewer
 
 ```bash
-chmod +x scripts/smoke_test.sh
+./scripts/demo-viewer.sh
+```
+
+It puts the bundled phantom (`tests/data/SimpleFantomWithStruct`: a water cylinder with one contoured target) into
+the stack's Orthanc, plans it with the shipped demo protocol (`demo-phantom-imrt`: 60 Gy in 30 fractions, five
+static fields, radiarch's pencil-beam engine) through the `radiarch` command inside the API container, pushes the
+structure set, plan and dose to Orthanc, and prints a link:
+
+```
+http://localhost:3000/plan-review?StudyInstanceUIDs=<the phantom's study>
+```
+
+Open it in Chrome or Firefox on the same machine (or through `ssh -L 3000:localhost:3000 <machine>`). The plan
+review mode opens on the slice through the dose maximum, with the dose as isodose colour bands over the CT; the
+panels on the right show the DVHs, the radiarch plan (summary, a goal template, Evaluate) and the structures.
+`docs/viewing.md` explains the viewer and its configuration.
+
+### Smoke test
+
+After the stack is up, an end-to-end API smoke test: the phantom into Orthanc (`scripts/load-phantom.sh`), a proton
+plan through the legacy `/plans` route (MCsquare in the worker), its job and artifacts. It also pushes that plan's
+dose, so the phantom's study then holds two doses; the plan review mode opens the latest.
+
+```bash
 ./scripts/smoke_test.sh
-```
-
-To target a different API base URL:
-
-```bash
-API_BASE_URL="http://127.0.0.1:8000/api/v1" ./scripts/smoke_test.sh
+API_BASE_URL="http://127.0.0.1:8000/api/v1" X_API_KEY=<key> ./scripts/smoke_test.sh   # another server, or with a key
 ```
 
 | Service | Port | Description |
 |---|---|---|
-| `api` | 8000 | Radiarch FastAPI server |
-| `worker` | — | Celery worker (plan execution) |
+| `api` | 8000 | Radiarch FastAPI server (OpenAPI at `/api/v1/docs`) |
+| `worker` | — | Celery worker (every service's jobs) |
 | `redis` | 6379 | Celery broker + result backend |
 | `postgres` | 5432 | Persistent data store |
-| `orthanc` | 8042 | DICOM server (Web UI + DICOMweb) |
+| `orthanc` | 8042, 4242 | DICOM server: web UI, REST and DICOMweb on 8042 (user `radiarch`, password `radiarch`); DICOM on 4242 |
+| `viewer` | 3000 (localhost) | OHIF with radiarch's extensions; Orthanc and the API behind it (profile `viewer`) |
 
-Stop everything: `docker compose down` (add `-v` to remove volumes).
+Stop everything: `docker compose --profile viewer down` (add `-v` to remove the volumes: plans, Orthanc, database).
+
+For a machine others can reach, set `RADIARCH_API_KEY` in `.env` (`openssl rand -hex 32`), change Orthanc's password
+in `docker-compose.yml`, and read `docs/PRODUCTION.md`.
 
 ## Quick Start — Local Development
 
+Python 3.12 or newer (Ubuntu: `sudo apt install python3-venv python3-pip`). No Docker needed: `.env.dev` runs jobs in
+process with in-memory stores.
+
 ```bash
-python3 -m venv src/.venv
-source src/.venv/bin/activate
-./scripts/install-dev.sh         # editable install + sanity check
+python3 -m venv .venv
+source .venv/bin/activate
+./scripts/install-dev.sh         # editable install with the dev extras + sanity check
+cp .env.dev .env
 uvicorn radiarch.app:create_app --factory --reload
 ```
 
@@ -104,7 +143,8 @@ suite's `tests/conftest.py` also prepends `src/` to `sys.path` as a
 belt-and-suspenders guard so `pytest` works even if the install is
 stale.
 
-Open <http://localhost:8000/api/v1/docs> to inspect the OpenAPI schema.
+Open <http://localhost:8000/api/v1/docs> to inspect the OpenAPI schema. `docs/demo.md` walks through the services on
+the bundled phantom in about fifteen minutes.
 
 ### Engines
 
@@ -134,6 +174,8 @@ All settings use `RADIARCH_` prefix. Place them in `.env` or export as env vars.
 | `RADIARCH_BROKER_URL` | `redis://localhost:6379/0` | Celery broker (Redis) |
 | `RADIARCH_DICOMWEB_URL` | `""` | DICOMweb STOW-RS URL for artifact push; empty = disabled |
 | `RADIARCH_VIEWER_URL` | `""` | OHIF base URL; a successful push returns a `viewer_url` that opens the study (`docs/viewing.md`) |
+| `RADIARCH_VIEWER_ROUTE` | `viewer` | The OHIF route of that link: `viewer` for any OHIF, `plan-review` for radiarch's viewer (the compose file's) |
+| `RADIARCH_ORTHANC_DICOMWEB_ROOT` | `/dicom-web` | Orthanc's DICOMweb path under `RADIARCH_ORTHANC_BASE_URL`, where studies are read from |
 | `RADIARCH_BUILD_COMMIT` | `""` | The commit an image was built from (a build argument); else the git checkout's. Every DICOM object states `[release, "git <commit>"]` in Software Versions |
 | `RADIARCH_API_KEY` | `""` | `X-API-Key` required on every `/api/v1` route except `/info`; empty disables auth (dev only) |
 | `RADIARCH_ALLOW_TEST_ENGINES` | unset | Permit the test-only `analytic` engine (wrong physics by design). Unset = only when `RADIARCH_ENVIRONMENT=dev` |

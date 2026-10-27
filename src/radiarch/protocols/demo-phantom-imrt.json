@@ -1,0 +1,30 @@
+{
+  "protocol_id": "demo-phantom-imrt",
+  "name": "Demo: the bundled phantom's target, 5-field IMRT (not a clinical protocol)",
+  "site": "phantom",
+  "version": "1",
+  "description": "For trying radiarch on the bundled SimpleFantomWithStruct phantom (a water cylinder with one contoured target, TargetVolume): PTV = target + 5 mm, 60 Gy in 30 fractions, five static 6 MV fields with MLC apertures, radiarch's pencil-beam engine. It shows the planning loop, the RT objects and the viewer; it is not a site protocol.",
+  "source": "radiarch demo (docs/viewing.md)",
+  "prescription": {"target": "PTV", "dose_gy": 60.0, "fractions": 30},
+  "structure_aliases": {"Target": ["TargetVolume", "GTV", "CTV"]},
+  "structures": [
+    {"op": "expand", "name": "PTV", "source": "Target", "margin_mm": 5.0},
+    {"op": "ring", "name": "RingNear", "source": "PTV", "inner_mm": 3.0, "outer_mm": 15.0},
+    {"op": "ring", "name": "RingFar", "source": "PTV", "inner_mm": 25.0, "outer_mm": 200.0}
+  ],
+  "goals": [
+    {"structure": "PTV", "metric": "D95", "op": ">=", "gy": 57.0},
+    {"structure": "PTV", "metric": "Dmax", "op": "<=", "gy": 66.0}
+  ],
+  "extra_objectives": [
+    {"type": "DMax", "structure_name": "RingNear", "dose_gy": 54.0, "weight": 50.0},
+    {"type": "DMax", "structure_name": "RingFar", "dose_gy": 30.0, "weight": 100.0}
+  ],
+  "beams": {"technique": "imrt", "count": 5, "sequence_levels": 5},
+  "machine": "synthetic-120",
+  "engine": {"name": "pb"},
+  "beamlet_mm": 5.0,
+  "jaw_margin_mm": 10.0,
+  "iterations": 100,
+  "rounds": 2
+}

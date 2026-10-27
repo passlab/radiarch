@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Against the Docker Compose stack: the bundled phantom goes into its Orthanc first (load-phantom.sh), and the plan is
+# made on that study. STUDY_UID skips the loading (a study the server can already reach).
 API_BASE_URL="${API_BASE_URL:-http://127.0.0.1:8000/api/v1}"
 # Every route but /info needs the API key once RADIARCH_API_KEY is set on the server.
 X_API_KEY="${X_API_KEY:-}"
@@ -16,13 +18,20 @@ curl -fsS "${AUTH[@]}" "${API_BASE_URL}/info" | python3 -m json.tool >/dev/null
 echo "   OK"
 echo
 
+if [ -z "${STUDY_UID:-}" ]; then
+  echo "   loading the bundled phantom into the stack's Orthanc"
+  STUDY_UID="$("$(dirname "${BASH_SOURCE[0]}")/load-phantom.sh" | tail -n 1)"
+fi
+echo "   study ${STUDY_UID}"
+echo
+
 echo "2) POST /plans (create a minimal plan)"
 CREATE_RESP="$(
   curl -fsS "${AUTH[@]}" "${API_BASE_URL}/plans" \
     -H "Content-Type: application/json" \
     -d '{
       "workflow_id": "proton-impt-basic",
-      "study_instance_uid": "1.2.826.0.1.3680043.8.1055.1",
+      "study_instance_uid": "'"${STUDY_UID}"'",
       "prescription_gy": 2.0,
       "beam_count": 3,
       "fraction_count": 1,
