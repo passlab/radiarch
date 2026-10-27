@@ -1,6 +1,6 @@
 # Radiarch — implementation plan and tasks
 
-State: 2026-10-22. The design is in [`architecture.md`](architecture.md); what each item
+State: 2026-10-27. The design is in [`architecture.md`](architecture.md); what each item
 did, file by file, is in [`impl-log.md`](impl-log.md); the decisions
 are in [`adr/`](adr/); the evaluation that set this roadmap is
 [`reports/tps-evaluation-and-roadmap.md`](reports/tps-evaluation-and-roadmap.md).
@@ -30,7 +30,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 13 | R8 Native pencil-beam engine, VMAT, SBRT | done; physicist review waiting | 6e73aa2..cc5c047 | 0015 |
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
-| 16 | R13 Viewer integration | in progress | — | — |
+| 16 | R13 Viewer integration | in progress (R13.1 done) | fc7473d | — |
 | 17 | R11 Multi-criteria optimization | not started | — | — |
 
 ## Before the roadmap (done by 2026-10-20)
