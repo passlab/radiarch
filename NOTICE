@@ -30,5 +30,7 @@ This product includes or runs software developed by others:
   runs it only as a separate program that exchanges files with it; nothing in
   radiarch links to or imports it.
 
-- Test data: the SimpleFantomWithStruct DICOM set from the OpenTPS test data,
-  under tests/data/.
+- Test data: the SimpleFantomWithStruct DICOM set, a synthetic phantom from
+  the OpenTPS test data (testData/SimpleFantomWithStruct), Apache License 2.0,
+  developed by the OpenTPS consortium (http://opentps.org/), under
+  tests/data/SimpleFantomWithStruct/ (provenance: its README.md).
