@@ -10,6 +10,8 @@ summary.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -20,6 +22,7 @@ from .common import ResearchArtifact
 from .dose import EngineSpec
 
 OBJECT_KINDS = ("rtstruct", "rtplan", "rtdose", "rtimage")
+EXPORT_VERSION = "1"               # raise when the writers change what an export holds: earlier exports are then not reused
 
 
 class PrescriptionSpec(BaseModel):
@@ -56,6 +59,17 @@ class RTExportRequest(BaseModel):
     dose_summation: str = Field(default="PLAN", pattern="^(PLAN|MULTI_PLAN)$",
                                 description="MULTI_PLAN: the dose sums this plan and the plans in summed_plan_uids (an accumulated course, R9).")
     summed_plan_uids: List[str] = Field(default_factory=list, max_length=16, description="The other plans of a MULTI_PLAN dose.")
+    new_export: bool = Field(default=False,
+                             description="Write a new export even when this plan was exported with these settings before: a copy with new "
+                                         "UIDs, marked 'copy N' in its label and series description, whose plan references the earlier one "
+                                         "(RTPlanRelationship PREDECESSOR). False = the earlier export is returned with its UIDs, and "
+                                         "pushed again when push is set, so the archive keeps one copy.")
+
+    def compute_cache_key(self) -> str:
+        """The plan and every setting that shapes the objects; not ``push`` or ``new_export``, which do not."""
+        payload = self.model_dump(mode="json", exclude={"push", "new_export"})
+        blob = json.dumps({"version": EXPORT_VERSION, **payload}, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
     @model_validator(mode="after")
     def _one_source(self) -> "RTExportRequest":
@@ -113,6 +127,10 @@ class RTExportResult(ResearchArtifact):
     push_error: Optional[str] = None
     viewer_url: Optional[str] = Field(default=None, description="Opens the study in the configured viewer once pushed (RADIARCH_VIEWER_URL).")
     created_at: Optional[datetime] = None
+    cache_key: Optional[str] = Field(default=None, description="The plan and export settings it was written for (RTExportRequest.compute_cache_key).")
+    copy_number: int = Field(default=1, ge=1, description="1 for the first export of the plan with these settings; N for the copy asked with new_export.")
+    copy_of: Optional[str] = Field(default=None, description="The export a copy follows: its plan is the copy's predecessor.")
+    reused: bool = Field(default=False, description="This response is the stored export of the plan with these settings; nothing was written.")
 
 
 class SessionSpec(BaseModel):
@@ -165,5 +183,5 @@ class RTPushResult(BaseModel):
     viewer_url: Optional[str] = Field(default=None, description="Opens the study in the configured viewer (RADIARCH_VIEWER_URL).")
 
 
-__all__ = ["OBJECT_KINDS", "PrescriptionSpec", "RTExportRequest", "RTObjectRef", "RTExportResult", "SessionSpec",
+__all__ = ["OBJECT_KINDS", "EXPORT_VERSION", "PrescriptionSpec", "RTExportRequest", "RTObjectRef", "RTExportResult", "SessionSpec",
            "RTRecordRequest", "RTRecordResult", "RTPushRequest", "RTPushResult"]

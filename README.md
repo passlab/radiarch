@@ -97,7 +97,11 @@ Planning takes about six minutes on a 10-core (20-thread) workstation and longer
 prints each planning round (`protocols: running planning 15% (imrt planning, round 1 of up to 2)`). Until it prints
 `pushed ... RT objects` and the link, the study in the viewer holds only the CT and the clinic's structure set: no
 plan, dose or DVH yet. `docker compose logs -f worker` shows the planning itself. Run again for the same patient,
-the script reuses the stored geometry and plan (`done (computed before: the stored result)`) and pushes them again.
+the script reuses the stored geometry, plan and export (`done (computed before: the stored result)`, `the stored export
+of this plan`) and pushes the same objects again, which Orthanc already holds: the study keeps one plan. Add
+`--new-export` to `radiarch plan` for a second copy: new UIDs, `copy 2` in its label and series description, and the
+first plan as its predecessor. Studies from before this change hold one copy per run; delete the extras in Orthanc
+(`http://localhost:8042`) or start again with `docker compose --profile viewer down -v`.
 
 Open it in Firefox or Chrome on the same machine (or through `ssh -L 3000:localhost:3000 <machine>`). The plan
 review mode opens on the slice through the dose maximum: the dose as isodose colour bands over the CT, and the

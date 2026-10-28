@@ -696,3 +696,20 @@ dose, and OHIF loads a structure set only when it is dropped into a viewport of 
   The protocol job reports each goal-driven round (`imrt planning, round 1 of up to 2`).
 - **Log messages.** 75 log calls used `%s` placeholders, which loguru prints as they stand (`Using real Orthanc adapter
   at %s`); they use `{}` now, and `tests/test_log_messages.py` keeps it so.
+
+## A plan exported again is the same export (2026-10-28)
+
+- **Duplicates in the study.** Each run of `demo-lung.sh` reused the stored plan but exported it again with new UIDs, so
+  the study gained another structure set, plan, dose and DRR series per run, identical but for their UIDs.
+- **Reuse.** An export is keyed by its plan and every setting that shapes its objects (`compute_cache_key`; not
+  `push`). Asked again, the service returns the stored export (`reused: true`) and, with `push`, sends the same
+  objects again; Orthanc keeps an instance it already holds. An export whose files are gone is written anew.
+- **A marked copy.** `new_export` (`radiarch plan --new-export`) writes a copy: new UIDs, `copy N` in the RT Plan and
+  structure set labels (within 16 characters) and in every series description, and the latest earlier plan referenced
+  with RTPlanRelationship PREDECESSOR. The manifest records `copy_number` and `copy_of`. Later default runs return the
+  latest copy.
+- **No replace.** DICOMweb has no delete, and a deletion in an archive cannot be undone. Eclipse and RayStation keep a
+  plan's identity in their database and retire a superseded plan rather than delete it; radiarch links copies the same
+  way and leaves deleting to the archive.
+- **Tests:** `tests/test_rt_export_reuse.py` (the same export, a setting that changes the key, copies and their
+  references, missing files, the label); `test_r10_cli` checks a rerun pushes the same UIDs and `--new-export` a copy.

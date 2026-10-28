@@ -27,13 +27,13 @@ from test_r6_rt_export_service import _loaded_ct, _photon_pipeline, env  # noqa:
 CT_IMAGE = "1.2.840.10008.5.1.4.1.1.2"
 
 
-def _export(push: bool = False):
+def _export(push: bool = False, new_export: bool = False):
     from radiarch.services.rt_export import RTExportService
 
     _geo, _bm, _opt, seq = _photon_pipeline()
     svc = RTExportService()
     res = svc.export(RTExportRequest(sequence_id=seq.sequence_id, label="R13", prescription=PrescriptionSpec(dose_gy=2.0, fractions=2),
-                                     push=push))
+                                     push=push, new_export=new_export))
     return svc, res
 
 
@@ -249,7 +249,7 @@ def test_a_viewer_finds_the_export_of_what_it_shows(env, monkeypatch):
 
     monkeypatch.setattr(radiarch_app, "init_db", lambda: None)
     svc, a = _export()
-    _svc, b = _export()
+    _svc, b = _export(new_export=True)          # a second export of the same plan is a copy, asked for
     vol = _loaded_ct().ct
     dose_a = next(o for o in a.objects if o.kind == "RTDOSE")
 

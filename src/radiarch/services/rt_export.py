@@ -14,6 +14,11 @@ builds the case context from the geometry's CT provenance, and writes into
 * ``RI_B{n}.dcm`` one DRR per beam, referenced from the plan's beam;
 * ``manifest.json`` the :class:`RTExportResult`.
 
+A plan exported again with the same settings returns its earlier export: the
+same objects with the same UIDs, which an archive stores once. ``new_export``
+asks for a copy instead, marked "copy N" and referencing the earlier plan as
+its predecessor (an archive keeps both; nothing is deleted).
+
 Treatment records are written against an export: ``RT_F{n}.dcm`` per
 session and ``RTS.dcm`` for the summary. ``push`` sends the files with
 STOW-RS through the DICOMweb notifier.
@@ -120,6 +125,20 @@ class RTExportService:
         found.sort(key=lambda r: r.created_at or epoch, reverse=True)
         return found[:max(0, int(limit))]
 
+    def exports_of(self, cache_key: str) -> List[RTExportResult]:
+        """The exports written for one plan and settings (RTExportRequest.compute_cache_key), oldest first; an export
+        whose files are gone is left out."""
+        found = []
+        for p in self.base_dir.glob(f"*/{MANIFEST}"):
+            try:
+                r = RTExportResult.model_validate_json(p.read_text())
+            except ValueError:
+                continue
+            if r.cache_key == cache_key and all(Path(o.path).is_file() for o in r.objects):
+                found.append(r)
+        epoch = datetime.min.replace(tzinfo=timezone.utc)
+        return sorted(found, key=lambda r: (r.copy_number, r.created_at or epoch))
+
     def _save(self, result: RTExportResult) -> None:
         d = self.directory(result.export_id)
         d.mkdir(parents=True, exist_ok=True)
@@ -132,9 +151,23 @@ class RTExportService:
     # ------------------------------------------------------------------
 
     def export(self, request: RTExportRequest) -> RTExportResult:
+        cache_key = request.compute_cache_key()
+        earlier = self.exports_of(cache_key)
+        if earlier and not request.new_export:
+            return self._reuse(earlier[-1], request)
+        copy_number, copy_of = 1, None
+        if earlier:            # a copy asked for: marked, and its plan follows the latest one
+            last = earlier[-1]
+            copy_number, copy_of = last.copy_number + 1, last.export_id
+            request = request.model_copy(update={
+                "label": _copy_label(request.label, copy_number),
+                "description": request.description or f"copy {copy_number}",
+                "predecessor_plan_uid": request.predecessor_plan_uid or last.plan_sop_instance_uid})
         src = self._resolve(request)
         arrays = load_geometry_arrays(src.geometry)
         ctx = self._context(src.geometry, src)
+        if copy_number > 1:
+            ctx.series_note = f"copy {copy_number}"
         export_id = str(uuid.uuid4())
         out = self.directory(export_id)
         out.mkdir(parents=True, exist_ok=True)
@@ -217,6 +250,7 @@ class RTExportService:
             plan_sop_instance_uid=plan_uid if "rtplan" in request.objects else None,
             beam_numbers=beam_numbers, beam_metersets=metersets, n_fractions=int(n_fractions), prescription=request.prescription,
             machine_name=request.machine_name, attribution=self._attribution(src), objects=objects, created_at=datetime.now(timezone.utc),
+            cache_key=cache_key, copy_number=copy_number, copy_of=copy_of,
         )
         if request.push:
             ok, err = self._push([o.path for o in objects])
@@ -225,6 +259,16 @@ class RTExportService:
         self._save(result)
         logger.info("RT export {}: {} objects in {}", export_id, len(objects), out)
         return result
+
+    def _reuse(self, result: RTExportResult, request: RTExportRequest) -> RTExportResult:
+        """The stored export of this plan and settings, pushed again when asked: the same UIDs, so the archive keeps one copy."""
+        if request.push:
+            ok, err = self._push([o.path for o in result.objects])
+            result.pushed, result.push_error = ok, err
+            result.viewer_url = viewer_link(result.study_instance_uid) if ok else None
+            self._save(result)
+        logger.info("RT export {}: the stored export of this plan and settings{}", result.export_id, ", pushed again" if request.push else "")
+        return result.model_copy(update={"reused": True})
 
     # ------------------------------------------------------------------
     # Treatment records
@@ -581,6 +625,12 @@ def _new_uid() -> str:
 def _series_uid(export_id: str, kind: str) -> str:
     from ..dicom.writers import stable_uid
     return stable_uid(export_id, kind)
+
+
+def _copy_label(label: str, number: int) -> str:
+    """The label of copy ``number``, within the 16 characters an RT Plan label holds."""
+    suffix = f" copy {number}"
+    return label[:max(0, 16 - len(suffix))].rstrip(" -_") + suffix
 
 
 def _beam_key(beam) -> str:

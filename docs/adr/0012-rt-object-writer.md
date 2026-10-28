@@ -82,6 +82,14 @@ objects need.
    explicit URL on `/push`). A photon optimization is refused until it is
    sequenced: a fluence is not a plan. `POST /rt/exports/{id}/records`
    writes sessions and the summary against an export.
+   *Amended 2026-10-28:* an export is keyed by its plan and every setting
+   that shapes the objects (`RTExportRequest.compute_cache_key`). The same
+   key returns the stored export with its UIDs (`reused`), so a rerun pushes
+   objects the archive already holds. `new_export` writes a copy instead:
+   new UIDs, "copy N" in the plan label and series description, the latest
+   earlier plan referenced as PREDECESSOR. Nothing is deleted from an
+   archive; as in commercial planning systems, a later plan supersedes an
+   earlier one by reference.
 8. **Validation in CI.** Every object type is validated against the DICOM
    standard's IOD tables with `dicom-validator` (a dev extra, edition
    2026d) in the full suite, and with `dciodvfy` (dicom3tools) in a CI

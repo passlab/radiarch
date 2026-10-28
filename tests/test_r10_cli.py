@@ -75,6 +75,25 @@ def test_plan_and_push_prints_the_viewer_link(cli_env, tmp_path, capsys, monkeyp
     get_settings.cache_clear()
 
 
+def test_a_rerun_pushes_the_same_objects_and_a_new_export_marks_its_copy(cli_env, capsys, monkeypatch):
+    """Planning a patient again pushes the stored export, whose UIDs the archive already holds; --new-export is a copy."""
+    from radiarch.adapters import dicomweb
+    from radiarch.config import get_settings
+
+    sent = []
+    monkeypatch.setattr(dicomweb.DICOMwebNotifier, "store_instances",
+                        lambda self, paths, raise_errors=False: sent.append(sorted(pydicom.dcmread(p).SOPInstanceUID for p in paths)) or True)
+    monkeypatch.setenv("RADIARCH_DICOMWEB_URL", "http://pacs.invalid/dicom-web")
+    get_settings.cache_clear()
+    args = ["plan", "--protocol", str(cli_env), "--study", "1.2.3", "--push", "--poll", "0.01"]
+    assert main(args) == 0 and "stored export" not in capsys.readouterr().err
+    assert main(args) == 0 and "the stored export of this plan" in capsys.readouterr().err
+    assert len(sent) == 2 and sent[0] == sent[1]
+    assert main(args + ["--new-export"]) == 0 and "copy 2" in capsys.readouterr().err
+    assert set(sent[2]).isdisjoint(sent[0])
+    get_settings.cache_clear()
+
+
 def test_the_demo_protocol_ships():
     from radiarch.services.autoplan import load_protocol
 

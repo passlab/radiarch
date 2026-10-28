@@ -101,12 +101,17 @@ def cmd_plan(args) -> int:
         run = _plan_one(rx, _protocol(args.protocol), args.study, args.data, args.spacing)
         _print_goals(run)
         if args.export or args.push:
-            exp = run.export(label=args.label, push=bool(args.push))
+            exp = run.export(label=args.label, push=bool(args.push), new_export=bool(args.new_export))
+            r = exp.result
+            if r.reused:
+                print(f"export {r.export_id}: the stored export of this plan, the same objects and UIDs "
+                      "(--new-export writes a marked copy)", file=sys.stderr)
+            elif r.copy_number > 1:
+                print(f"export {r.export_id}: copy {r.copy_number}, its plan follows export {r.copy_of}'s", file=sys.stderr)
             if args.export:
                 files = exp.download(args.export)
                 print(f"RT objects: {', '.join(str(f) for f in files)}")
             if args.push:
-                r = exp.result
                 if not r.pushed:
                     print(f"push failed: {r.push_error}", file=sys.stderr)
                     return 3
@@ -220,6 +225,9 @@ def build_parser() -> argparse.ArgumentParser:
             s.add_argument("--export", help="write the RT objects into this directory")
             s.add_argument("--push", action="store_true",
                            help="push the RT objects to the server's DICOMweb destination (RADIARCH_DICOMWEB_URL) and print the viewer link")
+            s.add_argument("--new-export", action="store_true",
+                           help="write the RT objects again as a marked copy (new UIDs, 'copy N', the earlier plan as its predecessor); "
+                                "by default a plan exported before with these settings returns that export")
             s.add_argument("--json", help="write the run (plan, dose, goals) as JSON")
             s.add_argument("--strict", action="store_true", help="exit 2 when a goal is not met")
         else:

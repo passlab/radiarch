@@ -79,6 +79,7 @@ class CaseContext:
     operator: str = "radiarch"
     engine: str = ""                   # the dose engine and its version, for the private block
     machine: str = ""                  # the machine model id
+    series_note: str = ""              # appended to the series description, e.g. "copy 2" for a second export of a plan
     now: Optional[datetime] = None      # fixed for reproducible files; None = the clock
 
     def __post_init__(self) -> None:
@@ -209,6 +210,8 @@ def new_dataset(ctx: CaseContext, sop_class: str, modality: str, *, series_numbe
     ds.SeriesInstanceUID = series_instance_uid or generate_uid()
     ds.SeriesNumber = int(series_number)
     ds.SeriesDescription = "RESEARCH - " + NOT_FOR_CLINICAL_USE      # the R0 contract, as the legacy exporter wrote it
+    if ctx.series_note:
+        ds.SeriesDescription = f"{ds.SeriesDescription} ({ctx.series_note})"[:64]
     ds.SeriesDate = ctx.date
     ds.SeriesTime = ctx.time
     ds.OperatorsName = ctx.operator
