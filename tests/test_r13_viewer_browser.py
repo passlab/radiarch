@@ -227,6 +227,8 @@ def test_a_plan_in_the_standalone_viewer(env, viewer, tmp_path):  # noqa: F811
             expect(page.get_by_text("Goals:")).to_be_visible(timeout=120000)
             expect(page.get_by_text("DVHs from radiarch's evaluation")).to_be_visible()
             page.screenshot(path=str(artifacts / "viewer-goals.png"))
+            # the image was drawn, so the viewport's black-image warning (Chrome's OpenGL backend on Linux) never showed
+            expect(page.locator('[data-cy="rt-dose-blank-warning"]')).to_have_count(0)
         except Exception:
             page.screenshot(path=str(artifacts / "viewer-failure.png"))
             (artifacts / "viewer-failure.html").write_text(page.content())

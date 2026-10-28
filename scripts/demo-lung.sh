@@ -6,7 +6,7 @@
 # and the link that opens them in the viewer: contours, the dose colour wash and the DVHs. Research use only.
 #
 #   docker compose --profile viewer up -d --build     # first: the stack with the viewer
-#   ./scripts/demo-lung.sh                            # then: a ~60 MB download and a few minutes of planning
+#   ./scripts/demo-lung.sh                            # then: a ~60 MB download and some minutes of planning
 #
 # Environment: PATIENT (default LUNG1-002), COLLECTION (default NSCLC-Radiomics), VIEWER_URL (default
 # http://localhost:3000), SPACING_MM (dose grid, default 4), PROTOCOL (default demo-lung-imrt; lung-60gy-30fx-vmat
@@ -27,7 +27,7 @@ STUDY="$(docker compose exec -T api radiarch fetch-tcia --collection "${COLLECTI
   --cache /data/artifacts/tcia --push | tail -n 1)"
 echo "   study ${STUDY}"
 
-echo "2) a plan with ${PROTOCOL}, its RT objects pushed to Orthanc (a few minutes)"
+echo "2) a plan with ${PROTOCOL}, its RT objects pushed to Orthanc (minutes: each planning round is printed)"
 docker compose exec -T api radiarch plan --server http://localhost:8000/api/v1 --protocol "${PROTOCOL}" \
   --study "${STUDY}" --spacing "${SPACING_MM}" --push --poll 2
 

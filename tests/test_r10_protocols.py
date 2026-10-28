@@ -113,3 +113,20 @@ def test_the_shipped_lung_protocol_encodes_its_harness_case():
     pairs = _protocol_matches_case(load_protocol("lung-60gy-30fx-vmat"), load_cases()["lung_vmat_lctsc"])
     assert len(pairs) >= 15
     assert [what for what, ours, theirs in pairs if _normalise(ours) != _normalise(theirs)] == []
+
+
+def test_planning_reports_each_round(rx):
+    """A protocol job says which goal-driven round it is in: planning a patient takes minutes."""
+    from radiarch.models.protocol import PlanningProtocol, ProtocolRunRequest
+    from radiarch.services.autoplan import AutoplanService
+
+    geo = rx.build_geometry("1.2.3", hu_model="LINEAR")
+    seen = []
+    protocol = PlanningProtocol(**{**PROTOCOL, "protocol_id": "test-rounds", "goals": PROTOCOL["goals"][:1] + [
+        {"structure": "Cord", "metric": "Dmax", "op": "<=", "gy": 0.01}]})              # never met: every round runs
+    AutoplanService().run(ProtocolRunRequest(geometry_id=geo.id, protocol=protocol),
+                          progress_callback=lambda stage, fraction, message: seen.append((str(stage.value), fraction, message)))
+    rounds = [m for s, f, m in seen if "round" in m]
+    assert rounds == ["imrt planning, round 1 of up to 2", "imrt planning, round 2 of up to 2"]
+    fractions = [f for s, f, m in seen]
+    assert fractions == sorted(fractions) and seen[-1][0] == "done"

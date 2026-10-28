@@ -97,7 +97,7 @@ class DoseService:
 
         cached = self.dose_store.lookup_by_cache_key(cache_key)
         if cached is not None:
-            logger.info("Dose cache hit for key %s → %s", cache_key[:10], cached.dose_id)
+            logger.info("Dose cache hit for key {} → {}", cache_key[:10], cached.dose_id)
             on_progress(DoseStage.done, 1.0, "cache hit")
             return cached
 
@@ -220,7 +220,7 @@ class DoseService:
 
         on_progress(DoseStage.done, 1.0, f"dose_id={dose_id}")
         logger.info(
-            "Dose %s built: engine=%s scenarios=%d max=%.3f Gy",
+            "Dose {} built: engine={} scenarios={} max={:.3f} Gy",
             dose_id, engine.name, len(scenarios),
             result.statistics.max_gy,
         )
@@ -276,7 +276,7 @@ class DoseService:
             )
             self.influence_store.save(influence_id=influence_id, cache_key=key, influence=inf, result=result)
             results.append(result)
-        logger.info("Native scenario set: %d influence matrices from one %s run", len(results), engine.name)
+        logger.info("Native scenario set: {} influence matrices from one {} run", len(results), engine.name)
         return results
 
     def build_influence(
@@ -402,14 +402,14 @@ class DoseService:
         ct_path = Path(uri)
         if not ct_path.is_file():
             logger.warning(
-                "Geometry %s declares ct_grid_uri=%s but the file is missing.",
+                "Geometry {} declares ct_grid_uri={} but the file is missing.",
                 geom.geometry_id, uri,
             )
             return None
         try:
             return sitk.GetArrayFromImage(sitk.ReadImage(str(ct_path))).astype(np.int16)
         except Exception as exc:  # pragma: no cover — defensive
-            logger.warning("Failed to read CT NIfTI %s: %s", uri, exc)
+            logger.warning("Failed to read CT NIfTI {}: {}", uri, exc)
             return None
 
     def _load_beam_model(self, beam_model_id: str) -> BeamModelBundle:

@@ -76,7 +76,7 @@ class BAOService:
 
         cached = self.store.lookup_by_cache_key(cache_key)
         if cached is not None:
-            logger.info("BAO cache hit %s → %s", cache_key[:10], cached.bao_id)
+            logger.info("BAO cache hit {} → {}", cache_key[:10], cached.bao_id)
             on_progress(BAOStage.done, 1.0, "cache hit")
             return cached
 
@@ -87,7 +87,7 @@ class BAOService:
                 f"n_beams={request.n_beams} exceeds candidate count "
                 f"{len(candidates)}"
             )
-        logger.info("BAO: %d candidates, selecting %d beams via %s",
+        logger.info("BAO: {} candidates, selecting {} beams via {}",
                     len(candidates), request.n_beams, request.search)
 
         # --- scoring closure: angle set → composite plan cost --------
@@ -130,7 +130,7 @@ class BAOService:
         )
         self.store.save(bao_id=bao_id, cache_key=cache_key, result=result)
         on_progress(BAOStage.done, 1.0, f"bao_id={bao_id}")
-        logger.info("BAO %s done: selected %s final_score=%.6g time=%.1fs",
+        logger.info("BAO {} done: selected {} final_score={:.6g} time={:.1f}s",
                     bao_id, [c.key() for c in selected], final_score,
                     result.compute_time_s)
         return result

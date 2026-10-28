@@ -31,7 +31,7 @@ def run_autoplan_job(job_id: str, request_payload: dict):
 
     job = store.get_autoplan_job(job_id)
     if not job:
-        logger.error("run_autoplan_job called with unknown job_id=%s", job_id)
+        logger.error("run_autoplan_job called with unknown job_id={}", job_id)
         return
 
     t0 = time.monotonic()

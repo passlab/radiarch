@@ -122,7 +122,7 @@ class DicomFetcher:
                     tmpdir, patient_ref.dicom_study_uid, rtstruct_series_uid, "RT"
                 )
             logger.info(
-                "Staged study %s → %s (CT=%d instances, RT=%d instances)",
+                "Staged study {} → {} (CT={} instances, RT={} instances)",
                 patient_ref.dicom_study_uid,
                 tmpdir,
                 ct_count,
@@ -184,14 +184,14 @@ class DicomFetcher:
             series = self.adapter.search_for_series(study_uid, modality="RTSTRUCT")
         except Exception as exc:
             logger.warning(
-                "RTSTRUCT series lookup failed for %s: %s — continuing without it",
+                "RTSTRUCT series lookup failed for {}: {} — continuing without it",
                 study_uid,
                 exc,
             )
             return None
 
         if not series:
-            logger.info("No RTSTRUCT series found in study %s", study_uid)
+            logger.info("No RTSTRUCT series found in study {}", study_uid)
             return None
 
         # For now: take the first one. When we encounter studies with

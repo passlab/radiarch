@@ -33,7 +33,7 @@ def build_beam_model_job(job_id: str, request_payload: dict):
 
     job = store.get_beam_model_job(job_id)
     if not job:
-        logger.error("build_beam_model_job called with unknown job_id=%s", job_id)
+        logger.error("build_beam_model_job called with unknown job_id={}", job_id)
         return
 
     t0 = time.monotonic()
@@ -60,7 +60,7 @@ def build_beam_model_job(job_id: str, request_payload: dict):
         result = service.build(request, progress_callback=_on_progress)
 
     except SoftTimeLimitExceeded:
-        logger.error("Beam model build timed out for job %s", job_id)
+        logger.error("Beam model build timed out for job {}", job_id)
         store.update_beam_model_job(
             job_id,
             state=JobState.failed,
@@ -71,7 +71,7 @@ def build_beam_model_job(job_id: str, request_payload: dict):
         return
 
     except Exception as exc:  # pragma: no cover — exercised in tests
-        logger.exception("Beam model build failed for job %s", job_id)
+        logger.exception("Beam model build failed for job {}", job_id)
         store.update_beam_model_job(
             job_id,
             state=JobState.failed,

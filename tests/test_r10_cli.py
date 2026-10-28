@@ -115,3 +115,30 @@ def test_cwl_tools_match_the_command(name):
     bound += [a for a in tool.get("arguments", []) if isinstance(a, str) and a.startswith("--")]
     assert bound and set(bound) <= options, set(bound) - options
     assert "RESEARCH" in tool["doc"] and tool["outputs"]
+
+
+def test_a_job_reports_its_progress_while_the_command_waits(capsys):
+    """Against a server, the command prints a job's state, stage and progress as they change (not every poll)."""
+    import httpx
+
+    from radiarch.cli import _progress
+    from radiarch.sdk import Radiarch
+
+    states = iter([{"state": "running", "stage": "structures", "progress": 0.05},
+                   {"state": "running", "stage": "planning", "progress": 0.15, "message": "imrt planning, round 1 of up to 2"},
+                   {"state": "running", "stage": "planning", "progress": 0.15, "message": "imrt planning, round 1 of up to 2"},
+                   {"state": "succeeded", "stage": "done", "progress": 1.0, "geometry_id": "g1"}])
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "POST":
+            return httpx.Response(202, json={"job_id": "j1"})
+        if request.url.path.endswith("/jobs/j1"):
+            return httpx.Response(200, json=next(states))
+        return httpx.Response(200, json={"ok": True})
+
+    rx = Radiarch("http://radiarch/api/v1", poll_interval=0, on_progress=_progress,
+                  http=httpx.Client(base_url="http://radiarch/api/v1", transport=httpx.MockTransport(handler)))
+    assert rx.submit("geometry", "/geometry/build", {}, None) == {"ok": True}
+    err = capsys.readouterr().err.splitlines()
+    assert err == ["  geometry: running structures 5%", "  geometry: running planning 15% (imrt planning, round 1 of up to 2)",
+                   "  geometry: succeeded done 100%"]

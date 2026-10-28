@@ -80,7 +80,7 @@ class FakeOrthancAdapter(OrthancAdapterBase):
         return sample_data.SAMPLE_SEGMENTATIONS.get(sop_instance_uid)
 
     def store_artifact(self, dataset_bytes: bytes, content_type: str = "application/dicom") -> str:
-        logger.debug("Storing artifact in fake adapter (content type %s, %s bytes)", content_type, len(dataset_bytes))
+        logger.debug("Storing artifact in fake adapter (content type {}, {} bytes)", content_type, len(dataset_bytes))
         return "mock-artifact-uid"
 
     # The fake adapter has no DICOM bytes — expose metadata only so the
@@ -131,23 +131,23 @@ class OrthancAdapter(OrthancAdapterBase):
         self.client = DICOMwebClient(url=dicomweb_url(settings), session=session)
 
     def get_study(self, study_instance_uid: str) -> Optional[StudyMetadata]:
-        logger.debug("Fetching study metadata from Orthanc: %s", study_instance_uid)
+        logger.debug("Fetching study metadata from Orthanc: {}", study_instance_uid)
         studies = self.client.search_for_studies(search_filters={"StudyInstanceUID": study_instance_uid})
         if not studies:
             return None
         return StudyMetadata(study_instance_uid=study_instance_uid, raw=studies[0])
 
     def get_segmentation(self, sop_instance_uid: str) -> Optional[Dict[str, Any]]:
-        logger.debug("Fetching segmentation %s from Orthanc", sop_instance_uid)
+        logger.debug("Fetching segmentation {} from Orthanc", sop_instance_uid)
         try:
             dataset = self.client.retrieve_instance(sop_instance_uid)
         except Exception as exc:  # pragma: no cover - network errors
-            logger.error("Failed to retrieve segmentation %s: %s", sop_instance_uid, exc)
+            logger.error("Failed to retrieve segmentation {}: {}", sop_instance_uid, exc)
             return None
         return {"InstanceUID": sop_instance_uid, "Raw": dataset}
 
     def store_artifact(self, dataset_bytes: bytes, content_type: str = "application/dicom") -> str:
-        logger.debug("Storing artifact via STOW-RS (%s bytes)", len(dataset_bytes))
+        logger.debug("Storing artifact via STOW-RS ({} bytes)", len(dataset_bytes))
         try:
             result = self.client.store_instances(dataset_bytes, content_type=content_type)
         except Exception as exc:  # pragma: no cover
@@ -232,5 +232,5 @@ def build_orthanc_adapter(settings: Settings | None = None) -> OrthancAdapterBas
         logger.info("Using fake Orthanc adapter (mock data mode)")
         return FakeOrthancAdapter()
 
-    logger.info("Using real Orthanc adapter at %s", settings.orthanc_base_url)
+    logger.info("Using real Orthanc adapter at {}", settings.orthanc_base_url)
     return OrthancAdapter(settings)

@@ -92,13 +92,13 @@ class BeamModelService:
         cached = self.store.lookup_by_cache_key(cache_key)
         if cached is not None:
             logger.info(
-                "Beam model cache hit for key %s → %s",
+                "Beam model cache hit for key {} → {}",
                 cache_key[:10], cached.beam_model_id,
             )
             on_progress(BeamModelStage.done, 1.0, "cache hit")
             return cached
 
-        logger.info("Building beam model (cache miss, key %s)", cache_key[:10])
+        logger.info("Building beam model (cache miss, key {})", cache_key[:10])
 
         on_progress(BeamModelStage.loading_geometry, 0.05, "Loading geometry")
         geometry = self._load_geometry(request.geometry_id)
@@ -191,7 +191,7 @@ class BeamModelService:
         )
 
         logger.info(
-            "Beam model %s built: modality=%s elements=%d",
+            "Beam model {} built: modality={} elements={}",
             beam_model_id,
             request.modality.value,
             built.fluence_elements.total_count,

@@ -126,7 +126,7 @@ def build_objectives(plan: PlanDetail, geometry: GeometryResult, target_name: st
     for obj in plan.objectives or []:
         name = names.get(obj.structure_name.strip().lower())
         if name is None:
-            logger.warning("Objective ROI %s not found in the geometry; skipped", obj.structure_name)
+            logger.warning("Objective ROI {} not found in the geometry; skipped", obj.structure_name)
             continue
         kind = obj.objective_type.value if hasattr(obj.objective_type, "value") else str(obj.objective_type)
         objectives.append(ObjectiveSpec(
@@ -225,7 +225,7 @@ def compute_dvh(dose_zyx: np.ndarray, mask_zyx: np.ndarray, roi_name: str) -> Di
     dose = np.asarray(dose_zyx, dtype=np.float32)
     mask = np.asarray(mask_zyx, dtype=bool)
     if mask.shape != dose.shape:
-        logger.warning("DVH mask shape %s != dose shape %s — skipping", mask.shape, dose.shape)
+        logger.warning("DVH mask shape {} != dose shape {} — skipping", mask.shape, dose.shape)
         return {}
     target_doses = dose[mask]
     if target_doses.size == 0:
@@ -280,7 +280,7 @@ def export_rtdose(dose_image, ct, output_path: str, rbe: float = 1.0) -> None:
     write_rtdose(ctx, np.asarray(dose_image.imageArray, dtype=np.float32), dose_image.origin, dose_image.spacing, output_path,
                  plan_sop_class=SOP.RTPLAN, plan_sop_instance=stable_uid(str(output_path), "legacy-plan"), rbe=rbe,
                  dose_units="Gy(RBE)" if abs(float(rbe) - 1.0) > 1e-9 else "Gy")
-    logger.info("RTDOSE saved to %s", output_path)
+    logger.info("RTDOSE saved to {}", output_path)
 
 
 def dose_summary(dose_zyx: np.ndarray) -> Dict[str, float]:

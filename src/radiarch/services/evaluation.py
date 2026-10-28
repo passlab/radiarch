@@ -71,7 +71,7 @@ class EvaluationService:
 
         cached = self.store.lookup_by_cache_key(cache_key)
         if cached is not None:
-            logger.info("Evaluation cache hit %s → %s", cache_key[:10],
+            logger.info("Evaluation cache hit {} → {}", cache_key[:10],
                         cached.evaluation_id)
             on_progress(EvaluationStage.done, 1.0, "cache hit")
             return cached
@@ -226,7 +226,7 @@ class EvaluationService:
         self.store.save(evaluation_id=evaluation_id, cache_key=cache_key,
                         result=result)
         on_progress(EvaluationStage.done, 1.0, f"evaluation_id={evaluation_id}")
-        logger.info("Evaluation %s done: %d DVH curves, indices=%s, gamma=%s",
+        logger.info("Evaluation {} done: {} DVH curves, indices={}, gamma={}",
                     evaluation_id, len(curves), indices is not None,
                     gamma is not None)
         return result

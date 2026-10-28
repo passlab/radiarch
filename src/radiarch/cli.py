@@ -27,14 +27,28 @@ from typing import Any, Dict, List, Optional
 INTENDED_USE = "RESEARCH USE ONLY. NOT FOR CLINICAL USE."
 
 
+def _progress(service: str, job: Dict[str, Any]) -> None:
+    """A job's state as it changes, on stderr: planning a patient takes minutes, and silence looks like a hang."""
+    stage = job.get("stage")
+    progress = job.get("progress")
+    parts = [f"  {service}: {job.get('state', '')}"]
+    if stage and stage != job.get("state"):
+        parts.append(str(stage))
+    if isinstance(progress, (int, float)) and progress > 0:
+        parts.append(f"{progress:.0%}")
+    if job.get("message"):
+        parts.append(f"({job['message']})")
+    print(" ".join(parts), file=sys.stderr, flush=True)
+
+
 def _client(args):
     from .sdk import Radiarch
 
     server = args.server or os.environ.get("RADIARCH_SERVER")
     key = args.api_key or os.environ.get("RADIARCH_API_KEY")
     if server:
-        return Radiarch(server, api_key=key, poll_interval=args.poll)
-    return Radiarch.local(poll_interval=args.poll)
+        return Radiarch(server, api_key=key, poll_interval=args.poll, on_progress=_progress)
+    return Radiarch.local(poll_interval=args.poll, on_progress=_progress)
 
 
 def _protocol(value: str):

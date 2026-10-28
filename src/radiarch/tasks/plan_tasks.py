@@ -33,7 +33,7 @@ def run_plan_job(job_id: str, plan_id: str):
     job = store.get_job(job_id)
     plan = store.get_plan(plan_id)
     if not job or not plan:
-        logger.error("Job or plan missing for job_id=%s plan_id=%s", job_id, plan_id)
+        logger.error("Job or plan missing for job_id={} plan_id={}", job_id, plan_id)
         return
 
     t0 = time.monotonic()
@@ -123,10 +123,10 @@ def run_plan_job(job_id: str, plan_id: str):
                 with open(rtdose_path, "rb") as f:
                     notifier.store_instances(f.read())
             except Exception as exc:
-                logger.warning("DICOMweb push failed (non-fatal): %s", exc)
+                logger.warning("DICOMweb push failed (non-fatal): {}", exc)
 
     except SoftTimeLimitExceeded:
-        logger.error("Soft time limit exceeded for plan %s (elapsed %.1fs)", plan_id, _elapsed())
+        logger.error("Soft time limit exceeded for plan {} (elapsed {:.1f}s)", plan_id, _elapsed())
         store.update_job(
             job_id, state=JobState.failed, progress=1.0,
             message=f"Timed out after {_elapsed():.0f}s", stage="timeout",
@@ -134,7 +134,7 @@ def run_plan_job(job_id: str, plan_id: str):
         return
 
     except PlannerError as exc:
-        logger.exception("Planner failed for plan %s", plan_id)
+        logger.exception("Planner failed for plan {}", plan_id)
         store.update_job(
             job_id, state=JobState.failed, progress=1.0,
             message=str(exc), stage="error",
@@ -142,7 +142,7 @@ def run_plan_job(job_id: str, plan_id: str):
         return
 
     except Exception as exc:
-        logger.exception("Unexpected error in plan %s", plan_id)
+        logger.exception("Unexpected error in plan {}", plan_id)
         store.update_job(
             job_id, state=JobState.failed, progress=1.0,
             message=f"Internal error: {exc}", stage="error",

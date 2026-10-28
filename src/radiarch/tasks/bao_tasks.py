@@ -32,7 +32,7 @@ def run_bao_job(job_id: str, request_payload: dict):
 
     job = store.get_bao_job(job_id)
     if not job:
-        logger.error("run_bao_job called with unknown job_id=%s", job_id)
+        logger.error("run_bao_job called with unknown job_id={}", job_id)
         return
 
     t0 = time.monotonic()

@@ -33,7 +33,7 @@ def optimize_and_compute(plan: PlanDetail, robustness: Optional[RobustnessSpec] 
         raise RuntimeError("the beam model has no spots")
 
     method = solver_method(plan.optimization_method)
-    logger.info("Optimizing %d spots with %s (%d iterations max)...", n, method, plan.max_iterations)
+    logger.info("Optimizing {} spots with {} ({} iterations max)...", n, method, plan.max_iterations)
     request = OptimizationRunRequest(
         plan_id=plan.id, geometry_id=geometry.geometry_id, beam_model_id=beam_model.beam_model_id,
         dose_engine=mcsquare_engine(plan.nb_primaries_beamlets),
@@ -42,9 +42,9 @@ def optimize_and_compute(plan: PlanDetail, robustness: Optional[RobustnessSpec] 
         robustness=robustness or RobustnessSpec(),
     )
     opt = OptimizationService().run(request)
-    logger.info("Optimization complete. Success: %s, cost %.4g", opt.convergence.success, opt.convergence.final_cost)
+    logger.info("Optimization complete. Success: {}, cost {:.4g}", opt.convergence.success, opt.convergence.final_cost)
 
-    logger.info("Computing final dose (%g primaries)...", plan.nb_primaries_final)
+    logger.info("Computing final dose ({:g} primaries)...", plan.nb_primaries_final)
     dose_result = DoseService().compute_dose(DoseComputeRequest(
         plan_id=plan.id, geometry_id=geometry.geometry_id, beam_model_id=beam_model.beam_model_id,
         engine=mcsquare_engine(plan.nb_primaries_final),
@@ -87,7 +87,7 @@ def optimize_and_compute(plan: PlanDetail, robustness: Optional[RobustnessSpec] 
 
 
 def run(plan: PlanDetail) -> Dict[str, Any]:
-    logger.info("Starting IMPT optimization for plan %s", plan.id)
+    logger.info("Starting IMPT optimization for plan {}", plan.id)
     summary = optimize_and_compute(plan)
     summary["engine"] = "mcsquare_optimized"
     return summary

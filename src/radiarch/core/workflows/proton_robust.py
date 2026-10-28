@@ -31,7 +31,7 @@ def configure_robustness(rob_cfg: RobustnessConfig | None) -> RobustnessSpec:
 
 
 def run(plan: PlanDetail) -> Dict[str, Any]:
-    logger.info("Starting robust proton optimization for plan %s", plan.id)
+    logger.info("Starting robust proton optimization for plan {}", plan.id)
     rob_cfg = plan.robustness or RobustnessConfig()
     robustness = configure_robustness(rob_cfg)
     native = robustness.engine_native

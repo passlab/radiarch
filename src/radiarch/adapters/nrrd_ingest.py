@@ -204,7 +204,7 @@ def _read_itk(path: str | Path, *, is_label: bool = False):
     orig_image = sitk.ReadImage(str(path))
     image, canon = _canonicalize_to_axis_aligned(orig_image, is_label=is_label)
     if canon != "identity":
-        logger.info("%s: %s", path.name, canon)
+        logger.info("{}: {}", path.name, canon)
 
     array_xyz = np.transpose(sitk.GetArrayFromImage(image))  # [z,y,x] -> [x,y,z]
     origin = tuple(float(o) for o in image.GetOrigin())
@@ -231,7 +231,7 @@ def load_ct(path: str | Path, *, patient: Any = None):
         patient=patient if patient is not None else PatientInfo(),
     )
     logger.info(
-        "Loaded NRRD CT %s: shape=%s spacing=%s origin=%s",
+        "Loaded NRRD CT {}: shape={} spacing={} origin={}",
         Path(path).name, array_xyz.shape, spacing, origin,
     )
     return ct
@@ -281,12 +281,12 @@ def load_segmentation(path: str | Path) -> List[_SegmentContour]:
         )
     named = ", ".join(f"{c.name}(lv={lv})" for c, lv in zip(contours, present))
     logger.info(
-        "Loaded NRRD segmentation %s: %d structure(s) [%s]",
+        "Loaded NRRD segmentation {}: {} structure(s) [{}]",
         Path(path).name, len(contours), named,
     )
     if declared and set(present) - set(declared):
         logger.warning(
-            "%s: labels %s present in volume but not described in header metadata "
+            "{}: labels {} present in volume but not described in header metadata "
             "— named by raw value.",
             Path(path).name, sorted(set(present) - set(declared)),
         )

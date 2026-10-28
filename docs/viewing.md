@@ -96,6 +96,15 @@ interpreted as avoidance or control. On the right are three panels:
 - the radiarch plan: summary, a goal template, Evaluate;
 - the structures, each of which can be shown or hidden.
 
+### Browsers
+
+The dose viewport draws the CT and the dose as 3D volumes with WebGL 2 (OHIF's MPR views do the same); contours and
+the panels are ordinary page graphics. Firefox and Chrome both work, with one exception found on a Linux workstation
+with an NVIDIA GPU: Chrome's default graphics backend there (ANGLE on OpenGL) draws every 3D volume black, without an
+error, while OHIF's 2D slice views still work. In Chrome, open `chrome://flags/#use-angle`, choose **Vulkan** and
+relaunch; or use Firefox. A few seconds after the volumes are mounted, the dose viewport checks whether it drew anything
+and, while it stays black, shows this advice in the image.
+
 ## Setting it up
 
 1. **A DICOMweb server holding the CT.** Orthanc with its DICOMweb plugin

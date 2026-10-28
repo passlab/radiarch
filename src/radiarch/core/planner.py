@@ -51,7 +51,7 @@ class RadiarchPlanner:
     # ------------------------------------------------------------------
 
     def run(self, plan: PlanDetail) -> PlanExecutionResult:
-        logger.info("Running planner for plan %s (Workflow: %s)", plan.id, plan.workflow_id)
+        logger.info("Running planner for plan {} (Workflow: {})", plan.id, plan.workflow_id)
 
         wf_id = plan.workflow_id.value if hasattr(plan.workflow_id, "value") else str(plan.workflow_id)
         runner = RUNNERS.get(wf_id)

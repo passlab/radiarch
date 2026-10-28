@@ -51,7 +51,7 @@ class GeometryDeriver:
         cache_key = derive_cache_key(parent, request)
         cached = self.store.lookup_by_cache_key(cache_key)
         if cached is not None:
-            logger.info("Derived geometry cache hit %s → %s", cache_key[:10], cached.geometry_id)
+            logger.info("Derived geometry cache hit {} → {}", cache_key[:10], cached.geometry_id)
             return cached
 
         density = _read(parent.density_grid_uri).astype(np.float32)
@@ -139,7 +139,7 @@ class GeometryDeriver:
         # the arrays here are (z, y, x), as SimpleITK reads them; the store takes (x, y, z)
         self.store.save(geometry_id=geometry_id, cache_key=cache_key, density=density.transpose(2, 1, 0), masks=masks.transpose(2, 1, 0),
                         ct=ct.transpose(2, 1, 0) if ct is not None else None, result=result)
-        logger.info("Derived geometry %s from %s: %d operation(s), structures %s", geometry_id, parent.geometry_id,
+        logger.info("Derived geometry {} from {}: {} operation(s), structures {}", geometry_id, parent.geometry_id,
                     len(applied), sorted(index))
         return result
 

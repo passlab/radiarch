@@ -680,3 +680,19 @@ dose, and OHIF loads a structure set only when it is dropped into a viewport of 
 - **Verified** on the compose stack: `demo-lung.sh` in under six minutes (download, a 7-field plan with every goal
   met: PTV D95 60.1 Gy, cord max 35.7 Gy, oesophagus mean 9.6 Gy, heart D33 20.2 Gy, lungs-PTV D37 6.3 Gy). In
   Chromium on an NVIDIA GPU, the link shows the GTV, CTV, PTV and organ contours over the dose wash, and the DVHs.
+
+## Black image in Chrome on Linux; planning progress; log messages (2026-10-28)
+
+- **Chrome's default backend on Linux draws 3D volumes black.** In Chrome on a Linux workstation with an NVIDIA GPU, the
+  dose viewport showed contours and DVHs over a black image. Firefox showed everything. With ANGLE on OpenGL (Chrome's
+  Linux default), every volume viewport is black without an error, OHIF's own MPR of the CT included. With ANGLE on
+  Vulkan, the same page draws the CT and the dose. The hand checks that saw no colour wash were probably this.
+  - The dose viewport samples its canvas every 3 s once the volumes are mounted (`isBlankImage`, rt-dose-core); black
+    three times running, it shows a warning naming the fix (Firefox, or `chrome://flags/#use-angle` set to Vulkan).
+  - README and `docs/viewing.md` (Browsers) say the same; the browser test checks that no warning shows when the image
+    is drawn.
+- **Planning progress.** `radiarch plan` was silent for the minutes a plan takes, which looked like a hang. The SDK
+  client takes `on_progress`, called when a job's state, stage, progress or message changes; the command prints it.
+  The protocol job reports each goal-driven round (`imrt planning, round 1 of up to 2`).
+- **Log messages.** 75 log calls used `%s` placeholders, which loguru prints as they stand (`Using real Orthanc adapter
+  at %s`); they use `{}` now, and `tests/test_log_messages.py` keeps it so.

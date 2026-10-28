@@ -23,7 +23,7 @@ def run(plan: PlanDetail, adapter=None) -> Dict[str, Any]:
     """Geometry → proton beam model → MCsquare dose with 1 MU per spot (no optimization)."""
     from ...services.dose import DoseService
 
-    logger.info("Initializing basic proton workflow for plan %s", plan.id)
+    logger.info("Initializing basic proton workflow for plan {}", plan.id)
     sim_dir = setup_sim_dir(plan.id)
 
     geometry = build_geometry(plan)
@@ -33,7 +33,7 @@ def run(plan: PlanDetail, adapter=None) -> Dict[str, Any]:
     if n < 1:
         raise RuntimeError("the beam model has no spots")
 
-    logger.info("Running MCsquare dose calculation (%d spots, %g primaries)...", n, BASIC_PRIMARIES)
+    logger.info("Running MCsquare dose calculation ({} spots, {:g} primaries)...", n, BASIC_PRIMARIES)
     dose_result = DoseService().compute_dose(DoseComputeRequest(
         plan_id=plan.id, geometry_id=geometry.geometry_id, beam_model_id=beam_model.beam_model_id,
         engine=mcsquare_engine(BASIC_PRIMARIES), weights=WeightVector(length=n, values=[1.0] * n),

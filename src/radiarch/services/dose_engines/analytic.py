@@ -191,7 +191,7 @@ class AnalyticEngine:
         # Cap active voxels — keep the highest-intensity ones.
         if active.size > max_active:
             _logger.info(
-                "Analytic Dij: capping active voxels %d → %d "
+                "Analytic Dij: capping active voxels {} → {} "
                 "(set engine params.max_active_voxels to override)",
                 active.size, max_active,
             )

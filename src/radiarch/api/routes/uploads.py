@@ -119,7 +119,7 @@ def _scan_directory(root: Path) -> UploadResponse:
             elif modality == "RTSTRUCT":
                 rtstruct_count += 1
         except Exception as exc:  # pragma: no cover — defensive
-            logger.debug("Could not parse DICOM modality for %s: %s", path, exc)
+            logger.debug("Could not parse DICOM modality for {}: {}", path, exc)
 
     return UploadResponse(
         upload_id="",  # filled in by caller
@@ -204,7 +204,7 @@ async def upload_dicom(file: UploadFile = File(...)) -> UploadResponse:
 
     summary = summary.model_copy(update={"upload_id": upload_id})
     logger.info(
-        "Upload %s accepted: %d files (%d DICOM, %d CT, %d RTSTRUCT, %.1f MB)",
+        "Upload {} accepted: {} files ({} DICOM, {} CT, {} RTSTRUCT, {:.1f} MB)",
         upload_id,
         summary.file_count,
         summary.dicom_count,

@@ -43,7 +43,7 @@ def build_geometry_job(job_id: str, request_payload: dict):
 
     job = store.get_geometry_job(job_id)
     if not job:
-        logger.error("build_geometry_job called with unknown job_id=%s", job_id)
+        logger.error("build_geometry_job called with unknown job_id={}", job_id)
         return
 
     t0 = time.monotonic()
@@ -67,7 +67,7 @@ def build_geometry_job(job_id: str, request_payload: dict):
         # SQL persistence above) — we just log it for now.
         if eta is not None:
             logger.debug(
-                "geometry job %s stage=%s progress=%.2f eta=%.1fs",
+                "geometry job {} stage={} progress={:.2f} eta={:.1f}s",
                 job_id,
                 stage.value if hasattr(stage, "value") else stage,
                 fraction,
@@ -87,7 +87,7 @@ def build_geometry_job(job_id: str, request_payload: dict):
         result = service.build(request, progress_callback=_on_progress)
 
     except SoftTimeLimitExceeded:
-        logger.error("Geometry build timed out for job %s", job_id)
+        logger.error("Geometry build timed out for job {}", job_id)
         store.update_geometry_job(
             job_id,
             state=JobState.failed,
@@ -98,7 +98,7 @@ def build_geometry_job(job_id: str, request_payload: dict):
         return
 
     except Exception as exc:  # pragma: no cover — defensive; exercised in tests
-        logger.exception("Geometry build failed for job %s", job_id)
+        logger.exception("Geometry build failed for job {}", job_id)
         store.update_geometry_job(
             job_id,
             state=JobState.failed,

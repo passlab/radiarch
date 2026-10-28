@@ -247,8 +247,8 @@ def _prune_optimization_checkpoints(base_dir: Path, keep: int) -> dict:
             except OSError as exc:  # pragma: no cover
                 logger.error(f"cleanup: failed to prune checkpoint {p}: {exc}")
     if pruned:
-        logger.info("cleanup[optimization]: pruned %d old checkpoints across "
-                    "%d runs (keep=%d)", pruned, runs, keep)
+        logger.info("cleanup[optimization]: pruned {} old checkpoints across "
+                    "{} runs (keep={})", pruned, runs, keep)
     return {"runs_scanned": runs, "checkpoints_pruned": pruned, "kept_per_run": keep}
 
 

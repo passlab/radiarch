@@ -46,7 +46,7 @@ def build_dose_job(job_id: str, request_payload: dict):
 
     job = store.get_dose_job(job_id)
     if not job:
-        logger.error("build_dose_job called with unknown job_id=%s", job_id)
+        logger.error("build_dose_job called with unknown job_id={}", job_id)
         return
 
     t0 = time.monotonic()
@@ -154,7 +154,7 @@ def build_influence_job(job_id: str, request_payload: dict):
 
     job = store.get_dose_job(job_id)
     if not job:
-        logger.error("build_influence_job called with unknown job_id=%s", job_id)
+        logger.error("build_influence_job called with unknown job_id={}", job_id)
         return
 
     t0 = time.monotonic()

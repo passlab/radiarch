@@ -163,7 +163,7 @@ def rasterize_contours(
         canonical = _resolve_canonical(contour.name, alias_lookup)
         if canonical in masks_by_canonical:
             logger.debug(
-                "Skipping duplicate contour %r → canonical %r (already rasterized)",
+                "Skipping duplicate contour {!r} → canonical {!r} (already rasterized)",
                 contour.name,
                 canonical,
             )
@@ -172,7 +172,7 @@ def rasterize_contours(
             mask_obj = contour.getBinaryMask(origin, grid_size, spacing)
         except Exception as exc:  # pragma: no cover — logged, not fatal.
             logger.warning(
-                "Rasterization failed for contour %r (canonical %r): %s",
+                "Rasterization failed for contour {!r} (canonical {!r}): {}",
                 contour.name,
                 canonical,
                 exc,
@@ -181,7 +181,7 @@ def rasterize_contours(
         mask = np.asarray(mask_obj.imageArray, dtype=bool)
         if mask.shape != grid_size:
             logger.warning(
-                "Contour %r mask shape %s does not match target %s — skipping",
+                "Contour {!r} mask shape {} does not match target {} — skipping",
                 contour.name,
                 mask.shape,
                 grid_size,

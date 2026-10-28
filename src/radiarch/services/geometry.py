@@ -126,11 +126,11 @@ class GeometryService:
 
         cached = self.store.lookup_by_cache_key(cache_key)
         if cached is not None:
-            logger.info("Geometry cache hit for key %s → %s", cache_key[:10], cached.geometry_id)
+            logger.info("Geometry cache hit for key {} → {}", cache_key[:10], cached.geometry_id)
             on_progress(GeometryStage.done, 1.0, "cache hit")
             return cached
 
-        logger.info("Building geometry (cache miss, key %s)", cache_key[:10])
+        logger.info("Building geometry (cache miss, key {})", cache_key[:10])
         on_progress(GeometryStage.loading_dicom, 0.05, "Loading CT and RTSTRUCT")
         loaded = self._load(request)
         return self._process(request, loaded, cache_key, on_progress)
@@ -194,7 +194,7 @@ class GeometryService:
             adapter = self._get_adapter()
         except Exception as exc:  # pragma: no cover — defensive
             logger.warning(
-                "Failed to build Orthanc adapter, falling back to disk: %s", exc
+                "Failed to build Orthanc adapter, falling back to disk: {}", exc
             )
             return self._load_from_disk(None, request.patient_ref)
 
@@ -374,7 +374,7 @@ class GeometryService:
             result=result,
         )
         logger.info(
-            "Geometry %s built: grid=%s structures=%s",
+            "Geometry {} built: grid={} structures={}",
             geometry_id,
             target_grid.size,
             list(structure_index.keys()),

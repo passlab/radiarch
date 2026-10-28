@@ -93,11 +93,20 @@ prints a link:
 http://localhost:3000/plan-review?StudyInstanceUIDs=<the patient's study>
 ```
 
-Open it in Chrome or Firefox on the same machine (or through `ssh -L 3000:localhost:3000 <machine>`). The plan
+Planning takes about six minutes on a 10-core (20-thread) workstation and longer on a smaller machine; meanwhile the command
+prints each planning round (`protocols: running planning 15% (imrt planning, round 1 of up to 2)`). Until it prints
+`pushed ... RT objects` and the link, the study in the viewer holds only the CT and the clinic's structure set: no
+plan, dose or DVH yet. `docker compose logs -f worker` shows the planning itself.
+
+Open it in Firefox or Chrome on the same machine (or through `ssh -L 3000:localhost:3000 <machine>`). The plan
 review mode opens on the slice through the dose maximum: the dose as isodose colour bands over the CT, and the
 plan's structures (GTV, CTV, PTV and the organs) as contours. On the right are the DVHs, the radiarch plan (summary,
 a goal template, Evaluate) and the structure list, where each contour can be hidden or shown. `docs/viewing.md`
 explains the viewer and its configuration.
+
+**Chrome on Linux:** its default graphics backend (ANGLE on OpenGL) draws the CT and the dose black, while the contours
+and DVHs still show; OHIF's own MPR view is black too. Use Firefox, or in Chrome open `chrome://flags/#use-angle`, choose
+**Vulkan** and relaunch. The viewer says so when its image stays black.
 
 NSCLC-Radiomics is licensed CC BY-NC 3.0 (non-commercial use; cite it as `docs/demo.md` says). The download stays
 in the stack's artifact volume, not in this repository. Without internet access, `./scripts/demo-viewer.sh` does

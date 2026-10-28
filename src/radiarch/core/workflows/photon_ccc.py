@@ -40,7 +40,7 @@ def run(plan: PlanDetail) -> Dict[str, Any]:
     from ...services.dose_engines.ccc import CCCEngine
     from ...services.photon_beamlets import build_photon_plan
 
-    logger.info("Starting photon CCC workflow for plan %s", plan.id)
+    logger.info("Starting photon CCC workflow for plan {}", plan.id)
     sim_dir = setup_sim_dir(plan.id)
 
     # 1. Geometry: density on the CT grid (Schneider), the target mask

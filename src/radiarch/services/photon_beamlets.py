@@ -110,7 +110,7 @@ def generate_photon_beamlets(
         beam_ids=[b.beam_id for b in beam_set.beams],
     )
     logger.info(
-        "Built photon plan: %d beams, jaw=%.1f×%.1f mm, leaf=%.1f mm, beamlet=%.1f×%.1f mm → %d beamlets",
+        "Built photon plan: {} beams, jaw={:.1f}×{:.1f} mm, leaf={:.1f} mm, beamlet={:.1f}×{:.1f} mm → {} beamlets",
         len(plan.beams), jaw_x, jaw_y, leaf_width, bx, by, plan.n_beamlets,
     )
 

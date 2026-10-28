@@ -21,7 +21,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from loguru import logger
@@ -131,7 +131,7 @@ def normalise_to_goal(dose: np.ndarray, target_doses: np.ndarray, metric: str, g
 
 def plan_static(geo, target: str, rx_gy: float, goals: List[dict], beams: dict, beamlet_mm: float, iterations: int,
                 jaw_margin_mm: float = 20.0, engine_name: str = "ccc", n_jobs: int = 8, rounds: int = 4, machine: str = "synthetic-120",
-                extra: Sequence = (), engine_params: Optional[dict] = None):
+                extra: Sequence = (), engine_params: Optional[dict] = None, on_round: Optional[Callable[[int, int], None]] = None):
     """Beam model → Dij → optimization, then goal-driven reweighting rounds (the rule-based auto-planning a
     planner does by hand: a goal that fails gets three times the weight and, for an organ's limit, a 10 % lower dose
     level, and the optimizer restarts from the previous weights). Every round's plan is normalised to the target's first
@@ -166,6 +166,8 @@ def plan_static(geo, target: str, rx_gy: float, goals: List[dict], beams: dict, 
     init = None
     opt = dose = None
     for r in range(max(1, int(rounds))):
+        if on_round is not None:
+            on_round(r + 1, max(1, int(rounds)))
         opt = OptimizationService().run(OptimizationRunRequest(
             geometry_id=geo.geometry_id, beam_model_id=bm.beam_model_id,
             dose_engine=EngineSpec(name=engine_name, params={"n_jobs": n_jobs} if engine_params is None else dict(engine_params)),
@@ -193,7 +195,7 @@ def plan_static(geo, target: str, rx_gy: float, goals: List[dict], beams: dict, 
 
 
 def plan_vmat(geo, arrays, target: str, rx: float, goals: List[dict], extra: list, arcs, beamlet: float, iterations: int, rounds: int,
-              fractions: int, spec: dict) -> dict:
+              fractions: int, spec: dict, on_round: Optional[Callable[[int, int], None]] = None) -> dict:
     """Sector beams around every target (the field covers them from every angle of the arcs), fluence optimization
     with the pb Dij and goal-driven reweighting rounds, then arcs (VMAT service); the arc dose normalised so the
     main target's D95 meets its prescription. Returns bm, opt, vm, dose, k, history, objectives."""
@@ -231,6 +233,8 @@ def plan_vmat(geo, arrays, target: str, rx: float, goals: List[dict], extra: lis
     objectives: list = []
     opt = None
     for r in range(max(1, rounds)):
+        if on_round is not None:
+            on_round(r + 1, max(1, rounds))
         objectives = objectives_for(arrays, target, rx, goals, scale, level) + list(extra)
         opt = OptimizationService().run(OptimizationRunRequest(
             geometry_id=geo.geometry_id, beam_model_id=bm.beam_model_id, dose_engine=engine,
@@ -405,6 +409,9 @@ class AutoplanService:
 
         # 2. the goal-driven loop, then the deliverable plan
         on(AutoplanStage.planning, 0.15, f"{protocol.beams.technique} planning")
+        # each goal-driven round as it starts (the first also computes the dose matrix, the longest step)
+        def on_round(r: int, n: int) -> None:
+            on(AutoplanStage.planning, 0.15 + 0.55 * (r - 1) / n, f"{protocol.beams.technique} planning, round {r} of up to {n}")
         sequence_id = vmat_id = None
         if protocol.beams.technique == "imrt":
             from ..models.apertures import SequenceRequest
@@ -415,7 +422,7 @@ class AutoplanService:
             bm, opt, _, arrays, history = plan_static(pgeo, target, rx, goals, beams, protocol.beamlet_mm, protocol.iterations,
                                                       jaw_margin_mm=protocol.jaw_margin_mm, engine_name=protocol.engine.name,
                                                       rounds=protocol.rounds, machine=protocol.machine, extra=protocol.extra_objectives,
-                                                      engine_params=protocol.engine.params)
+                                                      engine_params=protocol.engine.params, on_round=on_round)
             on(AutoplanStage.deliverable, 0.75, "sequencing apertures")
             seq = ApertureService().sequence(opt.optimization_id, SequenceRequest(
                 objectives=objectives_for(arrays, target, rx, goals, {}, {}) + list(protocol.extra_objectives),
@@ -429,7 +436,7 @@ class AutoplanService:
             out = plan_vmat(pgeo, arrays, target, rx, goals, list(protocol.extra_objectives), protocol.beams.arcs, protocol.beamlet_mm,
                             protocol.iterations, protocol.rounds, protocol.prescription.fractions,
                             {"jaw_margin_mm": protocol.jaw_margin_mm, "machine": protocol.machine, "arc_rounds": protocol.arc_rounds,
-                             "pb_params": dict(protocol.engine.params)})
+                             "pb_params": dict(protocol.engine.params)}, on_round=on_round)
             vm, k, history = out["vm"], out["k"], out["history"]
             vmat_id, src_bm, src_dose, deliverable, optimization_id = vm.vmat_id, vm.beam_model_id, vm.dose_id, vm.deliverable, out["opt"].optimization_id
 

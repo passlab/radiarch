@@ -173,7 +173,7 @@ class ApertureService:
             dose_units=dose_units_for(opt.rbe_factor), plan_id=request.plan_id,
         )
         self.store.save(result, res.segment_mu)
-        logger.info("Sequenced optimization %s on %s: %d segments, %.1f MU, deliverable=%s",
+        logger.info("Sequenced optimization {} on {}: {} segments, {:.1f} MU, deliverable={}",
                     optimization_id, machine.machine_id, result.n_segments, result.total_mu, result.deliverable)
         return result
 

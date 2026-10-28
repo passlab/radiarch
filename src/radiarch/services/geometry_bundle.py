@@ -62,14 +62,14 @@ def load_ct_hu(geom) -> Optional[np.ndarray]:
     ct_path = Path(uri)
     if not ct_path.is_file():
         logger.warning(
-            "Geometry %s declares ct_grid_uri=%s but the file is missing.",
+            "Geometry {} declares ct_grid_uri={} but the file is missing.",
             geom.geometry_id, uri,
         )
         return None
     try:
         return sitk.GetArrayFromImage(sitk.ReadImage(str(ct_path))).astype(np.int16)
     except Exception as exc:  # pragma: no cover — defensive
-        logger.warning("Failed to read CT NIfTI %s: %s", uri, exc)
+        logger.warning("Failed to read CT NIfTI {}: {}", uri, exc)
         return None
 
 
@@ -149,7 +149,7 @@ def load_geometry_arrays(geom) -> GeometryArrays:
     )
     if arrays.target() is None:
         logger.warning(
-            "Geometry %s has no PTV/GTV/CTV in its structure index (%s).",
+            "Geometry {} has no PTV/GTV/CTV in its structure index ({}).",
             geom.geometry_id, sorted(arrays.structure_index),
         )
     return arrays

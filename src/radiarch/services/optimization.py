@@ -128,7 +128,7 @@ class OptimizationService:
 
         cached = self.store.lookup_by_cache_key(cache_key)
         if cached is not None:
-            logger.info("Optimization cache hit %s → %s",
+            logger.info("Optimization cache hit {} → {}",
                         cache_key[:10], cached.optimization_id)
             on_progress(OptimizationStage.done, 1.0, "cache hit")
             return cached
@@ -204,7 +204,7 @@ class OptimizationService:
 
         on_progress(OptimizationStage.done, 1.0, f"optimization_id={opt_id}")
         logger.info(
-            "Optimization %s done: solver=%s iters=%d final_cost=%.6g time=%.1fs",
+            "Optimization {} done: solver={} iters={} final_cost={:.6g} time={:.1f}s",
             opt_id, request.solver.method, convergence.iterations,
             convergence.final_cost, result.compute_time_s,
         )

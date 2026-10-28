@@ -8,7 +8,7 @@ the result, which ``GET /{service}/{id}`` returns. :meth:`Radiarch.submit` hides
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional, Type, TypeVar
+from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
 
 import httpx
 from pydantic import BaseModel
@@ -45,13 +45,15 @@ class Radiarch:
 
     def __init__(self, base_url: str = "http://localhost:8000/api/v1", api_key: Optional[str] = None, *, timeout: float = 600.0,
                  poll_interval: float = 1.0, job_timeout: float = 6 * 3600.0, http: Optional[httpx.Client] = None,
-                 api_key_header: str = "X-API-Key") -> None:
+                 api_key_header: str = "X-API-Key", on_progress: Optional[Callable[[str, Dict[str, Any]], None]] = None) -> None:
         headers = {api_key_header: api_key} if api_key else {}
         self.http = http or httpx.Client(base_url=base_url.rstrip("/"), headers=headers, timeout=timeout)
         if http is not None and api_key:
             self.http.headers[api_key_header] = api_key
         self.prefix = "" if http is None else base_url.rstrip("/")
         self.poll_interval, self.job_timeout = float(poll_interval), float(job_timeout)
+        # called with (service, job status) whenever a job's state, stage or progress changes while waiting on it
+        self.on_progress = on_progress
 
     @classmethod
     def local(cls, **kwargs) -> "Radiarch":
@@ -102,9 +104,14 @@ class Radiarch:
         id_field, result_path = JOBS[service]
         job_id = data["job_id"]
         deadline = time.monotonic() + self.job_timeout
+        seen = None
         while True:
             job = self.get(f"/{service}/jobs/{job_id}")
             state = str(job.get("state", ""))
+            now = (state, job.get("stage"), job.get("progress"), job.get("message"))
+            if self.on_progress is not None and now != seen:
+                seen = now
+                self.on_progress(service, job)
             if state == "succeeded":
                 return self.get(result_path.format(id=job[id_field]), model)
             if state in ("failed", "cancelled"):
