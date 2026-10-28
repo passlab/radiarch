@@ -713,3 +713,7 @@ dose, and OHIF loads a structure set only when it is dropped into a viewport of 
   way and leaves deleting to the archive.
 - **Tests:** `tests/test_rt_export_reuse.py` (the same export, a setting that changes the key, copies and their
   references, missing files, the label); `test_r10_cli` checks a rerun pushes the same UIDs and `--new-export` a copy.
+- **Documentation and the demo scripts.** README section "Exporting a plan again" (behaviour, API, command, SDK, the
+  clean-up of older duplicates); `docs/demo.md` 5.1 and `docs/viewing.md` say what a rerun does. `demo-lung.sh` and
+  `demo-viewer.sh` take `NEW_EXPORT=1` for a marked copy; `test_tcia_demo` runs `demo-lung.sh` with a stand-in
+  `docker` and checks the option reaches `radiarch plan`.

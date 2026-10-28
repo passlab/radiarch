@@ -125,3 +125,31 @@ def test_the_compose_stack_shares_its_artifacts():
         env = dict(e.split("=", 1) for e in svc["environment"])
         assert env["RADIARCH_ARTIFACT_DIR"] == "/data/artifacts", name
         assert "radiarch-data:/data/artifacts" in svc["volumes"], name
+
+
+@pytest.mark.parametrize("new_export", [None, "1"])
+def test_the_demo_script_asks_for_a_copy_only_when_told(tmp_path, new_export):
+    """``demo-lung.sh`` run again pushes the stored export; ``NEW_EXPORT=1`` passes ``--new-export`` (a stand-in
+    ``docker`` records the commands)."""
+    import os
+    import shutil
+    import subprocess
+
+    if not shutil.which("bash"):
+        pytest.skip("needs bash")
+    log = tmp_path / "docker.log"
+    fake = tmp_path / "bin" / "docker"
+    fake.parent.mkdir()
+    fake.write_text(f'#!/usr/bin/env bash\necho "$*" >> "{log}"\necho 9.1\n')
+    fake.chmod(0o755)
+    env = {**os.environ, "PATH": f"{fake.parent}{os.pathsep}{os.environ['PATH']}"}
+    env.pop("NEW_EXPORT", None)
+    if new_export:
+        env["NEW_EXPORT"] = new_export
+    script = Path(__file__).resolve().parents[1] / "scripts" / "demo-lung.sh"
+    out = subprocess.run(["bash", str(script)], env=env, capture_output=True, text=True, timeout=60)
+    assert out.returncode == 0, out.stderr
+    fetch, plan = log.read_text().splitlines()
+    assert "fetch-tcia" in fetch and "radiarch plan" in plan and "--study 9.1" in plan and "--push" in plan
+    assert ("--new-export" in plan) == bool(new_export)
+    assert "plan-review?StudyInstanceUIDs=9.1" in out.stdout

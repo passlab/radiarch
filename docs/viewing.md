@@ -86,6 +86,11 @@ only. To serve it to more people, put an authenticating proxy in front of it.
 
 `./scripts/demo-viewer.sh` does the same with the bundled phantom and `demo-phantom-imrt`, without a download.
 
+Run either script again and the study keeps one radiarch plan: the stored export is pushed again with the same UIDs.
+`NEW_EXPORT=1` pushes a marked copy instead. Its series descriptions end in `(copy 2)` in OHIF's series list, and
+its plan references the first plan as its predecessor. A study filled before radiarch kept its exports
+(before 737d2c5) may hold one plan per run; delete the extras in Orthanc (`http://localhost:8042`).
+
 The compose file sets `RADIARCH_VIEWER_ROUTE=plan-review`, so radiarch's own links open this mode.
 
 The plan review mode opens the plan dose over its CT, on the slice through the dose maximum, with the contours of
@@ -112,7 +117,9 @@ and, while it stays black, shows this advice in the image.
    at `/dicom-web`. Radiarch's objects go into the CT's study, so the server must also hold that CT.
 2. **Radiarch pushes there.** Set `RADIARCH_DICOMWEB_URL=http://<orthanc>:8042/dicom-web`
    (authentication: `PRODUCTION.md`, "Pushing RT objects"). Push while exporting
-   (`"push": true` on `POST /api/v1/rt/export`) or later (`POST /api/v1/rt/exports/{id}/push`).
+   (`"push": true` on `POST /api/v1/rt/export`) or later (`POST /api/v1/rt/exports/{id}/push`). Exporting
+   the same plan with the same settings again returns the stored export, so a repeated push sends objects the
+   server already holds; `"new_export": true` writes a marked copy (README, "Exporting a plan again").
 3. **OHIF reads the same server.** The OHIF image (`ohif/app:v3.13.13`) ships
    `config/local_orthanc.js`; select it with `APP_CONFIG=config/local_orthanc.js`. That file expects
    Orthanc's `/dicom-web` on OHIF's own origin, so serve both behind one reverse proxy (Orthanc has

@@ -191,6 +191,11 @@ Orthanc. The default patient is `LUNG1-002` of NSCLC-Radiomics: a non-small-cell
 is `PATIENT=LUNG1-001 ./scripts/demo-lung.sh` (it has no heart or oesophagus contours, so those goals are reported
 missing). `PROTOCOL=lung-60gy-30fx-vmat` plans two VMAT arcs instead, in about twenty minutes on a CPU.
 
+Run again for the same patient, the script downloads, plans and exports nothing new: the cached series, the stored
+plan and its stored export, pushed again with the same UIDs, so the study still holds one plan.
+`NEW_EXPORT=1 ./scripts/demo-lung.sh` pushes a marked copy (`copy 2`, its plan referencing the first) instead
+(README, "Exporting a plan again").
+
 The `demo-lung-imrt` protocol grows the CTV (5 mm) and PTV (5 mm) from the GTV, plans 60 Gy in 30 fractions with
 seven static fields, and judges the plan by the RTOG 0617 limits (cord, oesophagus, heart, lungs). It is a
 demonstration, not a site protocol: the dose engine and machine are radiarch's research models.

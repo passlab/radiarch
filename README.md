@@ -98,10 +98,8 @@ prints each planning round (`protocols: running planning 15% (imrt planning, rou
 `pushed ... RT objects` and the link, the study in the viewer holds only the CT and the clinic's structure set: no
 plan, dose or DVH yet. `docker compose logs -f worker` shows the planning itself. Run again for the same patient,
 the script reuses the stored geometry, plan and export (`done (computed before: the stored result)`, `the stored export
-of this plan`) and pushes the same objects again, which Orthanc already holds: the study keeps one plan. Add
-`--new-export` to `radiarch plan` for a second copy: new UIDs, `copy 2` in its label and series description, and the
-first plan as its predecessor. Studies from before this change hold one copy per run; delete the extras in Orthanc
-(`http://localhost:8042`) or start again with `docker compose --profile viewer down -v`.
+of this plan`) and pushes the same objects again, which Orthanc already holds: the study keeps one plan.
+`NEW_EXPORT=1 ./scripts/demo-lung.sh` pushes a marked copy instead (see [Exporting a plan again](#exporting-a-plan-again)).
 
 Open it in Firefox or Chrome on the same machine (or through `ssh -L 3000:localhost:3000 <machine>`). The plan
 review mode opens on the slice through the dose maximum: the dose as isodose colour bands over the CT, and the
@@ -296,6 +294,46 @@ curl -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
   -d '{"sessions": [{"fraction_number": 1, "treatment_date": "20261101"}]}' $API/rt/exports/<export id>/records
 curl -H "X-API-Key: $KEY" -o RP.dcm $API/rt/exports/<export id>/files/RP.dcm
 ```
+
+### Exporting a plan again
+
+An export is identified by its plan and by every setting that shapes the objects, among them the label, description,
+prescription, structures, object kinds, DVHs, per-beam doses, DRR size, and the referenced structure set and
+plans (`RTExportRequest.compute_cache_key`; `push` is not part of it). Asked for an export again:
+
+| Request | What radiarch does | In the archive |
+|---|---|---|
+| The same plan and settings (the default) | returns the stored export, `"reused": true`; with `push`, sends the same objects again | Orthanc keeps the copy it holds: one plan in the study |
+| The same plan, `new_export` | writes a copy: new UIDs, `copy N` in the RT Plan and structure set labels and in every series description, the latest earlier plan referenced with RTPlanRelationship `PREDECESSOR` | a second, marked plan beside the first |
+| Another setting (label, prescription, structures, ...) | a new export of its own (`copy_number` 1) | a separate plan |
+
+Nothing is deleted or replaced, in radiarch or in the archive: as in commercial planning systems, a later plan
+supersedes an earlier one by reference. Once a copy exists, the default returns the latest copy. An export whose
+files are gone is written anew. The export's manifest records `cache_key`, `copy_number` (1 for the first export)
+and `copy_of` (the export a copy follows).
+
+```bash
+radiarch plan --protocol demo-lung-imrt --study <uid> --push                  # again: the stored export, pushed again
+radiarch plan --protocol demo-lung-imrt --study <uid> --push --new-export     # a marked copy, "copy 2"
+NEW_EXPORT=1 ./scripts/demo-lung.sh                                           # the same from the demo scripts
+curl -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
+  -d '{"sequence_id": "<id>", "push": true, "new_export": true}' $API/rt/export
+```
+
+```python
+run = rx.run_protocol("demo-lung-imrt", geometry)
+first = run.export(push=True)                    # first.result.reused is False on the first export
+again = run.export(push=True)                    # again.id == first.id, again.result.reused is True
+copy = run.export(push=True, new_export=True)    # copy.result.copy_number == 2, copy.result.copy_of == first.id
+```
+
+`radiarch plan` says which it was: `export <id>: the stored export of this plan, the same objects and UIDs`, or
+`export <id>: copy 2, its plan follows export <id>'s`. In the viewer a copy's series read `RESEARCH - NOT FOR CLINICAL
+USE (copy 2)`.
+
+Exports written before this behaviour (radiarch before 737d2c5) carry no key and are never matched: the first export
+after an upgrade is a new one. To clear duplicate series that older runs left in a study, delete them in Orthanc's
+web interface (`http://localhost:8042`), or start the stack again empty with `docker compose --profile viewer down -v`.
 
 A photon optimization is exported through its aperture sequence (a fluence is not a plan). Every
 object type validates clean against the DICOM standard (`dicom-validator` in the test suite,

@@ -4,6 +4,7 @@
     radiarch protocol lung-60gy-30fx-vmat                one in full (JSON)
     radiarch plan --protocol lung-60gy-30fx-vmat --study 1.2.3 --data /dicom/case1 --export rt --json run.json
     radiarch plan --protocol demo-phantom-imrt --study <uid> --push    the RT objects to the server's DICOMweb, and a viewer link
+    radiarch plan --protocol demo-phantom-imrt --study <uid> --push --new-export    a marked copy ("copy 2") of an earlier export
     radiarch batch --protocol lung-60gy-30fx-vmat --cases cases.csv --out results
     radiarch fetch-tcia --collection NSCLC-Radiomics --patient LUNG1-002 --cache tcia --push    a public case into the PACS
 
