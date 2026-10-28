@@ -5,6 +5,7 @@
     radiarch plan --protocol lung-60gy-30fx-vmat --study 1.2.3 --data /dicom/case1 --export rt --json run.json
     radiarch plan --protocol demo-phantom-imrt --study <uid> --push    the RT objects to the server's DICOMweb, and a viewer link
     radiarch batch --protocol lung-60gy-30fx-vmat --cases cases.csv --out results
+    radiarch fetch-tcia --collection NSCLC-Radiomics --patient LUNG1-002 --cache tcia --push    a public case into the PACS
 
 A protocol is a shipped id or a JSON file. Without ``--server`` (or ``RADIARCH_SERVER``) the planning runs in this
 process; with it, on that server (``--api-key`` or ``RADIARCH_API_KEY``). ``cases.csv`` has a header with
@@ -103,6 +104,23 @@ def cmd_plan(args) -> int:
     return 0 if (run.passed or not args.strict) else 2
 
 
+def cmd_fetch_tcia(args) -> int:
+    """A public patient's CT and structure set from TCIA into a local cache, and optionally to the DICOMweb server."""
+    from .adapters import tcia
+
+    case = tcia.fetch_patient(args.collection, args.patient, Path(args.cache), args.modalities.split(","))
+    notice = tcia.licence_notice(case)
+    if notice:
+        print(notice, file=sys.stderr)
+    print(", ".join(f"{len(f)} {m}" for m, f in case.series.items()) + f" in {Path(args.cache) / args.collection / args.patient}",
+          file=sys.stderr)
+    if args.push:
+        n = tcia.push(case)
+        print(f"pushed {n} instances to the DICOMweb server", file=sys.stderr)
+    print(case.study_instance_uid)
+    return 0
+
+
 def _read_cases(path: Path, base: Optional[Path]) -> List[Dict[str, Any]]:
     with open(path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
@@ -196,6 +214,13 @@ def build_parser() -> argparse.ArgumentParser:
             s.add_argument("--out", required=True, help="output directory: summary.csv, summary.md, runs.jsonl")
             s.add_argument("--export", action="store_true", help="also write each case's RT objects under out/<case_id>/")
         s.set_defaults(func=func)
+    s = sub.add_parser("fetch-tcia", help="download a public patient (CT and structure set) from The Cancer Imaging Archive")
+    s.add_argument("--collection", default="NSCLC-Radiomics", help="TCIA collection (default NSCLC-Radiomics)")
+    s.add_argument("--patient", required=True, help="the patient ID in the collection, e.g. LUNG1-002")
+    s.add_argument("--cache", required=True, help="download directory (a completed series is not downloaded again)")
+    s.add_argument("--modalities", default="CT,RTSTRUCT", help="series to fetch (default CT,RTSTRUCT)")
+    s.add_argument("--push", action="store_true", help="push them to the DICOMweb server (RADIARCH_DICOMWEB_URL)")
+    s.set_defaults(func=cmd_fetch_tcia)
     return p
 
 

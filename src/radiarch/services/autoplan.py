@@ -387,12 +387,14 @@ class AutoplanService:
         on(AutoplanStage.structures, 0.05, "structures")
         lower = {k.lower(): k for k in geo.structure_index}
         ops: List[StructureOperation] = []
+        aliased: Dict[str, str] = {}
         for name, aliases in protocol.structure_aliases.items():
             if name.lower() in lower:
                 continue
             found = next((lower[a.lower()] for a in aliases if a.lower() in lower), None)
             if found is not None:
                 ops.append(StructureOperation(op="union", name=name, sources=[found]))
+                aliased[name] = found
         ops += list(protocol.structures)
         pgeo = gsvc.derive(geo.geometry_id, GeometryDeriveRequest(operations=ops)) if ops else geo
         if target not in pgeo.structure_index:
@@ -454,6 +456,7 @@ class AutoplanService:
             evaluation_id = ev.evaluation_id
         result = ProtocolRunResult(
             run_id=str(uuid.uuid4()), protocol=protocol, geometry_id=geo.geometry_id, planning_geometry_id=pgeo.geometry_id,
+            aliased=aliased,
             optimization_id=optimization_id, sequence_id=sequence_id, vmat_id=vmat_id, beam_model_id=bm_n.beam_model_id,
             dose_id=dose_n.dose_id, normalisation=float(k), goals=outcomes, passed=all(o.passed is not False for o in outcomes),
             deliverable=bool(deliverable), evaluation_id=evaluation_id, history=history, seconds=round(time.time() - t0, 1),

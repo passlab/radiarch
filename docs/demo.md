@@ -174,13 +174,37 @@ a DICOMweb server, and the viewer shows them. With the Docker Compose stack and 
 
 ```bash
 docker compose --profile viewer up -d --build
-./scripts/demo-viewer.sh          # the phantom into Orthanc, a plan with the demo protocol, its objects pushed
+./scripts/demo-lung.sh            # a public lung-cancer patient into Orthanc, a plan with demo-lung-imrt, pushed
 ```
 
 and open the link it prints (`http://localhost:3000/plan-review?StudyInstanceUIDs=...`). The plan review mode shows
-the dose as isodose bands over the CT, the DVHs, and the radiarch plan with its goals. `docs/viewing.md` covers
-the viewer, and 3D Slicer with SlicerRT for the same objects. The service results are also NIfTI volumes, which
-Slicer and ITK-SNAP open directly.
+the dose as isodose bands over the CT with the plan's contours (GTV, CTV, PTV, organs), the DVHs, and the radiarch
+plan with its goals. `docs/viewing.md` covers the viewer, and 3D Slicer with SlicerRT for the same objects. The
+service results are also NIfTI volumes, which Slicer and ITK-SNAP open directly.
+
+### 5.1 The lung patient
+
+`demo-lung.sh` uses `radiarch fetch-tcia`, which downloads a patient's planning CT and structure set from The Cancer
+Imaging Archive's public NBIA API (no account needed) into the API container's artifact volume and pushes them to
+Orthanc. The default patient is `LUNG1-002` of NSCLC-Radiomics: a non-small-cell lung cancer with the tumour
+(`GTV-1`), both lungs, the heart, the oesophagus and the spinal cord contoured. Another patient of that collection
+is `PATIENT=LUNG1-001 ./scripts/demo-lung.sh` (it has no heart or oesophagus contours, so those goals are reported
+missing). `PROTOCOL=lung-60gy-30fx-vmat` plans two VMAT arcs instead, in about twenty minutes on a CPU.
+
+The `demo-lung-imrt` protocol grows the CTV (5 mm) and PTV (5 mm) from the GTV, plans 60 Gy in 30 fractions with
+seven static fields, and judges the plan by the RTOG 0617 limits (cord, oesophagus, heart, lungs). It is a
+demonstration, not a site protocol: the dose engine and machine are radiarch's research models.
+
+NSCLC-Radiomics is distributed under CC BY-NC 3.0 (non-commercial use) with TCIA's data usage policy. Work that uses
+it cites the data and the paper:
+
+- Aerts, H. J. W. L. et al. (2019). Data from NSCLC-Radiomics (version 4). The Cancer Imaging Archive.
+  https://doi.org/10.7937/K9/TCIA.2015.PF0M9REI
+- Aerts, H. J. W. L. et al. (2014). Decoding tumour phenotype by noninvasive imaging using a quantitative radiomics
+  approach. Nature Communications 5, 4006. https://doi.org/10.1038/ncomms5006
+
+Without internet access, `./scripts/demo-viewer.sh` does the same with the bundled phantom (a water cylinder with one
+contoured target and the `demo-phantom-imrt` protocol).
 
 ## 6. Your own data
 

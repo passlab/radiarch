@@ -1,0 +1,169 @@
+{
+  "protocol_id": "demo-lung-imrt",
+  "name": "Demo: a contoured lung tumour, 7-field IMRT (a quicker variant of lung-60gy-30fx-vmat)",
+  "site": "lung",
+  "version": "1",
+  "description": "For the lung demo (docs/demo.md): a public NSCLC-Radiomics patient's GTV + 5 mm CTV + 5 mm PTV, 60 Gy in 30 fractions, seven static 6 MV fields with MLC apertures on radiarch's pencil-beam engine, judged against the RTOG 0617 limits of lung-60gy-30fx-vmat. Static fields plan in minutes on a CPU, where the two VMAT arcs of lung-60gy-30fx-vmat take about twenty.",
+  "source": "radiarch demo; dose limits from RTOG 0617 as in lung-60gy-30fx-vmat",
+  "prescription": {
+    "target": "PTV",
+    "dose_gy": 60.0,
+    "fractions": 30
+  },
+  "structure_aliases": {
+    "GTV": [
+      "GTV",
+      "GTV_Primary",
+      "Tumor",
+      "Tumour",
+      "GTVp",
+      "GTV-1",
+      "GTV1"
+    ],
+    "SpinalCord": [
+      "SpinalCord",
+      "Spinal_Cord",
+      "Cord",
+      "SPINAL_CORD",
+      "Spinal-Cord"
+    ],
+    "Esophagus": [
+      "Esophagus",
+      "Oesophagus",
+      "ESOPHAGUS"
+    ],
+    "Heart": [
+      "Heart",
+      "HEART"
+    ],
+    "Lung_L": [
+      "Lung_L",
+      "LLung",
+      "Lung_Left",
+      "LUNG_L",
+      "Left_Lung",
+      "Lung-Left"
+    ],
+    "Lung_R": [
+      "Lung_R",
+      "RLung",
+      "Lung_Right",
+      "LUNG_R",
+      "Right_Lung",
+      "Lung-Right"
+    ]
+  },
+  "structures": [
+    {
+      "op": "expand",
+      "name": "CTV",
+      "source": "GTV",
+      "margin_mm": 5.0
+    },
+    {
+      "op": "expand",
+      "name": "PTV",
+      "source": "CTV",
+      "margin_mm": 5.0
+    },
+    {
+      "op": "ring",
+      "name": "RingNear",
+      "source": "PTV",
+      "inner_mm": 3.0,
+      "outer_mm": 12.0
+    },
+    {
+      "op": "ring",
+      "name": "RingFar",
+      "source": "PTV",
+      "inner_mm": 20.0,
+      "outer_mm": 45.0
+    },
+    {
+      "op": "union",
+      "name": "Lungs",
+      "sources": [
+        "Lung_L",
+        "Lung_R"
+      ]
+    },
+    {
+      "op": "subtract",
+      "name": "Lungs-GTV",
+      "source": "Lungs",
+      "sources": [
+        "GTV"
+      ]
+    },
+    {
+      "op": "subtract",
+      "name": "Lungs-PTV",
+      "source": "Lungs",
+      "sources": [
+        "PTV"
+      ]
+    }
+  ],
+  "goals": [
+    {
+      "structure": "PTV",
+      "metric": "D95",
+      "op": ">=",
+      "gy": 60.0
+    },
+    {
+      "structure": "SpinalCord",
+      "metric": "Dmax",
+      "op": "<=",
+      "gy": 45.0
+    },
+    {
+      "structure": "Esophagus",
+      "metric": "Dmean",
+      "op": "<=",
+      "gy": 34.0
+    },
+    {
+      "structure": "Heart",
+      "metric": "D33",
+      "op": "<=",
+      "gy": 60.0
+    },
+    {
+      "structure": "Lungs-PTV",
+      "metric": "D37",
+      "op": "<=",
+      "gy": 20.0,
+      "dmax_term": false
+    }
+  ],
+  "extra_objectives": [
+    {
+      "type": "DMax",
+      "structure_name": "RingNear",
+      "dose_gy": 54.0,
+      "weight": 100.0
+    },
+    {
+      "type": "DMax",
+      "structure_name": "RingFar",
+      "dose_gy": 30.0,
+      "weight": 200.0
+    }
+  ],
+  "beams": {
+    "technique": "imrt",
+    "count": 7,
+    "sequence_levels": 5
+  },
+  "machine": "synthetic-120",
+  "engine": {
+    "name": "pb"
+  },
+  "beamlet_mm": 5.0,
+  "jaw_margin_mm": 10.0,
+  "iterations": 100,
+  "rounds": 2,
+  "evaluation_template": "rtog-0617"
+}

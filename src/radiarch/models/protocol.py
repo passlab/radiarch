@@ -118,6 +118,8 @@ class ProtocolRunResult(ResearchArtifact):
     protocol: PlanningProtocol
     geometry_id: str = Field(..., description="The patient's geometry the run started from.")
     planning_geometry_id: str = Field(..., description="With the protocol's aliases and derived structures.")
+    aliased: Dict[str, str] = Field(default_factory=dict,
+                                    description="Protocol structure name -> the patient's structure it was copied from (by structure_aliases).")
     optimization_id: str
     sequence_id: Optional[str] = None
     vmat_id: Optional[str] = None

@@ -78,17 +78,23 @@ environment variables:
 Whoever reaches the viewer uses radiarch with that key. Compose therefore publishes it on localhost
 only. To serve it to more people, put an authenticating proxy in front of it.
 
-`./scripts/demo-viewer.sh` makes a plan to look at:
-1. It puts the bundled phantom into the stack's Orthanc.
-2. It plans it with the shipped `demo-phantom-imrt` protocol (`radiarch plan --push` in the API container).
+`./scripts/demo-lung.sh` makes a plan to look at (docs/demo.md, section 5.1):
+1. It downloads a public lung-cancer patient (NSCLC-Radiomics `LUNG1-002`: CT, tumour and organ contours) from TCIA
+   and pushes it to the stack's Orthanc (`radiarch fetch-tcia --push` in the API container).
+2. It plans it with the shipped `demo-lung-imrt` protocol (`radiarch plan --push` in the API container).
 3. It prints the link.
+
+`./scripts/demo-viewer.sh` does the same with the bundled phantom and `demo-phantom-imrt`, without a download.
 
 The compose file sets `RADIARCH_VIEWER_ROUTE=plan-review`, so radiarch's own links open this mode.
 
-The plan review mode opens the plan dose over its CT. On the right are three panels:
-- the dose's DVHs and isodose legend;
+The plan review mode opens the plan dose over its CT, on the slice through the dose maximum, with the contours of
+the structure set the dose belongs to (for a radiarch plan: radiarch's, with the CTV and PTV it derived). Planning
+aids start hidden: rings, optimisation helpers and organ-minus-target structures such as `Lungs-PTV`, and ROIs
+interpreted as avoidance or control. On the right are three panels:
+- the dose's DVHs (planning aids on request) and isodose legend;
 - the radiarch plan: summary, a goal template, Evaluate;
-- the structures.
+- the structures, each of which can be shown or hidden.
 
 ## Setting it up
 

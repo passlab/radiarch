@@ -7,6 +7,7 @@ The test assembles a full deployment:
 Headless Chromium then opens the study in the plan review mode and checks:
 - the dose is drawn over the CT, in isodose colours of the prescription;
 - the dose panel shows the DVHs from the RT Dose;
+- the structure set the dose references is drawn as contours in the dose viewport;
 - the radiarch panel finds the plan, and Evaluate grades the goals.
 
 It needs:
@@ -133,6 +134,13 @@ def _grey_pixels(png: bytes) -> int:
     return int((rgb.mean(axis=2) > 100).sum())
 
 
+# the segmentation representations in the dose viewport: their type and each segment's label and visibility
+CONTOURS = """() => { const s = window.services.segmentationService;
+  return s.getSegmentationRepresentations('rtDose').map(r => ({ type: r.type,
+    segments: Object.entries(s.getSegmentation(r.segmentationId)?.segments ?? {}).filter(([, g]) => g)
+      .map(([i, g]) => ({ label: g.label, visible: r.segments?.[i]?.visible ?? null })) })); }"""
+
+
 def test_a_plan_in_the_standalone_viewer(env, viewer, tmp_path):  # noqa: F811
     import numpy as np
     import pydicom
@@ -174,6 +182,11 @@ def test_a_plan_in_the_standalone_viewer(env, viewer, tmp_path):  # noqa: F811
             # the dose panel: the RT Dose's own DVHs, named by the structure set
             expect(page.get_by_text("DVHs from the RT Dose file")).to_be_visible(timeout=60000)
             expect(page.locator("td", has_text="PTV").first).to_be_visible()
+            # the dose's structure set, drawn as contours over the CT and the dose, every structure shown
+            page.wait_for_function(f"() => ({CONTOURS})().length > 0", timeout=60000)
+            contours = page.evaluate(CONTOURS)
+            assert [c["type"] for c in contours] == ["Contour"], contours
+            assert {g["label"]: g["visible"] for g in contours[0]["segments"]} == {"PTV": True, "OAR": True}, contours
             page.wait_for_timeout(5000)
             shot = page.locator("[data-viewportid=\"rtDose\"]").screenshot()
             assert _grey_pixels(shot) > 1000, "the CT is not drawn"

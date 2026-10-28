@@ -21,7 +21,7 @@ radiarch/
   Dockerfile            # Multi-stage container build
   docker-compose.yml    # Full stack: API + Worker + Redis + Postgres + Orthanc (+ the viewer, profile "viewer")
   .env.example          # Documented env var template
-  scripts/              # smoke_test.sh, demo-viewer.sh (a plan into the viewer), install-dev.sh, fetch-engines.sh
+  scripts/              # smoke_test.sh, demo-lung.sh and demo-viewer.sh (a plan into the viewer), install-dev.sh, fetch-engines.sh
   viewer/               # OHIF packages: rt-dose-core, the RT Dose and radiarch extensions, the plan review mode,
                         # standalone/ (the viewer image: OHIF + nginx proxy) (viewer/README.md)
   demo/                 # CLI demos per service (show_*.py) + compare_engines.py; walkthrough in docs/demo.md
@@ -79,22 +79,29 @@ with a free Docker Hub account and run the command again.
 ### A plan in the viewer
 
 ```bash
-./scripts/demo-viewer.sh
+./scripts/demo-lung.sh
 ```
 
-It puts the bundled phantom (`tests/data/SimpleFantomWithStruct`: a water cylinder with one contoured target) into
-the stack's Orthanc, plans it with the shipped demo protocol (`demo-phantom-imrt`: 60 Gy in 30 fractions, five
-static fields, radiarch's pencil-beam engine) through the `radiarch` command inside the API container, pushes the
-structure set, plan and dose to Orthanc, and prints a link:
+It downloads a public lung-cancer patient from The Cancer Imaging Archive (NSCLC-Radiomics `LUNG1-002`, about
+60 MB: a planning CT with the tumour, `GTV-1`, and the lungs, heart, oesophagus and spinal cord contoured by the
+clinic) into the stack's Orthanc. It then plans it with the shipped `demo-lung-imrt` protocol (CTV = GTV + 5 mm,
+PTV = CTV + 5 mm, 60 Gy in 30 fractions, seven IMRT fields on radiarch's pencil-beam engine, RTOG 0617 dose limits)
+through the `radiarch` command inside the API container, pushes the structure set, plan and dose to Orthanc, and
+prints a link:
 
 ```
-http://localhost:3000/plan-review?StudyInstanceUIDs=<the phantom's study>
+http://localhost:3000/plan-review?StudyInstanceUIDs=<the patient's study>
 ```
 
 Open it in Chrome or Firefox on the same machine (or through `ssh -L 3000:localhost:3000 <machine>`). The plan
-review mode opens on the slice through the dose maximum, with the dose as isodose colour bands over the CT; the
-panels on the right show the DVHs, the radiarch plan (summary, a goal template, Evaluate) and the structures.
-`docs/viewing.md` explains the viewer and its configuration.
+review mode opens on the slice through the dose maximum: the dose as isodose colour bands over the CT, and the
+plan's structures (GTV, CTV, PTV and the organs) as contours. On the right are the DVHs, the radiarch plan (summary,
+a goal template, Evaluate) and the structure list, where each contour can be hidden or shown. `docs/viewing.md`
+explains the viewer and its configuration.
+
+NSCLC-Radiomics is licensed CC BY-NC 3.0 (non-commercial use; cite it as `docs/demo.md` says). The download stays
+in the stack's artifact volume, not in this repository. Without internet access, `./scripts/demo-viewer.sh` does
+the same with the bundled phantom (`tests/data/SimpleFantomWithStruct`: a water cylinder with one contoured target).
 
 ### Smoke test
 

@@ -16,13 +16,16 @@
       "GTV_Primary",
       "Tumor",
       "Tumour",
-      "GTVp"
+      "GTVp",
+      "GTV-1",
+      "GTV1"
     ],
     "SpinalCord": [
       "SpinalCord",
       "Spinal_Cord",
       "Cord",
-      "SPINAL_CORD"
+      "SPINAL_CORD",
+      "Spinal-Cord"
     ],
     "Esophagus": [
       "Esophagus",
@@ -38,14 +41,16 @@
       "LLung",
       "Lung_Left",
       "LUNG_L",
-      "Left_Lung"
+      "Left_Lung",
+      "Lung-Left"
     ],
     "Lung_R": [
       "Lung_R",
       "RLung",
       "Lung_Right",
       "LUNG_R",
-      "Right_Lung"
+      "Right_Lung",
+      "Lung-Right"
     ]
   },
   "structures": [

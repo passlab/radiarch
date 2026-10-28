@@ -303,8 +303,14 @@ class ProtocolRun(_Object):
         return [g.model_dump() for g in self.result.goals]
 
     def export(self, **request) -> "Export":
+        """The plan's RT objects. Its structure set holds the planning geometry's structures under the protocol's names:
+        a patient's structure the protocol copied to its own name (structure_aliases) is not written twice."""
         rx = self.result.protocol.prescription
         request.setdefault("prescription", {"dose_gy": rx.dose_gy, "fractions": rx.fractions, "target_structure": rx.target})
+        if request.get("structures") is None and self.result.aliased:
+            index = self.geometry().result.structure_index
+            copied = set(self.result.aliased.values())
+            request["structures"] = [n for n in sorted(index, key=index.get) if n not in copied]
         return _export(self.client, beam_model_id=self.result.beam_model_id, dose_id=self.result.dose_id, **request)
 
 

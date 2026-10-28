@@ -649,3 +649,34 @@ That found the following, now fixed.
   by the pencil-beam engine, every goal met, 8 RT objects pushed). The printed link, opened in Chromium on an NVIDIA
   GPU, shows the dose wash on the maximum's slice, the DVHs and the radiarch plan panel, with no console errors.
 
+
+## A lung-cancer patient in the viewer (2026-10-27)
+
+The phantom demo showed a dose over a water cylinder, and no contours: the dose viewport drew only the CT and the
+dose, and OHIF loads a structure set only when it is dropped into a viewport of its own.
+- **Contours in the dose viewport.** The dose display set records the structure set it was matched with
+  (`structureSetSOPInstanceUID`); once Cornerstone has mounted the volumes, the viewport loads that structure set
+  with OHIF's RT handler and adds it as a contour representation, so OHIF's segmentation panel lists the structures.
+  Added earlier, before the volumes are mounted, Cornerstone's contour display threw "No actor found" on every render.
+- **Planning aids hidden.** `planningAids` (rt-dose-core): ROIs interpreted as avoidance, control and the like, rings
+  and optimisation helpers, and organ-minus-target structures such as `Lungs-PTV`. They start hidden in the viewport,
+  and the DVH panel shows them on request.
+- **One name per structure.** A protocol copies a patient's structure to its own name (`structure_aliases`:
+  `Spinal-Cord` → `SpinalCord`). The run now records the copies (`aliased`), and its export leaves out the originals,
+  so the structure set, the DVHs and the goals use the same names and no structure is drawn twice.
+- **`radiarch fetch-tcia`** (`adapters/tcia.py`): a public patient's planning CT and structure set from TCIA's NBIA
+  API into a cache, optionally pushed to the DICOMweb server; the collection's licence line is printed.
+- **`demo-lung-imrt`**: the lung protocol's structures and RTOG 0617 goals with seven static fields, which plan in
+  minutes on a CPU (the two VMAT arcs of `lung-60gy-30fx-vmat` take about twenty). The lung protocols take
+  NSCLC-Radiomics' names (`GTV-1`, `Spinal-Cord`, `Lung-Left`, `Lung-Right`).
+- **`scripts/demo-lung.sh`**: NSCLC-Radiomics `LUNG1-002` into the stack's Orthanc, planned and pushed, the link
+  printed. README, `docs/demo.md` (5.1, with the data's licence and citation) and `docs/viewing.md` lead with it; the
+  phantom demo remains for machines without internet access.
+- **Compose:** the API and worker set `RADIARCH_ARTIFACT_DIR=/data/artifacts`, the shared volume. A relative value
+  in `.env` had given each container its own directory, and the API answered 404 for the worker's geometry.
+- **Tests:** `tests/test_tcia_demo.py` (fetch, cache, push, the command, the protocols' names, the compose file);
+  `test_r10_protocols` checks the export names each structure once; rt-dose-core tests `planningAids`; the browser
+  test checks the structure set is drawn as contours in the dose viewport.
+- **Verified** on the compose stack: `demo-lung.sh` in under six minutes (download, a 7-field plan with every goal
+  met: PTV D95 60.1 Gy, cord max 35.7 Gy, oesophagus mean 9.6 Gy, heart D33 20.2 Gy, lungs-PTV D37 6.3 Gy). In
+  Chromium on an NVIDIA GPU, the link shows the GTV, CTV, PTV and organ contours over the dose wash, and the DVHs.

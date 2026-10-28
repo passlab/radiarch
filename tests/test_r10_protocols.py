@@ -73,6 +73,10 @@ def test_a_protocol_plans_a_patient(rx, tmp_path):
     ds = pydicom.dcmread(rp)
     total = sum(float(b.BeamMeterset) for b in ds.FractionGroupSequence[0].ReferencedBeamSequence)
     assert total == pytest.approx(float(mu_out.sum()) / 2, rel=1e-3)        # per fraction: 2 fractions
+    # the structure set names each structure once, as the protocol does: Cord, not also the patient's OAR it came from
+    assert run.result.aliased == {"Cord": "OAR"}
+    rs = pydicom.dcmread(tmp_path / "RS.dcm")
+    assert sorted(r.ROIName for r in rs.StructureSetROISequence) == ["Cord", "PTV", "Ring"]
 
 
 def test_shipped_protocols_and_refusals(rx):

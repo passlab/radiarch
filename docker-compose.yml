@@ -28,6 +28,7 @@ services:
       - RADIARCH_VIEWER_URL=http://localhost:3000
       - RADIARCH_VIEWER_ROUTE=plan-review
       - RADIARCH_DATA_ROOT=/data/radiarch/testData/SimpleFantomWithStruct
+      - RADIARCH_ARTIFACT_DIR=/data/artifacts   # the shared volume below: the API reads what the worker writes
     volumes:
       - radiarch-data:/data/artifacts
       - ./tests/data:/data/radiarch/testData:ro
@@ -73,6 +74,7 @@ services:
       - RADIARCH_VIEWER_URL=http://localhost:3000
       - RADIARCH_VIEWER_ROUTE=plan-review
       - RADIARCH_DATA_ROOT=/data/radiarch/testData/SimpleFantomWithStruct
+      - RADIARCH_ARTIFACT_DIR=/data/artifacts   # the shared volume below: the API reads what the worker writes
     volumes:
       - radiarch-data:/data/artifacts
       - ./tests/data:/data/radiarch/testData:ro
