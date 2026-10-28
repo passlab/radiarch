@@ -142,3 +142,16 @@ def test_a_job_reports_its_progress_while_the_command_waits(capsys):
     err = capsys.readouterr().err.splitlines()
     assert err == ["  geometry: running structures 5%", "  geometry: running planning 15% (imrt planning, round 1 of up to 2)",
                    "  geometry: succeeded done 100%"]
+
+
+def test_a_stored_result_is_reported_as_such(capsys):
+    """Planning the same patient again returns the stored run at once (200): the command says so instead of nothing."""
+    import httpx
+
+    from radiarch.cli import _progress
+    from radiarch.sdk import Radiarch
+
+    rx = Radiarch("http://radiarch/api/v1", poll_interval=0, on_progress=_progress,
+                  http=httpx.Client(base_url="http://radiarch", transport=httpx.MockTransport(lambda r: httpx.Response(200, json={"ok": True}))))
+    assert rx.submit("protocols", "/protocols/run", {}, None) == {"ok": True}
+    assert capsys.readouterr().err.splitlines() == ["  protocols: done (computed before: the stored result)"]

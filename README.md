@@ -96,7 +96,8 @@ http://localhost:3000/plan-review?StudyInstanceUIDs=<the patient's study>
 Planning takes about six minutes on a 10-core (20-thread) workstation and longer on a smaller machine; meanwhile the command
 prints each planning round (`protocols: running planning 15% (imrt planning, round 1 of up to 2)`). Until it prints
 `pushed ... RT objects` and the link, the study in the viewer holds only the CT and the clinic's structure set: no
-plan, dose or DVH yet. `docker compose logs -f worker` shows the planning itself.
+plan, dose or DVH yet. `docker compose logs -f worker` shows the planning itself. Run again for the same patient,
+the script reuses the stored geometry and plan (`done (computed before: the stored result)`) and pushes them again.
 
 Open it in Firefox or Chrome on the same machine (or through `ssh -L 3000:localhost:3000 <machine>`). The plan
 review mode opens on the slice through the dose maximum: the dose as isodose colour bands over the CT, and the

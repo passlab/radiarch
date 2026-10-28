@@ -100,7 +100,10 @@ class Radiarch:
         resp = self.request("POST", path, json=body)
         data = resp.json()
         if resp.status_code != 202:
-            return model.model_validate(data)
+            # the service answers 200 with a result it already holds (same inputs): no job to wait on
+            if self.on_progress is not None:
+                self.on_progress(service, {"state": "done", "message": "computed before: the stored result"})
+            return model.model_validate(data) if model else data
         id_field, result_path = JOBS[service]
         job_id = data["job_id"]
         deadline = time.monotonic() + self.job_timeout
