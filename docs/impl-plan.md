@@ -31,7 +31,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
 | 16 | R13 Viewer integration | done; 3D Slicer check by the project lead waiting | fc7473d..26787db | 0018 |
-| 17 | R11 Multi-criteria optimization | not started | — | — |
+| 17 | R11 Multi-criteria optimization | not started; design proposed | — | (0019) |
 
 ## Before the roadmap (done by 2026-10-20)
 
@@ -241,6 +241,33 @@ OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH
 - [ ] The objects read by 3D Slicer with SlicerRT (structures, dose, beams, DRRs; Slicer's DVHs against the DVHs
   radiarch wrote), steps and an empty results table in the record **(waiting: the project lead)**
 
-### R11 — Multi-criteria optimization (not started)
-- [ ] Pareto surface generation on the objective set
-- [ ] Navigation and auto-navigation against goal priorities
+### R11 — Multi-criteria optimization (not started; design proposed)
+A set of Pareto-optimal plans computed up front, navigated by sliders or automatically by goal priority, and made
+deliverable by dose mimicking. The research and the design: [`reports/mco-research-and-design.md`](reports/mco-research-and-design.md)
+(§4 D1–D9; ADR 0019 when built). Estimate about 4.5 ew, against the roadmap's 2: the roadmap counted generation and
+navigation only, not hard constraints, deliverable conversion or the viewer panel.
+- [ ] R11.1 Convex trade-off objectives and hard constraints (D1, D2): `MeanDose`, `EUDMax`, `EUDMin`, `RMSOver`,
+  `RMSUnder`, `UniformRMS`, each read in Gy; nonconvex types refused as trade-offs; constraints by an
+  augmented-Lagrangian loop around L-BFGS-B; a feasibility run that names the violated constraints; redundant
+  objectives reported (about 0.5 ew)
+- [ ] R11.2 The Pareto set (D3, D4): anchors with a small weight on the others, a balance plan, sandwich plans (inner set
+  with dummy points, vertex enumeration of the outer set, HiGHS duals as the next weights) to an error bound or a plan
+  budget (3N + 1 by default); warm starts; navigation voxels; the error bound per plan; `POST /mco/run` as a job with
+  a cache key and lineage (about 1 ew)
+- [ ] R11.3 Navigation (D5): the piercing LP over the blend weights with clamps and locks; exact values, DVH and goals
+  on the blended dose; stored, named states with the balance plan as reference; `POST /mco/{id}/navigate`,
+  `GET /mco/{id}/states` (about 0.5 ew)
+- [ ] R11.4 Automatic navigation and projection (D6): lexicographic over the blend weights by a goal template's
+  priorities with slip; projection onto the Pareto set; `POST /mco/{id}/auto-navigate` (about 0.5 ew)
+- [ ] R11.5 The deliverable plan (D7): a `ReferenceDose` mimicking objective; static fields sequenced (R4), arcs (R8)
+  and proton spots with their minimum meterset, each re-optimized against the navigated dose; normalisation (R10);
+  the deviation table with its flags; `POST /mco/{id}/deliverable` (about 0.75 ew)
+- [ ] R11.6 Robust MCO (D8): the scenario-wise worst case in generation; nominal and worst-case values in navigation
+  (about 0.25 ew)
+- [ ] R11.7 SDK, command line, protocols and viewer (D9): `ParetoSet` in the SDK; a protocol's `mco` section used by
+  `radiarch plan`; the navigation panel in the OHIF extension (sliders, clamps, live DVH and goals) (about 0.5 ew)
+- [ ] R11.8 Record and ADR 0019: the algorithm tests of report §5 in CI; the TG-119 C-shape front, the lung demo
+  (automatic navigation against the R10 protocol plan, navigated against deliverable, plans against the error bound),
+  a robust proton case; physicist sign-off (about 0.5 ew)
+- [ ] Later **(open)**: shared-aperture or shared-sweep Pareto plans so navigation shows the deliverable dose;
+  tail-mean (CVaR) trade-offs; Pareto sets across beam arrangements; the TROTS benchmark
