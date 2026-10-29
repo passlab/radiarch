@@ -98,6 +98,31 @@ class HardConstraintTerm:
                                      met=v <= s.tolerance_gy)
 
 
+class ObjectiveCap(HardConstraintTerm):
+    """A trade-off objective held at no more than ``cap_gy``: ``f(d) - cap <= 0``, one residual (projection, R11.4)."""
+
+    def __init__(self, objective, mask: np.ndarray, cap_gy: float, label: str, tolerance_gy: float = 0.01):
+        self.objective, self.mask = objective, np.asarray(mask, dtype=np.float64)
+        self.cap, self.label, self.tolerance = float(cap_gy), label, float(tolerance_gy)
+        self.voxelwise = False
+        self.mu = np.zeros(1)
+        self.spec = _CapSpec(tolerance_gy=self.tolerance)
+
+    def residuals(self, dose: np.ndarray):
+        v, g = self.objective.value_and_grad(np.asarray(dose, dtype=np.float64), self.mask)
+        return np.array([v - self.cap]), lambda y: float(y[0]) * g
+
+    def outcome(self, dose: np.ndarray) -> HardConstraintOutcome:
+        v = self.violation(dose)
+        return HardConstraintOutcome(label=f"{self.label} <= {self.cap:.4g} Gy", achieved_gy=round(self.cap + float(self.residuals(dose)[0][0]), 6),
+                                     violation_gy=round(v, 6), met=v <= self.tolerance)
+
+
+@dataclass
+class _CapSpec:
+    tolerance_gy: float
+
+
 @dataclass
 class ConstrainedSolve:
     weights: np.ndarray
@@ -182,5 +207,5 @@ def infeasible_message(outcomes: Sequence[HardConstraintOutcome]) -> str:
     return "no plan on these beams meets the hard constraints: " + "; ".join(failing)
 
 
-__all__ = ["AL_ROUNDS", "InfeasibleConstraintsError", "HardConstraintTerm", "ConstrainedSolve",
+__all__ = ["AL_ROUNDS", "InfeasibleConstraintsError", "HardConstraintTerm", "ObjectiveCap", "ConstrainedSolve",
            "solve_with_hard_constraints", "infeasible_message"]

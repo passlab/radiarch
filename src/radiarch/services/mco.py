@@ -27,7 +27,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 from loguru import logger
@@ -229,6 +229,7 @@ class MCOService:
         weights = np.stack([p.solved.x for p in res.plans]).astype(np.float32)
         mco_id = str(uuid.uuid4())
         self.store.save_arrays(mco_id, weights, index, doses, {nm: m[index] for nm, m in struct.items()})
+        (self.store.dir(mco_id) / "request.json").write_text(request.model_dump_json(indent=1), encoding="utf-8")
 
         norm = res.normalized()
         root = self.store.dir(mco_id)
@@ -253,4 +254,61 @@ class MCOService:
         return result
 
 
-__all__ = ["MCOService", "MCOStore", "MCOProgressCallback", "normalize"]
+    # -----------------------------------------------------------------
+    # Projection onto the Pareto set (R11.4, D6)
+    # -----------------------------------------------------------------
+
+    def project(self, mco_id: str, blend) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+        """A navigated blend moved onto the Pareto set: the plan that lowers the trade-offs' normalized sum as far as
+        it can with none of them above its value in the blend, under the run's hard constraints (a variant of Bokrantz
+        & Miettinen's projection, Med Phys 42:5862, 2015, which raises every objective evenly). The blend is the start
+        and meets every cap, so the projected plan is at least as good in every trade-off. Returns the plan's element
+        weights, its dose on the navigation voxels and notes."""
+        result = self.store.get_by_id(mco_id)
+        req_path = self.store.dir(mco_id) / "request.json"
+        if result is None or not req_path.is_file():
+            raise ValueError(f"Pareto set {mco_id} has no stored request to project with")
+        request = MCORunRequest.model_validate_json(req_path.read_text(encoding="utf-8"))
+        osvc = self.optimization
+        base = OptimizationRunRequest(
+            plan_id=request.plan_id, geometry_id=request.geometry_id, beam_model_id=request.beam_model_id, dose_engine=request.dose_engine,
+            objectives=[o.model_copy(update={"weight": 1.0}) for o in request.tradeoffs], hard_constraints=request.hard_constraints,
+            solver=request.solver, rbe=request.rbe)
+        prob = osvc._assemble_problem(base)
+        forward, backward, weight_terms = osvc.nominal_ops(prob)
+        lam = np.asarray(blend, dtype=np.float64)
+        x0 = lam @ self.store.load_weights(mco_id).astype(np.float64)
+        span = np.maximum(np.asarray(result.nadir_gy) - np.asarray(result.ideal_gy), 1e-6)
+        x, dose, notes = project_blend([o for o, _ in prob.obj_terms], [m for _, m in prob.obj_terms], forward, backward,
+                                       osvc.hard_terms(prob, request.hard_constraints), x0, span, get_solver(request.solver.method),
+                                       request.solver.max_iterations, request.solver.convergence_tol or 1e-10,
+                                       [f"{o.type}({o.structure_name})" for o in request.tradeoffs])
+        index = np.load(self.store.dir(mco_id) / "navigation_index.npy")
+        return x, dose.ravel()[index], notes
+
+
+def project_blend(objectives, masks, forward, backward, constraint_terms, x0: np.ndarray, span: np.ndarray, solver, max_iter: int,
+                  tol: float, names: List[str]) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+    """``min sum_i f_i / span_i`` subject to ``f_i <= f_i(x0)`` and the hard constraints, from ``x0`` (see
+    :meth:`MCOService.project`). Returns the weights, their full dose and notes; ``x0`` itself when the solve does
+    not hold every cap."""
+    from .hard_constraints import ObjectiveCap
+
+    d0 = forward(x0)
+    caps = [ObjectiveCap(o, m, o.value(d0, m), name) for o, m, name in zip(objectives, masks, names)]
+    scale = 1.0 / np.asarray(span, dtype=np.float64)
+
+    def dose_terms(d: np.ndarray):
+        loss, grad = 0.0, np.zeros(d.shape)
+        for s, o, m in zip(scale, objectives, masks):
+            v, g = o.value_and_grad(d, m)
+            loss, grad = loss + s * v, grad + s * g
+        return loss, grad
+
+    out = solve_with_hard_constraints(list(constraint_terms) + caps, forward, backward, x0, solver, max_iter, tol, dose_terms=dose_terms)
+    if not out.met:
+        return np.asarray(x0, dtype=np.float64), d0, ["the projection did not hold every cap; the navigated plan is kept"]
+    return out.weights, out.dose, []
+
+
+__all__ = ["MCOService", "MCOStore", "MCOProgressCallback", "normalize", "project_blend"]

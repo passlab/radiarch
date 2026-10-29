@@ -320,6 +320,16 @@ class ParetoSet(_Object):
                               goals=goal_set, **request)
         return self.client.post(f"/mco/{self.id}/navigate", req, NavigationState)
 
+    def auto_navigate(self, goals: Union[str, Dict[str, Any]], *, clamps: Optional[Dict[str, float]] = None, locks: Seq[str] = (),
+                      from_state: Any = "balance", **request):
+        """The blend that best meets ``goals`` (a template id or a goal set), priority 1 first, then 2, then 3."""
+        from ..models.mco import AutoNavigateRequest, NavigationState
+
+        goal_set = {"template_id": goals} if isinstance(goals, str) else goals
+        req = AutoNavigateRequest(goals=goal_set, clamps=clamps or {}, locks=list(locks), from_state=getattr(from_state, "state_id", from_state),
+                                  **request)
+        return self.client.post(f"/mco/{self.id}/auto-navigate", req, NavigationState)
+
     def states(self):
         """The stored navigation states, the balance plan first."""
         from ..models.mco import NavigationState

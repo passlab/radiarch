@@ -16,6 +16,14 @@ objectives normalized to ideal 0 and nadir 1::
 The small ``rho`` keeps the answer off weakly dominated blends. A slider move asks for one objective at no more than a
 value, with the others sharing the cost or the gain evenly from where they are; a reference point asks for every
 objective toward a value; clamps hold whatever else moves; a lock clamps an objective where it is.
+
+Automatic navigation (R11.4, D6) is lexicographic over the blend weights against a goal set's priorities: level 1's
+summed relative shortfall is minimized, then level 2's with every level-1 goal held (a met goal stays met, a missed one
+within a slip of what it reached), then level 3's, then the trade-offs' sum with every goal held. DVH goals are not linear in the blend, so each
+level is a small constrained problem in the blend weights (SLSQP, then COBYLA when a shortfall remains), each
+evaluation a weighted sum of the plans' doses on the goal's structure. RayStation describes automatic navigation the
+same way in one sentence ("lexicographic optimization where the plan coefficients constitute optimization variables");
+its algorithm is not published, so this one is radiarch's own.
 """
 
 from __future__ import annotations
@@ -26,10 +34,10 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-from scipy.optimize import linprog
+from scipy.optimize import linprog, minimize
 
-from ..models.mco import DVHCurve, MCOResult, NavigateRequest, NavigationState
-from .clinical_goals import grade_goal_set
+from ..models.mco import AutoLevel, AutoNavigateRequest, DVHCurve, MCOResult, NavigateRequest, NavigationState
+from .clinical_goals import evaluate_metric, grade_goal_set, load_template, parse_metric, resolve_structure
 from .dvh import dvh_on_bins
 from .optimization import _objective_from_spec
 
@@ -107,25 +115,31 @@ class Navigator:
         c = np.r_[RHO * self.Fn.sum(axis=1), 1.0 if rows else 0.0]
         return self._lp(c, rows, z, upper, with_h=bool(rows))
 
-    # -- a request --------------------------------------------------------------------------------------------------
-    def navigate(self, req: NavigateRequest, start: np.ndarray) -> Tuple[np.ndarray, Dict[str, float], List[str]]:
-        """The blend a request asks for, the clamps it held (Gy, by name) and notes."""
-        n = len(self.names)
+    def caps(self, clamps: Dict[str, float], locks: List[str], start: np.ndarray) -> Tuple[Dict[int, float], Dict[str, float]]:
+        """Clamps (Gy) and locks (where ``start`` is) as normalized upper bounds; refused when no blend meets them."""
         current = start @ self.Fn
-        notes: List[str] = []
         upper: Dict[int, float] = {}
         clamps_gy: Dict[str, float] = {}
-        for key, gy in req.clamps.items():
+        for key, gy in clamps.items():
             i = self.index(key)
             upper[i] = min(upper.get(i, np.inf), self.to_norm(i, gy))
             clamps_gy[self.names[i]] = float(gy)
-        for key in req.locks:
+        for key in locks:
             i = self.index(key)
             upper[i] = min(upper.get(i, np.inf), float(current[i]) + 1e-9)
             clamps_gy[self.names[i]] = round(float(start @ self.F[:, i]), 6)
         if upper and self.pierce(current, [], upper) is None:
             raise NavigationError("no blend of the Pareto plans meets these clamps: " +
                                   ", ".join(f"{self.names[i]} <= {self.ideal[i] + c * self.span[i]:.3g} Gy" for i, c in upper.items()))
+        return upper, clamps_gy
+
+    # -- a request --------------------------------------------------------------------------------------------------
+    def navigate(self, req: NavigateRequest, start: np.ndarray) -> Tuple[np.ndarray, Dict[str, float], List[str]]:
+        """The blend a request asks for, the clamps it held (Gy, by name) and notes."""
+        n = len(self.names)
+        current = start @ self.Fn
+        notes: List[str] = []
+        upper, clamps_gy = self.caps(req.clamps, req.locks, start)
         if req.move:
             (key, gy), = req.move.items()
             k = self.index(key)
@@ -155,9 +169,100 @@ class Navigator:
         lam = np.where(lam < 1e-9, 0.0, lam)
         return lam / lam.sum(), clamps_gy, notes
 
+    # -- automatic navigation (R11.4) -------------------------------------------------------------------------------
+    def _goals(self, req: AutoNavigateRequest) -> Tuple[list, List[str]]:
+        """The goals the navigation voxels can grade: (goal, metric, voxel doses of every plan, scale, EQD2 α/β)."""
+        from .radiobiology import default_alpha_beta
+
+        spec = req.goals
+        template = load_template(spec.template_id) if spec.template_id else None
+        goals = (list(template.goals) if template else []) + list(spec.goals)
+        aliases = dict(template.aliases) if template else {}
+        basis = spec.dose_basis or (template.dose_basis if template else "physical")
+        if basis == "EQD2" and req.fractions is None:
+            raise NavigationError("EQD2 goals need the plan's fractions")
+        prepared, missing = [], []
+        for g in goals:
+            name = resolve_structure(g.structure, list(self.masks), aliases, spec.structure_aliases)
+            if name is None:
+                missing.append(g.structure)
+                continue
+            metric = parse_metric(g.metric)
+            if metric.needs_prescription and not req.prescription_gy:
+                raise NavigationError(f"{g.metric} needs prescription_gy")
+            ab = (spec.alpha_beta_gy.get(name, spec.alpha_beta_gy.get(g.structure, default_alpha_beta(name)))
+                  if basis == "EQD2" else None)
+            prepared.append((g, metric, self.doses[:, self.masks[name]].astype(np.float64), abs(g.value) if abs(g.value) > 1e-9 else 1.0, ab))
+        return prepared, sorted(set(missing))
+
+    def _shortfall(self, item, lam: np.ndarray, rx: Optional[float], fractions: Optional[int]) -> float:
+        from .radiobiology import eqd2
+
+        g, metric, D, scale, ab = item
+        d = lam @ D
+        if ab is not None:
+            d = eqd2(d, fractions, ab)
+        v = evaluate_metric(metric, d, self.result.voxel_cc or 0.0, rx)
+        return max(0.0, v - g.value) / scale if g.op in ("<=", "<") else max(0.0, g.value - v) / scale
+
+    def auto_navigate(self, req: AutoNavigateRequest, start: np.ndarray) -> Tuple[np.ndarray, Dict[str, float], List[str], List[AutoLevel]]:
+        upper, clamps_gy = self.caps(req.clamps, req.locks, start)
+        goals, missing = self._goals(req)
+        notes = [f"goals on {', '.join(missing)} are not used: not navigation structures (add them to the run's "
+                 f"navigation_structures)"] if missing else []
+        k = len(self.F)
+        lam_of = lambda mu: mu / mu.sum() if mu.sum() > 1e-12 else np.full(k, 1.0 / k)          # noqa: E731
+        short = lambda item, mu: self._shortfall(item, lam_of(mu), req.prescription_gy, req.fractions)  # noqa: E731
+        clamp_cons = [{"type": "ineq", "fun": (lambda mu, i=i, c=c: c - lam_of(mu) @ self.Fn[:, i])} for i, c in upper.items()]
+        lam0 = start
+        if any(lam0 @ self.Fn[:, i] > c + 1e-9 for i, c in upper.items()):
+            lam0 = self.pierce(start @ self.Fn, list(range(len(self.names))), upper)
+            notes.append("the starting state broke a clamp: the search started from the nearest blend that holds them")
+        mu = np.asarray(lam0, dtype=np.float64).copy()
+        held: list = []
+        levels: List[AutoLevel] = []
+
+        def feasible(m: np.ndarray, cons) -> bool:
+            return all(c["fun"](m) >= -1e-7 for c in cons)
+
+        def search(fun, cons, m0: np.ndarray) -> np.ndarray:
+            best, best_v = m0, fun(m0)
+            bounds = [(0.0, 1.0)] * k
+            for method, opts in (("SLSQP", {"maxiter": 200, "ftol": 1e-10, "eps": 1e-4}), ("COBYLA", {"maxiter": 600, "rhobeg": 0.05})):
+                if best_v <= 1e-12:
+                    break
+                try:
+                    r = minimize(fun, best, method=method, bounds=bounds, constraints=cons, options=opts)
+                except Exception:                                    # a solver refusing the problem leaves the best so far
+                    continue
+                cand = np.clip(r.x, 0.0, 1.0)
+                if cand.sum() > 1e-12 and feasible(cand, cons) and fun(cand) < best_v - 1e-12:
+                    best, best_v = cand, fun(cand)
+            return best
+
+        for p in sorted({int(item[0].priority) for item in goals}):
+            level = [item for item in goals if int(item[0].priority) == p]
+            fun = lambda m, level=level: sum(short(item, m) for item in level)          # noqa: E731
+            before = fun(mu)
+            cons = clamp_cons + [{"type": "ineq", "fun": (lambda m, item=item, cap=cap: cap - short(item, m))} for item, cap in held]
+            mu = search(fun, cons, mu)
+            after = fun(mu)
+            levels.append(AutoLevel(priority=p, goals=len(level), passed=sum(short(item, mu) <= 1e-9 for item in level),
+                                    shortfall_before=round(before, 6), shortfall=round(after, 6)))
+            # a goal the level met stays met; one it could not meet may slip by a fraction of its value for the levels below
+            held += [(item, 0.0 if short(item, mu) <= 1e-9 else short(item, mu) + req.slip) for item in level]
+        # last: the trade-offs as low as the goals allow
+        cons = clamp_cons + [{"type": "ineq", "fun": (lambda m, item=item, cap=cap: cap - short(item, m))} for item, cap in held]
+        total = lambda m: float(lam_of(m) @ self.Fn.sum(axis=1))                            # noqa: E731
+        mu = search(total, cons, mu)
+        lam = lam_of(mu)
+        lam = np.where(lam < 1e-9, 0.0, lam)
+        return lam / lam.sum(), clamps_gy, notes, levels
+
     # -- what a state reports ---------------------------------------------------------------------------------------
-    def state(self, lam: np.ndarray, req: Optional[NavigateRequest], state_id: str, clamps: Dict[str, float], notes: List[str],
-              from_state: Optional[str]) -> NavigationState:
+    def state(self, lam: np.ndarray, req, state_id: str, clamps: Dict[str, float], notes: List[str],
+              from_state: Optional[str], levels: Optional[List[AutoLevel]] = None) -> NavigationState:
+        """The state of a blend: exact values, DVHs, and the request's goals (a navigation or an automatic one)."""
         d = self.dose(lam)
         exact = self.exact(d)
         bound = lam @ self.F
@@ -180,7 +285,8 @@ class Navigator:
         return NavigationState(
             state_id=state_id, mco_id=self.result.mco_id, name=req.name if req is not None else "balance plan", from_state=from_state,
             blend=[round(float(v), 9) for v in lam], values_gy=[round(float(v), 6) for v in exact], bound_gy=[round(float(v), 6) for v in bound],
-            normalized=[round(float(v), 6) for v in (exact - self.ideal) / self.span], clamps=clamps, notes=notes, goals=goals, dvh=dvh,
+            normalized=[round(float(v), 6) for v in (exact - self.ideal) / self.span], clamps=clamps, notes=notes, goals=goals,
+            levels=levels or [], dvh=dvh,
             created_at=datetime.now(timezone.utc))
 
 
@@ -237,6 +343,18 @@ class NavigationService:
             raise NavigationError(f"no state {req.from_state!r} in Pareto set {mco_id}")
         lam, clamps, notes = nav.navigate(req, np.asarray(start.blend, dtype=np.float64))
         state = nav.state(lam, req, str(uuid.uuid4()), clamps, notes, start.state_id)
+        if req.save:
+            self._save(state)
+        return state
+
+
+    def auto_navigate(self, mco_id: str, req: AutoNavigateRequest) -> NavigationState:
+        nav = self.navigator(mco_id)
+        start = self.get_state(mco_id, req.from_state)
+        if start is None:
+            raise NavigationError(f"no state {req.from_state!r} in Pareto set {mco_id}")
+        lam, clamps, notes, levels = nav.auto_navigate(req, np.asarray(start.blend, dtype=np.float64))
+        state = nav.state(lam, req, str(uuid.uuid4()), clamps, notes, start.state_id, levels)
         if req.save:
             self._save(state)
         return state

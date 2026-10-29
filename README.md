@@ -543,6 +543,7 @@ Navigation blends the stored plans, so a slider move needs no dose calculation; 
 | `GET /api/v1/mco/jobs/{job_id}` | Poll a run. |
 | `GET /api/v1/mco/{mco_id}` | The set: each plan's weights and trade-off values in Gy, ideal and nadir, the error bound per plan. |
 | `POST /api/v1/mco/{mco_id}/navigate` | A slider `move`, a `reference` point, `clamps` and `locks` from a state (the balance plan by default): the blend, exact trade-off values, DVHs and graded goals. |
+| `POST /api/v1/mco/{mco_id}/auto-navigate` | The blend that best meets a goal set (template or inline), priority 1 first, then 2, then 3; met goals stay met. |
 | `GET /api/v1/mco/{mco_id}/states` | The stored navigation states, the balance plan first; `/states/{state_id}` one of them. |
 
 ```python
@@ -554,6 +555,8 @@ ps.error_bound, ps.table()
 st = ps.navigate(move={"MeanDose(Heart)": 8.0}, locks=["EUDMax(SpinalCord)"], goals="rtog-0617", prescription_gy=60)
 st.values_gy, st.goals.all_priority1_passed
 ps.navigate(from_state=st, clamps={"MeanDose(Lungs-PTV)": 12.0}, reference={"UniformRMS(PTV)": 1.5})
+auto = ps.auto_navigate("rtog-0617", prescription_gy=60, fractions=30)
+[(lv.priority, lv.passed, lv.goals) for lv in auto.levels]
 ```
 
 ## BAO Service (`/api/v1/bao`)

@@ -819,3 +819,29 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   value and is paid for elsewhere, locks and clamps hold, a move beyond reach is limited and said so, better slider
   values give better values, a reference point, the refusals, goals and DVHs from the blended dose; on the stub
   patient through the SDK, routes and stored states (onward from a state, unsaved states, 404 and 422).
+
+### R11.4 Automatic navigation and projection
+
+- **Automatic navigation** (`Navigator.auto_navigate`, D6): lexicographic over the blend weights against a goal set's
+  priorities (a template, inline goals, or both; physical or EQD2). Each goal's shortfall is its miss over its value;
+  level 1's summed shortfall is minimized, then level 2's with level 1 held, then level 3's, then the trade-offs' sum
+  with every goal held. The blend weights are parametrized as `mu / sum(mu)` with `mu` in [0, 1], so the solvers need
+  no equality constraint; each level runs SLSQP (finite differences) and then COBYLA while a shortfall remains,
+  keeping the best feasible point. Clamps and locks hold throughout. Goals on structures outside the navigation voxels
+  are left out and named. The state reports each level's goals, passes and shortfall before and after.
+- **Met goals do not slip.** As designed, every held goal could slip by 1 % of its value. The hand-solved toy problem
+  showed the final step trading a met priority-1 goal (P ≥ 8 Gy became 7.92 Gy) for the trade-offs' sum: a met goal
+  is now held at zero shortfall, and only a goal a level could not meet may slip. The design report says so.
+- **Projection** (`MCOService.project`, `project_blend`): the sum of the normalized trade-offs minimized with each
+  capped at its navigated value (`ObjectiveCap`, a trade-off as a hard constraint with a 0.01 Gy tolerance) and the
+  run's hard constraints, from the blended weights (which meet every cap). The result is at least as good in every
+  trade-off; when the solve cannot hold the caps the navigated plan is kept and said so. A variant of Bokrantz &
+  Miettinen's even projection. It is an optimization on the full dose matrix, so it runs inside R11.5's deliverable
+  job rather than as a navigation request. An MCO run now stores its request (`mco/{id}/request.json`) for it.
+- **Interfaces:** `POST /api/v1/mco/{id}/auto-navigate` (`AutoNavigateRequest` → `NavigationState` with `levels`);
+  SDK `ParetoSet.auto_navigate(goals, clamps=, locks=, from_state=, ...)`.
+- **Tests** (`tests/test_r11_auto.py`): a three-plan, three-voxel problem solved by hand (each level's result, the
+  order deciding which organ pays, a lower level never undoing a higher one, a missed goal using its slip), clamps,
+  missing structures, refusals (EQD2 without fractions, a percentage goal without a prescription); the projection on a
+  synthetic dose-matrix problem (no trade-off worse, their sum better) and through the service (the hard constraint
+  held); the route and SDK on the stub patient.

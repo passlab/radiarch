@@ -272,14 +272,18 @@ against, as in RayStation. A request takes milliseconds to a fraction of a secon
 **D6. Automatic navigation by goal priority, then projection.**
 - **What it takes.** A goal template's priorities: 1 must, 2 should, 3 would like (R5).
 - **What it does.** It navigates lexicographically over `λ`. At each priority level it minimizes that level's summed
-  normalized goal violation, evaluated exactly on the blended dose. Every higher level is held to its achieved
-  violation plus a slip of 1 % of the goal's value. After the last level it minimizes the normalized objectives with
-  every level held.
+  normalized goal violation, evaluated exactly on the blended dose. Every higher level is held: a goal it met stays
+  met, and a goal it missed may slip by 1 % of its value. After the last level it minimizes the normalized objectives
+  with every level held. (As first drafted every goal could slip; the toy problem in the tests showed a met
+  priority-1 goal lost to the slip, so met goals do not slip.)
 - **How it solves.** DVH goals are not linear in `λ`, so each level is a small constrained problem in at most a few
-  dozen variables, solved by `scipy.optimize` (SLSQP from the LP solution, COBYLA as the fallback). Each evaluation
-  is one weighted sum over the navigation voxels.
-- **Projection.** It is optional and on by default. One more optimization projects the navigated plan onto the
-  Pareto set (Bokrantz & Miettinen): `min t` subject to `f_i ≤ f_i(nav) + t` and the constraints.
+  dozen variables, solved by `scipy.optimize` (SLSQP from the starting state, then COBYLA while a shortfall remains).
+  Each evaluation is one weighted sum of the plans' doses on the goal's structure.
+- **Projection.** It is optional and on by default, and it runs as the first step of making the deliverable plan
+  (D7), because it is an optimization on the full dose matrix rather than a navigation step. It moves the navigated
+  plan onto the Pareto set by minimizing the sum of the normalized trade-offs with none of them above its navigated
+  value, under the hard constraints. This is a variant of Bokrantz & Miettinen's projection (`min t` subject to
+  `f_i ≤ f_i(nav) + t`), which improves the objectives evenly; both give a plan at least as good in every objective.
 - **Provenance.** This is radiarch's own method, built from published parts. RayStation's algorithm for the same task
   is not published, and the record says so.
 

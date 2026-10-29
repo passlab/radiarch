@@ -6,6 +6,7 @@ Endpoints
 ``GET  /api/v1/mco/jobs/{job_id}``  — a run's progress.
 ``GET  /api/v1/mco/{mco_id}``       — a Pareto set: its plans, objective values and error bound.
 ``POST /api/v1/mco/{mco_id}/navigate``            — a slider move, a reference point or clamps: a navigation state.
+``POST /api/v1/mco/{mco_id}/auto-navigate``       — the blend that best meets a goal set, priority by priority.
 ``GET  /api/v1/mco/{mco_id}/states``              — the stored states, the balance plan first.
 ``GET  /api/v1/mco/{mco_id}/states/{state_id}``   — one state.
 """
@@ -19,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
 from ...core.store import store
-from ...models.mco import MCOJobStatus, MCORunRequest, MCOResult, NavigateRequest, NavigationState
+from ...models.mco import AutoNavigateRequest, MCOJobStatus, MCORunRequest, MCOResult, NavigateRequest, NavigationState
 from ...services.audit import emit, make_event
 from ...services.mco import MCOService
 from ...services.navigation import NavigationError, NavigationService
@@ -97,6 +98,19 @@ async def navigate(mco_id: str, request: NavigateRequest) -> NavigationState:
     except NavigationError as exc:
         raise HTTPException(status_code=404 if "no state" in str(exc) else 422, detail=str(exc)) from exc
     except ValueError as exc:                     # a goal template or metric the grader refuses
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/{mco_id}/auto-navigate", response_model=NavigationState, summary="Automatic navigation by goal priority (R11.4).",
+             responses={404: {"description": "Unknown Pareto set or state."},
+                        422: {"description": "An unknown objective or template, a goal needing a prescription, or clamps no blend meets."}})
+async def auto_navigate(mco_id: str, request: AutoNavigateRequest) -> NavigationState:
+    _known(mco_id)
+    try:
+        return _navigation().auto_navigate(mco_id, request)
+    except NavigationError as exc:
+        raise HTTPException(status_code=404 if "no state" in str(exc) else 422, detail=str(exc)) from exc
+    except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 

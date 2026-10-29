@@ -31,7 +31,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
 | 16 | R13 Viewer integration | done; 3D Slicer check by the project lead waiting | fc7473d..26787db | 0018 |
-| 17 | R11 Multi-criteria optimization | in progress: R11.1–R11.3 done | 268b0f0.. | (0019) |
+| 17 | R11 Multi-criteria optimization | in progress: R11.1–R11.4 done | 268b0f0.. | (0019) |
 
 ## Before the roadmap (done by 2026-10-20)
 
@@ -257,8 +257,9 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
 - [x] R11.3 Navigation (D5): the piercing LP over the blend weights with clamps and locks; exact values, DVH and goals
   on the blended dose; stored, named states with the balance plan as reference; `POST /mco/{id}/navigate`,
   `GET /mco/{id}/states` (about 0.5 ew)
-- [ ] R11.4 Automatic navigation and projection (D6): lexicographic over the blend weights by a goal template's
-  priorities with slip; projection onto the Pareto set; `POST /mco/{id}/auto-navigate` (about 0.5 ew)
+- [x] R11.4 Automatic navigation and projection (D6): lexicographic over the blend weights by a goal template's
+  priorities (met goals stay met, missed ones may slip); projection onto the Pareto set as a service step, run by
+  R11.5's deliverable job; `POST /mco/{id}/auto-navigate` (about 0.5 ew)
 - [ ] R11.5 The deliverable plan (D7): a `ReferenceDose` mimicking objective; static fields sequenced (R4), arcs (R8)
   and proton spots with their minimum meterset, each re-optimized against the navigated dose; normalisation (R10);
   the deviation table with its flags; `POST /mco/{id}/deliverable` (about 0.75 ew)

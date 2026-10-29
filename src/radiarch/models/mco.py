@@ -164,6 +164,34 @@ class NavigateRequest(BaseModel):
         return self
 
 
+class AutoNavigateRequest(BaseModel):
+    """``POST /mco/{mco_id}/auto-navigate``: the blend that best meets a goal set, priority by priority (D6).
+
+    Level 1 goals (must) first: the blend that minimizes their summed shortfall (each goal's miss over its value);
+    then level 2 with every level-1 goal held: a met goal stays met, a missed one within ``slip`` (a fraction of its
+    value) of what level 1 reached; then level 3; then the trade-offs' sum with every goal held. Clamps and locks hold
+    throughout."""
+
+    goals: GoalSetSpec
+    prescription_gy: Optional[float] = Field(default=None, gt=0.0)
+    fractions: Optional[int] = Field(default=None, ge=1, le=100)
+    from_state: str = Field(default="balance", max_length=64, description="Where the search starts, and the reference for locks.")
+    clamps: Dict[str, float] = Field(default_factory=dict, max_length=MAX_TRADEOFFS)
+    locks: List[str] = Field(default_factory=list, max_length=MAX_TRADEOFFS)
+    slip: float = Field(default=0.01, ge=0.0, le=0.5)
+    dvh_bins: int = Field(default=60, ge=0, le=500)
+    name: Optional[str] = Field(default=None, max_length=128)
+    save: bool = True
+
+
+class AutoLevel(BaseModel):
+    priority: int
+    goals: int
+    passed: int
+    shortfall_before: float = Field(..., description="Summed relative shortfall of the level's goals at the start.")
+    shortfall: float = Field(..., description="The same after the level's search.")
+
+
 class DVHCurve(BaseModel):
     structure: str
     dose_gy: List[float]
@@ -184,6 +212,7 @@ class NavigationState(ResearchArtifact):
     clamps: Dict[str, float] = Field(default_factory=dict, description="The upper bounds (Gy) this state holds, by objective name.")
     notes: List[str] = Field(default_factory=list)
     goals: Optional[GoalsReport] = None
+    levels: List[AutoLevel] = Field(default_factory=list, description="Automatic navigation: each priority level's search.")
     dvh: List[DVHCurve] = Field(default_factory=list)
     created_at: Optional[datetime] = None
 
@@ -202,4 +231,4 @@ class MCOJobStatus(BaseModel):
 
 
 __all__ = ["MCO_VERSION", "MAX_TRADEOFFS", "MCORunRequest", "ParetoPlan", "ErrorPoint", "MCOStage", "MCOResult", "NavigateRequest",
-           "DVHCurve", "NavigationState", "MCOJobStatus"]
+           "AutoNavigateRequest", "AutoLevel", "DVHCurve", "NavigationState", "MCOJobStatus"]
