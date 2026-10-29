@@ -50,7 +50,8 @@ class _Object:
 
     def lineage(self) -> Dict[str, Any]:
         kind = {"Geometry": "geometry", "BeamModel": "beam_model", "Dose": "dose", "Optimization": "optimization",
-                "Sequence": "sequence", "Evaluation": "evaluation", "Export": "rt_export", "Registration": "registration"}[type(self).__name__]
+                "Sequence": "sequence", "Evaluation": "evaluation", "Export": "rt_export", "Registration": "registration",
+                "ParetoSet": "mco"}[type(self).__name__]
         return self.client.get(f"/lineage/{kind}/{self.id}")
 
 
@@ -135,6 +136,19 @@ class BeamModel(_Object):
         req = OptimizationRunRequest(geometry_id=self.result.geometry_id, beam_model_id=self.id, dose_engine=_engine(engine), objectives=objs,
                                      solver=SolverConfig(method=method, max_iterations=int(max_iterations)), init_weights_uri=init_weights_uri, **extra)
         return Optimization(self.client, self.client.submit("optimize", "/optimize/run", req, OptimizationResult))
+
+    def mco(self, tradeoffs: Iterable[Any], *, hard_constraints: Iterable[Any] = (), engine: Union[str, EngineSpec, dict, None] = "pb",
+            max_iterations: int = 300, **request) -> "ParetoSet":
+        """The Pareto set of this beam model over ``tradeoffs`` (``ops.mean_dose``, ``ops.uniform_rms``, ...) under
+        ``hard_constraints`` (``ops.hard``): anchors, a balance plan and sandwich plans to an error bound (R11)."""
+        from ..models.mco import MCORunRequest, MCOResult
+        from ..models.optimization import HardConstraint, ObjectiveSpec, SolverConfig
+
+        req = MCORunRequest(geometry_id=self.result.geometry_id, beam_model_id=self.id, dose_engine=_engine(engine),
+                            tradeoffs=[o if isinstance(o, ObjectiveSpec) else ObjectiveSpec(**o) for o in tradeoffs],
+                            hard_constraints=[c if isinstance(c, HardConstraint) else HardConstraint(**c) for c in hard_constraints],
+                            solver=SolverConfig(method="L-BFGS-B", max_iterations=int(max_iterations)), **request)
+        return ParetoSet(self.client, self.client.submit("mco", "/mco/run", req, MCOResult))
 
     def dose(self, weights: Seq[float], *, engine: Union[str, EngineSpec, dict, None] = "pb", geometry: Union[Geometry, str, None] = None) -> "Dose":
         """The dose of explicit element weights (on this beam model's geometry, or another in the same frame)."""
@@ -280,6 +294,17 @@ class Registration(_Object):
 
         dose_id = dose.id if isinstance(dose, Dose) else dose
         return Dose(self.client, self.client.post(f"/registrations/{self.id}/map-dose", {"dose_id": dose_id}, DoseResult))
+
+
+class ParetoSet(_Object):
+    """Pareto-optimal plans of a beam model over convex trade-offs (R11): their values, the error bound."""
+
+    id_field = "mco_id"
+
+    def table(self) -> List[Dict[str, Any]]:
+        """One row per plan: its kind and each trade-off's value in Gy."""
+        names = [f"{o.type}({o.structure_name})" for o in self.result.tradeoffs]
+        return [{"plan": p.index, "kind": p.kind, **dict(zip(names, p.values_gy))} for p in self.result.plans]
 
 
 class ProtocolRun(_Object):

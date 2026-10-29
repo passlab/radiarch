@@ -752,3 +752,38 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   doses (and the DVH surrogate's counterexample); spec ranges; the augmented Lagrangian against SciPy's SLSQP with the
   constraints written out (organ maximum; organ mean and gEUD; target minimum); an impossible set; the service on the
   analytic engine (an organ limit held and reported, a redundant objective noted, an infeasible set refused).
+
+### R11.2 The Pareto set
+
+- **Algorithm** (`services/pareto.py`, D3), independent of doses: it asks a `solve(weights, warm)` for weighted-sum
+  plans. N anchor plans (weight 1 on one trade-off, 10⁻³ on the others) fix the ideal and nadir; a balance plan has
+  equal normalized weights; then sandwich plans. The inner set is the plans' hull plus everything worse
+  (`conv(P) + R^n_+`, which is what Rennen's dummy points stand for); the outer set is the intersection of the
+  halfspaces the plans' weights support. Its vertices come from Qhull (`HalfspaceIntersection`, a Chebyshev centre
+  from HiGHS as the interior point; a box only bounds the set), and each vertex's distance to the inner set is one
+  HiGHS linear program. The largest distance is the error bound (Bokrantz & Forsgren 2013); that program's duals at
+  the worst vertex are the next plan's weights, floored at 10⁻³ so the plan is Pareto optimal, and the plan
+  warm-starts from the plan the program blended most. It stops at the tolerance (default 0.05 of the normalized
+  range), at the budget (3N + 1 by default, at most 4N + 1), or when the next weights repeat a plan's.
+- **Service** (`services/mco.py`, D4): `MCOService.run` assembles the problem once through `OptimizationService`
+  (the cached dose matrix, the trade-offs at weight 1), runs the feasibility run when there are hard constraints, and
+  solves each weighted sum with the request's solver, under the hard constraints by the augmented Lagrangian of
+  R11.1. It stores every plan's weights, and every plan's dose on the navigation voxels (the structures the
+  trade-offs, constraints and `navigation_structures` name) with a mask per structure: `mco/{id}/weights.npy`,
+  `navigation_index.npy`, `navigation_dose.npy`, `navigation_masks.npz`, `meta.json`. A trade-off the anchors do not
+  spread is noted ("trades nothing on these beams").
+- **Convergence at a bound.** An organ's anchor is often zero fluence, where L-BFGS-B reports a failed line search;
+  a plan counts as converged when the solver says so or its projected gradient vanishes. For that, the trade-offs
+  now return the one-sided gradient at their level (`MeanDose` and `EUDMax` at 0 Gy with a 0 Gy level give the
+  mean's gradient, a subgradient), not zero, so adding dose to an organ at its level still shows a cost.
+- **Interfaces:** `MCORunRequest` and `MCOResult` (`models/mco.py`); `POST /api/v1/mco/run` (200 cached or 202 job),
+  `GET /mco/jobs/{id}`, `GET /mco/{id}`; the Celery task `radiarch.mco.run` on the optimize queue; jobs in both
+  stores (`mco_jobs` table); lineage kind `mco` (parents: geometry, beam model); SDK `BeamModel.mco(...)` returning
+  `ParetoSet` (`.table()`), and `ops.mean_dose`, `eud_max`, `eud_min`, `rms_over`, `rms_under`, `uniform_rms`,
+  `hard`.
+- **Tests** (`tests/test_r11_pareto.py`): a two-objective front known in closed form (every plan on it, the bound
+  covering the true error); three- and four-objective quadratic fronts (the bound never grows and covers the error
+  sampled with random weights); supporting weights and no dominated plan; the anchors fixing ideal and nadir; the
+  request's limits and cache key; the service on the analytic engine (anchors, balance, the stored doses reproducing
+  each plan's values, hard constraints holding in every plan, an infeasible set, a trade-off that trades nothing);
+  the SDK, route, job, cache and lineage on the stub patient.

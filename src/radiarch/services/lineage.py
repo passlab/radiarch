@@ -16,6 +16,7 @@ Parents per kind:
 * sequence: the optimization and the open-field beam model it sequenced;
 * evaluation: its dose (when it was a stored dose) and geometry;
 * rt_export: the beam model, the dose and the geometry it wrote;
+* mco: the geometry and beam model of its Pareto set (R11);
 * plan (legacy workflows): the geometry, beam model and dose in its summary.
 """
 
@@ -111,6 +112,7 @@ class LineageService:
         from .dose import DoseService
         from .evaluation import EvaluationService
         from .geometry import GeometryService
+        from .mco import MCOService
         from .optimization import OptimizationService
         from .registration import RegistrationStore
         from .rt_export import RTExportService
@@ -138,6 +140,7 @@ class LineageService:
             "rt_export": (RTExportService().get, rt_export_ids),
             "plan": (plan_store.get_plan, plan_ids),
             "registration": (registrations.get_by_id, registrations.list_ids),
+            "mco": (MCOService().store.get_by_id, MCOService().store.list_ids),
         }
 
     def get(self, ref: VersionRef) -> Optional[Any]:
@@ -292,6 +295,12 @@ class LineageService:
             summary = {"deformable": _enum_value(g("deformable")), "jacobian_min": getattr(getattr(q, "jacobian", None), "min", None),
                        "landmarks_after_mm": [round(l.after_mm, 2) for l in getattr(q, "landmarks", [])],
                        "max_displacement_mm": getattr(q, "max_displacement_mm", None)}
+        elif ref.kind == "mco":
+            add("geometry", g("geometry_id"))
+            add("beam_model", g("beam_model_id"))
+            attr.engine_name, attr.engine_version = g("engine_name"), g("engine_version")
+            summary = {"tradeoffs": [f"{o.type}({o.structure_name})" for o in g("tradeoffs") or []], "plans": len(g("plans") or []),
+                       "error_bound": g("error_bound"), "converged": g("converged")}
         elif ref.kind == "plan":
             qa = dict(g("qa_summary") or {})
             add("geometry", qa.get("geometryId"))

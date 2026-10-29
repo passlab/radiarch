@@ -62,5 +62,45 @@ def dvh_min(structure: str, dose_gy: float, volume_fraction: float, weight: floa
     return ObjectiveSpec(type="DVHMin", structure_name=structure, dose_gy=dose_gy, volume_fraction=volume_fraction, weight=weight)
 
 
+# trade-offs for multi-criteria planning (R11): convex, in Gy, zero when met; the weight is the MCO run's to set
+
+def mean_dose(structure: str, level_gy: float = 0.0) -> ObjectiveSpec:
+    """The structure's mean dose above ``level_gy`` (0: as low as possible)."""
+    return ObjectiveSpec(type="MeanDose", structure_name=structure, dose_gy=level_gy, weight=1.0)
+
+
+def eud_max(structure: str, a: float, level_gy: float = 0.0) -> ObjectiveSpec:
+    """The gEUD (exponent ``a >= 1``) above ``level_gy``: an organ."""
+    return ObjectiveSpec(type="EUDMax", structure_name=structure, dose_gy=level_gy, eud_a=a, weight=1.0)
+
+
+def eud_min(structure: str, level_gy: float, a: float = -10.0) -> ObjectiveSpec:
+    """The gEUD (exponent ``a <= 1``) below ``level_gy``: a target's cold spots."""
+    return ObjectiveSpec(type="EUDMin", structure_name=structure, dose_gy=level_gy, eud_a=a, weight=1.0)
+
+
+def rms_over(structure: str, level_gy: float) -> ObjectiveSpec:
+    """Root mean square of the dose above ``level_gy``."""
+    return ObjectiveSpec(type="RMSOver", structure_name=structure, dose_gy=level_gy, weight=1.0)
+
+
+def rms_under(structure: str, level_gy: float) -> ObjectiveSpec:
+    """Root mean square of the dose below ``level_gy``."""
+    return ObjectiveSpec(type="RMSUnder", structure_name=structure, dose_gy=level_gy, weight=1.0)
+
+
+def uniform_rms(structure: str, dose_gy: float) -> ObjectiveSpec:
+    """Root mean square deviation from ``dose_gy``: a target's homogeneity."""
+    return ObjectiveSpec(type="UniformRMS", structure_name=structure, dose_gy=dose_gy, weight=1.0)
+
+
+def hard(structure: str, metric: str, op: str, value_gy: float, *, eud_a: Optional[float] = None, tolerance_gy: float = 0.1):
+    """A hard constraint (``Dmax <=``, ``Dmin >=``, ``Dmean <=``, ``gEUD`` with ``eud_a``)."""
+    from ..models.optimization import HardConstraint
+
+    return HardConstraint(structure_name=structure, metric=metric, op=op, value_gy=value_gy, eud_a=eud_a, tolerance_gy=tolerance_gy)
+
+
 __all__ = ["expand", "erode", "ring", "union", "intersection", "subtract", "override",
-           "uniform", "minimum", "maximum", "dvh_max", "dvh_min"]
+           "uniform", "minimum", "maximum", "dvh_max", "dvh_min",
+           "mean_dose", "eud_max", "eud_min", "rms_over", "rms_under", "uniform_rms", "hard"]

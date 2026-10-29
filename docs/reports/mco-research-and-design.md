@@ -239,16 +239,17 @@ plans normalize the objectives to [0, 1] for the algorithms. Sliders and reports
    Pareto optimal and not only weakly so.
 2. **Balance plan.** One plan with equal normalized weights.
 3. **Sandwich plans.** Auxiliary plans by the sandwich algorithm:
-   - Rennen's inner set with dummy points;
+   - the inner set `conv(P) + R^n_+`, the plans' hull with everything worse than it (the role of Rennen's dummy
+     points);
    - Bokrantz & Forsgren's vertex enumeration of the outer set (Qhull through `scipy.spatial`, one HiGHS linear program
      per vertex through `scipy.optimize.linprog`);
    - the worst vertex's duals give the next weights.
 
 Generation stops when the error bound falls below a tolerance (default 5 % of the normalized range) or at a plan
-budget (default 3N + 1, at most 4N). Each plan warm-starts from the nearest stored plan, and the dose matrices are
+budget (default 3N + 1, at most 4N + 1). Each plan warm-starts from the nearest stored plan, and the dose matrices are
 computed once and cached. Solver tolerances are tight and fixed in the run's key, and the run is deterministic. The
-error bound is recorded after every plan, so the record shows how the approximation converged. More than eight
-objectives fall back to RayStation's rule: pairs of the most anti-correlated objectives.
+error bound is recorded after every plan, so the record shows how the approximation converged. A run takes at most
+eight trade-offs; RayStation's rule for more (pairs of the most anti-correlated objectives) is not built.
 
 **D4. Storage keeps navigation fast.**
 - **What is stored.** An MCO run stores each Pareto plan's weights, objective vector and dose, the last on the

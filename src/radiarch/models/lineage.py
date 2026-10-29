@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from .common import RESEARCH_USE_ONLY
 
-KINDS = ("geometry", "beam_model", "influence", "dose", "optimization", "sequence", "bao", "evaluation", "rt_export", "plan", "registration")
+KINDS = ("geometry", "beam_model", "influence", "dose", "optimization", "sequence", "bao", "evaluation", "rt_export", "plan", "registration", "mco")
 
 
 class VersionState(str, Enum):

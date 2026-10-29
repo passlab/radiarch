@@ -31,6 +31,7 @@ celery_app = Celery(
         # Service 6 — async plan evaluation (DVH / indices / gamma).
         "radiarch.tasks.evaluation_tasks",
         "radiarch.tasks.autoplan_tasks",
+        "radiarch.tasks.mco_tasks",
         "radiarch.tasks.cleanup_tasks",
     ],
 )
@@ -45,6 +46,7 @@ celery_app.conf.task_routes = {
     "radiarch.bao.*": {"queue": "optimize"},
     "radiarch.evaluate.*": {"queue": "evaluate"},
     "radiarch.autoplan.*": {"queue": "optimize"},
+    "radiarch.mco.*": {"queue": "optimize"},
     "radiarch.cleanup.*": {"queue": "maintenance"},
 }
 
@@ -76,6 +78,12 @@ celery_app.conf.task_annotations = {
     },
     "radiarch.autoplan.run": {
         # A protocol run is several optimizations, sequencing or arcs, and an evaluation: the beam-angle budget.
+        "soft_time_limit": settings.bao_soft_time_limit_s,
+        "time_limit": settings.bao_hard_time_limit_s,
+        "rate_limit": settings.bao_rate_limit,
+    },
+    "radiarch.mco.run": {
+        # A Pareto set is up to 4 N + 1 optimizations on one dose matrix: the beam-angle budget.
         "soft_time_limit": settings.bao_soft_time_limit_s,
         "time_limit": settings.bao_hard_time_limit_s,
         "rate_limit": settings.bao_rate_limit,

@@ -526,6 +526,29 @@ python demo/show_optimization.py --solver Adam --max-iters 500 --show
 
 See `docs/PRODUCTION.md` → "Optimization Service" for worker sizing and settings.
 
+## Multi-criteria optimization (`/api/v1/mco`, R11, in progress)
+
+A Pareto set: plans where no trade-off can improve without another getting worse, computed up front so a planner (or
+a rule) can choose between them. Anchor plans (one per trade-off), a balance plan, then plans chosen by the sandwich
+algorithm until its bound on the distance from any Pareto plan to the computed ones falls to `error_tolerance`
+(default 0.05 of each trade-off's range) or the `plan_budget` (default 3N + 1) is spent. Trade-offs are the convex
+objectives above (two to eight); hard constraints hold in every plan. Navigation between the plans and making a plan
+deliverable come next (R11.3–R11.5). Design: `docs/reports/mco-research-and-design.md`.
+
+| Method & path | Purpose |
+|---|---|
+| `POST /api/v1/mco/run` | The Pareto set of a beam model (200 cached / 202 job / 422). |
+| `GET /api/v1/mco/jobs/{job_id}` | Poll a run. |
+| `GET /api/v1/mco/{mco_id}` | The set: each plan's weights and trade-off values in Gy, ideal and nadir, the error bound per plan. |
+
+```python
+from radiarch.sdk import Radiarch, ops
+ps = beam_model.mco([ops.uniform_rms("PTV", 60), ops.mean_dose("Lungs-PTV"), ops.mean_dose("Heart"),
+                     ops.eud_max("SpinalCord", 12)],
+                    hard_constraints=[ops.hard("SpinalCord", "Dmax", "<=", 45), ops.hard("PTV", "Dmin", ">=", 54)])
+ps.error_bound, ps.table()
+```
+
 ## BAO Service (`/api/v1/bao`)
 
 Service 5 (Beam Angle Optimization) selects which beam directions a plan should

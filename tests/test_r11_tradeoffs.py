@@ -55,6 +55,13 @@ class TestTradeoffValues:
         assert RMSUnder("S", 10.0).value(d, m) == pytest.approx(np.sqrt(4.0 / 3.0))
         assert UniformRMS("S", 10.0).value(d, m) == pytest.approx(np.sqrt(8.0 / 3.0))
 
+    def test_an_organ_at_its_level_still_has_a_gradient(self):
+        # at 0 Gy with a 0 Gy level the value is 0, but adding dose must cost: the one-sided subgradient, not zero
+        d, m = np.zeros(5), np.array([1.0, 1.0, 1.0, 0.0, 0.0])
+        for obj in (MeanDose("S", 0.0), EUDMax("S", 0.0, 1.0), EUDMax("S", 0.0, 6.0)):
+            v, g = obj.value_and_grad(d, m)
+            assert v == 0.0 and np.allclose(g, m / 3.0)
+
     def test_loss_is_weight_times_value(self):
         rng = np.random.default_rng(1)
         d, m = rng.uniform(0, 20, 50), (rng.uniform(size=50) > 0.3).astype(float)

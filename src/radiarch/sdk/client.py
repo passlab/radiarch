@@ -24,6 +24,7 @@ JOBS = {
     "evaluate": ("evaluation_id", "/evaluate/{id}"),
     "bao": ("bao_id", "/bao/{id}"),
     "protocols": ("run_id", "/protocols/runs/{id}"),
+    "mco": ("mco_id", "/mco/{id}"),
 }
 
 

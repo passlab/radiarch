@@ -333,7 +333,8 @@ def _geud(d: np.ndarray, mask: np.ndarray, n: float, a: float) -> Tuple[float, n
     d = np.maximum(d, EUD._EPS) if a < 1.0 else np.maximum(d, 0.0)
     top = float(np.max(d * mask))
     if top <= 0.0:
-        return 0.0, np.zeros_like(d)
+        # no dose: for a >= 1 the gEUD is a scaled a-norm, and mask / n is a subgradient at zero (the mean's gradient)
+        return 0.0, mask / n
     m = float(np.sum(((d / top) ** a) * mask) / n)
     g = top * m ** (1.0 / a)
     if g <= 0.0:
@@ -376,9 +377,11 @@ class MeanDose(_TradeOff):
         if n <= 0:
             return 0.0, np.zeros_like(d)
         excess = float(np.sum(d * m) / n) - self.dose_gy
-        if excess <= 0.0:
+        if excess < 0.0:
             return 0.0, np.zeros_like(d)
-        return excess, m / n
+        # at the level itself the gradient is the mean's: the one-sided subgradient, so that an organ at 0 Gy with
+        # a 0 Gy level still shows what adding dose costs
+        return max(excess, 0.0), m / n
 
 
 class EUDMax(_TradeOff):
@@ -399,9 +402,9 @@ class EUDMax(_TradeOff):
         if n <= 0:
             return 0.0, np.zeros_like(d)
         g, grad = _geud(d, m, n, self.a)
-        if g <= self.dose_gy:
+        if g < self.dose_gy:
             return 0.0, np.zeros_like(d)
-        return g - self.dose_gy, grad
+        return max(g - self.dose_gy, 0.0), grad
 
 
 class EUDMin(_TradeOff):
@@ -422,9 +425,9 @@ class EUDMin(_TradeOff):
         if n <= 0:
             return 0.0, np.zeros_like(d)
         g, grad = _geud(d, m, n, self.a)
-        if g >= self.dose_gy:
+        if g > self.dose_gy:
             return 0.0, np.zeros_like(d)
-        return self.dose_gy - g, -grad
+        return max(self.dose_gy - g, 0.0), -grad
 
 
 class _RMS(_TradeOff):

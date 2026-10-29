@@ -181,4 +181,4 @@ def test_lineage_endpoints(env, monkeypatch):  # noqa: F811
 
 def test_every_kind_is_listed():
     assert set(KINDS) == {"geometry", "beam_model", "influence", "dose", "optimization", "sequence", "bao", "evaluation", "rt_export", "plan",
-                         "registration"}
+                         "registration", "mco"}

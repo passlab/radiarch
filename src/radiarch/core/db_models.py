@@ -221,3 +221,20 @@ class AutoplanJobRow(Base):
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
+
+
+class MCOJobRow(Base):
+    """Async tracking row for one ``POST /mco/run`` invocation (R11); ``mco_id`` on success."""
+
+    __tablename__ = "mco_jobs"
+
+    id = Column(String(36), primary_key=True)
+    cache_key = Column(String(64), nullable=False, index=True)
+    state = Column(String(20), nullable=False, default="queued")
+    progress = Column(Float, default=0.0)
+    stage = Column(String(32), nullable=True, default="queued")
+    message = Column(Text, nullable=True)
+    mco_id = Column(String(36), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)

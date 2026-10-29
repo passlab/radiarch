@@ -31,7 +31,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
 | 16 | R13 Viewer integration | done; 3D Slicer check by the project lead waiting | fc7473d..26787db | 0018 |
-| 17 | R11 Multi-criteria optimization | in progress: R11.1 done | 268b0f0.. | (0019) |
+| 17 | R11 Multi-criteria optimization | in progress: R11.1–R11.2 done | 268b0f0.. | (0019) |
 
 ## Before the roadmap (done by 2026-10-20)
 
@@ -250,10 +250,10 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   `RMSUnder`, `UniformRMS`, each read in Gy; nonconvex types refused as trade-offs; constraints by an
   augmented-Lagrangian loop around L-BFGS-B; a feasibility run that names the violated constraints; redundant
   objectives reported (about 0.5 ew)
-- [ ] R11.2 The Pareto set (D3, D4): anchors with a small weight on the others, a balance plan, sandwich plans (inner set
-  with dummy points, vertex enumeration of the outer set, HiGHS duals as the next weights) to an error bound or a plan
-  budget (3N + 1 by default); warm starts; navigation voxels; the error bound per plan; `POST /mco/run` as a job with
-  a cache key and lineage (about 1 ew)
+- [x] R11.2 The Pareto set (D3, D4): anchors with a small weight on the others, a balance plan, sandwich plans (the
+  inner set `conv(P) + R^n_+`, vertex enumeration of the outer set, HiGHS duals as the next weights) to an error bound
+  or a plan budget (3N + 1 by default, at most 4N + 1; two to eight trade-offs); warm starts; navigation voxels; the
+  error bound per plan; `POST /mco/run` as a job with a cache key and lineage; `BeamModel.mco` in the SDK (about 1 ew)
 - [ ] R11.3 Navigation (D5): the piercing LP over the blend weights with clamps and locks; exact values, DVH and goals
   on the blended dose; stored, named states with the balance plan as reference; `POST /mco/{id}/navigate`,
   `GET /mco/{id}/states` (about 0.5 ew)

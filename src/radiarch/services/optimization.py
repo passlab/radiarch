@@ -237,22 +237,8 @@ class OptimizationService:
 
         Raises :class:`InfeasibleConstraintsError` when the feasibility run cannot meet them. Hard constraints apply
         to the nominal scenario (the request refuses them with robustness)."""
-        terms = [HardConstraintTerm(c, self._resolve_mask(prob.geometry, c.structure_name, prob.grid_shape))
-                 for c in request.hard_constraints]
-        inf, mat = prob.scenario_dij[prob.scenarios[0].hash()]
-
-        def forward(w: np.ndarray) -> np.ndarray:
-            return prob.engine.apply_influence(inf, np.asarray(w, dtype=np.float32), prob.grid_shape).dose
-
-        def backward(grad_dose: np.ndarray) -> np.ndarray:
-            return np.asarray(mat.T @ np.asarray(grad_dose).ravel(order="C"), dtype=np.float64)
-
-        def weight_terms(w: np.ndarray) -> Tuple[float, np.ndarray]:
-            loss, grad = 0.0, np.zeros(w.size)
-            for reg in prob.regularizers:
-                rl, rg = reg(w)
-                loss, grad = loss + rl, grad + rg
-            return loss, grad
+        terms = self.hard_terms(prob, request.hard_constraints)
+        forward, backward, weight_terms = self.nominal_ops(prob)
 
         on_progress(OptimizationStage.optimizing, 0.35, f"Feasibility of {len(terms)} hard constraint(s)")
         feas = solve_with_hard_constraints(terms, forward, backward, prob.w0, solver, max_iter, tol)
@@ -274,6 +260,30 @@ class OptimizationService:
         return out.weights, ConvergenceInfo(
             success=out.success and out.met, iterations=feas.iterations + out.iterations, final_cost=float(final_cost),
             cost_history=out.cost_history, hard_constraints=out.outcomes, constraint_rounds=out.rounds, notes=notes)
+
+    def hard_terms(self, prob: "_Problem", constraints) -> List[HardConstraintTerm]:
+        return [HardConstraintTerm(c, self._resolve_mask(prob.geometry, c.structure_name, prob.grid_shape)) for c in constraints]
+
+    @staticmethod
+    def nominal_ops(prob: "_Problem"):
+        """``forward`` (weights → nominal dose), ``backward`` (a dose gradient → weights) and the regularizers'
+        ``weight_terms``: the pieces a solve outside :meth:`run` needs (hard constraints, the Pareto set)."""
+        inf, mat = prob.scenario_dij[prob.scenarios[0].hash()]
+
+        def forward(w: np.ndarray) -> np.ndarray:
+            return prob.engine.apply_influence(inf, np.asarray(w, dtype=np.float32), prob.grid_shape).dose
+
+        def backward(grad_dose: np.ndarray) -> np.ndarray:
+            return np.asarray(mat.T @ np.asarray(grad_dose).ravel(order="C"), dtype=np.float64)
+
+        def weight_terms(w: np.ndarray) -> Tuple[float, np.ndarray]:
+            loss, grad = 0.0, np.zeros(w.size)
+            for reg in prob.regularizers:
+                rl, rg = reg(w)
+                loss, grad = loss + rl, grad + rg
+            return loss, grad
+
+        return forward, backward, weight_terms
 
     # -----------------------------------------------------------------
     # Problem assembly (shared by run + tests)

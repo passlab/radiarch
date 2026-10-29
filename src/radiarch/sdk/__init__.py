@@ -11,7 +11,7 @@ Research use only; not for clinical use.
 
 from . import ops
 from .client import Radiarch, RadiarchError
-from .objects import Arcs, BeamModel, Dose, Evaluation, Export, Geometry, Optimization, ProtocolRun, Registration, Sequence
+from .objects import Arcs, BeamModel, Dose, Evaluation, Export, Geometry, Optimization, ParetoSet, ProtocolRun, Registration, Sequence
 
 __all__ = ["Radiarch", "RadiarchError", "ops", "Geometry", "BeamModel", "Optimization", "Sequence", "Arcs", "Dose",
-           "Evaluation", "Export", "Registration", "ProtocolRun"]
+           "Evaluation", "Export", "Registration", "ProtocolRun", "ParetoSet"]
