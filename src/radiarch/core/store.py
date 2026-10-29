@@ -21,7 +21,7 @@ from ..models.optimization import OptimizationJobStatus, OptimizationStage
 from ..models.bao import BAOJobStatus, BAOStage
 from ..models.evaluation import EvaluationJobStatus, EvaluationStage
 from ..models.protocol import AutoplanJobStatus, AutoplanStage
-from ..models.mco import MCOJobStatus, MCOStage
+from ..models.mco import DeliverableJobStatus, DeliverableStage, MCOJobStatus, MCOStage
 
 
 def _utcnow():
@@ -272,6 +272,24 @@ class StoreBase(abc.ABC):
     @abc.abstractmethod
     def list_mco_jobs(self) -> List[MCOJobStatus]: ...
 
+    @abc.abstractmethod
+    def create_deliverable_job(self, cache_key: str) -> DeliverableJobStatus: ...
+
+    @abc.abstractmethod
+    def get_deliverable_job(self, job_id: str) -> Optional[DeliverableJobStatus]: ...
+
+    @abc.abstractmethod
+    def update_deliverable_job(
+        self,
+        job_id: str,
+        *,
+        state: Optional[JobState] = None,
+        progress: Optional[float] = None,
+        message: Optional[str] = None,
+        stage: Optional[DeliverableStage] = None,
+        deliverable_id: Optional[str] = None,
+    ) -> Optional[DeliverableJobStatus]: ...
+
 
 # ---------------------------------------------------------------------------
 # In-memory implementation (used in tests & dev)
@@ -290,6 +308,7 @@ class InMemoryStore(StoreBase):
         self._evaluation_jobs: Dict[str, EvaluationJobStatus] = {}
         self._autoplan_jobs: Dict[str, AutoplanJobStatus] = {}
         self._mco_jobs: Dict[str, MCOJobStatus] = {}
+        self._deliverable_jobs: Dict[str, DeliverableJobStatus] = {}
 
     def create_plan(self, payload: PlanRequest) -> tuple[PlanDetail, JobStatus]:
         plan_id = str(uuid.uuid4())
@@ -809,6 +828,36 @@ class InMemoryStore(StoreBase):
 
     def list_mco_jobs(self) -> List[MCOJobStatus]:
         return list(self._mco_jobs.values())
+
+    def create_deliverable_job(self, cache_key: str) -> DeliverableJobStatus:
+        job = DeliverableJobStatus(id=str(uuid.uuid4()), cache_key=cache_key, state=JobState.queued, progress=0.0,
+                                   stage=DeliverableStage.queued, created_at=_utcnow())
+        self._deliverable_jobs[job.id] = job
+        return job
+
+    def get_deliverable_job(self, job_id: str) -> Optional[DeliverableJobStatus]:
+        return self._deliverable_jobs.get(job_id)
+
+    def update_deliverable_job(self, job_id: str, *, state: Optional[JobState] = None, progress: Optional[float] = None,
+                               message: Optional[str] = None, stage: Optional[DeliverableStage] = None,
+                               deliverable_id: Optional[str] = None) -> Optional[DeliverableJobStatus]:
+        job = self._deliverable_jobs.get(job_id)
+        if not job:
+            return None
+        data = job.model_dump()
+        now = _utcnow()
+        if state:
+            data["state"] = state
+            if state == JobState.running and not data.get("started_at"):
+                data["started_at"] = now
+            if state in {JobState.succeeded, JobState.failed, JobState.cancelled}:
+                data["finished_at"] = now
+        for k, v in (("progress", progress), ("message", message), ("stage", stage), ("deliverable_id", deliverable_id)):
+            if v is not None:
+                data[k] = v
+        updated = DeliverableJobStatus(**data)
+        self._deliverable_jobs[job_id] = updated
+        return updated
 
 
 # ---------------------------------------------------------------------------
@@ -1709,6 +1758,65 @@ class SQLStore(StoreBase):
             return [self._mco_job_row_to_status(r) for r in rows]
         finally:
             session.close()
+
+    def create_deliverable_job(self, cache_key: str) -> DeliverableJobStatus:
+        from .db_models import DeliverableJobRow
+
+        session = self._session()
+        try:
+            row = DeliverableJobRow(id=str(uuid.uuid4()), cache_key=cache_key, state=JobState.queued.value, progress=0.0,
+                                    stage=DeliverableStage.queued.value, created_at=_utcnow())
+            session.add(row)
+            session.commit()
+            return self._deliverable_job_row_to_status(row)
+        finally:
+            session.close()
+
+    def get_deliverable_job(self, job_id: str) -> Optional[DeliverableJobStatus]:
+        from .db_models import DeliverableJobRow
+
+        session = self._session()
+        try:
+            row = session.query(DeliverableJobRow).filter_by(id=job_id).first()
+            return self._deliverable_job_row_to_status(row) if row else None
+        finally:
+            session.close()
+
+    def update_deliverable_job(self, job_id: str, *, state: Optional[JobState] = None, progress: Optional[float] = None,
+                               message: Optional[str] = None, stage: Optional[DeliverableStage] = None,
+                               deliverable_id: Optional[str] = None) -> Optional[DeliverableJobStatus]:
+        from .db_models import DeliverableJobRow
+
+        session = self._session()
+        try:
+            row = session.query(DeliverableJobRow).filter_by(id=job_id).first()
+            if not row:
+                return None
+            now = _utcnow()
+            if state:
+                row.state = state.value if hasattr(state, "value") else state
+                if state == JobState.running and not row.started_at:
+                    row.started_at = now
+                if state in {JobState.succeeded, JobState.failed, JobState.cancelled}:
+                    row.finished_at = now
+            if progress is not None:
+                row.progress = progress
+            if message is not None:
+                row.message = message
+            if stage is not None:
+                row.stage = stage.value if hasattr(stage, "value") else stage
+            if deliverable_id is not None:
+                row.deliverable_id = deliverable_id
+            session.commit()
+            return self._deliverable_job_row_to_status(row)
+        finally:
+            session.close()
+
+    @staticmethod
+    def _deliverable_job_row_to_status(row) -> DeliverableJobStatus:
+        return DeliverableJobStatus(id=row.id, cache_key=row.cache_key, state=row.state, progress=row.progress or 0.0, stage=row.stage,
+                                    message=row.message, deliverable_id=row.deliverable_id, started_at=row.started_at,
+                                    finished_at=row.finished_at, created_at=row.created_at)
 
     @staticmethod
     def _mco_job_row_to_status(row) -> MCOJobStatus:

@@ -252,6 +252,9 @@ class LineageService:
         elif ref.kind == "optimization":
             add("geometry", g("geometry_id"))
             add("beam_model", g("beam_model_id"))
+            ck = str(g("cache_key") or "")
+            if ck.startswith("mco:"):                              # a navigated plan of a Pareto set (R11.5)
+                add("mco", ck.split(":")[1])
             attr.engine_name, attr.engine_version = g("engine_name"), g("engine_version")
             conv = g("convergence")
             summary = {"dose_units": g("dose_units"), "rbe": g("rbe_factor"), "iterations": getattr(conv, "iterations", None),

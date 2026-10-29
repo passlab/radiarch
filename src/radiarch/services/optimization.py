@@ -64,6 +64,7 @@ from .objectives import (
     MeanDose,
     RMSOver,
     RMSUnder,
+    ReferenceDose,
     SmoothnessRegularizer,
     TotalVariationRegularizer,
     UniformRMS,
@@ -590,6 +591,10 @@ def _objective_from_spec(s: ObjectiveSpec):
         return RMSUnder(s.structure_name, s.dose_gy, s.weight)
     if t == "UniformRMS":
         return UniformRMS(s.structure_name, s.dose_gy, s.weight)
+    if t == "ReferenceDose":
+        from .autoplan import read_volume
+
+        return ReferenceDose(s.structure_name, read_volume(s.reference_dose_uri), s.reference_role, s.weight)
     raise ValueError(f"unknown objective type {t!r}")
 
 

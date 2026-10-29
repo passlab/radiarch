@@ -845,3 +845,28 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   missing structures, refusals (EQD2 without fractions, a percentage goal without a prescription); the projection on a
   synthetic dose-matrix problem (no trade-off worse, their sum better) and through the service (the hard constraint
   held); the route and SDK on the stub patient.
+
+### R11.5 The deliverable plan
+
+- **Steps** (`services/mco_deliverable.py`, D7): a navigation state's blend is projected onto the Pareto set (R11.4)
+  and stored as an optimization record (`cache_key` `mco:{mco_id}:{key}`, so lineage links it to its Pareto set); its
+  dose is the reference. Static photon fields are sequenced into apertures (R4) and arcs given in the request are
+  swept (R8), the segment or control-point metersets re-optimized against a `ReferenceDose` objective on every
+  navigation structure; proton spots are the plan as projected (the proton machine model has no minimum spot
+  meterset). Optional normalisation scales the photon plan's metersets to a coverage metric (R10's `_scaled`).
+- **`ReferenceDose`** (`services/objectives.py`): the mean squared one-sided difference from a reference dose: an organ
+  above it; a target above it in its hotter half (voxels above the reference's median there) and below it in its
+  colder half. Targets are the structures a target-type trade-off or a lower-bound constraint names, or the request's
+  `targets`; `target_priority` weighs them. The design report had the target's halves reversed; corrected there.
+- **Deviation table:** every trade-off (exact, on the navigation voxels) and every goal of an optional goal set,
+  navigated, projected and deliverable; flagged when the deliverable value is worse than the navigated one by more
+  than `tolerance_gy` (doses) or `tolerance_volume` (volumes in % or cc).
+- **Interfaces:** `POST /api/v1/mco/{id}/deliverable` (`DeliverableRequest`; 200 cached, 202 job),
+  `GET /mco/deliverables/jobs/{job_id}`, `GET /mco/deliverables/{id}` (`MCODeliverable`); the Celery task
+  `radiarch.mco.deliverable`; jobs in both stores (`mco_deliverable_jobs`); SDK `ParetoSet.deliverable(state, ...)`
+  returning `MCOPlan` (`.dose()`, `.beam_model()`, `.deviation_table()`, `.export()`).
+- **Tests** (`tests/test_r11_deliverable.py`, `tests/test_r11_deliverable_vmat.py`): `ReferenceDose` one-sided by role,
+  its gradient and spec; protons on the stubbed service (the projected spots, no trade-off worse, the record's lineage
+  key, the cache); static photon fields through the SDK on the stub patient (apertures, normalisation, the deviation
+  table and its flags against the tolerance, lineage to the Pareto set, export, 404s); VMAT arcs from a pencil-beam
+  Pareto set (each trade-off within 0.5 Gy of the navigated plan on the stub patient).

@@ -76,6 +76,12 @@ class ObjectiveSpec(BaseModel):
       below ``dose_gy`` over the structure.
     * ``UniformRMS`` — the root mean square deviation from ``dose_gy``.
 
+    Dose mimicking (R11.5): ``ReferenceDose`` pulls the structure's dose toward
+    the dose in ``reference_dose_uri`` (a NIfTI on the same grid), one-sidedly:
+    an organ is penalized above it; a target above it in its hotter half (the
+    voxels above the reference's median there) and below it in its colder half
+    (``reference_role``). The loss is the mean squared one-sided difference.
+
     ``volume_fraction`` is required for the two DVH types and ignored
     otherwise; ``eud_a`` is required for the two trade-off EUD types and
     optional for ``EUD`` (10 when unset). The validator enforces this.
@@ -84,7 +90,7 @@ class ObjectiveSpec(BaseModel):
     type: str = Field(
         ...,
         description='One of "DMin", "DMax", "DUniform", "DVHMin", "DVHMax", "EUD", '
-                    '"MeanDose", "EUDMax", "EUDMin", "RMSOver", "RMSUnder", "UniformRMS".',
+                    '"MeanDose", "EUDMax", "EUDMin", "RMSOver", "RMSUnder", "UniformRMS", "ReferenceDose".',
     )
     structure_name: str = Field(..., min_length=1, max_length=128,
                                 description="Name of the target structure mask.")
@@ -102,7 +108,10 @@ class ObjectiveSpec(BaseModel):
                     "optional for EUD (10 when unset).",
     )
 
-    _ALLOWED_TYPES = {"DMin", "DMax", "DUniform", "DVHMin", "DVHMax", "EUD"} | set(TRADEOFF_TYPES)
+    reference_dose_uri: Optional[str] = Field(default=None, max_length=1024, description="ReferenceDose: the dose to mimic (NIfTI).")
+    reference_role: Optional[Literal["organ", "target"]] = Field(default=None, description="ReferenceDose: how the structure is mimicked.")
+
+    _ALLOWED_TYPES = {"DMin", "DMax", "DUniform", "DVHMin", "DVHMax", "EUD", "ReferenceDose"} | set(TRADEOFF_TYPES)
     _DVH_TYPES = {"DVHMin", "DVHMax"}
 
     @model_validator(mode="after")
@@ -121,6 +130,8 @@ class ObjectiveSpec(BaseModel):
             raise ValueError("EUDMin needs eud_a <= 1 and not 0 (the gEUD is concave only there)")
         if self.eud_a is not None and abs(self.eud_a) < 1e-9:
             raise ValueError("eud_a must be non-zero")
+        if self.type == "ReferenceDose" and (not self.reference_dose_uri or self.reference_role is None):
+            raise ValueError("ReferenceDose needs reference_dose_uri and reference_role")
         return self
 
     @property
@@ -143,6 +154,8 @@ class ObjectiveSpec(BaseModel):
         }
         if self.eud_a is not None:          # only when set, so earlier objectives keep their hashes
             payload["eud_a"] = round(self.eud_a, 9)
+        if self.reference_dose_uri is not None:
+            payload["reference"] = [self.reference_dose_uri, self.reference_role]
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 

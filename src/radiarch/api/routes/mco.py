@@ -9,6 +9,9 @@ Endpoints
 ``POST /api/v1/mco/{mco_id}/auto-navigate``       — the blend that best meets a goal set, priority by priority.
 ``GET  /api/v1/mco/{mco_id}/states``              — the stored states, the balance plan first.
 ``GET  /api/v1/mco/{mco_id}/states/{state_id}``   — one state.
+``POST /api/v1/mco/{mco_id}/deliverable``         — a state made deliverable: the cached plan (200) or a job (202).
+``GET  /api/v1/mco/deliverables/jobs/{job_id}``   — its progress.
+``GET  /api/v1/mco/deliverables/{deliverable_id}`` — the deliverable plan and its deviation table.
 """
 
 from __future__ import annotations
@@ -20,9 +23,10 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
 from ...core.store import store
-from ...models.mco import AutoNavigateRequest, MCOJobStatus, MCORunRequest, MCOResult, NavigateRequest, NavigationState
+from ...models.mco import AutoNavigateRequest, DeliverableJobStatus, DeliverableRequest, MCODeliverable, MCOJobStatus, MCORunRequest, MCOResult, NavigateRequest, NavigationState
 from ...services.audit import emit, make_event
 from ...services.mco import MCOService
+from ...services.mco_deliverable import DeliverableService
 from ...services.navigation import NavigationError, NavigationService
 from ..security import api_key_auth
 
@@ -37,6 +41,11 @@ def _service() -> MCOService:
 @lru_cache(maxsize=1)
 def _navigation() -> NavigationService:
     return NavigationService(_service().store)
+
+
+@lru_cache(maxsize=1)
+def _deliverables() -> DeliverableService:
+    return DeliverableService(mco_service=_service())
 
 
 def _known(mco_id: str) -> None:
@@ -70,6 +79,29 @@ async def run_mco(request: MCORunRequest, response: Response, api_key_prefix: Op
     emit(make_event("mco.run", state="dispatched", cache_key=key, geometry_id=request.geometry_id, beam_model_id=request.beam_model_id,
                     api_key_prefix=api_key_prefix, extra={"job_id": job.id}))
     return MCORunResponse(job_id=job.id, cache_key=key)
+
+
+class DeliverableResponse(BaseModel):
+    job_id: str
+    cache_key: str
+    state: str = "queued"
+    message: str = "Dispatched; poll /mco/deliverables/jobs/{job_id} for progress."
+
+
+@router.get("/deliverables/jobs/{job_id}", response_model=DeliverableJobStatus, summary="A deliverable plan's progress.")
+async def get_deliverable_job(job_id: str) -> DeliverableJobStatus:
+    job = store.get_deliverable_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Deliverable job not found: {job_id}")
+    return job
+
+
+@router.get("/deliverables/{deliverable_id}", response_model=MCODeliverable, summary="A deliverable plan and its deviation table.")
+async def get_deliverable(deliverable_id: str) -> MCODeliverable:
+    result = _deliverables().store.get_by_id(deliverable_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Deliverable plan not found: {deliverable_id}")
+    return result
 
 
 @router.get("/jobs/{job_id}", response_model=MCOJobStatus, summary="An MCO run's progress.")
@@ -127,3 +159,27 @@ async def get_state(mco_id: str, state_id: str) -> NavigationState:
     if state is None:
         raise HTTPException(status_code=404, detail=f"no state {state_id!r} in Pareto set {mco_id}")
     return state
+
+
+@router.post("/{mco_id}/deliverable", summary="A navigation state made deliverable (R11.5).",
+             responses={200: {"description": "Made before: the stored plan."}, 202: {"description": "A job: poll /mco/deliverables/jobs/{job_id}."},
+                        404: {"description": "Unknown Pareto set or state."}})
+async def make_deliverable(mco_id: str, request: DeliverableRequest, response: Response,
+                           api_key_prefix: Optional[str] = Depends(api_key_auth)):
+    _known(mco_id)
+    try:
+        key = _deliverables().cache_key(mco_id, request)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    cached = _deliverables().store.lookup_by_cache_key(key)
+    if cached is not None:
+        response.status_code = status.HTTP_200_OK
+        return cached
+    job = store.create_deliverable_job(key)
+    from ...tasks.mco_tasks import run_deliverable_job
+
+    run_deliverable_job.delay(job.id, mco_id, request.model_dump(mode="json"))
+    response.status_code = status.HTTP_202_ACCEPTED
+    emit(make_event("mco.deliverable", state="dispatched", cache_key=key, api_key_prefix=api_key_prefix,
+                    extra={"job_id": job.id, "mco_id": mco_id, "state_id": request.state_id}))
+    return DeliverableResponse(job_id=job.id, cache_key=key)

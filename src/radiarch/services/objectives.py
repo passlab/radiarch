@@ -477,6 +477,39 @@ class UniformRMS(_RMS):
         return d - self.dose_gy, 1.0
 
 
+class ReferenceDose:
+    """Dose mimicking (R11.5): pull a structure's dose toward a reference dose, one-sidedly.
+
+    As RayStation's conversion of a navigated plan does: an organ is penalized only above the reference; a target is
+    penalized above it in its hotter half (voxels whose reference dose is above the median there) and below it in its
+    colder half, so neither its hot spots grow nor its coverage falls.
+    ``loss = w * mean_i e_i^2`` over the structure, ``e`` the one-sided difference.
+    """
+
+    def __init__(self, structure_name: str, reference: np.ndarray, role: str, weight: float = 1.0):
+        if role not in ("organ", "target"):
+            raise ValueError(f"role must be organ or target, got {role!r}")
+        self.structure_name, self.role, self.weight = structure_name, role, float(weight)
+        self.reference = np.asarray(reference, dtype=np.float64)
+        self.name = f"ReferenceDose({structure_name}, {role}, w={weight})"
+
+    def __call__(self, dose: np.ndarray, mask: np.ndarray) -> Tuple[float, np.ndarray]:
+        d, m = _prepare(dose, mask)
+        if self.reference.shape != d.shape:
+            raise ValueError(f"reference dose shape {self.reference.shape} != dose shape {d.shape}")
+        n = float(m.sum())
+        if n <= 0:
+            return 0.0, np.zeros_like(d)
+        diff = (d - self.reference) * m
+        if self.role == "organ":
+            e = np.maximum(diff, 0.0)
+        else:
+            hot = self.reference > float(np.median(self.reference[m > 0]))
+            e = np.where(hot, np.maximum(diff, 0.0), np.minimum(diff, 0.0))
+        loss = self.weight * float(np.sum(e * e)) / n
+        return loss, 2.0 * self.weight * e / n
+
+
 # ===========================================================================
 # O5 — Constraints (penalty form) + fluence regularizers
 # ===========================================================================
@@ -635,6 +668,7 @@ __all__ = [
     "RMSOver",
     "RMSUnder",
     "UniformRMS",
+    "ReferenceDose",
     "ConstraintPenalty",
     "WeightRegularizer",
     "SmoothnessRegularizer",

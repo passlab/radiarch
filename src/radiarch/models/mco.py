@@ -22,6 +22,7 @@ from .dose import EngineSpec
 from .evaluation import GoalSetSpec, GoalsReport
 from .job import JobState
 from .optimization import HardConstraint, ObjectiveSpec, SolverConfig, check_tradeoffs
+from .vmat import ArcSpec
 
 MCO_VERSION = "1"
 MAX_TRADEOFFS = 8
@@ -217,6 +218,103 @@ class NavigationState(ResearchArtifact):
     created_at: Optional[datetime] = None
 
 
+class NormaliseSpec(BaseModel):
+    """Scale the deliverable plan's metersets so a target's coverage metric meets its value (R10's normalisation)."""
+
+    structure: str = Field(..., max_length=128)
+    metric: str = Field(default="D95", pattern=r"^(D\d+(\.\d+)?|Dmax|Dmean)$")
+    gy: float = Field(..., gt=0.0)
+
+
+class DeliverableRequest(BaseModel):
+    """``POST /mco/{mco_id}/deliverable``: a navigation state made into a plan a machine can deliver (D7).
+
+    The state's blend is projected onto the Pareto set (``project``), and its dose becomes the reference the
+    deliverable plan mimics: static photon fields are sequenced into apertures (R4), arcs given in ``arcs`` are swept
+    (R8), and the segment or control-point metersets are re-optimized against ``ReferenceDose`` objectives on every
+    navigation structure; proton spot weights are the plan as they stand. ``targets`` are mimicked as targets (default:
+    the structures a target-type trade-off or a ``Dmin``/``gEUD >=`` constraint names); ``target_priority`` weighs them
+    against the organs. The deviation table compares the deliverable plan with the navigated one, trade-off by
+    trade-off and goal by goal; a deliverable value worse by more than ``tolerance_gy`` (doses) or
+    ``tolerance_volume`` (volumes, in % or cc) is flagged."""
+
+    state_id: str = Field(default="balance", max_length=64)
+    project: bool = True
+    arcs: List[ArcSpec] = Field(default_factory=list, max_length=8)
+    fractions: int = Field(default=1, ge=1, le=100, description="For VMAT's machine limits, and EQD2 goals.")
+    levels: int = Field(default=10, ge=1, le=100, description="Fluence levels per beam when sequencing apertures.")
+    machine_model_id: Optional[str] = None
+    targets: List[str] = Field(default_factory=list, max_length=32)
+    target_priority: float = Field(default=1.0, gt=0.0, le=1000.0)
+    max_iterations: int = Field(default=200, ge=1, le=100_000)
+    normalise: Optional[NormaliseSpec] = None
+    goals: Optional[GoalSetSpec] = None
+    prescription_gy: Optional[float] = Field(default=None, gt=0.0)
+    tolerance_gy: float = Field(default=1.0, gt=0.0)
+    tolerance_volume: float = Field(default=1.0, gt=0.0)
+
+    def compute_cache_key(self, mco_cache_key: str, blend: List[float]) -> str:
+        payload = {"mco": mco_cache_key, "blend": [round(float(v), 9) for v in blend],
+                   **self.model_dump(mode="json", exclude={"state_id"})}
+        return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+class DeviationRow(BaseModel):
+    name: str
+    kind: str = Field(..., description="trade-off or goal")
+    unit: str
+    navigated: Optional[float] = None
+    projected: Optional[float] = None
+    deliverable: Optional[float] = None
+    worse_by: Optional[float] = Field(default=None, description="How much worse the deliverable plan is than the navigated (negative: better).")
+    flagged: bool = False
+
+
+class DeliverableStage(str, Enum):
+    queued = "queued"
+    projecting = "projecting"
+    mimicking = "mimicking"
+    normalising = "normalising"
+    comparing = "comparing"
+    done = "done"
+
+
+class MCODeliverable(ResearchArtifact):
+    deliverable_id: str
+    cache_key: str
+    mco_id: str
+    state_id: str
+    geometry_id: str
+    blend: List[float]
+    projected: bool
+    technique: str = Field(..., description="imrt (sequenced apertures), vmat (arcs) or proton (spots).")
+    optimization_id: str = Field(..., description="The navigated (projected) plan's weights and dose, as an optimization.")
+    sequence_id: Optional[str] = None
+    vmat_id: Optional[str] = None
+    beam_model_id: str = Field(..., description="The deliverable plan.")
+    dose_id: Optional[str] = Field(default=None, description="Its dose (photons; a proton plan's dose is the optimization's).")
+    normalisation: float = 1.0
+    deliverable: bool = Field(..., description="No machine-limit issue was reported.")
+    deviation: List[DeviationRow] = Field(default_factory=list)
+    flagged: int = 0
+    notes: List[str] = Field(default_factory=list)
+    seconds: float = 0.0
+    created_at: Optional[datetime] = None
+
+
+class DeliverableJobStatus(BaseModel):
+    id: str
+    cache_key: str
+    state: JobState = JobState.queued
+    progress: float = 0.0
+    stage: Optional[DeliverableStage] = DeliverableStage.queued
+    message: Optional[str] = None
+    deliverable_id: Optional[str] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+
 class MCOJobStatus(BaseModel):
     id: str
     cache_key: str
@@ -231,4 +329,5 @@ class MCOJobStatus(BaseModel):
 
 
 __all__ = ["MCO_VERSION", "MAX_TRADEOFFS", "MCORunRequest", "ParetoPlan", "ErrorPoint", "MCOStage", "MCOResult", "NavigateRequest",
-           "AutoNavigateRequest", "AutoLevel", "DVHCurve", "NavigationState", "MCOJobStatus"]
+           "AutoNavigateRequest", "AutoLevel", "DVHCurve", "NavigationState", "NormaliseSpec", "DeliverableRequest", "DeviationRow",
+           "DeliverableStage", "MCODeliverable", "DeliverableJobStatus", "MCOJobStatus"]

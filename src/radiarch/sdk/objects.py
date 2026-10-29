@@ -51,7 +51,7 @@ class _Object:
     def lineage(self) -> Dict[str, Any]:
         kind = {"Geometry": "geometry", "BeamModel": "beam_model", "Dose": "dose", "Optimization": "optimization",
                 "Sequence": "sequence", "Evaluation": "evaluation", "Export": "rt_export", "Registration": "registration",
-                "ParetoSet": "mco"}[type(self).__name__]
+                "ParetoSet": "mco", "MCOPlan": "optimization"}[type(self).__name__]
         return self.client.get(f"/lineage/{kind}/{self.id}")
 
 
@@ -330,11 +330,40 @@ class ParetoSet(_Object):
                                   **request)
         return self.client.post(f"/mco/{self.id}/auto-navigate", req, NavigationState)
 
+    def deliverable(self, state: Any = "balance", **request) -> "MCOPlan":
+        """A navigation state made into a plan a machine can deliver: projected onto the Pareto set, sequenced into
+        apertures (or ``arcs=[...]``; protons as weighted), metersets mimicking the navigated dose; with the deviation
+        table, navigated against deliverable."""
+        from ..models.mco import DeliverableRequest, MCODeliverable
+
+        req = DeliverableRequest(state_id=getattr(state, "state_id", state), **request)
+        return MCOPlan(self.client, self.client.submit("mco/deliverables", f"/mco/{self.id}/deliverable", req, MCODeliverable))
+
     def states(self):
         """The stored navigation states, the balance plan first."""
         from ..models.mco import NavigationState
 
         return [NavigationState.model_validate(s) for s in self.client.get(f"/mco/{self.id}/states")]
+
+
+class MCOPlan(_Object):
+    """The deliverable plan of a navigation state (R11.5): its beam model, dose and deviation table."""
+
+    id_field = "deliverable_id"
+
+    def beam_model(self) -> BeamModel:
+        return self.client.beam_model(self.result.beam_model_id)
+
+    def dose(self) -> "Dose":
+        return self.client.dose(self.result.dose_id) if self.result.dose_id else None
+
+    def deviation_table(self) -> List[Dict[str, Any]]:
+        return [r.model_dump() for r in self.result.deviation]
+
+    def export(self, **request) -> "Export":
+        if self.result.technique == "proton":
+            return _export(self.client, optimization_id=self.result.optimization_id, **request)
+        return _export(self.client, beam_model_id=self.result.beam_model_id, dose_id=self.result.dose_id, **request)
 
 
 class ProtocolRun(_Object):

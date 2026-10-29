@@ -258,24 +258,29 @@ class MCOService:
     # Projection onto the Pareto set (R11.4, D6)
     # -----------------------------------------------------------------
 
+    def problem(self, mco_id: str):
+        """``(result, request, problem)``: the stored set, its request, and its optimization problem assembled again
+        (the dose matrix comes from the influence cache)."""
+        result = self.store.get_by_id(mco_id)
+        req_path = self.store.dir(mco_id) / "request.json"
+        if result is None or not req_path.is_file():
+            raise ValueError(f"Pareto set {mco_id} has no stored request")
+        request = MCORunRequest.model_validate_json(req_path.read_text(encoding="utf-8"))
+        base = OptimizationRunRequest(
+            plan_id=request.plan_id, geometry_id=request.geometry_id, beam_model_id=request.beam_model_id, dose_engine=request.dose_engine,
+            objectives=[o.model_copy(update={"weight": 1.0}) for o in request.tradeoffs], hard_constraints=request.hard_constraints,
+            solver=request.solver, rbe=request.rbe)
+        return result, request, self.optimization._assemble_problem(base)
+
     def project(self, mco_id: str, blend) -> Tuple[np.ndarray, np.ndarray, List[str]]:
         """A navigated blend moved onto the Pareto set: the plan that lowers the trade-offs' normalized sum as far as
         it can with none of them above its value in the blend, under the run's hard constraints (a variant of Bokrantz
         & Miettinen's projection, Med Phys 42:5862, 2015, which raises every objective evenly). The blend is the start
         and meets every cap, so the projected plan is at least as good in every trade-off. Returns the plan's element
         weights, its dose on the navigation voxels and notes."""
-        result = self.store.get_by_id(mco_id)
-        req_path = self.store.dir(mco_id) / "request.json"
-        if result is None or not req_path.is_file():
-            raise ValueError(f"Pareto set {mco_id} has no stored request to project with")
-        request = MCORunRequest.model_validate_json(req_path.read_text(encoding="utf-8"))
+        result, request, prob = self.problem(mco_id)
         osvc = self.optimization
-        base = OptimizationRunRequest(
-            plan_id=request.plan_id, geometry_id=request.geometry_id, beam_model_id=request.beam_model_id, dose_engine=request.dose_engine,
-            objectives=[o.model_copy(update={"weight": 1.0}) for o in request.tradeoffs], hard_constraints=request.hard_constraints,
-            solver=request.solver, rbe=request.rbe)
-        prob = osvc._assemble_problem(base)
-        forward, backward, weight_terms = osvc.nominal_ops(prob)
+        forward, backward, _ = osvc.nominal_ops(prob)
         lam = np.asarray(blend, dtype=np.float64)
         x0 = lam @ self.store.load_weights(mco_id).astype(np.float64)
         span = np.maximum(np.asarray(result.nadir_gy) - np.asarray(result.ideal_gy), 1e-6)

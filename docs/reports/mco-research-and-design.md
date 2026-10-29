@@ -105,8 +105,9 @@ The published answers fall into three groups.
 
 **Navigate on fluence, then convert the chosen plan.**
 - Dose mimicking optimizes a deliverable plan toward the navigated dose. RayStation:
-  - penalizes over-dose relative to the navigated dose in organs and in the colder half of a target;
-  - penalizes under-dose in the rest of the target;
+  - penalizes over-dose relative to the navigated dose in organs and in the target voxels below 50 % cumulative
+    volume (its hotter half);
+  - penalizes under-dose in the rest of the target (its colder half);
   - mimics the dose voxel by voxel when its Pareto plans were made with machine parameters, and the DVH otherwise
     (RaySearch white paper 2020).
 - For VMAT, Craft et al. (Med Phys 39:686, 2012) navigate a 180-beam fluence problem. They then merge neighbouring
@@ -289,21 +290,27 @@ against, as in RayStation. A request takes milliseconds to a fraction of a secon
 
 **D7. The deliverable plan mimics the navigated dose, and the difference is reported.** A new objective type,
 `ReferenceDose`, mimics a reference dose one-sidedly, as RayStation describes:
-- it penalizes over-dose in organs and in the colder half of a target;
-- it penalizes under-dose in the rest of the target;
+- it penalizes over-dose in organs and in the hotter half of a target (the voxels above the reference's median there);
+- it penalizes under-dose in the colder half of the target;
 - a target-priority weight sets targets against organs.
+
+(The first draft of this section had the target's halves the wrong way round; the white paper's "target voxels below
+50 % cumulative volume" are the voxels above the median dose, its hotter half.)
 
 How each technique uses it:
 - **Static fields (IMRT):** the blended fluence is sequenced as in R4, and the segment metersets are re-optimized
   against `ReferenceDose`.
 - **VMAT:** the blended sector fluence becomes arcs as in R8, and the arc metersets are re-optimized the same way.
-- **Protons:** the blended spot weights are re-optimized with the minimum spot meterset against `ReferenceDose`.
+- **Protons:** the projected spot weights are the plan. Radiarch's proton machine model has no minimum spot meterset,
+  so there is nothing to re-optimize; the plan is exported by its optimization record.
 
-Then:
-- the plan is normalized to the main target's coverage goal (R10);
+First the navigated plan is projected onto the Pareto set (D6), and its dose is the reference the deliverable plan
+mimics. Then:
+- the plan is normalized to the main target's coverage goal when asked (R10; photons);
 - it is stored as a beam model and dose like any other plan;
-- it carries a *deviation table*: every objective and goal, navigated against deliverable. A difference beyond a
-  stated tolerance (default 1 Gy, or 1 % on a target metric) is flagged.
+- it carries a *deviation table*: every trade-off and goal, navigated (and projected) against deliverable. A
+  deliverable value worse by more than a stated tolerance (default 1 Gy for doses, 1 percentage point or 1 cc for
+  volumes) is flagged.
 
 Shared-aperture generation, so that navigation shows the deliverable dose itself (Salari & Unkelbach; Fredriksson &
 Bokrantz; shared sweeps in VMAT), is the planned follow-up when the deviation tables show it is needed.

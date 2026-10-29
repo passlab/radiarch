@@ -534,8 +534,10 @@ algorithm until its bound on the distance from any Pareto plan to the computed o
 (default 0.05 of each trade-off's range) or the `plan_budget` (default 3N + 1) is spent. Trade-offs are the convex
 objectives above (two to eight); hard constraints hold in every plan, and a coverage constraint on the target
 (`PTV Dmin >=`) keeps organ anchors from switching every beamlet off (the run notes a plan that delivers no dose).
-Navigation blends the stored plans, so a slider move needs no dose calculation; making a plan deliverable comes next
-(R11.5). Design: `docs/reports/mco-research-and-design.md`.
+Navigation blends the stored plans, so a slider move needs no dose calculation. A navigation state is made deliverable
+by projecting it onto the Pareto set and mimicking its dose: apertures for static fields, arcs when given, the spots
+themselves for protons; a deviation table compares the deliverable plan with the navigated one and flags what got
+worse. Design: `docs/reports/mco-research-and-design.md`.
 
 | Method & path | Purpose |
 |---|---|
@@ -545,6 +547,8 @@ Navigation blends the stored plans, so a slider move needs no dose calculation; 
 | `POST /api/v1/mco/{mco_id}/navigate` | A slider `move`, a `reference` point, `clamps` and `locks` from a state (the balance plan by default): the blend, exact trade-off values, DVHs and graded goals. |
 | `POST /api/v1/mco/{mco_id}/auto-navigate` | The blend that best meets a goal set (template or inline), priority 1 first, then 2, then 3; met goals stay met. |
 | `GET /api/v1/mco/{mco_id}/states` | The stored navigation states, the balance plan first; `/states/{state_id}` one of them. |
+| `POST /api/v1/mco/{mco_id}/deliverable` | A state made deliverable (200 cached / 202 job): projection, apertures or `arcs` mimicking its dose, optional `normalise`, the deviation table. |
+| `GET /api/v1/mco/deliverables/{id}` | The deliverable plan (beam model, dose, technique) and its deviation table; `/deliverables/jobs/{job_id}` its job. |
 
 ```python
 from radiarch.sdk import Radiarch, ops
@@ -557,6 +561,9 @@ st.values_gy, st.goals.all_priority1_passed
 ps.navigate(from_state=st, clamps={"MeanDose(Lungs-PTV)": 12.0}, reference={"UniformRMS(PTV)": 1.5})
 auto = ps.auto_navigate("rtog-0617", prescription_gy=60, fractions=30)
 [(lv.priority, lv.passed, lv.goals) for lv in auto.levels]
+plan = ps.deliverable(auto, goals="rtog-0617", prescription_gy=60, normalise={"structure": "PTV", "metric": "D95", "gy": 60})
+plan.deviation_table()          # navigated, projected and deliverable value of every trade-off and goal, flagged ones
+plan.export(label="MCO", prescription={"dose_gy": 60, "fractions": 30})
 ```
 
 ## BAO Service (`/api/v1/bao`)
