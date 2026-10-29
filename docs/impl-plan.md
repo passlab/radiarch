@@ -1,6 +1,6 @@
 # Radiarch — implementation plan and tasks
 
-State: 2026-10-27. The design is in [`architecture.md`](architecture.md); what each item
+State: 2026-10-29. The design is in [`architecture.md`](architecture.md); what each item
 did, file by file, is in [`impl-log.md`](impl-log.md); the decisions
 are in [`adr/`](adr/); the evaluation that set this roadmap is
 [`reports/tps-evaluation-and-roadmap.md`](reports/tps-evaluation-and-roadmap.md).
@@ -30,7 +30,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 13 | R8 Native pencil-beam engine, VMAT, SBRT | done; physicist review waiting | 6e73aa2..cc5c047 | 0015 |
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
-| 16 | R13 Viewer integration | in progress (R13.1, R13.2a done) | fc7473d | 0018 |
+| 16 | R13 Viewer integration | done; 3D Slicer check by the project lead waiting | fc7473d..26787db | 0018 |
 | 17 | R11 Multi-criteria optimization | not started | — | — |
 
 ## Before the roadmap (done by 2026-10-20)
@@ -117,7 +117,8 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] RT Beams Treatment Record and RT Treatment Summary Record
 - [x] Export service, STOW-RS push, conformance checks in CI
 - [x] RT Plan with VMAT arcs (DYNAMIC beams) — done in R8
-- [ ] Objects checked by hand in OHIF and 3D Slicer **(open)**
+- [x] Objects checked by hand in OHIF (R13.3)
+- [ ] Objects checked by hand in 3D Slicer with SlicerRT **(waiting: the project lead; see R13.3)**
 - [ ] Wedges, compensators, blocks, bolus **(open)**
 - [x] DVH sequence in RT Dose (R13.2a)
 
@@ -192,7 +193,7 @@ them in batches and from workflow engines.
 - [x] R10.5 Harness and record (`docs/validation/2026-10-26-r10/`, commit `92ce40d`): a protocol run reproduces its harness case; a batch case over the LCTSC thoraces;
   ADR 0017.
 
-### R13 — Viewer integration (in progress)
+### R13 — Viewer integration (done; 3D Slicer check waiting)
 Viewing stays outside radiarch: the RT objects go to a DICOMweb server that OHIF reads, and a radiarch
 OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH, goals).
 - [x] R13.1 RT objects to OHIF through DICOMweb (`docs/viewing.md`): what OHIF 3.13.13 and 3D Slicer show
@@ -220,8 +221,25 @@ OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH
   Orthanc's DICOMweb and radiarch's API; the API key added by the proxy), the compose profile `viewer`, and
   the browser test `tests/test_r13_viewer_browser.py` in CI's Viewer job (headless Chromium through the plan
   review mode; the dose checked inside OHIF and in pixels, shown against hidden)
-- [ ] R13.3 Record: the objects and the extension checked by hand in OHIF and 3D Slicer (also closes R6's
-  open hand check)
+- [x] Hand-check fixes (2026-10-27): the dose colour wash shows on a GPU (the dose actor's opacity unit distance), the
+  viewport opens on the dose maximum with lighter low bands (`340ef3b`, `5e64d0f`); a fresh clone launches with
+  Orthanc fetch and push fixed and a phantom demo, `scripts/demo-viewer.sh` (`bd0982d`)
+- [x] A lung-cancer patient in the viewer (`6ba1105`): `radiarch fetch-tcia` (a public TCIA patient into a cache and
+  the PACS), the `demo-lung-imrt` protocol (seven IMRT fields, RTOG 0617 goals, minutes on a CPU),
+  `scripts/demo-lung.sh`; the dose viewport draws the dose's structure set as contours; planning aids (rings,
+  helpers, organ-minus-target) start hidden; each structure named once in the export
+- [x] A black image in Chrome on Linux (`e3adcd2`): Chrome's default ANGLE-on-OpenGL backend draws every volume
+  viewport black on an NVIDIA workstation; the dose viewport detects a blank image and names the fix (Firefox, or
+  ANGLE on Vulkan); planning progress printed by `radiarch plan` (`e3adcd2`, `ffece91`)
+- [x] A plan exported again is the same export (`737d2c5`, `26787db`): the same plan and settings return the stored
+  export and its UIDs, so a rerun keeps one plan in the study; `new_export` writes a marked copy ("copy N", the
+  earlier plan as its predecessor); nothing is deleted
+- [x] Hand check in OHIF by the project lead: the lung demo (NSCLC-Radiomics LUNG1-002) and the LCTSC VMAT plan,
+  CT, dose colour wash, contours, DVHs and the plan panel, in Firefox on a Linux workstation
+- [x] R13.3 Record (`docs/validation/2026-10-28-r13/`): the cases, the OHIF hand check and the findings with their
+  fixes; closes R6's hand check in OHIF
+- [ ] The objects read by 3D Slicer with SlicerRT (structures, dose, beams, DRRs; Slicer's DVHs against the DVHs
+  radiarch wrote), steps and an empty results table in the record **(waiting: the project lead)**
 
 ### R11 — Multi-criteria optimization (not started)
 - [ ] Pareto surface generation on the objective set

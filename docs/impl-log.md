@@ -485,7 +485,7 @@ optimization for VMAT; the R8 record for the physicist.
   `protocol_batch_lctsc` 79 pass (six thoraces planned and deliverable, PTV D95 54.1 Gy, the SBRT template's priority-1
   goals met).
 
-## R13 — viewer integration (2026-10-27, in progress)
+## R13 — viewer integration (2026-10-27 to 2026-10-29)
 
 - R13.1: OHIF 3.13.13's SOP class handlers (read at tag `v3.13.13`) cover the RT Structure Set, not RT Dose or RT
   Plan; `docs/viewing.md` says what OHIF and 3D Slicer show and how to set up the push and the viewer. Setting
@@ -717,3 +717,11 @@ dose, and OHIF loads a structure set only when it is dropped into a viewport of 
   clean-up of older duplicates); `docs/demo.md` 5.1 and `docs/viewing.md` say what a rerun does. `demo-lung.sh` and
   `demo-viewer.sh` take `NEW_EXPORT=1` for a marked copy; `test_tcia_demo` runs `demo-lung.sh` with a stand-in
   `docker` and checks the option reaches `radiarch plan`.
+
+## R13.3 record; R13 closed (2026-10-29)
+
+- **Record** `docs/validation/2026-10-28-r13/`: the two cases (the LCTSC VMAT plan, the `LUNG1-002` IMRT demo with its
+  goal numbers), the project lead's OHIF hand check (CT, dose colour wash, contours, DVHs, the plan panel; Firefox on
+  Linux), and the eight findings of the hand checks with the commits that fixed them.
+- **Open:** the objects read by 3D Slicer with SlicerRT, left to the project lead; the record gives the steps and an
+  empty results table. R6's hand check is done in OHIF and waits on the same Slicer check.
