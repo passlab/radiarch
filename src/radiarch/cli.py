@@ -81,6 +81,20 @@ def _print_goals(run, out=None) -> None:
         print(f"  {_goal_label(g):40s} {achieved:>8s}  {state}", file=out)
 
 
+def _print_mco(rx, run, out=None) -> None:
+    """An mco protocol's Pareto set, the state its plan was navigated to, and what the deliverable plan made worse."""
+    out = out or sys.stdout
+    r = run.result
+    ps = rx.get(f"/mco/{r.mco_id}")
+    print(f"Pareto set {r.mco_id}: {len(ps['plans'])} plans, error bound {ps['error_bound']:.3f}", file=out)
+    print(f"  navigate from state {r.state_id} (POST /mco/{r.mco_id}/navigate, or the viewer's MCO panel)", file=out)
+    plan = rx.get(f"/mco/deliverables/{r.deliverable_id}")
+    print(f"  deliverable plan {r.deliverable_id}: {plan['flagged']} of {len(plan['deviation'])} deviation rows flagged", file=out)
+    for row in plan["deviation"]:
+        if row["flagged"]:
+            print(f"    {row['name']:40s} navigated {row['navigated']:.2f}, deliverable {row['deliverable']:.2f} {row['unit']}", file=out)
+
+
 def cmd_protocols(args) -> int:
     with _client(args) as rx:
         rows = rx.protocols()
@@ -101,6 +115,8 @@ def cmd_plan(args) -> int:
     with _client(args) as rx:
         run = _plan_one(rx, _protocol(args.protocol), args.study, args.data, args.spacing)
         _print_goals(run)
+        if run.result.mco_id:
+            _print_mco(rx, run)
         if args.export or args.push:
             exp = run.export(label=args.label, push=bool(args.push), new_export=bool(args.new_export))
             r = exp.result

@@ -96,9 +96,11 @@ The compose file sets `RADIARCH_VIEWER_ROUTE=plan-review`, so radiarch's own lin
 The plan review mode opens the plan dose over its CT, on the slice through the dose maximum, with the contours of
 the structure set the dose belongs to (for a radiarch plan: radiarch's, with the CTV and PTV it derived). Planning
 aids start hidden: rings, optimisation helpers and organ-minus-target structures such as `Lungs-PTV`, and ROIs
-interpreted as avoidance or control. On the right are three panels:
+interpreted as avoidance or control. On the right are four panels:
 - the dose's DVHs (planning aids on request) and isodose legend;
 - the radiarch plan: summary, a goal template, Evaluate;
+- the Pareto set of an MCO plan (R11.7): a slider, a value field and a lock per trade-off, automatic navigation by a
+  goal template, the state's goals and DVHs; "Make deliverable" (with the deviation table) and "Export and open";
 - the structures, each of which can be shown or hidden.
 
 ### Browsers
@@ -164,6 +166,9 @@ Headless Chromium then opens the plan review mode and checks:
   - the window runs from 0 to 120 %;
   - each isodose band has its own colour;
 - the radiarch panel finds the plan, and Evaluate grades the RTOG 0617 goals and draws radiarch's DVHs.
+
+`tests/test_r11_viewer_browser.py` opens an MCO plan the same way: the MCO panel finds its Pareto set, a typed value
+navigates to a new state, "Make deliverable" shows the deviation table, and "Export and open" writes the plan.
 
 On failure it keeps screenshots, the page and the console.
 

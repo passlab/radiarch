@@ -135,6 +135,7 @@ jobs:
         run: |
           node --test viewer/rt-dose-core/test/core.test.js
           node --test viewer/radiarch-client/test/client.test.js
+          node --test viewer/radiarch-client/test/mco.test.js
 
       - name: Build the viewer image (OHIF with radiarch's packages, nginx)
         run: docker build -f viewer/standalone/Dockerfile -t radiarch-viewer:ci viewer/
@@ -167,7 +168,7 @@ jobs:
           RADIARCH_TEST_VIEWER_IMAGE: radiarch-viewer:ci
           RADIARCH_TEST_DICOMWEB_URL: http://127.0.0.1:8042/dicom-web
           RADIARCH_TEST_ARTIFACTS: ${{ runner.temp }}/viewer-artifacts
-        run: python -m pytest tests/test_r13_viewer_browser.py -v --tb=short -rs
+        run: python -m pytest tests/test_r13_viewer_browser.py tests/test_r11_viewer_browser.py -v --tb=short -rs
 
       - name: Screenshots and logs of the browser test
         if: always()

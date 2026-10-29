@@ -318,6 +318,8 @@ class MCODeliverable(ResearchArtifact):
     deliverable: bool = Field(..., description="No machine-limit issue was reported.")
     deviation: List[DeviationRow] = Field(default_factory=list)
     flagged: int = 0
+    request: Optional[DeliverableRequest] = Field(default=None, description="What it was made with (a viewer makes another state "
+                                                                       "deliverable the same way).")
     notes: List[str] = Field(default_factory=list)
     seconds: float = 0.0
     created_at: Optional[datetime] = None

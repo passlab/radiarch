@@ -899,3 +899,35 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   - on the stub patient: worst-case and nominal values against the stored scenario doses, coverage in every scenario,
     an infeasible band named by scenario, navigation and goals on worst cases, automatic navigation's shortfall equal to
     the worst case's, the robust proton deliverable with no worst case worse, and the photon refusal.
+
+### R11.7 Protocols, command line and viewer
+
+- **Protocols** (`models/protocol.py`, `services/autoplan.py`): an optional `mco` section (`MCOSection`: trade-offs,
+  hard constraints, budget, tolerance, `navigation_goals`, `navigation_structures`). A protocol with one:
+  - computes the Pareto set on its beams (static fields, or the arcs' sectors with the pencil-beam engine);
+  - navigates automatically by its goals (the planning goals as clinical goals, the main target's at priority 1);
+  - makes the navigated state deliverable, normalised to the coverage goal, in place of the reweighting rounds.
+
+  The run records `mco_id`, `state_id` and `deliverable_id`. A protocol without the section keeps its digest, so
+  earlier runs stay cached. The beam arrangements moved into `static_beam_model` and `sector_beam_model`, unchanged.
+- **Command line:** `radiarch plan` prints the Pareto set, the state to navigate from and the flagged deviations.
+  The SDK adds `ProtocolRun.pareto_set()`.
+- **API:**
+  - `GET /mco/deliverables?dose_id=&beam_model_id=` finds the plans that made a dose.
+  - A deliverable plan stores its `request`, so another state is made deliverable the same way.
+- **Viewer:**
+  - `@radiarch/client` adds `findDeliverables`, `paretoSetOf(export)`, `navigate`, `autoNavigate`, `makeDeliverable`
+    (following the job) and `exportPlan`, and the helpers `tradeoffRows`, `stateCurves` and `deviationRows`.
+  - `@radiarch/ohif-extension-radiarch` has a second panel, `radiarch-mco`, in the plan review mode. It shows a slider,
+    a value field and a lock per trade-off (worst case and nominal on a robust set), automatic navigation by a goal
+    template, the state's goals and DVHs, "Make deliverable" with the deviation table, and "Export and open" (the new
+    plan beside the one on screen, referencing its structure set, sent to the image server).
+  - A navigated blend is shown by its DVHs and goals. The dose on screen changes only when a plan is exported and
+    opened: a blend has no dose file.
+- **Tests:**
+  - `tests/test_r11_protocol.py`: the section, its default goals and digest; an MCO protocol planning the stub patient;
+    navigation from its state; export; the command's output.
+  - `viewer/radiarch-client/test/mco.test.js`: offline helpers in CI's viewer job; live, through
+    `tests/test_r11_viewer_client.py`, against a served API with a key.
+  - `tests/test_r11_viewer_browser.py`: the panel in headless Chromium (CI's viewer job).
+  - The test conftest now clears every cached route service between tests (`_navigation`, `_deliverables` too).

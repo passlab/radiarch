@@ -31,7 +31,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
 | 16 | R13 Viewer integration | done; 3D Slicer check by the project lead waiting | fc7473d..26787db | 0018 |
-| 17 | R11 Multi-criteria optimization | in progress: R11.1–R11.6 done | 268b0f0.. | (0019) |
+| 17 | R11 Multi-criteria optimization | in progress: R11.1–R11.7 done | 268b0f0.. | (0019) |
 
 ## Before the roadmap (done by 2026-10-20)
 
@@ -267,8 +267,10 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
 - [x] R11.6 Robust MCO (D8): the scenario-wise worst case in generation (smoothed, with a valid outer bound); hard
   constraints in every scenario; worst-case and nominal values, goals and automatic navigation on worst cases; the
   robust gap reported; robust deliverables for protons (about 0.25 ew)
-- [ ] R11.7 SDK, command line, protocols and viewer (D9): `ParetoSet` in the SDK; a protocol's `mco` section used by
-  `radiarch plan`; the navigation panel in the OHIF extension (sliders, clamps, live DVH and goals) (about 0.5 ew)
+- [x] R11.7 SDK, command line, protocols and viewer (D9): `ParetoSet` in the SDK; a protocol's `mco` section used by
+  `radiarch plan` (Pareto set, automatic navigation by the goals, deliverable plan); the MCO panel in the OHIF
+  extension (sliders, value fields, locks, automatic navigation, goals, DVHs, make deliverable, export and open)
+  (about 0.5 ew)
 - [ ] R11.8 Record and ADR 0019: the algorithm tests of report §5 in CI; the TG-119 C-shape front, the lung demo
   (automatic navigation against the R10 protocol plan, navigated against deliverable, plans against the error bound),
   a robust proton case; physicist sign-off (about 0.5 ew)

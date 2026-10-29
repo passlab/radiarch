@@ -80,6 +80,13 @@ class DeliverableStore:
     def list_ids(self) -> List[str]:
         return sorted(d.name for d in self.base_dir.iterdir() if d.is_dir() and (d / "meta.json").is_file()) if self.base_dir.is_dir() else []
 
+    def find(self, dose_id: Optional[str] = None, beam_model_id: Optional[str] = None) -> List[MCODeliverable]:
+        """The plans with this dose and beam model (either may be left out), newest first."""
+        plans = [p for p in (self.get_by_id(i) for i in self.list_ids()) if p is not None
+                 and (dose_id is None or p.dose_id == dose_id) and (beam_model_id is None or p.beam_model_id == beam_model_id)]
+        epoch = datetime.min.replace(tzinfo=timezone.utc)
+        return sorted(plans, key=lambda p: p.created_at or epoch, reverse=True)
+
     def save(self, result: MCODeliverable) -> None:
         root = self.base_dir / result.deliverable_id
         root.mkdir(parents=True, exist_ok=True)
@@ -217,7 +224,7 @@ class DeliverableService:
             deliverable_id=str(uuid.uuid4()), cache_key=key, mco_id=mco_id, state_id=state.state_id, geometry_id=result.geometry_id,
             blend=state.blend, projected=projected, technique=technique, optimization_id=opt.optimization_id, sequence_id=sequence_id,
             vmat_id=vmat_id, beam_model_id=beam_model_id, dose_id=dose_id, normalisation=float(k), deliverable=bool(deliverable),
-            deviation=rows, flagged=sum(r.flagged for r in rows), notes=notes, seconds=round(time.time() - t0, 1),
+            deviation=rows, flagged=sum(r.flagged for r in rows), request=request, notes=notes, seconds=round(time.time() - t0, 1),
             created_at=datetime.now(timezone.utc))
         self.store.save(out)
         on(DeliverableStage.done, 1.0, f"deliverable {out.deliverable_id}: {out.flagged} flagged")

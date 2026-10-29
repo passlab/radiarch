@@ -96,6 +96,14 @@ async def get_deliverable_job(job_id: str) -> DeliverableJobStatus:
     return job
 
 
+@router.get("/deliverables", response_model=List[MCODeliverable], summary="Deliverable plans by their dose or beam model (R11.7).")
+async def find_deliverables(dose_id: Optional[str] = None, beam_model_id: Optional[str] = None, limit: int = 20) -> List[MCODeliverable]:
+    """The deliverable plans that made a dose or a beam model, newest first: how a viewer finds the Pareto set behind the
+    dose on screen. With neither filter, the newest plans."""
+    found = _deliverables().store.find(dose_id=dose_id, beam_model_id=beam_model_id)
+    return found[: max(1, min(int(limit), 200))]
+
+
 @router.get("/deliverables/{deliverable_id}", response_model=MCODeliverable, summary="A deliverable plan and its deviation table.")
 async def get_deliverable(deliverable_id: str) -> MCODeliverable:
     result = _deliverables().store.get_by_id(deliverable_id)

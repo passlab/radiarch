@@ -345,6 +345,13 @@ Bokrantz; shared sweeps in VMAT), is the planned follow-up when the deviation ta
   interactive navigation.
 - **Viewer:** a navigation panel in the OHIF extension (R13): a slider and a clamp per objective, live DVH and goals
   from the API, and the dose wash replaced when a state is applied.
+- **As built (R11.7).**
+  - **Protocols.** A protocol's `mco` section makes `radiarch plan` run three steps: the Pareto set, automatic
+    navigation by the protocol's goals, and the deliverable plan, normalised.
+  - **Viewer panel.** The panel adds a value field and a lock per trade-off to the sliders. A navigated blend is shown
+    by its DVHs and goals; it has no dose file to wash the CT with. The dose on screen changes when the state is made
+    deliverable and "Export and open" writes it beside the plan on screen.
+  - **Finding the set.** The panel finds the Pareto set through `GET /mco/deliverables?dose_id=`.
 
 The vocabulary follows RayStation's, which the literature shares: Pareto plans, anchor, balance plan, navigation,
 clamp, deliverable plan, dose mimicking.

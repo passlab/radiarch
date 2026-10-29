@@ -129,21 +129,11 @@ def normalise_to_goal(dose: np.ndarray, target_doses: np.ndarray, metric: str, g
 # The two loops (moved from the validation harness unchanged)
 # ---------------------------------------------------------------------------
 
-def plan_static(geo, target: str, rx_gy: float, goals: List[dict], beams: dict, beamlet_mm: float, iterations: int,
-                jaw_margin_mm: float = 20.0, engine_name: str = "ccc", n_jobs: int = 8, rounds: int = 4, machine: str = "synthetic-120",
-                extra: Sequence = (), engine_params: Optional[dict] = None, on_round: Optional[Callable[[int, int], None]] = None):
-    """Beam model → Dij → optimization, then goal-driven reweighting rounds (the rule-based auto-planning a
-    planner does by hand: a goal that fails gets three times the weight and, for an organ's limit, a 10 % lower dose
-    level, and the optimizer restarts from the previous weights). Every round's plan is normalised to the target's first
-    coverage goal. Returns (bm, opt, normalised dose_zyx, arrays, history)."""
+def static_beam_model(geo, arrays, target: str, goals: List[dict], beams: dict, beamlet_mm: float, jaw_margin_mm: float, machine: str):
+    """Static photon fields at equal spacing around the targets' centre, the jaws over every target from every angle."""
     from ..models.beam_model import BeamModelBuildRequest, BeamSetSpec, BeamSpec, DeliveryParams, Modality
-    from ..models.dose import EngineSpec
-    from ..models.optimization import OptimizationRunRequest, SolverConfig
     from .beam_model import BeamModelService
-    from .geometry_bundle import load_geometry_arrays
-    from .optimization import OptimizationService
 
-    arrays = load_geometry_arrays(geo)
     # the field covers every target: the multi-target case has three
     targets = [t for t in target_names(target, goals) if t in arrays.structure_index]
     union = np.zeros(arrays.shape_zyx, dtype=bool)
@@ -154,10 +144,47 @@ def plan_static(geo, target: str, rx_gy: float, goals: List[dict], beams: dict, 
     jaw_y = float(hi[2] - lo[2] + 2 * jaw_margin_mm)
     centre = tuple(float(v) for v in (lo + hi) / 2.0)
     n_beams = int(beams.get("count", 7)); spacing = float(beams.get("spacing_deg", 360.0 / n_beams)); start = float(beams.get("start_deg", 0.0))
-    bm = BeamModelService().build(BeamModelBuildRequest(
+    return BeamModelService().build(BeamModelBuildRequest(
         geometry_id=geo.geometry_id, modality=Modality.photon_imrt, machine_model_id=machine,
         beam_set=BeamSetSpec(isocenter_mm=centre, beams=[BeamSpec(beam_id=f"G{(start + i * spacing) % 360:g}", gantry_deg=(start + i * spacing) % 360.0) for i in range(n_beams)]),
         delivery_params=DeliveryParams(jaw_opening_mm=(jaw_x, jaw_y), beamlet_size_mm=(beamlet_mm, beamlet_mm))))
+
+
+def sector_beam_model(geo, arrays, target: str, goals: List[dict], arcs, beamlet: float, jaw_margin_mm: float, machine: str):
+    """Sector beams of the arcs around every target, the jaws over them from every angle of the arcs."""
+    from ..models.beam_model import BeamModelBuildRequest, BeamSetSpec, BeamSpec, DeliveryParams, Modality
+    from ..models.vmat import sector_beams
+    from .beam_model import BeamModelService
+
+    union = np.zeros(arrays.shape_zyx, bool)
+    for t in {target} | {g["structure"] for g in goals if g["op"].startswith(">")}:
+        union |= arrays.mask_zyx(arrays.structure_index[t])
+    lo, hi = structure_extent_mm(union, arrays.origin_mm, arrays.spacing_mm)
+    iso = tuple(float(v) for v in (lo + hi) / 2.0)
+    jaw_x = float(np.hypot(hi[0] - lo[0], hi[1] - lo[1]) + 2 * jaw_margin_mm)
+    jaw_y = float(hi[2] - lo[2] + 2 * jaw_margin_mm)
+    return BeamModelService().build(BeamModelBuildRequest(
+        geometry_id=geo.geometry_id, modality=Modality.photon_imrt, machine_model_id=machine,
+        beam_set=BeamSetSpec(isocenter_mm=iso, beams=[BeamSpec(beam_id=b, gantry_deg=g, couch_deg=c, collimator_deg=col)
+                                                      for b, g, c, col in sector_beams(arcs)]),
+        delivery_params=DeliveryParams(jaw_opening_mm=(jaw_x, jaw_y), beamlet_size_mm=(beamlet, beamlet))))
+
+
+def plan_static(geo, target: str, rx_gy: float, goals: List[dict], beams: dict, beamlet_mm: float, iterations: int,
+                jaw_margin_mm: float = 20.0, engine_name: str = "ccc", n_jobs: int = 8, rounds: int = 4, machine: str = "synthetic-120",
+                extra: Sequence = (), engine_params: Optional[dict] = None, on_round: Optional[Callable[[int, int], None]] = None):
+    """Beam model → Dij → optimization, then goal-driven reweighting rounds (the rule-based auto-planning a
+    planner does by hand: a goal that fails gets three times the weight and, for an organ's limit, a 10 % lower dose
+    level, and the optimizer restarts from the previous weights). Every round's plan is normalised to the target's first
+    coverage goal. Returns (bm, opt, normalised dose_zyx, arrays, history)."""
+    from ..models.dose import EngineSpec
+    from ..models.optimization import OptimizationRunRequest, SolverConfig
+    from .geometry_bundle import load_geometry_arrays
+    from .optimization import OptimizationService
+
+    arrays = load_geometry_arrays(geo)
+    targets = [t for t in target_names(target, goals) if t in arrays.structure_index]
+    bm = static_beam_model(geo, arrays, target, goals, beams, beamlet_mm, jaw_margin_mm, machine)
     cover = next((g for g in goals if g["structure"] == target and g["op"].startswith(">")), None)
     masks = {g["structure"]: arrays.mask_zyx(arrays.structure_index[g["structure"]]) for g in goals if g["structure"] in arrays.structure_index}
     scale: Dict[int, float] = {}
@@ -199,31 +226,17 @@ def plan_vmat(geo, arrays, target: str, rx: float, goals: List[dict], extra: lis
     """Sector beams around every target (the field covers them from every angle of the arcs), fluence optimization
     with the pb Dij and goal-driven reweighting rounds, then arcs (VMAT service); the arc dose normalised so the
     main target's D95 meets its prescription. Returns bm, opt, vm, dose, k, history, objectives."""
-    from ..models.beam_model import BeamModelBuildRequest, BeamSetSpec, BeamSpec, DeliveryParams, Modality
     from ..models.dose import EngineSpec
     from ..models.optimization import OptimizationRunRequest, SolverConfig
-    from ..models.vmat import ArcRequest, sector_beams
-    from .beam_model import BeamModelService
+    from ..models.vmat import ArcRequest
     from .dose import DoseService
     from .optimization import OptimizationService
     from .vmat import VMATService
 
     target_mask = arrays.mask_zyx(arrays.structure_index[target])
-    union = np.zeros(arrays.shape_zyx, bool)
-    for t in {target} | {g["structure"] for g in goals if g["op"].startswith(">")}:
-        union |= arrays.mask_zyx(arrays.structure_index[t])
-    lo, hi = structure_extent_mm(union, arrays.origin_mm, arrays.spacing_mm)
-    iso = tuple(float(v) for v in (lo + hi) / 2.0)
-    margin = float(spec.get("jaw_margin_mm", 10.0))
-    jaw_x = float(np.hypot(hi[0] - lo[0], hi[1] - lo[1]) + 2 * margin)
-    jaw_y = float(hi[2] - lo[2] + 2 * margin)
     machine = spec.get("machine", "synthetic-120")
     engine = EngineSpec(name="pb", params=dict(spec.get("pb_params", {})))
-    bm = BeamModelService().build(BeamModelBuildRequest(
-        geometry_id=geo.geometry_id, modality=Modality.photon_imrt, machine_model_id=machine,
-        beam_set=BeamSetSpec(isocenter_mm=iso, beams=[BeamSpec(beam_id=b, gantry_deg=g, couch_deg=c, collimator_deg=col)
-                                                      for b, g, c, col in sector_beams(arcs)]),
-        delivery_params=DeliveryParams(jaw_opening_mm=(jaw_x, jaw_y), beamlet_size_mm=(beamlet, beamlet))))
+    bm = sector_beam_model(geo, arrays, target, goals, arcs, beamlet, float(spec.get("jaw_margin_mm", 10.0)), machine)
     masks = {g["structure"]: arrays.mask_zyx(arrays.structure_index[g["structure"]]) for g in goals if g["structure"] in arrays.structure_index}
     targets = {g["structure"] for g in goals if g["op"].startswith(">")}
     scale: Dict[int, float] = {}
@@ -407,42 +420,54 @@ class AutoplanService:
         goals = [g.model_dump() for g in protocol.goals]
         cover = next(g for g in goals if g["structure"] == target and g["op"] == ">=")
 
-        # 2. the goal-driven loop, then the deliverable plan
-        on(AutoplanStage.planning, 0.15, f"{protocol.beams.technique} planning")
-        # each goal-driven round as it starts (the first also computes the dose matrix, the longest step)
-        def on_round(r: int, n: int) -> None:
-            on(AutoplanStage.planning, 0.15 + 0.55 * (r - 1) / n, f"{protocol.beams.technique} planning, round {r} of up to {n}")
-        sequence_id = vmat_id = None
-        if protocol.beams.technique == "imrt":
-            from ..models.apertures import SequenceRequest
-            from .apertures import ApertureService
-
-            b = protocol.beams
-            beams = {"count": b.count, "start_deg": b.start_deg, **({"spacing_deg": b.spacing_deg} if b.spacing_deg else {})}
-            bm, opt, _, arrays, history = plan_static(pgeo, target, rx, goals, beams, protocol.beamlet_mm, protocol.iterations,
-                                                      jaw_margin_mm=protocol.jaw_margin_mm, engine_name=protocol.engine.name,
-                                                      rounds=protocol.rounds, machine=protocol.machine, extra=protocol.extra_objectives,
-                                                      engine_params=protocol.engine.params, on_round=on_round)
-            on(AutoplanStage.deliverable, 0.75, "sequencing apertures")
-            seq = ApertureService().sequence(opt.optimization_id, SequenceRequest(
-                objectives=objectives_for(arrays, target, rx, goals, {}, {}) + list(protocol.extra_objectives),
-                levels=b.sequence_levels, max_iterations=protocol.iterations, machine_model_id=protocol.machine))
-            sequence_id, src_bm, src_dose, deliverable = seq.sequence_id, seq.beam_model_id, seq.dose_id, seq.deliverable
+        mco: Dict[str, Optional[str]] = {}
+        if protocol.mco is not None:
+            # 2'. multi-criteria: the Pareto set, automatic navigation by the goals, the navigated plan made deliverable
+            out = self._plan_mco(protocol, pgeo, arrays, goals, cover, on)
+            d = out["deliverable"]
+            optimization_id, sequence_id, vmat_id, deliverable, k = d.optimization_id, d.sequence_id, d.vmat_id, d.deliverable, d.normalisation
+            beam_model_id, dose_id, history = d.beam_model_id, d.dose_id, out["history"]
             from .dose import DoseService
-            raw = read_volume(DoseService().dose_store.get_by_id(src_dose).dose_grid_uri)
-            _, k = normalise_to_goal(raw, raw[arrays.mask_zyx(arrays.structure_index[target])], cover["metric"], cover["gy"] * NORMALISATION_HEADROOM)
-            optimization_id = opt.optimization_id
+            dose_arr = read_volume(DoseService().dose_store.get_by_id(dose_id).dose_grid_uri)
+            mco = {"mco_id": d.mco_id, "state_id": d.state_id, "deliverable_id": d.deliverable_id}
         else:
-            out = plan_vmat(pgeo, arrays, target, rx, goals, list(protocol.extra_objectives), protocol.beams.arcs, protocol.beamlet_mm,
-                            protocol.iterations, protocol.rounds, protocol.prescription.fractions,
-                            {"jaw_margin_mm": protocol.jaw_margin_mm, "machine": protocol.machine, "arc_rounds": protocol.arc_rounds,
-                             "pb_params": dict(protocol.engine.params)}, on_round=on_round)
-            vm, k, history = out["vm"], out["k"], out["history"]
-            vmat_id, src_bm, src_dose, deliverable, optimization_id = vm.vmat_id, vm.beam_model_id, vm.dose_id, vm.deliverable, out["opt"].optimization_id
+            # 2. the goal-driven loop, then the deliverable plan
+            on(AutoplanStage.planning, 0.15, f"{protocol.beams.technique} planning")
+            # each goal-driven round as it starts (the first also computes the dose matrix, the longest step)
+            def on_round(r: int, n: int) -> None:
+                on(AutoplanStage.planning, 0.15 + 0.55 * (r - 1) / n, f"{protocol.beams.technique} planning, round {r} of up to {n}")
+            sequence_id = vmat_id = None
+            if protocol.beams.technique == "imrt":
+                from ..models.apertures import SequenceRequest
+                from .apertures import ApertureService
 
-        # 3. normalised in its metersets: a deliverable beam model and its dose, both scaled by k
-        on(AutoplanStage.deliverable, 0.85, f"normalising by {k:.4f}")
-        bm_n, dose_n, dose_arr = self._scaled(src_bm, src_dose, k, key)
+                b = protocol.beams
+                beams = {"count": b.count, "start_deg": b.start_deg, **({"spacing_deg": b.spacing_deg} if b.spacing_deg else {})}
+                bm, opt, _, arrays, history = plan_static(pgeo, target, rx, goals, beams, protocol.beamlet_mm, protocol.iterations,
+                                                          jaw_margin_mm=protocol.jaw_margin_mm, engine_name=protocol.engine.name,
+                                                          rounds=protocol.rounds, machine=protocol.machine, extra=protocol.extra_objectives,
+                                                          engine_params=protocol.engine.params, on_round=on_round)
+                on(AutoplanStage.deliverable, 0.75, "sequencing apertures")
+                seq = ApertureService().sequence(opt.optimization_id, SequenceRequest(
+                    objectives=objectives_for(arrays, target, rx, goals, {}, {}) + list(protocol.extra_objectives),
+                    levels=b.sequence_levels, max_iterations=protocol.iterations, machine_model_id=protocol.machine))
+                sequence_id, src_bm, src_dose, deliverable = seq.sequence_id, seq.beam_model_id, seq.dose_id, seq.deliverable
+                from .dose import DoseService
+                raw = read_volume(DoseService().dose_store.get_by_id(src_dose).dose_grid_uri)
+                _, k = normalise_to_goal(raw, raw[arrays.mask_zyx(arrays.structure_index[target])], cover["metric"], cover["gy"] * NORMALISATION_HEADROOM)
+                optimization_id = opt.optimization_id
+            else:
+                out = plan_vmat(pgeo, arrays, target, rx, goals, list(protocol.extra_objectives), protocol.beams.arcs, protocol.beamlet_mm,
+                                protocol.iterations, protocol.rounds, protocol.prescription.fractions,
+                                {"jaw_margin_mm": protocol.jaw_margin_mm, "machine": protocol.machine, "arc_rounds": protocol.arc_rounds,
+                                 "pb_params": dict(protocol.engine.params)}, on_round=on_round)
+                vm, k, history = out["vm"], out["k"], out["history"]
+                vmat_id, src_bm, src_dose, deliverable, optimization_id = vm.vmat_id, vm.beam_model_id, vm.dose_id, vm.deliverable, out["opt"].optimization_id
+
+            # 3. normalised in its metersets: a deliverable beam model and its dose, both scaled by k
+            on(AutoplanStage.deliverable, 0.85, f"normalising by {k:.4f}")
+            bm_n, dose_n, dose_arr = self._scaled(src_bm, src_dose, k, key)
+            beam_model_id, dose_id = bm_n.beam_model_id, dose_n.dose_id
         outcomes = []
         for g in goals:
             if g["structure"] not in arrays.structure_index:
@@ -457,15 +482,15 @@ class AutoplanService:
         if protocol.evaluation_template:
             on(AutoplanStage.evaluating, 0.92, f"evaluating against {protocol.evaluation_template}")
             from .evaluation import EvaluationService
-            ev = EvaluationService().run(EvaluationRequest(dose_id=dose_n.dose_id, geometry_id=pgeo.geometry_id, prescription_gy=rx,
+            ev = EvaluationService().run(EvaluationRequest(dose_id=dose_id, geometry_id=pgeo.geometry_id, prescription_gy=rx,
                                                            target_structure=target, fractions=protocol.prescription.fractions,
                                                            goals=GoalSetSpec(template_id=protocol.evaluation_template)))
             evaluation_id = ev.evaluation_id
         result = ProtocolRunResult(
             run_id=str(uuid.uuid4()), protocol=protocol, geometry_id=geo.geometry_id, planning_geometry_id=pgeo.geometry_id,
             aliased=aliased,
-            optimization_id=optimization_id, sequence_id=sequence_id, vmat_id=vmat_id, beam_model_id=bm_n.beam_model_id,
-            dose_id=dose_n.dose_id, normalisation=float(k), goals=outcomes, passed=all(o.passed is not False for o in outcomes),
+            optimization_id=optimization_id, sequence_id=sequence_id, vmat_id=vmat_id, beam_model_id=beam_model_id,
+            dose_id=dose_id, normalisation=float(k), **mco, goals=outcomes, passed=all(o.passed is not False for o in outcomes),
             deliverable=bool(deliverable), evaluation_id=evaluation_id, history=history, seconds=round(time.time() - t0, 1),
             cache_key=key, created_at=datetime.now(timezone.utc))
         self.store.save(result)
@@ -473,6 +498,49 @@ class AutoplanService:
         logger.info("Protocol {} on geometry {}: {} goals, passed={}, normalised by {:.4f}, {:.0f} s", protocol.protocol_id,
                     geo.geometry_id, len(outcomes), result.passed, k, result.seconds)
         return result
+
+    @staticmethod
+    def _plan_mco(protocol, pgeo, arrays, goals: List[dict], cover: dict, on) -> dict:
+        """A protocol's ``mco`` section: the Pareto set on its beams (static fields, or the arcs' sectors), automatic
+        navigation by its goals, and the navigated plan made deliverable (apertures or arcs, normalised to the main
+        target's coverage goal)."""
+        from ..models.dose import EngineSpec
+        from ..models.mco import AutoNavigateRequest, DeliverableRequest, MCORunRequest, NormaliseSpec
+        from ..models.optimization import SolverConfig
+        from ..models.protocol import AutoplanStage, navigation_goals
+        from .mco import MCOService
+        from .mco_deliverable import DeliverableService
+        from .navigation import NavigationService
+
+        m, b = protocol.mco, protocol.beams
+        rx, target, fx = protocol.prescription.dose_gy, protocol.prescription.target, protocol.prescription.fractions
+        if b.technique == "imrt":
+            beams = {"count": b.count, "start_deg": b.start_deg, **({"spacing_deg": b.spacing_deg} if b.spacing_deg else {})}
+            bm = static_beam_model(pgeo, arrays, target, goals, beams, protocol.beamlet_mm, protocol.jaw_margin_mm, protocol.machine)
+            engine = protocol.engine
+        else:
+            bm = sector_beam_model(pgeo, arrays, target, goals, b.arcs, protocol.beamlet_mm, protocol.jaw_margin_mm, protocol.machine)
+            engine = EngineSpec(name="pb", params=dict(protocol.engine.params))
+        present = [g["structure"] for g in goals if g["structure"] in arrays.structure_index]
+        mreq = MCORunRequest(geometry_id=pgeo.geometry_id, beam_model_id=bm.beam_model_id, dose_engine=engine, tradeoffs=m.tradeoffs,
+                             hard_constraints=m.hard_constraints, solver=SolverConfig(method="L-BFGS-B", max_iterations=protocol.iterations),
+                             plan_budget=m.plan_budget, error_tolerance=m.error_tolerance,
+                             navigation_structures=list(dict.fromkeys(present + list(m.navigation_structures))))
+        mco = MCOService()
+        res = mco.run(mreq, lambda stage, f, msg: on(AutoplanStage.pareto, 0.15 + 0.45 * f, f"Pareto set: {msg}"))
+        on(AutoplanStage.navigating, 0.62, f"{len(res.plans)} Pareto plans; navigating by the goals' priorities")
+        goal_set = navigation_goals(protocol)
+        state = NavigationService(mco.store).auto_navigate(res.mco_id, AutoNavigateRequest(
+            goals=goal_set, prescription_gy=rx, fractions=fx, name=f"protocol {protocol.protocol_id}"))
+        on(AutoplanStage.deliverable, 0.7, "the navigated plan made deliverable")
+        d = DeliverableService(mco_service=mco).run(res.mco_id, DeliverableRequest(
+            state_id=state.state_id, arcs=b.arcs if b.technique == "vmat" else [], fractions=fx, levels=b.sequence_levels,
+            machine_model_id=protocol.machine, max_iterations=protocol.iterations, goals=goal_set, prescription_gy=rx,
+            normalise=NormaliseSpec(structure=target, metric=cover["metric"], gy=cover["gy"] * NORMALISATION_HEADROOM)))
+        history = [{"mco_id": res.mco_id, "plans": len(res.plans), "error_bound": res.error_bound, "stop_reason": res.stop_reason},
+                   {"state_id": state.state_id, "levels": [lv.model_dump() for lv in state.levels]},
+                   {"deliverable_id": d.deliverable_id, "flagged": d.flagged, "normalisation": d.normalisation}]
+        return {"deliverable": d, "history": history}
 
     @staticmethod
     def _scaled(beam_model_id: str, dose_id: str, k: float, key: str):
@@ -526,5 +594,5 @@ def read_spacing(uri: str) -> Tuple[float, float, float]:
 
 
 __all__ = ["OAR_WEIGHT", "NORMALISATION_HEADROOM", "read_volume", "dose_at", "structure_extent_mm", "goal_value", "goal_met",
-           "target_names", "objectives_for", "normalise_to_goal", "plan_static", "plan_vmat", "AutoplanError", "AutoplanService",
+           "target_names", "objectives_for", "normalise_to_goal", "static_beam_model", "sector_beam_model", "plan_static", "plan_vmat", "AutoplanError", "AutoplanService",
            "AutoplanStore", "builtin_protocols", "load_protocol"]

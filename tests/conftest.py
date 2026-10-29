@@ -90,7 +90,7 @@ def fake_workflow_runners():
 def _clear_router_service_caches():
     for name, module in list(sys.modules.items()):
         if name.startswith("radiarch.api.routes.") and module is not None:
-            svc = getattr(module, "_service", None)
-            if svc is not None and hasattr(svc, "cache_clear"):
-                svc.cache_clear()
+            for attr, svc in list(vars(module).items()):      # _service, and the mco routes' _navigation, _deliverables
+                if attr.startswith("_") and callable(svc) and hasattr(svc, "cache_clear"):
+                    svc.cache_clear()
     yield

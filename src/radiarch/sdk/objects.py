@@ -395,6 +395,11 @@ class ProtocolRun(_Object):
     def goals_table(self) -> List[Dict[str, Any]]:
         return [g.model_dump() for g in self.result.goals]
 
+    def pareto_set(self) -> Optional["ParetoSet"]:
+        """An mco protocol's Pareto set, to navigate from ``state_id`` (None for a protocol without one)."""
+        from ..models.mco import MCOResult
+        return ParetoSet(self.client, self.client.get(f"/mco/{self.result.mco_id}", MCOResult)) if self.result.mco_id else None
+
     def export(self, **request) -> "Export":
         """The plan's RT objects. Its structure set holds the planning geometry's structures under the protocol's names:
         a patient's structure the protocol copied to its own name (structure_aliases) is not written twice."""

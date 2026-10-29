@@ -5,6 +5,10 @@ with aliases for the names centres use), the planning goals the optimizer is dri
 beam arrangement (static fields, sequenced into apertures, or VMAT arcs), the machine and engine, the planning loop's
 settings, and the goal template the finished plan is evaluated against. Running it on a geometry gives a
 deliverable plan normalised to the main target's coverage goal.
+
+A protocol with an ``mco`` section (R11.7) plans by multi-criteria optimization instead of the reweighting rounds: the
+Pareto set of its trade-offs, automatic navigation by its goals' priorities, and the navigated plan made deliverable.
+The Pareto set is kept, so a planner can navigate from the protocol's plan.
 """
 
 from __future__ import annotations
@@ -19,9 +23,10 @@ from pydantic import BaseModel, Field, model_validator
 
 from .common import ResearchArtifact
 from .dose import EngineSpec
+from .evaluation import ClinicalGoal, GoalSetSpec
 from .geometry import StructureOperation
 from .job import JobState
-from .optimization import ObjectiveSpec
+from .optimization import HardConstraint, ObjectiveSpec, check_tradeoffs
 from .vmat import ArcSpec
 
 
@@ -58,6 +63,39 @@ class BeamArrangement(BaseModel):
         return self
 
 
+class MCOSection(BaseModel):
+    """A protocol's multi-criteria plan (R11.7): the trade-offs, the limits every Pareto plan meets, the generation's
+    budget, and the goals automatic navigation works by. Without ``navigation_goals`` they are the protocol's goals:
+    the main target's at priority 1, the others at priority 2."""
+
+    tradeoffs: List[ObjectiveSpec] = Field(..., min_length=2, max_length=8)
+    hard_constraints: List[HardConstraint] = Field(default_factory=list, max_length=64)
+    plan_budget: Optional[int] = Field(default=None, ge=3, le=33)
+    error_tolerance: float = Field(default=0.05, gt=0.0, le=1.0)
+    navigation_goals: Optional[GoalSetSpec] = None
+    navigation_structures: List[str] = Field(default_factory=list, max_length=64)
+
+    @model_validator(mode="after")
+    def _check(self) -> "MCOSection":
+        check_tradeoffs(self.tradeoffs)
+        if self.plan_budget is not None and self.plan_budget > 4 * len(self.tradeoffs) + 1:
+            raise ValueError(f"plan_budget at most 4 N + 1 = {4 * len(self.tradeoffs) + 1} for {len(self.tradeoffs)} trade-offs")
+        return self
+
+
+PLANNING_METRICS = {"Dmax": "Dmax[Gy]", "Dmean": "Dmean[Gy]"}
+
+
+def navigation_goals(protocol: "PlanningProtocol") -> GoalSetSpec:
+    """The goals a protocol's plan is navigated by: its ``mco.navigation_goals``, else its planning goals as clinical
+    goals (``D95`` → ``D95%[Gy]``), the main target's at priority 1 and the others at priority 2."""
+    if protocol.mco is not None and protocol.mco.navigation_goals is not None:
+        return protocol.mco.navigation_goals
+    t = protocol.prescription.target
+    return GoalSetSpec(goals=[ClinicalGoal(structure=g.structure, metric=PLANNING_METRICS.get(g.metric, f"{g.metric}%[Gy]"), op=g.op,
+                                           value=g.gy, priority=1 if g.structure == t else 2) for g in protocol.goals])
+
+
 class PlanningProtocol(BaseModel):
     protocol_id: str = Field(..., pattern=r"^[a-z0-9][a-z0-9-]{1,63}$")
     name: str = Field(..., max_length=200)
@@ -80,6 +118,7 @@ class PlanningProtocol(BaseModel):
     rounds: int = Field(default=3, ge=1, le=10, description="Goal-driven fluence rounds.")
     arc_rounds: int = Field(default=3, ge=1, le=10, description="Goal-driven meterset rounds on the arcs (VMAT).")
     evaluation_template: Optional[str] = Field(default=None, description="A goal template the finished plan is evaluated against.")
+    mco: Optional[MCOSection] = Field(default=None, description="Plan by multi-criteria optimization instead of the reweighting rounds (R11.7).")
 
     @model_validator(mode="after")
     def _main_target_has_coverage(self) -> "PlanningProtocol":
@@ -89,7 +128,10 @@ class PlanningProtocol(BaseModel):
         return self
 
     def digest(self) -> str:
-        return hashlib.sha256(json.dumps(self.model_dump(mode="json"), sort_keys=True).encode("utf-8")).hexdigest()
+        data = self.model_dump(mode="json")
+        if data.get("mco") is None:          # so a protocol without one keeps its digest (and its runs' cache keys)
+            data.pop("mco", None)
+        return hashlib.sha256(json.dumps(data, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 class ProtocolRunRequest(BaseModel):
@@ -121,6 +163,9 @@ class ProtocolRunResult(ResearchArtifact):
     aliased: Dict[str, str] = Field(default_factory=dict,
                                     description="Protocol structure name -> the patient's structure it was copied from (by structure_aliases).")
     optimization_id: str
+    mco_id: Optional[str] = Field(default=None, description="The Pareto set (an mco protocol): navigate from state_id.")
+    state_id: Optional[str] = Field(default=None, description="The automatically navigated state the plan was made from.")
+    deliverable_id: Optional[str] = Field(default=None, description="Its deliverable plan, with the deviation table.")
     sequence_id: Optional[str] = None
     vmat_id: Optional[str] = None
     beam_model_id: str = Field(..., description="The deliverable plan, its metersets normalised.")
@@ -140,6 +185,8 @@ class AutoplanStage(str, Enum):
     queued = "queued"
     structures = "structures"
     planning = "planning"
+    pareto = "pareto"
+    navigating = "navigating"
     deliverable = "deliverable"
     evaluating = "evaluating"
     done = "done"
@@ -158,5 +205,5 @@ class AutoplanJobStatus(BaseModel):
     created_at: Optional[datetime] = None
 
 
-__all__ = ["PlanningGoal", "Prescription", "BeamArrangement", "PlanningProtocol", "ProtocolRunRequest", "GoalOutcome",
+__all__ = ["PlanningGoal", "Prescription", "BeamArrangement", "MCOSection", "navigation_goals", "PlanningProtocol", "ProtocolRunRequest", "GoalOutcome",
            "ProtocolRunResult", "AutoplanStage", "AutoplanJobStatus"]

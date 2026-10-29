@@ -557,6 +557,7 @@ it. A robust set is made deliverable for protons only (422 for photons).
 | `GET /api/v1/mco/{mco_id}/states` | The stored navigation states, the balance plan first; `/states/{state_id}` one of them. |
 | `POST /api/v1/mco/{mco_id}/deliverable` | A state made deliverable (200 cached / 202 job): projection, apertures or `arcs` mimicking its dose, optional `normalise`, the deviation table. |
 | `GET /api/v1/mco/deliverables/{id}` | The deliverable plan (beam model, dose, technique) and its deviation table; `/deliverables/jobs/{job_id}` its job. |
+| `GET /api/v1/mco/deliverables?dose_id=` | The deliverable plans that made a dose (or `beam_model_id`), newest first: how the viewer finds a plan's Pareto set. |
 
 ```python
 from radiarch.sdk import Radiarch, ops
@@ -578,6 +579,25 @@ robust = proton_beam_model.mco([ops.uniform_rms("CTV", 60), ops.mean_dose("Parot
                                                                           {"name": "range-3%", "range_scale": 0.97}]})
 robust.table()                  # worst-case values, and "<name> nominal" columns
 ```
+
+**In a protocol** (an `mco` section): `radiarch plan` computes the Pareto set of the section's trade-offs on the
+protocol's beams, navigates it automatically by the protocol's goals (the main target's at priority 1, the others at 2,
+or the section's `navigation_goals`), and makes the navigated state deliverable, normalised to the coverage goal, in
+place of the reweighting rounds. The run keeps `mco_id`, `state_id` and `deliverable_id`; the command prints the set,
+the state to navigate from, and any flagged deviation; `run.pareto_set()` in the SDK.
+
+```json
+"mco": {"tradeoffs": [{"type": "UniformRMS", "structure_name": "PTV", "dose_gy": 60, "weight": 1},
+                      {"type": "MeanDose", "structure_name": "Lungs-PTV", "dose_gy": 0, "weight": 1},
+                      {"type": "MeanDose", "structure_name": "Heart", "dose_gy": 0, "weight": 1}],
+        "hard_constraints": [{"structure_name": "PTV", "metric": "Dmin", "op": ">=", "value_gy": 54}],
+        "plan_budget": 10}
+```
+
+**In the viewer:** the plan review mode's MCO panel finds the Pareto set behind the dose on screen. Each trade-off has a
+slider and a value field over its range, and a lock. A move shows the new state's values, goals and DVHs. Automatic
+navigation works by a goal template. "Make deliverable" shows the deviation table, and "Export and open" writes the plan
+beside the one on screen and sends it to the image server.
 
 ## BAO Service (`/api/v1/bao`)
 
