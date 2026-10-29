@@ -14,9 +14,13 @@ constraints when there are any, warm-started from the nearest plan. What navigat
         navigation_index.npy           flat indices of the navigation voxels on the dose grid
         navigation_dose.npy            plans x navigation voxels (float32, Gy)
         navigation_masks.npz           structure → boolean over the navigation voxels
+        navigation_dose_scenarios.npy  robust (R11.6): scenarios x plans x navigation voxels, nominal first
 
 A navigated plan's dose on those voxels is a blend of the rows of ``navigation_dose.npy``; its full dose is the
 dose matrix times the same blend of the rows of ``weights.npy``, computed only when a plan is made from it.
+
+A robust set (R11.6, D8; :mod:`radiarch.services.robust_mco`) is solved on the stacked scenario doses of the navigation
+voxels: each plan minimizes the worst scenario of its weighted sum, and reports each trade-off's worst case.
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -39,7 +44,8 @@ from ..models.optimization import OptimizationRunRequest
 from .hard_constraints import InfeasibleConstraintsError, infeasible_message, solve_with_hard_constraints
 from .optimization import OptimizationService
 from .optimization_solvers import get_solver
-from .pareto import Solved, normalize, sandwich
+from .pareto import MIN_RANGE, Solved, normalize, sandwich
+from .robust_mco import StackedOps, WorstCase, scenario_terms, scenario_wise
 
 MCOProgressCallback = Callable[[MCOStage, float, str], None]
 
@@ -80,10 +86,14 @@ class MCOStore:
     def list_ids(self) -> List[str]:
         return sorted(d.name for d in self.base_dir.iterdir() if d.is_dir() and (d / "meta.json").is_file()) if self.base_dir.is_dir() else []
 
-    def save_arrays(self, mco_id: str, weights: np.ndarray, index: np.ndarray, doses: np.ndarray, masks: Dict[str, np.ndarray]) -> None:
+    def save_arrays(self, mco_id: str, weights: np.ndarray, index: np.ndarray, doses: np.ndarray, masks: Dict[str, np.ndarray],
+                    scenario_doses: Optional[np.ndarray] = None) -> None:
         root = self.dir(mco_id)
         root.mkdir(parents=True, exist_ok=True)
-        for name, arr in (("weights.npy", weights), ("navigation_index.npy", index), ("navigation_dose.npy", doses)):
+        arrays = [("weights.npy", weights), ("navigation_index.npy", index), ("navigation_dose.npy", doses)]
+        if scenario_doses is not None:
+            arrays.append(("navigation_dose_scenarios.npy", scenario_doses))
+        for name, arr in arrays:
             tmp = root / f".{name}.tmp.npy"
             np.save(tmp, arr)
             os.replace(tmp, root / name)
@@ -112,6 +122,11 @@ class MCOStore:
     def load_weights(self, mco_id: str) -> np.ndarray:
         return np.load(self.dir(mco_id) / "weights.npy")
 
+    def load_scenario_doses(self, mco_id: str) -> Optional[np.ndarray]:
+        """A robust set's doses on the navigation voxels, scenarios x plans x voxels (memory-mapped), or None."""
+        path = self.dir(mco_id) / "navigation_dose_scenarios.npy"
+        return np.load(path, mmap_mode="r") if path.is_file() else None
+
 
 def _noop(stage: MCOStage, fraction: float, message: str) -> None:
     pass
@@ -121,6 +136,51 @@ def projected_gradient(grad: np.ndarray, x: np.ndarray) -> float:
     """The largest component of the gradient projected on ``x >= 0`` (zero at a bound-constrained optimum)."""
     g = np.asarray(grad, dtype=np.float64)
     return float(np.max(np.abs(np.where(np.asarray(x) > 0.0, g, np.minimum(g, 0.0))))) if g.size else 0.0
+
+
+@dataclass
+class MCOOps:
+    """What a solve on a Pareto set's problem needs. Nominal: doses on the full grid, the trade-offs as they are.
+    Robust: doses stacked over the scenarios on the navigation voxels, each trade-off its worst case (:class:`WorstCase`),
+    the hard constraints once per scenario."""
+
+    objectives: list
+    masks: list
+    forward: Callable[[np.ndarray], np.ndarray]
+    backward: Callable[[np.ndarray], np.ndarray]
+    terms: list
+    regs: Optional[Callable]
+    index: np.ndarray                       # the navigation voxels (flat indices on the dose grid)
+    structures: Dict[str, np.ndarray]       # structure → boolean over the navigation voxels
+    scenarios: List[str]                    # robust: the scenario names, nominal first; else empty
+
+    @property
+    def robust(self) -> bool:
+        return bool(self.scenarios)
+
+    def navigation(self, dose: np.ndarray) -> np.ndarray:
+        """A dose of :attr:`forward` on the navigation voxels, scenarios x voxels (one row when nominal)."""
+        return np.asarray(dose) if self.robust else np.asarray(dose).ravel()[self.index][None, :]
+
+    def values(self, dose: np.ndarray) -> np.ndarray:
+        return np.array([o.value(dose, m) for o, m in zip(self.objectives, self.masks)])
+
+    def nominal_values(self, dose: np.ndarray) -> np.ndarray:
+        return np.array([o.nominal(dose, m) for o, m in zip(self.objectives, self.masks)]) if self.robust else self.values(dose)
+
+    def weighted(self, raw: np.ndarray):
+        """``(dose_terms, bound)`` for the weights ``raw``: the weighted sum (robust: its smoothed worst scenario) and,
+        robust only, a lower bound on what any plan reaches in it (else None)."""
+        if self.robust:
+            return scenario_wise([o.objective for o in self.objectives], self.masks, raw)
+
+        def dose_terms(d: np.ndarray):
+            loss, grad = 0.0, np.zeros(d.shape)
+            for wi, o, m in zip(raw, self.objectives, self.masks):
+                v, g = o.value_and_grad(d, m)
+                loss, grad = loss + wi * v, grad + wi * g
+            return loss, grad
+        return dose_terms, None
 
 
 class MCOService:
@@ -138,55 +198,43 @@ class MCOService:
         t0 = time.time()
         n = len(request.tradeoffs)
         on(MCOStage.loading, 0.02, "loading the geometry, beam model and dose matrix")
-        base = OptimizationRunRequest(
-            plan_id=request.plan_id, geometry_id=request.geometry_id, beam_model_id=request.beam_model_id,
-            dose_engine=request.dose_engine, objectives=[o.model_copy(update={"weight": 1.0}) for o in request.tradeoffs],
-            hard_constraints=request.hard_constraints, solver=request.solver, rbe=request.rbe)
         osvc = self.optimization
-        prob = osvc._assemble_problem(base)
-        forward, backward, weight_terms = osvc.nominal_ops(prob)
-        terms = osvc.hard_terms(prob, request.hard_constraints)
-        objectives = [obj for obj, _ in prob.obj_terms]
-        masks = [m for _, m in prob.obj_terms]
+        prob = osvc._assemble_problem(self._base(request))
+        ops = self.ops(prob, request)
         solver = get_solver(request.solver.method)
         tol = request.solver.convergence_tol or 1e-10
         max_iter = request.solver.max_iterations
-        regs = weight_terms if prob.regularizers else None
         notes: List[str] = []
+        if ops.robust:
+            notes.append(f"robust over {len(ops.scenarios)} scenarios: each plan minimizes the worst scenario of its weighted sum; "
+                         f"the values are each trade-off's worst case over the scenarios, and the error bound includes the "
+                         f"gap between the two")
 
         start = np.asarray(prob.w0, dtype=np.float64)
-        if terms:
-            on(MCOStage.feasibility, 0.05, f"feasibility of {len(terms)} hard constraint(s)")
-            feas = solve_with_hard_constraints(terms, forward, backward, start, solver, max_iter, tol)
+        if ops.terms:
+            on(MCOStage.feasibility, 0.05, f"feasibility of {len(request.hard_constraints)} hard constraint(s)"
+                                           + (f" in {len(ops.scenarios)} scenarios" if ops.robust else ""))
+            feas = solve_with_hard_constraints(ops.terms, ops.forward, ops.backward, start, solver, max_iter, tol)
             if not feas.met:
                 raise InfeasibleConstraintsError(infeasible_message(feas.outcomes))
             start = feas.weights
-
-        def values(dose: np.ndarray) -> np.ndarray:
-            return np.array([o.value(dose, m) for o, m in zip(objectives, masks)])
 
         plans_x: List[np.ndarray] = []
 
         def solve(raw: np.ndarray, warm: Optional[int]) -> Solved:
             w0 = plans_x[warm] if warm is not None else start
-
-            def dose_terms(d: np.ndarray):
-                loss, grad = 0.0, np.zeros(d.shape)
-                for wi, o, m in zip(raw, objectives, masks):
-                    v, g = o.value_and_grad(d, m)
-                    loss, grad = loss + wi * v, grad + wi * g
-                return loss, grad
-
-            if terms:
-                out = solve_with_hard_constraints(terms, forward, backward, w0, solver, max_iter, tol, dose_terms=dose_terms, weight_terms=regs)
+            dose_terms, bound = ops.weighted(raw)
+            if ops.terms:
+                out = solve_with_hard_constraints(ops.terms, ops.forward, ops.backward, w0, solver, max_iter, tol, dose_terms=dose_terms,
+                                                  weight_terms=ops.regs)
                 x, ok, dose = out.weights, out.success and out.met, out.dose
             else:
                 def cost_and_grad(w: np.ndarray):
-                    d = forward(w)
+                    d = ops.forward(w)
                     loss, gd = dose_terms(d)
-                    gw = backward(gd)
-                    if regs is not None:
-                        rl, rg = regs(np.asarray(w, dtype=np.float64))
+                    gw = ops.backward(gd)
+                    if ops.regs is not None:
+                        rl, rg = ops.regs(np.asarray(w, dtype=np.float64))
                         loss, gw = loss + rl, gw + rg
                     return float(loss), gw
                 x, conv = solver.run(cost_and_grad, w0, max_iter, tol)
@@ -194,9 +242,9 @@ class MCOService:
                 # L-BFGS-B reports a failed line search at an optimum on the bound (an organ's anchor at zero
                 # fluence): a vanishing projected gradient counts as converged too
                 cost, g = cost_and_grad(x)
-                ok, dose = conv.success or projected_gradient(g, x) <= 1e-6 * (1.0 + abs(cost)), forward(x)
+                ok, dose = conv.success or projected_gradient(g, x) <= 1e-6 * (1.0 + abs(cost)), ops.forward(x)
             plans_x.append(x)
-            return Solved(x=x, values=values(dose), ok=ok)
+            return Solved(x=x, values=ops.values(dose), ok=ok, bound=None if bound is None else bound(dose))
 
         budget = request.budget
 
@@ -216,20 +264,22 @@ class MCOService:
             notes.append(f"plan(s) {', '.join(map(str, empty))} deliver no dose: without a hard constraint on target coverage "
                          f"(e.g. PTV Dmin >=) an organ's anchor, and even the balance plan, can switch every beamlet off")
 
-        # the navigation voxels: every structure the trade-offs, constraints and requested goals name
+        gap = None
+        if ops.robust:
+            # how far below each plan's weighted worst cases its scenario-wise bound lies (normalized): the part of the
+            # error bound that comes from protecting scenarios rather than each trade-off's own worst case
+            span = np.where(res.nadir - res.ideal > MIN_RANGE, res.nadir - res.ideal, 1.0)
+            gap = max(float((p.raw_weights @ p.solved.values - p.solved.bound) / (p.raw_weights @ span)) for p in res.plans)
+
         on(MCOStage.persisting, 0.92, "storing the plans and their doses on the navigation voxels")
-        names = list(dict.fromkeys([o.structure_name for o in request.tradeoffs] + [c.structure_name for c in request.hard_constraints]
-                                   + list(request.navigation_structures)))
-        struct = {nm: osvc._resolve_mask(prob.geometry, nm, prob.grid_shape).ravel() > 0 for nm in names}
-        union = np.zeros(int(np.prod(prob.grid_shape)), dtype=bool)
-        for m in struct.values():
-            union |= m
-        index = np.flatnonzero(union).astype(np.int64)
-        doses = np.stack([forward(p.solved.x).ravel()[index] for p in res.plans]).astype(np.float32)
+        nav = np.stack([ops.navigation(ops.forward(p.solved.x)) for p in res.plans]).astype(np.float32)     # plans x scenarios x voxels
+        nominal = [ops.nominal_values(ops.forward(p.solved.x)) for p in res.plans] if ops.robust else None
         weights = np.stack([p.solved.x for p in res.plans]).astype(np.float32)
         mco_id = str(uuid.uuid4())
-        self.store.save_arrays(mco_id, weights, index, doses, {nm: m[index] for nm, m in struct.items()})
+        self.store.save_arrays(mco_id, weights, ops.index, np.ascontiguousarray(nav[:, 0]), ops.structures,
+                               np.ascontiguousarray(nav.transpose(1, 0, 2)) if ops.robust else None)
         (self.store.dir(mco_id) / "request.json").write_text(request.model_dump_json(indent=1), encoding="utf-8")
+        names, index = list(ops.structures), ops.index
 
         norm = res.normalized()
         root = self.store.dir(mco_id)
@@ -240,12 +290,14 @@ class MCOService:
             ideal_gy=[round(float(v), 6) for v in res.ideal], nadir_gy=[round(float(v), 6) for v in res.nadir],
             plans=[ParetoPlan(index=k, kind=p.kind, weights=[float(w) for w in p.raw_weights],
                               values_gy=[round(float(v), 6) for v in p.solved.values], normalized=[round(float(v), 6) for v in norm[k]],
+                              nominal_gy=None if nominal is None else [round(float(v), 6) for v in nominal[k]],
                               converged=p.solved.ok) for k, p in enumerate(res.plans)],
             error_history=[ErrorPoint(plans=c, error=round(e, 6)) for c, e in res.history], error_bound=round(res.error, 6),
             converged=res.error <= request.error_tolerance, stop_reason=res.stop_reason, notes=notes,
             navigation_structures=names, navigation_voxels=int(index.size),
             voxel_cc=float(np.prod(prob.geometry.spacing_mm)) / 1000.0,
             weights_uri=str(root / "weights.npy"), navigation_dose_uri=str(root / "navigation_dose.npy"),
+            scenarios=list(ops.scenarios), robust_gap=None if gap is None else round(gap, 6), modality=prob.beam_model.result.modality.value,
             compute_time_s=round(time.time() - t0, 2), created_at=datetime.now(timezone.utc))
         self.store.save(result)
         on(MCOStage.done, 1.0, f"mco {mco_id}: {len(res.plans)} plans, error bound {res.error:.3f}")
@@ -266,30 +318,60 @@ class MCOService:
         if result is None or not req_path.is_file():
             raise ValueError(f"Pareto set {mco_id} has no stored request")
         request = MCORunRequest.model_validate_json(req_path.read_text(encoding="utf-8"))
-        base = OptimizationRunRequest(
+        return result, request, self.optimization._assemble_problem(self._base(request))
+
+    @staticmethod
+    def _base(request: MCORunRequest) -> OptimizationRunRequest:
+        """The optimization request whose problem a Pareto set is computed on (its hard constraints are the set's own
+        terms, :meth:`ops`)."""
+        return OptimizationRunRequest(
             plan_id=request.plan_id, geometry_id=request.geometry_id, beam_model_id=request.beam_model_id, dose_engine=request.dose_engine,
-            objectives=[o.model_copy(update={"weight": 1.0}) for o in request.tradeoffs], hard_constraints=request.hard_constraints,
-            solver=request.solver, rbe=request.rbe)
-        return result, request, self.optimization._assemble_problem(base)
+            objectives=[o.model_copy(update={"weight": 1.0}) for o in request.tradeoffs], solver=request.solver, rbe=request.rbe,
+            robustness=request.robustness)
+
+    def ops(self, prob, request: MCORunRequest) -> MCOOps:
+        """The solve operators of a set's problem (:class:`MCOOps`); the navigation voxels are every structure the
+        trade-offs, constraints and requested goals name."""
+        osvc = self.optimization
+        names = list(dict.fromkeys([o.structure_name for o in request.tradeoffs] + [c.structure_name for c in request.hard_constraints]
+                                   + list(request.navigation_structures)))
+        struct = {nm: osvc._resolve_mask(prob.geometry, nm, prob.grid_shape).ravel() > 0 for nm in names}
+        union = np.zeros(int(np.prod(prob.grid_shape)), dtype=bool)
+        for m in struct.values():
+            union |= m
+        index = np.flatnonzero(union).astype(np.int64)
+        structures = {nm: m[index] for nm, m in struct.items()}
+        forward, backward, weight_terms = osvc.nominal_ops(prob)
+        regs = weight_terms if prob.regularizers else None
+        if not request.robustness.enabled:
+            return MCOOps([o for o, _ in prob.obj_terms], [m for _, m in prob.obj_terms], forward, backward,
+                          osvc.hard_terms(prob, request.hard_constraints), regs, index, structures, [])
+        stacked = StackedOps([prob.scenario_dij[sc.hash()][1][index] for sc in prob.scenarios])
+        scenarios = [sc.name for sc in prob.scenarios]
+        cmasks = [structures[c.structure_name].astype(np.float64) for c in request.hard_constraints]
+        return MCOOps([WorstCase(o) for o, _ in prob.obj_terms], [np.asarray(m).ravel()[index].astype(np.float64) for _, m in prob.obj_terms],
+                      stacked.forward, stacked.backward, scenario_terms(request.hard_constraints, cmasks, scenarios), regs, index,
+                      structures, scenarios)
 
     def project(self, mco_id: str, blend) -> Tuple[np.ndarray, np.ndarray, List[str]]:
         """A navigated blend moved onto the Pareto set: the plan that lowers the trade-offs' normalized sum as far as
         it can with none of them above its value in the blend, under the run's hard constraints (a variant of Bokrantz
         & Miettinen's projection, Med Phys 42:5862, 2015, which raises every objective evenly). The blend is the start
-        and meets every cap, so the projected plan is at least as good in every trade-off. Returns the plan's element
-        weights, its dose on the navigation voxels and notes."""
+        and meets every cap, so the projected plan is at least as good in every trade-off (robust: in every trade-off's
+        worst case). Returns the plan's element weights, its nominal dose on the navigation voxels and notes."""
         result, request, prob = self.problem(mco_id)
-        osvc = self.optimization
-        forward, backward, _ = osvc.nominal_ops(prob)
+        ops = self.ops(prob, request)
+        x, dose, notes = self.project_ops(result, request, ops, blend)
+        return x, ops.navigation(dose)[0], notes
+
+    def project_ops(self, result: MCOResult, request: MCORunRequest, ops: MCOOps, blend) -> Tuple[np.ndarray, np.ndarray, List[str]]:
+        """:meth:`project` on assembled operators; the dose is in :attr:`MCOOps.forward`'s form."""
         lam = np.asarray(blend, dtype=np.float64)
-        x0 = lam @ self.store.load_weights(mco_id).astype(np.float64)
+        x0 = lam @ self.store.load_weights(result.mco_id).astype(np.float64)
         span = np.maximum(np.asarray(result.nadir_gy) - np.asarray(result.ideal_gy), 1e-6)
-        x, dose, notes = project_blend([o for o, _ in prob.obj_terms], [m for _, m in prob.obj_terms], forward, backward,
-                                       osvc.hard_terms(prob, request.hard_constraints), x0, span, get_solver(request.solver.method),
-                                       request.solver.max_iterations, request.solver.convergence_tol or 1e-10,
-                                       [f"{o.type}({o.structure_name})" for o in request.tradeoffs])
-        index = np.load(self.store.dir(mco_id) / "navigation_index.npy")
-        return x, dose.ravel()[index], notes
+        return project_blend(ops.objectives, ops.masks, ops.forward, ops.backward, ops.terms, x0, span, get_solver(request.solver.method),
+                             request.solver.max_iterations, request.solver.convergence_tol or 1e-10,
+                             [f"{o.type}({o.structure_name})" for o in request.tradeoffs])
 
 
 def project_blend(objectives, masks, forward, backward, constraint_terms, x0: np.ndarray, span: np.ndarray, solver, max_iter: int,
@@ -316,4 +398,4 @@ def project_blend(objectives, masks, forward, backward, constraint_terms, x0: np
     return out.weights, out.dose, []
 
 
-__all__ = ["MCOService", "MCOStore", "MCOProgressCallback", "normalize", "project_blend"]
+__all__ = ["MCOService", "MCOStore", "MCOOps", "MCOProgressCallback", "normalize", "project_blend"]

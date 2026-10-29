@@ -26,7 +26,7 @@ from ...core.store import store
 from ...models.mco import AutoNavigateRequest, DeliverableJobStatus, DeliverableRequest, MCODeliverable, MCOJobStatus, MCORunRequest, MCOResult, NavigateRequest, NavigationState
 from ...services.audit import emit, make_event
 from ...services.mco import MCOService
-from ...services.mco_deliverable import DeliverableService
+from ...services.mco_deliverable import DeliverableRefused, DeliverableService
 from ...services.navigation import NavigationError, NavigationService
 from ..security import api_key_auth
 
@@ -163,12 +163,15 @@ async def get_state(mco_id: str, state_id: str) -> NavigationState:
 
 @router.post("/{mco_id}/deliverable", summary="A navigation state made deliverable (R11.5).",
              responses={200: {"description": "Made before: the stored plan."}, 202: {"description": "A job: poll /mco/deliverables/jobs/{job_id}."},
-                        404: {"description": "Unknown Pareto set or state."}})
+                        404: {"description": "Unknown Pareto set or state."},
+                        422: {"description": "A robust photon Pareto set (robust deliverables are made for protons)."}})
 async def make_deliverable(mco_id: str, request: DeliverableRequest, response: Response,
                            api_key_prefix: Optional[str] = Depends(api_key_auth)):
     _known(mco_id)
     try:
         key = _deliverables().cache_key(mco_id, request)
+    except DeliverableRefused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     cached = _deliverables().store.lookup_by_cache_key(key)

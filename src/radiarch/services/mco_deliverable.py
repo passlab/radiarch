@@ -11,6 +11,9 @@ meterset, so the projected spots are the deliverable plan.
 The step most reported to fail in commercial MCO is this one (Kyroudi et al. 2016; Wong et al. 2024), so every
 deliverable plan carries a deviation table: each trade-off and goal, navigated against deliverable, flagged when the
 deliverable plan is worse by more than a tolerance.
+
+A robust set (R11.6) is projected with each trade-off's worst case capped, and its deviation table compares worst
+cases. Only proton sets are made deliverable robustly: a sequenced photon plan would need its own scenario doses.
 """
 
 from __future__ import annotations
@@ -31,14 +34,17 @@ from ..models.beam_model import Modality
 from ..models.dose import dose_units_for
 from ..models.mco import DeliverableRequest, DeliverableStage, DeviationRow, MCODeliverable
 from ..models.optimization import ConvergenceInfo, ObjectiveSpec, OptimizationResult
-from .clinical_goals import grade_goal_set, parse_metric
-from .mco import MCOService, project_blend
+from .clinical_goals import parse_metric
+from .mco import MCOService
 from .navigation import NavigationService
-from .optimization_solvers import get_solver
 
 DeliverableProgressCallback = Callable[[DeliverableStage, float, str], None]
 TARGET_TYPES = ("EUDMin", "RMSUnder", "UniformRMS")
 MCO_PLAN_PREFIX = "mco:"          # the navigated plan's optimization record: mco:{mco_id}:{key} (lineage reads it)
+
+
+class DeliverableRefused(ValueError):
+    """A deliverable plan this Pareto set cannot have (a robust photon set)."""
 
 
 class DeliverableStore:
@@ -108,6 +114,9 @@ class DeliverableService:
         result = self.mco.store.get_by_id(mco_id)
         if result is None:
             raise KeyError(mco_id)
+        if result.scenarios and result.modality != Modality.proton_pbs.value:
+            raise DeliverableRefused("a robust photon Pareto set has no deliverable plan yet: the sequenced plan would need "
+                                     "its own scenario doses; robust deliverables are made for proton sets")
         state = self.navigation.get_state(mco_id, request.state_id)
         if state is None:
             raise ValueError(f"no state {request.state_id!r} in Pareto set {mco_id}")
@@ -131,7 +140,8 @@ class DeliverableService:
         state = self.navigation.get_state(mco_id, request.state_id)
         result, mreq, prob = self.mco.problem(mco_id)
         osvc = self.mco.optimization
-        forward, backward, _ = osvc.nominal_ops(prob)
+        ops = self.mco.ops(prob, mreq)
+        forward, _, _ = osvc.nominal_ops(prob)
         lam = np.asarray(state.blend, dtype=np.float64)
         x = lam @ self.mco.store.load_weights(mco_id).astype(np.float64)
         notes: List[str] = []
@@ -140,15 +150,11 @@ class DeliverableService:
         projected = False
         if request.project:
             on(DeliverableStage.projecting, 0.05, "projecting the navigated plan onto the Pareto set")
-            span = np.maximum(np.asarray(result.nadir_gy) - np.asarray(result.ideal_gy), 1e-6)
-            x, dose_full, pnotes = project_blend(
-                [o for o, _ in prob.obj_terms], [m for _, m in prob.obj_terms], forward, backward,
-                osvc.hard_terms(prob, mreq.hard_constraints), x, span, get_solver(mreq.solver.method), mreq.solver.max_iterations,
-                mreq.solver.convergence_tol or 1e-10, [f"{o.type}({o.structure_name})" for o in mreq.tradeoffs])
+            x, _, pnotes = self.mco.project_ops(result, mreq, ops, lam)
             notes += pnotes
             projected = not pnotes
-        else:
-            dose_full = forward(x)
+        dose_full = forward(x)
+        projected_stack = ops.navigation(ops.forward(x))
 
         # 2. the navigated plan as an optimization (its weights and dose): the reference, and the input of sequencing
         opt_key = f"{MCO_PLAN_PREFIX}{mco_id}:{key}"
@@ -205,7 +211,8 @@ class DeliverableService:
 
         # 5. navigated against deliverable
         on(DeliverableStage.comparing, 0.9, "comparing the deliverable plan with the navigated one")
-        rows = self._deviation(mco_id, request, lam, np.asarray(dose_full), projected, np.asarray(delivered))
+        delivered_stack = projected_stack if dose_id is None else ops.navigation(np.asarray(delivered))      # protons: the projected plan
+        rows = self._deviation(mco_id, request, lam, projected_stack if projected else None, delivered_stack)
         out = MCODeliverable(
             deliverable_id=str(uuid.uuid4()), cache_key=key, mco_id=mco_id, state_id=state.state_id, geometry_id=result.geometry_id,
             blend=state.blend, projected=projected, technique=technique, optimization_id=opt.optimization_id, sequence_id=sequence_id,
@@ -218,40 +225,37 @@ class DeliverableService:
                     out.flagged, out.seconds)
         return out
 
-    def _deviation(self, mco_id: str, request: DeliverableRequest, lam: np.ndarray, projected_full: np.ndarray, projected: bool,
-                   delivered_full: np.ndarray) -> List[DeviationRow]:
+    def _deviation(self, mco_id: str, request: DeliverableRequest, lam: np.ndarray, projected: Optional[np.ndarray],
+                   delivered: np.ndarray) -> List[DeviationRow]:
+        """The deviation table from stacked doses on the navigation voxels (scenarios x voxels; one row when nominal):
+        robust, each trade-off's and goal's worst case is compared."""
         nav = self.navigation.navigator(mco_id)
-        index, doses, masks = self.mco.store.load_navigation(mco_id)
-        d_nav = lam @ doses.astype(np.float64)
-        d_proj = projected_full.ravel()[index] if projected else None
-        d_del = delivered_full.ravel()[index]
+        d_nav = nav.stack(lam)
         rows: List[DeviationRow] = []
-        v_nav, v_del = nav.exact(d_nav), nav.exact(d_del)
-        v_proj = nav.exact(d_proj) if d_proj is not None else [None] * len(v_nav)
+        v_nav, v_del = nav.values(d_nav)[0], nav.values(delivered)[0]
+        v_proj = nav.values(projected)[0] if projected is not None else [None] * len(v_nav)
         for name, a, p, b in zip(nav.names, v_nav, v_proj, v_del):
             worse = float(b - a)
             rows.append(DeviationRow(name=name, kind="trade-off", unit="Gy", navigated=round(float(a), 4),
                                      projected=None if p is None else round(float(p), 4), deliverable=round(float(b), 4),
                                      worse_by=round(worse, 4), flagged=worse > request.tolerance_gy))
         if request.goals is not None:
-            available = list(masks)
-            voxel = nav.result.voxel_cc or 0.0
-
-            def grade(d):
-                return grade_goal_set(request.goals, lambda nm: d[masks[nm]], available, voxel, request.prescription_gy, request.fractions)
-            g_nav, g_del = grade(d_nav), grade(d_del)
-            g_proj = grade(d_proj) if d_proj is not None else None
+            def grade(stack):
+                return nav.grade(request.goals, stack, request.prescription_gy, request.fractions)
+            g_nav, g_del = grade(d_nav), grade(delivered)
+            g_proj = grade(projected) if projected is not None else None
             for i, (ra, rb) in enumerate(zip(g_nav.results, g_del.results)):
                 if ra.missing:
                     continue
                 unit = parse_metric(ra.metric).unit
-                worse = (rb.achieved - ra.achieved) if ra.op in ("<=", "<") else (ra.achieved - rb.achieved)
+                a, b = ra.worst_case, rb.worst_case          # the achieved value when nominal
+                worse = (b - a) if ra.op in ("<=", "<") else (a - b)
                 tol = request.tolerance_gy if unit == "Gy" else request.tolerance_volume
                 rows.append(DeviationRow(
-                    name=f"{ra.structure} {ra.metric} {ra.op} {ra.value:g}", kind="goal", unit=unit, navigated=round(ra.achieved, 4),
-                    projected=None if g_proj is None else round(g_proj.results[i].achieved, 4), deliverable=round(rb.achieved, 4),
+                    name=f"{ra.structure} {ra.metric} {ra.op} {ra.value:g}", kind="goal", unit=unit, navigated=round(a, 4),
+                    projected=None if g_proj is None else round(g_proj.results[i].worst_case, 4), deliverable=round(b, 4),
                     worse_by=round(float(worse), 4), flagged=float(worse) > tol))
         return rows
 
 
-__all__ = ["DeliverableService", "DeliverableStore", "target_structures", "MCO_PLAN_PREFIX"]
+__all__ = ["DeliverableService", "DeliverableStore", "DeliverableRefused", "target_structures", "MCO_PLAN_PREFIX"]

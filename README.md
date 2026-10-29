@@ -503,8 +503,9 @@ lists every objective's value in `convergence.objective_values`.
 **Hard constraints** (`hard_constraints`): `Dmax <=`, `Dmin >=`, `Dmean <=`, `gEUD <=` (`eud_a >= 1`) or `gEUD >=`
 (`eud_a <= 1`), each met within its `tolerance_gy` (default 0.1 Gy). A feasibility run comes first and refuses a set
 no plan on the beams can meet (the job fails with `InfeasibleConstraintsError` naming them); then the objectives are minimized under the limits by an
-augmented Lagrangian, and `convergence.hard_constraints` reports each limit's achieved value. Nominal scenario only for
-now (not with `robustness`). Design: `docs/reports/mco-research-and-design.md` (D1, D2).
+augmented Lagrangian, and `convergence.hard_constraints` reports each limit's achieved value. On the nominal scenario
+in a single optimization (not with `robustness`); an MCO run holds them in every scenario. Design:
+`docs/reports/mco-research-and-design.md` (D1, D2).
 
 ```json
 "objectives": [{"type": "UniformRMS", "structure_name": "PTV", "dose_gy": 60, "weight": 1},
@@ -539,6 +540,13 @@ by projecting it onto the Pareto set and mimicking its dose: apertures for stati
 themselves for protons; a deviation table compares the deliverable plan with the navigated one and flags what got
 worse. Design: `docs/reports/mco-research-and-design.md`.
 
+**Robust MCO** (`robustness`: scenarios, as in robust optimization): each plan minimizes the worst scenario of its
+weighted sum, hard constraints hold in every scenario, and every trade-off value is its worst case over the scenarios,
+with its nominal value beside it (`nominal_gy`). Goals are graded on the nominal dose with their worst case
+(`worst_case`, `robust_all_passed`), and automatic navigation works on the worst cases. `robust_gap` is the part of the
+error bound that comes from protecting scenarios rather than each trade-off's own worst case; more plans do not remove
+it. A robust set is made deliverable for protons only (422 for photons).
+
 | Method & path | Purpose |
 |---|---|
 | `POST /api/v1/mco/run` | The Pareto set of a beam model (200 cached / 202 job / 422). |
@@ -564,6 +572,11 @@ auto = ps.auto_navigate("rtog-0617", prescription_gy=60, fractions=30)
 plan = ps.deliverable(auto, goals="rtog-0617", prescription_gy=60, normalise={"structure": "PTV", "metric": "D95", "gy": 60})
 plan.deviation_table()          # navigated, projected and deliverable value of every trade-off and goal, flagged ones
 plan.export(label="MCO", prescription={"dose_gy": 60, "fractions": 30})
+
+robust = proton_beam_model.mco([ops.uniform_rms("CTV", 60), ops.mean_dose("Parotid_L")], hard_constraints=[ops.hard("CTV", "Dmin", ">=", 57)],
+                               robustness={"enabled": True, "scenarios": [{"name": "range+3%", "range_scale": 1.03},
+                                                                          {"name": "range-3%", "range_scale": 0.97}]})
+robust.table()                  # worst-case values, and "<name> nominal" columns
 ```
 
 ## BAO Service (`/api/v1/bao`)

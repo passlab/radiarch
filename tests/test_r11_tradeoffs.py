@@ -158,8 +158,9 @@ class TestHardConstraintSpecs:
         with pytest.raises(ValueError, match=msg):
             HardConstraint(structure_name="S", value_gy=10.0, **kw)
 
-    def test_not_with_robustness_yet(self):
-        with pytest.raises(ValueError, match="R11.6"):
+    def test_not_in_a_robust_single_optimization(self):
+        # robust hard constraints hold in every scenario of an MCO run (R11.6, test_r11_robust.py)
+        with pytest.raises(ValueError, match="an MCO run"):
             _req(hard_constraints=[HardConstraint(structure_name="OAR", metric="Dmax", op="<=", value_gy=5.0)],
                  robustness=RobustnessSpec(enabled=True, aggregation="WORST_CASE",
                                            scenarios=[ScenarioSpec(name="x+", setup_shift_mm=(2.0, 0.0, 0.0))]))

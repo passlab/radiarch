@@ -36,11 +36,15 @@ MIN_RANGE = 1e-6        # an objective whose anchors span less than this (in its
 
 @dataclass
 class Solved:
-    """One weighted-sum solve: its decision vector and its objective values (raw units)."""
+    """One weighted-sum solve: its decision vector and its objective values (raw units).
+
+    ``bound``, when given, is a lower bound on the weighted sum over every attainable vector, used for the outer set
+    in place of the plan's own weighted sum (a robust solve minimizes something below it; ``robust_mco``)."""
 
     x: np.ndarray
     values: np.ndarray
     ok: bool = True
+    bound: Optional[float] = None
 
 
 @dataclass
@@ -157,6 +161,8 @@ def sandwich(solve: Callable[[np.ndarray, Optional[int]], Solved], n: int, budge
 
     def supporting(p: SandwichPlan) -> Tuple[np.ndarray, float]:
         a = p.raw_weights * span
+        if p.solved.bound is not None:          # raw . z >= bound, normalized
+            return a / a.sum(), float((p.solved.bound - p.raw_weights @ ideal) / a.sum())
         a = a / a.sum()
         return a, float(a @ normalize(p.solved.values, ideal, nadir))
 

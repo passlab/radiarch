@@ -434,8 +434,8 @@ class OptimizationRunRequest(BaseModel):
     constraints: List[ConstraintSpec] = Field(default_factory=list, max_length=256)
     hard_constraints: List[HardConstraint] = Field(
         default_factory=list, max_length=64,
-        description="Limits met within their tolerance (augmented Lagrangian after a feasibility run); "
-                    "not with robustness yet (R11.6).",
+        description="Limits met within their tolerance (augmented Lagrangian after a feasibility run), on the "
+                    "nominal dose; with robustness they hold in every scenario in an MCO run (POST /mco/run).",
     )
     solver: SolverConfig
     init_weights_uri: Optional[str] = Field(
@@ -456,7 +456,8 @@ class OptimizationRunRequest(BaseModel):
     @model_validator(mode="after")
     def _hard_constraints_nominal(self) -> "OptimizationRunRequest":
         if self.hard_constraints and self.robustness.enabled:
-            raise ValueError("hard constraints apply to the nominal scenario; robust hard constraints come with R11.6")
+            raise ValueError("a robust optimization takes no hard constraints: use constraints (penalties), or an MCO run "
+                             "(POST /mco/run), where hard constraints hold in every scenario")
         return self
 
     def compute_cache_key(self) -> str:

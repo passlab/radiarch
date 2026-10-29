@@ -140,7 +140,9 @@ class BeamModel(_Object):
     def mco(self, tradeoffs: Iterable[Any], *, hard_constraints: Iterable[Any] = (), engine: Union[str, EngineSpec, dict, None] = "pb",
             max_iterations: int = 300, **request) -> "ParetoSet":
         """The Pareto set of this beam model over ``tradeoffs`` (``ops.mean_dose``, ``ops.uniform_rms``, ...) under
-        ``hard_constraints`` (``ops.hard``): anchors, a balance plan and sandwich plans to an error bound (R11)."""
+        ``hard_constraints`` (``ops.hard``): anchors, a balance plan and sandwich plans to an error bound (R11).
+        ``robustness={"enabled": True, "scenarios": [...]}`` makes it robust (R11.6): the worst scenario of each
+        weighted sum, constraints in every scenario, worst-case values."""
         from ..models.mco import MCORunRequest, MCOResult
         from ..models.optimization import HardConstraint, ObjectiveSpec, SolverConfig
 
@@ -302,9 +304,16 @@ class ParetoSet(_Object):
     id_field = "mco_id"
 
     def table(self) -> List[Dict[str, Any]]:
-        """One row per plan: its kind and each trade-off's value in Gy."""
+        """One row per plan: its kind and each trade-off's value in Gy (robust: its worst case, and its nominal value
+        under ``"<name> nominal"``)."""
         names = [f"{o.type}({o.structure_name})" for o in self.result.tradeoffs]
-        return [{"plan": p.index, "kind": p.kind, **dict(zip(names, p.values_gy))} for p in self.result.plans]
+        rows = []
+        for p in self.result.plans:
+            row = {"plan": p.index, "kind": p.kind, **dict(zip(names, p.values_gy))}
+            if p.nominal_gy is not None:
+                row.update({f"{n} nominal": v for n, v in zip(names, p.nominal_gy)})
+            rows.append(row)
+        return rows
 
     def navigate(self, *, move: Optional[Dict[str, float]] = None, reference: Optional[Dict[str, float]] = None,
                  clamps: Optional[Dict[str, float]] = None, locks: Seq[str] = (), from_state: Any = "balance",

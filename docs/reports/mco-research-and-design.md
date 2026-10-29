@@ -320,6 +320,17 @@ Bokrantz; shared sweeps in VMAT), is the planned follow-up when the deviation ta
   weighted sum (Bokrantz & Fredriksson), which radiarch's `WORST_CASE` aggregation already computes. Navigation reports
   each objective's worst case over the scenarios, as well as its nominal value.
 - **Why the bound still holds.** The worst case of convex functions is convex.
+- **As built (R11.6).**
+  - **Sandwich bound.** The sandwich works on the worst cases `F_i`. A scenario-wise plan does not minimize `w . F`.
+    So each solve gives its own lower bound for the outer set: `w . F(x) >= max_s w . f(x; s) >= v*` for every plan.
+    The outer set stays valid. Its gap to the plans' own `w . F` cannot be closed by more plans and is reported as
+    `robust_gap`.
+  - **Smoothing.** The maximum over scenarios is smoothed by a log-sum-exp of 0.01 Gy per unit weight, because a kink
+    stalls L-BFGS-B. The bound subtracts the most the smoothing adds.
+  - **Hard constraints** hold in every scenario.
+  - **Goals** are graded on the nominal dose with their worst case. Automatic navigation works on the worst cases.
+  - **Deliverable.** A robust set is made deliverable for protons only. A sequenced photon plan would need its own
+    scenario doses.
 - **Later.** Objective-wise robust objectives (Chen et al.) are an option for later.
 
 **D9. One interface across API, SDK, command line and protocols.**

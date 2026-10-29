@@ -24,6 +24,11 @@ level is a small constrained problem in the blend weights (SLSQP, then COBYLA wh
 evaluation a weighted sum of the plans' doses on the goal's structure. RayStation describes automatic navigation the
 same way in one sentence ("lexicographic optimization where the plan coefficients constitute optimization variables");
 its algorithm is not published, so this one is radiarch's own.
+
+On a robust set (R11.6, D8) every plan's dose is stored per scenario, and a blend's scenario doses are the same blend
+of them. A trade-off's value is then its worst case over the scenarios (still convex, so the linear bound holds), its
+nominal value is reported beside it, goals are graded on the nominal dose with their worst case over the scenarios,
+and automatic navigation works on each goal's worst case.
 """
 
 from __future__ import annotations
@@ -52,9 +57,13 @@ class NavigationError(ValueError):
 class Navigator:
     """One Pareto set in memory: its plans' values and their doses on the navigation voxels."""
 
-    def __init__(self, result: MCOResult, doses: np.ndarray, masks: Dict[str, np.ndarray]) -> None:
+    def __init__(self, result: MCOResult, doses: np.ndarray, masks: Dict[str, np.ndarray],
+                 scenario_doses: Optional[np.ndarray] = None) -> None:
         self.result = result
         self.doses = np.asarray(doses, dtype=np.float32)
+        self.robust = scenario_doses is not None
+        self.scenarios = list(result.scenarios) if self.robust else ["nominal"]
+        self.scen = scenario_doses if self.robust else self.doses[None]                 # scenarios x plans x voxels
         self.masks = {k: np.asarray(v, dtype=bool) for k, v in masks.items()}
         self.F = np.array([p.values_gy for p in result.plans], dtype=np.float64)          # plans x objectives
         self.ideal, self.nadir = np.asarray(result.ideal_gy, float), np.asarray(result.nadir_gy, float)
@@ -85,6 +94,21 @@ class Navigator:
 
     def exact(self, dose: np.ndarray) -> np.ndarray:
         return np.array([o.value(dose, m) for o, m in zip(self.objectives, self.objective_masks)])
+
+    def stack(self, blend: np.ndarray) -> np.ndarray:
+        """The blend's dose in every scenario (nominal first), scenarios x voxels."""
+        return np.einsum("k,skv->sv", np.asarray(blend, dtype=np.float64), self.scen, dtype=np.float64)
+
+    def values(self, stack: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Each trade-off's value on a stacked dose: ``(worst case over the scenarios, nominal)`` (the same when nominal)."""
+        per = np.array([self.exact(d) for d in stack])
+        return per.max(axis=0), per[0]
+
+    def grade(self, spec, stack: np.ndarray, prescription_gy: Optional[float], fractions: Optional[int]):
+        """A goal set graded on the nominal dose of a stack; robust, each goal's worst case over the scenarios too."""
+        scen = {nm: (lambda name, d=d: d[self.masks[name]]) for nm, d in zip(self.scenarios[1:], stack[1:])} if self.robust else None
+        return grade_goal_set(spec, lambda name: stack[0][self.masks[name]], list(self.masks), self.result.voxel_cc or 0.0,
+                              prescription_gy, fractions, scen)
 
     def balance_blend(self) -> np.ndarray:
         lam = np.zeros(len(self.F))
@@ -192,18 +216,21 @@ class Navigator:
                 raise NavigationError(f"{g.metric} needs prescription_gy")
             ab = (spec.alpha_beta_gy.get(name, spec.alpha_beta_gy.get(g.structure, default_alpha_beta(name)))
                   if basis == "EQD2" else None)
-            prepared.append((g, metric, self.doses[:, self.masks[name]].astype(np.float64), abs(g.value) if abs(g.value) > 1e-9 else 1.0, ab))
+            prepared.append((g, metric, np.asarray(self.scen[:, :, self.masks[name]], dtype=np.float64), abs(g.value) if abs(g.value) > 1e-9 else 1.0, ab))
         return prepared, sorted(set(missing))
 
     def _shortfall(self, item, lam: np.ndarray, rx: Optional[float], fractions: Optional[int]) -> float:
         from .radiobiology import eqd2
 
-        g, metric, D, scale, ab = item
-        d = lam @ D
-        if ab is not None:
-            d = eqd2(d, fractions, ab)
-        v = evaluate_metric(metric, d, self.result.voxel_cc or 0.0, rx)
-        return max(0.0, v - g.value) / scale if g.op in ("<=", "<") else max(0.0, g.value - v) / scale
+        g, metric, D, scale, ab = item              # D: scenarios x plans x the goal structure's voxels
+        worst = 0.0
+        for Ds in D:
+            d = lam @ Ds
+            if ab is not None:
+                d = eqd2(d, fractions, ab)
+            v = evaluate_metric(metric, d, self.result.voxel_cc or 0.0, rx)
+            worst = max(worst, max(0.0, v - g.value) / scale if g.op in ("<=", "<") else max(0.0, g.value - v) / scale)
+        return worst
 
     def auto_navigate(self, req: AutoNavigateRequest, start: np.ndarray) -> Tuple[np.ndarray, Dict[str, float], List[str], List[AutoLevel]]:
         upper, clamps_gy = self.caps(req.clamps, req.locks, start)
@@ -263,15 +290,14 @@ class Navigator:
     def state(self, lam: np.ndarray, req, state_id: str, clamps: Dict[str, float], notes: List[str],
               from_state: Optional[str], levels: Optional[List[AutoLevel]] = None) -> NavigationState:
         """The state of a blend: exact values, DVHs, and the request's goals (a navigation or an automatic one)."""
-        d = self.dose(lam)
-        exact = self.exact(d)
+        stack = self.stack(lam)
+        d = stack[0]
+        exact, nominal = self.values(stack)
         bound = lam @ self.F
         goals = None
         bins = req.dvh_bins if req is not None else 60
         if req is not None and req.goals is not None:
-            available = list(self.masks)
-            goals = grade_goal_set(req.goals, lambda name: d[self.masks[name]], available, self.result.voxel_cc or 0.0,
-                                   req.prescription_gy, req.fractions)
+            goals = self.grade(req.goals, stack, req.prescription_gy, req.fractions)
             missing = sorted({g.structure for g in goals.results if g.missing})
             if missing:
                 notes = notes + [f"goals on {', '.join(missing)} are not graded: not navigation structures (add them to the "
@@ -284,7 +310,8 @@ class Navigator:
                             volume_pct=[round(float(v), 3) for v in dvh_on_bins(d, m, axis)]) for name, m in self.masks.items() if m.any()]
         return NavigationState(
             state_id=state_id, mco_id=self.result.mco_id, name=req.name if req is not None else "balance plan", from_state=from_state,
-            blend=[round(float(v), 9) for v in lam], values_gy=[round(float(v), 6) for v in exact], bound_gy=[round(float(v), 6) for v in bound],
+            blend=[round(float(v), 9) for v in lam], values_gy=[round(float(v), 6) for v in exact],
+            nominal_gy=[round(float(v), 6) for v in nominal] if self.robust else None, bound_gy=[round(float(v), 6) for v in bound],
             normalized=[round(float(v), 6) for v in (exact - self.ideal) / self.span], clamps=clamps, notes=notes, goals=goals,
             levels=levels or [], dvh=dvh,
             created_at=datetime.now(timezone.utc))
@@ -304,7 +331,7 @@ class NavigationService:
             if result is None:
                 raise KeyError(mco_id)
             _, doses, masks = self.store.load_navigation(mco_id)
-            nav = Navigator(result, doses, masks)
+            nav = Navigator(result, doses, masks, self.store.load_scenario_doses(mco_id))
             if len(self._cache) >= 4:
                 self._cache.pop(next(iter(self._cache)))
             self._cache[mco_id] = nav

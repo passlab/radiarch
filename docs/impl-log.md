@@ -870,3 +870,32 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   key, the cache); static photon fields through the SDK on the stub patient (apertures, normalisation, the deviation
   table and its flags against the tolerance, lineage to the Pareto set, export, 404s); VMAT arcs from a pencil-beam
   Pareto set (each trade-off within 0.5 Gy of the navigated plan on the stub patient).
+
+### R11.6 Robust MCO
+
+- **Generation** (`services/robust_mco.py`, `services/mco.py`, D8): with `robustness` on, the set is solved on stacked
+  scenario doses of the navigation voxels (each scenario's dose matrix restricted to them). Each plan minimizes the
+  worst scenario of its weighted sum (Bokrantz & Fredriksson), smoothed by a log-sum-exp of 0.01 Gy per unit weight;
+  hard constraints get one term per scenario, and an infeasible one is named with its scenario. Only the
+  `WORST_CASE` aggregation applies, and it is the default; the cache key changes only when robustness is on.
+- **Values and the bound:** a plan reports each trade-off's worst case over the scenarios (`values_gy`, convex, so the
+  navigation bound holds) and its nominal value (`nominal_gy`). The sandwich takes each solve's own lower bound
+  (`Solved.bound`: the smoothed optimum less 0.01 Gy · Σw · ln S) for the outer set, because a scenario-wise plan does
+  not minimize the weighted sum of worst cases. The bound stays valid. It also includes the gap between the two
+  measures, which more plans do not remove, and `robust_gap` reports it.
+- **Navigation:** scenario doses are stored (`navigation_dose_scenarios.npy`, scenarios x plans x voxels, memory-mapped
+  when read). A state reports worst-case values and `nominal_gy`. Goals are graded on the nominal dose with their worst
+  case (`grade_goal_set` takes scenario doses; `robust_all_passed`). Automatic navigation uses each goal's worst-case
+  shortfall.
+- **Deliverable:** a robust proton set is projected with worst cases capped, and its deviation table compares worst
+  cases. A robust photon set is refused (422): the sequenced plan would need its own scenario doses.
+- **Single optimizations** still refuse hard constraints with robustness, and the message points to MCO.
+- **Tests** (`tests/test_r11_robust.py`):
+  - the pieces: adjoint stacked operators; the worst case and its gradient; the smoothed sum's gradient against finite
+    differences, and its bound under the worst scenario; a constraint on one scenario;
+  - on a two-scenario problem: every attainable vector of worst cases lies in the outer set and within the error bound
+    of the plans' hull, and the scenario-wise plan has a lower worst-scenario sum than the nominal plan;
+  - the request: the default aggregation, and nominal keys unchanged;
+  - on the stub patient: worst-case and nominal values against the stored scenario doses, coverage in every scenario,
+    an infeasible band named by scenario, navigation and goals on worst cases, automatic navigation's shortfall equal to
+    the worst case's, the robust proton deliverable with no worst case worse, and the photon refusal.

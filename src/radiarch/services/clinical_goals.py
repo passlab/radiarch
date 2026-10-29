@@ -182,10 +182,13 @@ def resolve_structure(goal_structure: str, available: Sequence[str], aliases: Di
 
 
 def grade_goal_set(spec, doses_of: Callable[[str], np.ndarray], available: Sequence[str], voxel_cc: float,
-                   prescription_gy: Optional[float], fractions: Optional[int] = None):
+                   prescription_gy: Optional[float], fractions: Optional[int] = None,
+                   scenario_doses_of: Optional[Dict[str, Callable[[str], np.ndarray]]] = None):
     """A :class:`~radiarch.models.evaluation.GoalSetSpec` graded on one dose, given the voxel doses of each available
     structure (``doses_of``): the goals of the template and the spec, resolved by name and alias, physical or EQD2.
-    The evaluation service grades scenario doses too; navigation (R11) grades a blended dose with this."""
+    With ``scenario_doses_of`` (scenario name → the same for that scenario) each goal also gets its worst case and
+    the report ``robust_all_passed``. The evaluation service grades a dose's scenarios; navigation (R11) grades a
+    blended dose with this."""
     from ..models.evaluation import GoalsReport
     from .radiobiology import default_alpha_beta, eqd2
 
@@ -204,10 +207,12 @@ def grade_goal_set(spec, doses_of: Callable[[str], np.ndarray], available: Seque
                                       note=goal.note, source=source, missing=True, passed=None if spec.skip_missing else False))
             continue
         doses = doses_of(resolved)
+        scen = {nm: f(resolved) for nm, f in scenario_doses_of.items()} if scenario_doses_of else None
         if basis == "EQD2":
             ab = spec.alpha_beta_gy.get(resolved, spec.alpha_beta_gy.get(goal.structure, default_alpha_beta(resolved)))
             doses = eqd2(doses, fractions, ab)
-        r = evaluate_goal(goal, doses, voxel_cc, prescription_gy, None, resolved)
+            scen = {nm: eqd2(d, fractions, ab) for nm, d in scen.items()} if scen else scen
+        r = evaluate_goal(goal, doses, voxel_cc, prescription_gy, scen, resolved)
         r.source = r.source or source
         results.append(r)
     evaluable = [r for r in results if not r.missing]
@@ -217,7 +222,8 @@ def grade_goal_set(spec, doses_of: Callable[[str], np.ndarray], available: Seque
         n_missing=sum(1 for r in results if r.missing),
         passed_by_priority={p: sum(1 for r in evaluable if r.priority == p and r.passed) for p in (1, 2, 3)},
         failed_by_priority={p: sum(1 for r in evaluable if r.priority == p and not r.passed) for p in (1, 2, 3)},
-        all_priority1_passed=all(r.passed for r in evaluable if r.priority == 1), results=results)
+        all_priority1_passed=all(r.passed for r in evaluable if r.priority == 1),
+        robust_all_passed=all(r.passed_all_scenarios for r in evaluable) if scenario_doses_of else None, results=results)
 
 
 __all__ = ["GOALS_DIR", "Metric", "parse_metric", "evaluate_metric", "evaluate_goal", "builtin_templates", "load_template",

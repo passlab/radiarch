@@ -21,7 +21,7 @@ from .common import ResearchArtifact
 from .dose import EngineSpec
 from .evaluation import GoalSetSpec, GoalsReport
 from .job import JobState
-from .optimization import HardConstraint, ObjectiveSpec, SolverConfig, check_tradeoffs
+from .optimization import HardConstraint, ObjectiveSpec, RobustnessSpec, SolverConfig, check_tradeoffs
 from .vmat import ArcSpec
 
 MCO_VERSION = "1"
@@ -34,7 +34,11 @@ class MCORunRequest(BaseModel):
     ``tradeoffs`` are the objectives the planner will trade; their ``weight`` is ignored (the algorithm sets the
     weights). ``plan_budget`` counts every plan, anchors included, and defaults to ``3 N + 1``; generation stops
     earlier when the error bound falls to ``error_tolerance`` (in the objectives normalized to ideal 0, nadir 1).
-    ``navigation_structures`` adds structures whose dose navigation should show (a goal template's organs)."""
+    ``navigation_structures`` adds structures whose dose navigation should show (a goal template's organs).
+
+    With ``robustness`` enabled (D8) each plan minimizes the worst scenario of its weighted sum, hard constraints hold
+    in every scenario, and the trade-offs' values are their worst cases over the scenarios (their nominal values are
+    reported too). Only the ``WORST_CASE`` aggregation applies, and it is the default here."""
 
     plan_id: Optional[str] = Field(default=None, max_length=36, description="Owning plan id (not in the cache key).")
     geometry_id: str = Field(..., min_length=1, max_length=36)
@@ -49,10 +53,16 @@ class MCORunRequest(BaseModel):
                                   description="Weight of the other objectives in an anchor plan, so it is Pareto optimal.")
     navigation_structures: List[str] = Field(default_factory=list, max_length=64)
     rbe: Optional[float] = Field(default=None, gt=0.0, le=2.0)
+    robustness: RobustnessSpec = Field(default_factory=RobustnessSpec)
 
     @model_validator(mode="after")
     def _tradeoffs(self) -> "MCORunRequest":
         check_tradeoffs(self.tradeoffs)
+        if self.robustness.enabled:
+            if "aggregation" not in self.robustness.model_fields_set:
+                self.robustness.aggregation = "WORST_CASE"
+            elif self.robustness.aggregation != "WORST_CASE":
+                raise ValueError("a robust Pareto set uses the scenario-wise worst case: aggregation must be WORST_CASE")
         names = [f"{o.type}({o.structure_name})" for o in self.tradeoffs]
         if len(set(names)) != len(names):
             raise ValueError("two trade-offs of the same type on the same structure")
@@ -80,6 +90,8 @@ class MCORunRequest(BaseModel):
             "navigation_structures": sorted(set(self.navigation_structures)),
             "rbe": self.rbe,
         }
+        if self.robustness.enabled:          # only when on, so earlier sets keep their keys
+            payload["robustness"] = self.robustness.hash()
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -88,8 +100,9 @@ class ParetoPlan(BaseModel):
     index: int
     kind: str = Field(..., description="anchor, balance or sandwich")
     weights: List[float] = Field(..., description="The weight of each trade-off in the sum this plan minimizes.")
-    values_gy: List[float] = Field(..., description="Each trade-off's value at this plan, in Gy.")
+    values_gy: List[float] = Field(..., description="Each trade-off's value at this plan, in Gy (robust: its worst case over the scenarios).")
     normalized: List[float] = Field(..., description="The same, normalized to ideal 0 and nadir 1.")
+    nominal_gy: Optional[List[float]] = Field(default=None, description="Robust: each trade-off's value on the nominal dose.")
     converged: bool = True
 
 
@@ -133,6 +146,12 @@ class MCOResult(ResearchArtifact):
     voxel_cc: Optional[float] = Field(default=None, description="One dose-grid voxel's volume, for goals in cc.")
     weights_uri: str = Field(..., description="Every plan's element weights (.npy, plans x elements).")
     navigation_dose_uri: str = Field(..., description="Every plan's dose on the navigation voxels (.npy, plans x voxels).")
+    modality: Optional[str] = Field(default=None, description="The beam model's modality.")
+    scenarios: List[str] = Field(default_factory=list, description="Robust: the scenarios, nominal first (their doses on the "
+                                                                   "navigation voxels: navigation_dose_scenarios.npy, scenarios x plans x voxels).")
+    robust_gap: Optional[float] = Field(
+        default=None, description="Robust: the largest gap, normalized, between a plan's weighted worst cases and the worst "
+                                  "scenario of its weighted sum. It is part of the error bound, and more plans do not remove it.")
     compute_time_s: float = 0.0
     created_at: Optional[datetime] = None
 
@@ -207,7 +226,9 @@ class NavigationState(ResearchArtifact):
     name: Optional[str] = None
     from_state: Optional[str] = None
     blend: List[float] = Field(..., description="The weight of each Pareto plan; they sum to 1.")
-    values_gy: List[float] = Field(..., description="Each trade-off's exact value on the blended dose, in Gy.")
+    values_gy: List[float] = Field(..., description="Each trade-off's exact value on the blended dose, in Gy (robust: its worst "
+                                                     "case over the scenarios).")
+    nominal_gy: Optional[List[float]] = Field(default=None, description="Robust: each trade-off's value on the nominal dose.")
     bound_gy: List[float] = Field(..., description="The blend of the plans' values: an upper bound on the exact values (convexity).")
     normalized: List[float] = Field(..., description="The exact values normalized to ideal 0, nadir 1.")
     clamps: Dict[str, float] = Field(default_factory=dict, description="The upper bounds (Gy) this state holds, by objective name.")
