@@ -13,12 +13,13 @@ import hashlib
 import json
 from datetime import datetime
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
 from .common import ResearchArtifact
 from .dose import EngineSpec
+from .evaluation import GoalSetSpec, GoalsReport
 from .job import JobState
 from .optimization import HardConstraint, ObjectiveSpec, SolverConfig, check_tradeoffs
 
@@ -128,9 +129,62 @@ class MCOResult(ResearchArtifact):
     notes: List[str] = Field(default_factory=list)
     navigation_structures: List[str] = Field(default_factory=list, description="Structures whose voxels the stored doses cover.")
     navigation_voxels: int = 0
+    voxel_cc: Optional[float] = Field(default=None, description="One dose-grid voxel's volume, for goals in cc.")
     weights_uri: str = Field(..., description="Every plan's element weights (.npy, plans x elements).")
     navigation_dose_uri: str = Field(..., description="Every plan's dose on the navigation voxels (.npy, plans x voxels).")
     compute_time_s: float = 0.0
+    created_at: Optional[datetime] = None
+
+
+class NavigateRequest(BaseModel):
+    """``POST /mco/{mco_id}/navigate``: move from a state (the balance plan by default) on the Pareto set (D5).
+
+    Objectives are named as ``Type(Structure)`` (``MeanDose(Heart)``) or by their index. ``move`` sets one slider:
+    that objective at most this value in Gy, the others sharing the cost or the gain evenly (in their normalized
+    ranges). ``reference`` asks for a point: each listed objective toward its value, the others toward where they
+    are. ``clamps`` are upper bounds in Gy that hold whatever else moves; ``locks`` hold objectives at no worse than
+    where they are. With neither ``move`` nor ``reference`` the state is re-evaluated (for new goals or clamps)."""
+
+    from_state: str = Field(default="balance", max_length=64)
+    move: Dict[str, float] = Field(default_factory=dict, max_length=1)
+    reference: Dict[str, float] = Field(default_factory=dict, max_length=MAX_TRADEOFFS)
+    clamps: Dict[str, float] = Field(default_factory=dict, max_length=MAX_TRADEOFFS)
+    locks: List[str] = Field(default_factory=list, max_length=MAX_TRADEOFFS)
+    goals: Optional[GoalSetSpec] = None
+    prescription_gy: Optional[float] = Field(default=None, gt=0.0)
+    fractions: Optional[int] = Field(default=None, ge=1, le=100)
+    dvh_bins: int = Field(default=60, ge=0, le=500, description="DVH points per structure (0: none).")
+    name: Optional[str] = Field(default=None, max_length=128)
+    save: bool = Field(default=True, description="Store the state (listed by GET /mco/{id}/states).")
+
+    @model_validator(mode="after")
+    def _one_kind(self) -> "NavigateRequest":
+        if self.move and self.reference:
+            raise ValueError("give a move or a reference point, not both")
+        return self
+
+
+class DVHCurve(BaseModel):
+    structure: str
+    dose_gy: List[float]
+    volume_pct: List[float]
+
+
+class NavigationState(ResearchArtifact):
+    """A point on the Pareto set: a blend of its plans, its exact values and goals (D5)."""
+
+    state_id: str
+    mco_id: str
+    name: Optional[str] = None
+    from_state: Optional[str] = None
+    blend: List[float] = Field(..., description="The weight of each Pareto plan; they sum to 1.")
+    values_gy: List[float] = Field(..., description="Each trade-off's exact value on the blended dose, in Gy.")
+    bound_gy: List[float] = Field(..., description="The blend of the plans' values: an upper bound on the exact values (convexity).")
+    normalized: List[float] = Field(..., description="The exact values normalized to ideal 0, nadir 1.")
+    clamps: Dict[str, float] = Field(default_factory=dict, description="The upper bounds (Gy) this state holds, by objective name.")
+    notes: List[str] = Field(default_factory=list)
+    goals: Optional[GoalsReport] = None
+    dvh: List[DVHCurve] = Field(default_factory=list)
     created_at: Optional[datetime] = None
 
 
@@ -147,4 +201,5 @@ class MCOJobStatus(BaseModel):
     created_at: Optional[datetime] = None
 
 
-__all__ = ["MCO_VERSION", "MAX_TRADEOFFS", "MCORunRequest", "ParetoPlan", "ErrorPoint", "MCOStage", "MCOResult", "MCOJobStatus"]
+__all__ = ["MCO_VERSION", "MAX_TRADEOFFS", "MCORunRequest", "ParetoPlan", "ErrorPoint", "MCOStage", "MCOResult", "NavigateRequest",
+           "DVHCurve", "NavigationState", "MCOJobStatus"]

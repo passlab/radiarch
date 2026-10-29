@@ -787,3 +787,35 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   request's limits and cache key; the service on the analytic engine (anchors, balance, the stored doses reproducing
   each plan's values, hard constraints holding in every plan, an infeasible set, a trade-off that trades nothing);
   the SDK, route, job, cache and lineage on the stub patient.
+
+### R11.3 Navigation
+
+- **Navigator** (`services/navigation.py`, D5): a navigated plan is a blend of the Pareto plans; its dose on the
+  navigation voxels is the same blend of theirs, and each trade-off's exact value is at most the blend of the plans'
+  values (convexity). The search is Craft & Monz's piercing linear program over the blend weights in normalized
+  objectives (HiGHS), with a small term (10⁻³ times their sum) that keeps the answer off weakly dominated blends.
+  - A slider (`move`) holds one objective at no more than its value; the others share the cost or the gain evenly
+    from where they were. A move beyond reach under the clamps goes as far as it can and says how far.
+  - A `reference` point pulls every objective toward its value, the unlisted ones toward where they are.
+  - `clamps` (Gy) hold whatever else moves; a lock clamps an objective at its current value; a clamp set no blend
+    meets is refused.
+  - The state reports the blend, the exact values on the blended dose next to the bound, the normalized values,
+    the clamps, a DVH per navigation structure on one axis, and a goal set graded on the blended dose (physical or
+    EQD2). Goals on structures outside the navigation voxels are reported missing, with the advice to add them to
+    the run's `navigation_structures`.
+- **States**: stored as `mco/{id}/states/{state_id}.json`; the balance plan's state (`balance`) is made on first use
+  and is the reference every request starts from unless it names another state.
+- **Shared grader**: `clinical_goals.grade_goal_set` grades a goal set on one dose given each structure's voxel doses;
+  the navigator uses it (the evaluation service keeps its own, which also grades scenario doses).
+- **A plan without dose.** On the synthetic problem the balance plan switched every beamlet off: with no hard
+  constraint on target coverage, an organ's anchor has zero fluence, the target's nadir is "no dose", and equal
+  normalized weights favour the organs. RayStation's advice, minimum coverage as a constraint, is the cure; an MCO
+  run now notes any plan that delivers no dose and names it.
+- **Interfaces:** `POST /api/v1/mco/{id}/navigate` (`NavigateRequest` → `NavigationState`), `GET /mco/{id}/states`,
+  `GET /mco/{id}/states/{state_id}`; SDK `ParetoSet.navigate(move=, reference=, clamps=, locks=, from_state=,
+  goals=)` and `ParetoSet.states()`. `MCOResult.voxel_cc` keeps the voxel volume for goals in cc.
+- **Tests** (`tests/test_r11_navigation.py`): on a synthetic three-structure Pareto set, the balance blend reproduces
+  the balance plan, blends are the blends of doses with exact values never above the bound, a slider reaches its
+  value and is paid for elsewhere, locks and clamps hold, a move beyond reach is limited and said so, better slider
+  values give better values, a reference point, the refusals, goals and DVHs from the blended dose; on the stub
+  patient through the SDK, routes and stored states (onward from a state, unsaved states, 404 and 422).

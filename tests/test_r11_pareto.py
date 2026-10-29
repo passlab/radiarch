@@ -191,6 +191,12 @@ class TestService:
             msvc.run(_mreq(hard_constraints=[HardConstraint(structure_name="PTV", metric="Dmin", op=">=", value_gy=10.0),
                                              HardConstraint(structure_name="PTV", metric="Dmax", op="<=", value_gy=5.0)]))
 
+    def test_a_plan_without_dose_is_noted_and_a_coverage_constraint_prevents_it(self, msvc):
+        res = msvc.run(_mreq())                     # the OAR's anchor switches every beamlet off
+        assert any("deliver no dose" in n and "PTV Dmin" in n for n in res.notes)
+        cov = msvc.run(_mreq(hard_constraints=[HardConstraint(structure_name="PTV", metric="Dmin", op=">=", value_gy=5.0)]))
+        assert not any("deliver no dose" in n for n in cov.notes)
+
     def test_an_objective_that_trades_nothing_is_noted(self, msvc):
         res = msvc.run(_mreq(tradeoffs=[ObjectiveSpec(type="UniformRMS", structure_name="PTV", dose_gy=10.0, weight=1.0),
                                         ObjectiveSpec(type="MeanDose", structure_name="OAR", dose_gy=1000.0, weight=1.0)]))
@@ -239,7 +245,7 @@ def test_a_pareto_set_through_the_sdk(rx):
     with pytest.raises(RadiarchError) as e:                                    # and so does the server
         rx.request("POST", "/mco/run", json=body)
     assert e.value.status_code == 422 and "not trade-off objectives" in str(e.value.detail)
-    assert all(p.converged for p in ps.plans) and not ps.notes
+    assert all(p.converged for p in ps.plans) and all("deliver no dose" in n for n in ps.notes)
     with pytest.raises(RadiarchError) as e:
         rx.get("/mco/no-such-set")
     assert e.value.status_code == 404

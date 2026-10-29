@@ -532,14 +532,18 @@ A Pareto set: plans where no trade-off can improve without another getting worse
 a rule) can choose between them. Anchor plans (one per trade-off), a balance plan, then plans chosen by the sandwich
 algorithm until its bound on the distance from any Pareto plan to the computed ones falls to `error_tolerance`
 (default 0.05 of each trade-off's range) or the `plan_budget` (default 3N + 1) is spent. Trade-offs are the convex
-objectives above (two to eight); hard constraints hold in every plan. Navigation between the plans and making a plan
-deliverable come next (R11.3–R11.5). Design: `docs/reports/mco-research-and-design.md`.
+objectives above (two to eight); hard constraints hold in every plan, and a coverage constraint on the target
+(`PTV Dmin >=`) keeps organ anchors from switching every beamlet off (the run notes a plan that delivers no dose).
+Navigation blends the stored plans, so a slider move needs no dose calculation; making a plan deliverable comes next
+(R11.5). Design: `docs/reports/mco-research-and-design.md`.
 
 | Method & path | Purpose |
 |---|---|
 | `POST /api/v1/mco/run` | The Pareto set of a beam model (200 cached / 202 job / 422). |
 | `GET /api/v1/mco/jobs/{job_id}` | Poll a run. |
 | `GET /api/v1/mco/{mco_id}` | The set: each plan's weights and trade-off values in Gy, ideal and nadir, the error bound per plan. |
+| `POST /api/v1/mco/{mco_id}/navigate` | A slider `move`, a `reference` point, `clamps` and `locks` from a state (the balance plan by default): the blend, exact trade-off values, DVHs and graded goals. |
+| `GET /api/v1/mco/{mco_id}/states` | The stored navigation states, the balance plan first; `/states/{state_id}` one of them. |
 
 ```python
 from radiarch.sdk import Radiarch, ops
@@ -547,6 +551,9 @@ ps = beam_model.mco([ops.uniform_rms("PTV", 60), ops.mean_dose("Lungs-PTV"), ops
                      ops.eud_max("SpinalCord", 12)],
                     hard_constraints=[ops.hard("SpinalCord", "Dmax", "<=", 45), ops.hard("PTV", "Dmin", ">=", 54)])
 ps.error_bound, ps.table()
+st = ps.navigate(move={"MeanDose(Heart)": 8.0}, locks=["EUDMax(SpinalCord)"], goals="rtog-0617", prescription_gy=60)
+st.values_gy, st.goals.all_priority1_passed
+ps.navigate(from_state=st, clamps={"MeanDose(Lungs-PTV)": 12.0}, reference={"UniformRMS(PTV)": 1.5})
 ```
 
 ## BAO Service (`/api/v1/bao`)

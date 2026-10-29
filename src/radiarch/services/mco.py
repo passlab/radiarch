@@ -211,6 +211,10 @@ class MCOService:
             notes.append(f"{o.type}({o.structure_name}) is the same in every anchor plan "
                          f"({res.ideal[i]:.3g} Gy): it trades nothing on these beams")
         notes += [f"plan {k} did not converge" for k, p in enumerate(res.plans) if not p.solved.ok]
+        empty = [k for k, p in enumerate(res.plans) if float(np.sum(p.solved.x)) <= 0.0]
+        if empty:
+            notes.append(f"plan(s) {', '.join(map(str, empty))} deliver no dose: without a hard constraint on target coverage "
+                         f"(e.g. PTV Dmin >=) an organ's anchor, and even the balance plan, can switch every beamlet off")
 
         # the navigation voxels: every structure the trade-offs, constraints and requested goals name
         on(MCOStage.persisting, 0.92, "storing the plans and their doses on the navigation voxels")
@@ -239,6 +243,7 @@ class MCOService:
             error_history=[ErrorPoint(plans=c, error=round(e, 6)) for c, e in res.history], error_bound=round(res.error, 6),
             converged=res.error <= request.error_tolerance, stop_reason=res.stop_reason, notes=notes,
             navigation_structures=names, navigation_voxels=int(index.size),
+            voxel_cc=float(np.prod(prob.geometry.spacing_mm)) / 1000.0,
             weights_uri=str(root / "weights.npy"), navigation_dose_uri=str(root / "navigation_dose.npy"),
             compute_time_s=round(time.time() - t0, 2), created_at=datetime.now(timezone.utc))
         self.store.save(result)

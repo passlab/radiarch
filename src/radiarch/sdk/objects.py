@@ -306,6 +306,26 @@ class ParetoSet(_Object):
         names = [f"{o.type}({o.structure_name})" for o in self.result.tradeoffs]
         return [{"plan": p.index, "kind": p.kind, **dict(zip(names, p.values_gy))} for p in self.result.plans]
 
+    def navigate(self, *, move: Optional[Dict[str, float]] = None, reference: Optional[Dict[str, float]] = None,
+                 clamps: Optional[Dict[str, float]] = None, locks: Seq[str] = (), from_state: Any = "balance",
+                 goals: Union[str, Dict[str, Any], None] = None, **request):
+        """A navigation state: ``move={"MeanDose(Heart)": 12}`` (a slider), ``reference={...}`` (a point), with
+        ``clamps`` (upper bounds in Gy) and ``locks``, from a state (the balance plan by default). ``goals`` is a
+        template id or a goal set, graded on the blended dose."""
+        from ..models.mco import NavigateRequest, NavigationState
+
+        start = getattr(from_state, "state_id", from_state)
+        goal_set = {"template_id": goals} if isinstance(goals, str) else goals
+        req = NavigateRequest(from_state=start, move=move or {}, reference=reference or {}, clamps=clamps or {}, locks=list(locks),
+                              goals=goal_set, **request)
+        return self.client.post(f"/mco/{self.id}/navigate", req, NavigationState)
+
+    def states(self):
+        """The stored navigation states, the balance plan first."""
+        from ..models.mco import NavigationState
+
+        return [NavigationState.model_validate(s) for s in self.client.get(f"/mco/{self.id}/states")]
+
 
 class ProtocolRun(_Object):
     """A planning protocol's run: the deliverable plan (normalised), its dose and its goals."""

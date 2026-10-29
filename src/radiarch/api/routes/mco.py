@@ -5,20 +5,24 @@ Endpoints
 ``POST /api/v1/mco/run``            — the Pareto set of a beam model: the cached set (200) or a job (202).
 ``GET  /api/v1/mco/jobs/{job_id}``  — a run's progress.
 ``GET  /api/v1/mco/{mco_id}``       — a Pareto set: its plans, objective values and error bound.
+``POST /api/v1/mco/{mco_id}/navigate``            — a slider move, a reference point or clamps: a navigation state.
+``GET  /api/v1/mco/{mco_id}/states``              — the stored states, the balance plan first.
+``GET  /api/v1/mco/{mco_id}/states/{state_id}``   — one state.
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
 from ...core.store import store
-from ...models.mco import MCOJobStatus, MCORunRequest, MCOResult
+from ...models.mco import MCOJobStatus, MCORunRequest, MCOResult, NavigateRequest, NavigationState
 from ...services.audit import emit, make_event
 from ...services.mco import MCOService
+from ...services.navigation import NavigationError, NavigationService
 from ..security import api_key_auth
 
 router = APIRouter(prefix="/mco", tags=["mco"])
@@ -27,6 +31,16 @@ router = APIRouter(prefix="/mco", tags=["mco"])
 @lru_cache(maxsize=1)
 def _service() -> MCOService:
     return MCOService()
+
+
+@lru_cache(maxsize=1)
+def _navigation() -> NavigationService:
+    return NavigationService(_service().store)
+
+
+def _known(mco_id: str) -> None:
+    if _service().store.get_by_id(mco_id) is None:
+        raise HTTPException(status_code=404, detail=f"Pareto set not found: {mco_id}")
 
 
 class MCORunResponse(BaseModel):
@@ -71,3 +85,31 @@ async def get_mco(mco_id: str) -> MCOResult:
     if result is None:
         raise HTTPException(status_code=404, detail=f"Pareto set not found: {mco_id}")
     return result
+
+
+@router.post("/{mco_id}/navigate", response_model=NavigationState, summary="Navigate the Pareto set (R11.3).",
+             responses={404: {"description": "Unknown Pareto set or state."},
+                        422: {"description": "An unknown objective, or no blend meets the clamps."}})
+async def navigate(mco_id: str, request: NavigateRequest) -> NavigationState:
+    _known(mco_id)
+    try:
+        return _navigation().navigate(mco_id, request)
+    except NavigationError as exc:
+        raise HTTPException(status_code=404 if "no state" in str(exc) else 422, detail=str(exc)) from exc
+    except ValueError as exc:                     # a goal template or metric the grader refuses
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get("/{mco_id}/states", response_model=List[NavigationState], summary="The stored navigation states.")
+async def list_states(mco_id: str) -> List[NavigationState]:
+    _known(mco_id)
+    return _navigation().list_states(mco_id)
+
+
+@router.get("/{mco_id}/states/{state_id}", response_model=NavigationState, summary="One navigation state.")
+async def get_state(mco_id: str, state_id: str) -> NavigationState:
+    _known(mco_id)
+    state = _navigation().get_state(mco_id, state_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail=f"no state {state_id!r} in Pareto set {mco_id}")
+    return state

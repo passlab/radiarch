@@ -181,5 +181,44 @@ def resolve_structure(goal_structure: str, available: Sequence[str], aliases: Di
     return None
 
 
+def grade_goal_set(spec, doses_of: Callable[[str], np.ndarray], available: Sequence[str], voxel_cc: float,
+                   prescription_gy: Optional[float], fractions: Optional[int] = None):
+    """A :class:`~radiarch.models.evaluation.GoalSetSpec` graded on one dose, given the voxel doses of each available
+    structure (``doses_of``): the goals of the template and the spec, resolved by name and alias, physical or EQD2.
+    The evaluation service grades scenario doses too; navigation (R11) grades a blended dose with this."""
+    from ..models.evaluation import GoalsReport
+    from .radiobiology import default_alpha_beta, eqd2
+
+    template = load_template(spec.template_id) if spec.template_id else None
+    goals = (list(template.goals) if template else []) + list(spec.goals)
+    aliases = dict(template.aliases) if template else {}
+    basis = spec.dose_basis or (template.dose_basis if template else "physical")
+    if basis == "EQD2" and fractions is None:
+        raise ValueError("EQD2 goals need the plan's fractions")
+    results: List[GoalResult] = []
+    for goal in goals:
+        resolved = resolve_structure(goal.structure, available, aliases, spec.structure_aliases)
+        source = goal.source or (template.source if template else "")
+        if resolved is None:
+            results.append(GoalResult(structure=goal.structure, metric=goal.metric, op=goal.op, value=goal.value, priority=goal.priority,
+                                      note=goal.note, source=source, missing=True, passed=None if spec.skip_missing else False))
+            continue
+        doses = doses_of(resolved)
+        if basis == "EQD2":
+            ab = spec.alpha_beta_gy.get(resolved, spec.alpha_beta_gy.get(goal.structure, default_alpha_beta(resolved)))
+            doses = eqd2(doses, fractions, ab)
+        r = evaluate_goal(goal, doses, voxel_cc, prescription_gy, None, resolved)
+        r.source = r.source or source
+        results.append(r)
+    evaluable = [r for r in results if not r.missing]
+    return GoalsReport(
+        template_id=spec.template_id, dose_basis=basis, fractions=fractions, n_goals=len(results),
+        n_passed=sum(1 for r in evaluable if r.passed), n_failed=sum(1 for r in evaluable if not r.passed),
+        n_missing=sum(1 for r in results if r.missing),
+        passed_by_priority={p: sum(1 for r in evaluable if r.priority == p and r.passed) for p in (1, 2, 3)},
+        failed_by_priority={p: sum(1 for r in evaluable if r.priority == p and not r.passed) for p in (1, 2, 3)},
+        all_priority1_passed=all(r.passed for r in evaluable if r.priority == 1), results=results)
+
+
 __all__ = ["GOALS_DIR", "Metric", "parse_metric", "evaluate_metric", "evaluate_goal", "builtin_templates", "load_template",
-           "resolve_structure"]
+           "resolve_structure", "grade_goal_set"]
