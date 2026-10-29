@@ -492,8 +492,26 @@ requests reuse the cached result.
 | `GET /api/v1/optimize/{opt_id}/checkpoints` | List checkpoint snapshots. |
 | `DELETE /api/v1/optimize/{opt_id}` | Drop from cache. |
 
-**Objectives:** `DMin`, `DMax`, `DUniform`, `DVHMin`, `DVHMax`, `EUD`, plus hard
-constraints and fluence-smoothness / total-variation regularizers.
+**Objectives:** `DMin`, `DMax`, `DUniform`, `DVHMin`, `DVHMax`, `EUD` (exponent `eud_a`, 10 when unset), weighted
+penalty constraints (`constraints`), and fluence-smoothness / total-variation regularizers.
+
+**Trade-off objectives** (R11, for multi-criteria planning; usable in any run): `MeanDose`, `EUDMax` (`eud_a >= 1`),
+`EUDMin` (`eud_a <= 1`), `RMSOver`, `RMSUnder`, `UniformRMS`. Each is convex in the dose, reads in Gy above or below
+its `dose_gy` level, and is zero when met (`dose_gy: 0` makes an organ's objective "as low as possible"); the result
+lists every objective's value in `convergence.objective_values`.
+
+**Hard constraints** (`hard_constraints`): `Dmax <=`, `Dmin >=`, `Dmean <=`, `gEUD <=` (`eud_a >= 1`) or `gEUD >=`
+(`eud_a <= 1`), each met within its `tolerance_gy` (default 0.1 Gy). A feasibility run comes first and refuses a set
+no plan on the beams can meet (the job fails with `InfeasibleConstraintsError` naming them); then the objectives are minimized under the limits by an
+augmented Lagrangian, and `convergence.hard_constraints` reports each limit's achieved value. Nominal scenario only for
+now (not with `robustness`). Design: `docs/reports/mco-research-and-design.md` (D1, D2).
+
+```json
+"objectives": [{"type": "UniformRMS", "structure_name": "PTV", "dose_gy": 60, "weight": 1},
+               {"type": "EUDMax", "structure_name": "Heart", "dose_gy": 0, "eud_a": 2, "weight": 0.2}],
+"hard_constraints": [{"structure_name": "SpinalCord", "metric": "Dmax", "op": "<=", "value_gy": 45},
+                     {"structure_name": "PTV", "metric": "Dmin", "op": ">=", "value_gy": 54}]
+```
 **Solvers:** `L-BFGS-B` (default), `Adam`, `ProjectedGradient` — see
 [`docs/adr/0002-optimization-solver-choice.md`](docs/adr/0002-optimization-solver-choice.md).
 **Robust optimization:** scenario aggregation `WORST_CASE` / `EXPECTED` / `CVaR`.

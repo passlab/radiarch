@@ -40,6 +40,7 @@ from ..models.dose import InfluenceBuildRequest, ScenarioSpec, default_rbe, dose
 from ..models.optimization import (
     CheckpointInfo,
     ConstraintSpec,
+    ConvergenceInfo,
     ObjectiveSpec,
     OptimizationResult,
     OptimizationRunRequest,
@@ -58,9 +59,21 @@ from .objectives import (
     DVHMax,
     DVHMin,
     EUD,
+    EUDMax,
+    EUDMin,
+    MeanDose,
+    RMSOver,
+    RMSUnder,
     SmoothnessRegularizer,
     TotalVariationRegularizer,
+    UniformRMS,
     layer_neighbor_pairs,
+)
+from .hard_constraints import (
+    HardConstraintTerm,
+    InfeasibleConstraintsError,
+    infeasible_message,
+    solve_with_hard_constraints,
 )
 from .optimization_persistence import OptimizationStore
 from .optimization_solvers import get_solver
@@ -155,9 +168,12 @@ class OptimizationService:
                     f"Solving ({request.solver.method})")
         solver = get_solver(request.solver.method)
         tol = request.solver.convergence_tol or 1e-9
-        w_final, convergence = solver.run(
-            prob.cost_and_grad, prob.w0, max_iter, tol, callback=_callback
-        )
+        if request.hard_constraints:
+            w_final, convergence = self._solve_hard(request, prob, solver, max_iter, tol, _callback, on_progress)
+        else:
+            w_final, convergence = solver.run(
+                prob.cost_and_grad, prob.w0, max_iter, tol, callback=_callback
+            )
         w_final = np.clip(np.asarray(w_final, dtype=np.float32).ravel(), 0.0, None)
 
         # --- final dose on the nominal scenario ----------------------
@@ -172,6 +188,7 @@ class OptimizationService:
         convergence.constraint_violations = self._constraint_residuals(
             prob.constraint_terms, final_dose
         )
+        convergence.objective_values = [round(_objective_value(obj, final_dose, mask), 6) for obj, mask in prob.obj_terms]
 
         robust_stats = None
         if request.robustness.enabled:
@@ -209,6 +226,54 @@ class OptimizationService:
             convergence.final_cost, result.compute_time_s,
         )
         return result
+
+    # -----------------------------------------------------------------
+    # Hard constraints (R11, D2)
+    # -----------------------------------------------------------------
+
+    def _solve_hard(self, request: OptimizationRunRequest, prob: "_Problem", solver, max_iter: int, tol: float,
+                    callback, on_progress) -> Tuple[np.ndarray, ConvergenceInfo]:
+        """A feasibility run, then the objectives under the hard constraints (method of multipliers).
+
+        Raises :class:`InfeasibleConstraintsError` when the feasibility run cannot meet them. Hard constraints apply
+        to the nominal scenario (the request refuses them with robustness)."""
+        terms = [HardConstraintTerm(c, self._resolve_mask(prob.geometry, c.structure_name, prob.grid_shape))
+                 for c in request.hard_constraints]
+        inf, mat = prob.scenario_dij[prob.scenarios[0].hash()]
+
+        def forward(w: np.ndarray) -> np.ndarray:
+            return prob.engine.apply_influence(inf, np.asarray(w, dtype=np.float32), prob.grid_shape).dose
+
+        def backward(grad_dose: np.ndarray) -> np.ndarray:
+            return np.asarray(mat.T @ np.asarray(grad_dose).ravel(order="C"), dtype=np.float64)
+
+        def weight_terms(w: np.ndarray) -> Tuple[float, np.ndarray]:
+            loss, grad = 0.0, np.zeros(w.size)
+            for reg in prob.regularizers:
+                rl, rg = reg(w)
+                loss, grad = loss + rl, grad + rg
+            return loss, grad
+
+        on_progress(OptimizationStage.optimizing, 0.35, f"Feasibility of {len(terms)} hard constraint(s)")
+        feas = solve_with_hard_constraints(terms, forward, backward, prob.w0, solver, max_iter, tol)
+        if not feas.met:
+            raise InfeasibleConstraintsError(infeasible_message(feas.outcomes))
+        notes = [f"{obj.name} is already met by a plan that only meets the hard constraints: it trades nothing"
+                 for obj, mask in prob.obj_terms
+                 if hasattr(obj, "value_and_grad") and obj.value(feas.dose, mask) <= 1e-9]
+
+        on_progress(OptimizationStage.optimizing, 0.45, f"Solving ({request.solver.method}) under the hard constraints")
+        w0 = prob.w0 if request.init_weights_uri else feas.weights
+        out = solve_with_hard_constraints(terms, forward, backward, w0, solver, max_iter, tol,
+                                          dose_terms=prob.eval_dose_terms,
+                                          weight_terms=weight_terms if prob.regularizers else None,
+                                          callback=callback)
+        notes += [f"{o.label} not met within its tolerance after {out.rounds} rounds ({o.violation_gy:.3g} Gy over)"
+                  for o in out.outcomes if not o.met]
+        final_cost = prob.eval_dose_terms(out.dose)[0] + (weight_terms(out.weights)[0] if prob.regularizers else 0.0)
+        return out.weights, ConvergenceInfo(
+            success=out.success and out.met, iterations=feas.iterations + out.iterations, final_cost=float(final_cost),
+            cost_history=out.cost_history, hard_constraints=out.outcomes, constraint_rounds=out.rounds, notes=notes)
 
     # -----------------------------------------------------------------
     # Problem assembly (shared by run + tests)
@@ -487,9 +552,8 @@ class OptimizationService:
 def _objective_from_spec(s: ObjectiveSpec):
     """Construct the objective callable for one validated :class:`ObjectiveSpec`.
 
-    Note: ``EUD`` needs an exponent ``a`` that the v0.1 :class:`ObjectiveSpec`
-    does not carry, so a serial-organ default (``a = 10``) is used. Pass a
-    dedicated EUD spec field in a future revision to expose it.
+    ``EUD`` takes the spec's ``eud_a`` when set, else the serial-organ
+    default ``a = 10`` the v0.1 spec used.
     """
     t = s.type
     if t == "DMin":
@@ -503,8 +567,28 @@ def _objective_from_spec(s: ObjectiveSpec):
     if t == "DVHMax":
         return DVHMax(s.structure_name, s.dose_gy, s.volume_fraction, s.weight)
     if t == "EUD":
-        return EUD(s.structure_name, s.dose_gy, 10.0, s.weight)
+        return EUD(s.structure_name, s.dose_gy, s.eud_a if s.eud_a is not None else 10.0, s.weight)
+    if t == "MeanDose":
+        return MeanDose(s.structure_name, s.dose_gy, s.weight)
+    if t == "EUDMax":
+        return EUDMax(s.structure_name, s.dose_gy, s.eud_a, s.weight)
+    if t == "EUDMin":
+        return EUDMin(s.structure_name, s.dose_gy, s.eud_a, s.weight)
+    if t == "RMSOver":
+        return RMSOver(s.structure_name, s.dose_gy, s.weight)
+    if t == "RMSUnder":
+        return RMSUnder(s.structure_name, s.dose_gy, s.weight)
+    if t == "UniformRMS":
+        return UniformRMS(s.structure_name, s.dose_gy, s.weight)
     raise ValueError(f"unknown objective type {t!r}")
+
+
+def _objective_value(obj, dose: np.ndarray, mask: np.ndarray) -> float:
+    """An objective's unweighted value: in Gy for a trade-off type, the penalty over its weight otherwise."""
+    if hasattr(obj, "value_and_grad"):
+        return float(obj.value(dose, mask))
+    loss, _ = obj(dose, mask)
+    return float(loss) / obj.weight if getattr(obj, "weight", 0) else float(loss)
 
 
 def _aggregate(per_loss: List[float], per_grad: List[np.ndarray],

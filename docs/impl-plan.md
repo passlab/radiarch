@@ -31,7 +31,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
 | 16 | R13 Viewer integration | done; 3D Slicer check by the project lead waiting | fc7473d..26787db | 0018 |
-| 17 | R11 Multi-criteria optimization | not started; design proposed | — | (0019) |
+| 17 | R11 Multi-criteria optimization | in progress: R11.1 done | 268b0f0.. | (0019) |
 
 ## Before the roadmap (done by 2026-10-20)
 
@@ -241,12 +241,12 @@ OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH
 - [ ] The objects read by 3D Slicer with SlicerRT (structures, dose, beams, DRRs; Slicer's DVHs against the DVHs
   radiarch wrote), steps and an empty results table in the record **(waiting: the project lead)**
 
-### R11 — Multi-criteria optimization (not started; design proposed)
+### R11 — Multi-criteria optimization (in progress)
 A set of Pareto-optimal plans computed up front, navigated by sliders or automatically by goal priority, and made
 deliverable by dose mimicking. The research and the design: [`reports/mco-research-and-design.md`](reports/mco-research-and-design.md)
 (§4 D1–D9; ADR 0019 when built). Estimate about 4.5 ew, against the roadmap's 2: the roadmap counted generation and
 navigation only, not hard constraints, deliverable conversion or the viewer panel.
-- [ ] R11.1 Convex trade-off objectives and hard constraints (D1, D2): `MeanDose`, `EUDMax`, `EUDMin`, `RMSOver`,
+- [x] R11.1 Convex trade-off objectives and hard constraints (D1, D2): `MeanDose`, `EUDMax`, `EUDMin`, `RMSOver`,
   `RMSUnder`, `UniformRMS`, each read in Gy; nonconvex types refused as trade-offs; constraints by an
   augmented-Lagrangian loop around L-BFGS-B; a feasibility run that names the violated constraints; redundant
   objectives reported (about 0.5 ew)

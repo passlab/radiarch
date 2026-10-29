@@ -315,6 +315,166 @@ class EUD:
 
 
 # ===========================================================================
+# R11 — trade-off objectives: convex in the dose, valued in Gy, zero when met
+# ===========================================================================
+#
+# A multi-criteria run blends Pareto plans, and a blend is only bounded by its
+# parents when every objective is convex (f(sum l_j d_j) <= sum l_j f(d_j)).
+# Each objective below is convex and reads in Gy, so a slider shows a dose; its
+# loss is ``weight * value`` and its gradient ``weight * dvalue/dd``.
+
+
+def _geud(d: np.ndarray, mask: np.ndarray, n: float, a: float) -> Tuple[float, np.ndarray]:
+    """gEUD = (mean d^a)^(1/a) over the mask, and its gradient (d_i/gEUD)^(a-1) / n.
+
+    The dose is scaled by its maximum first so large exponents stay finite;
+    for ``a < 1`` it is floored at a small positive value, as :class:`EUD` does.
+    """
+    d = np.maximum(d, EUD._EPS) if a < 1.0 else np.maximum(d, 0.0)
+    top = float(np.max(d * mask))
+    if top <= 0.0:
+        return 0.0, np.zeros_like(d)
+    m = float(np.sum(((d / top) ** a) * mask) / n)
+    g = top * m ** (1.0 / a)
+    if g <= 0.0:
+        return 0.0, np.zeros_like(d)
+    grad = ((d / g) ** (a - 1.0)) / n * mask
+    return g, grad
+
+
+class _TradeOff:
+    """Shared shape: ``value`` (Gy) and ``__call__`` returning ``(weight * value, weight * grad)``."""
+
+    kind = ""
+
+    def __init__(self, structure_name: str, dose_gy: float, weight: float = 1.0):
+        self.structure_name = structure_name
+        self.dose_gy = float(dose_gy)
+        self.weight = float(weight)
+        self.name = f"{self.kind}({structure_name}, {dose_gy} Gy, w={weight})"
+
+    def value_and_grad(self, dose: np.ndarray, mask: np.ndarray) -> Tuple[float, np.ndarray]:
+        raise NotImplementedError
+
+    def value(self, dose: np.ndarray, mask: np.ndarray) -> float:
+        return self.value_and_grad(dose, mask)[0]
+
+    def __call__(self, dose: np.ndarray, mask: np.ndarray) -> Tuple[float, np.ndarray]:
+        v, g = self.value_and_grad(dose, mask)
+        logger.trace("{} -> value={:.6g} Gy", self.name, v)
+        return self.weight * v, self.weight * g
+
+
+class MeanDose(_TradeOff):
+    """The structure's mean dose above ``dose_gy``: ``max(0, mean(d) - level)``."""
+
+    kind = "MeanDose"
+
+    def value_and_grad(self, dose, mask):
+        d, m = _prepare(dose, mask)
+        n = float(m.sum())
+        if n <= 0:
+            return 0.0, np.zeros_like(d)
+        excess = float(np.sum(d * m) / n) - self.dose_gy
+        if excess <= 0.0:
+            return 0.0, np.zeros_like(d)
+        return excess, m / n
+
+
+class EUDMax(_TradeOff):
+    """The gEUD above ``dose_gy``, ``a >= 1`` (convex): an organ's objective, 0 Gy for "as low as possible"."""
+
+    kind = "EUDMax"
+
+    def __init__(self, structure_name: str, dose_gy: float, a: float, weight: float = 1.0):
+        if a < 1.0:
+            raise ValueError("EUDMax needs a >= 1")
+        self.a = float(a)
+        super().__init__(structure_name, dose_gy, weight)
+        self.name = f"EUDMax({structure_name}, {dose_gy} Gy, a={a}, w={weight})"
+
+    def value_and_grad(self, dose, mask):
+        d, m = _prepare(dose, mask)
+        n = float(m.sum())
+        if n <= 0:
+            return 0.0, np.zeros_like(d)
+        g, grad = _geud(d, m, n, self.a)
+        if g <= self.dose_gy:
+            return 0.0, np.zeros_like(d)
+        return g - self.dose_gy, grad
+
+
+class EUDMin(_TradeOff):
+    """The gEUD below ``dose_gy``, ``a <= 1`` (the gEUD is concave there): a target's cold-spot objective."""
+
+    kind = "EUDMin"
+
+    def __init__(self, structure_name: str, dose_gy: float, a: float, weight: float = 1.0):
+        if a > 1.0 or abs(a) < 1e-9:
+            raise ValueError("EUDMin needs a <= 1 and not 0")
+        self.a = float(a)
+        super().__init__(structure_name, dose_gy, weight)
+        self.name = f"EUDMin({structure_name}, {dose_gy} Gy, a={a}, w={weight})"
+
+    def value_and_grad(self, dose, mask):
+        d, m = _prepare(dose, mask)
+        n = float(m.sum())
+        if n <= 0:
+            return 0.0, np.zeros_like(d)
+        g, grad = _geud(d, m, n, self.a)
+        if g >= self.dose_gy:
+            return 0.0, np.zeros_like(d)
+        return self.dose_gy - g, -grad
+
+
+class _RMS(_TradeOff):
+    """``sqrt(mean(e^2))`` of a per-voxel deviation ``e``: a norm of a convex function, so convex."""
+
+    def deviation(self, d: np.ndarray) -> Tuple[np.ndarray, float]:
+        """The deviation and its derivative sign with respect to the dose."""
+        raise NotImplementedError
+
+    def value_and_grad(self, dose, mask):
+        d, m = _prepare(dose, mask)
+        n = float(m.sum())
+        if n <= 0:
+            return 0.0, np.zeros_like(d)
+        e, sign = self.deviation(d)
+        e = e * m
+        rms = float(np.sqrt(np.sum(e * e) / n))
+        if rms <= 0.0:
+            return 0.0, np.zeros_like(d)
+        return rms, sign * e / (n * rms)
+
+
+class RMSOver(_RMS):
+    """Root mean square of the dose above ``dose_gy`` over the structure (hot spots, an organ's dose)."""
+
+    kind = "RMSOver"
+
+    def deviation(self, d):
+        return np.maximum(0.0, d - self.dose_gy), 1.0
+
+
+class RMSUnder(_RMS):
+    """Root mean square of the dose below ``dose_gy`` over the structure (a target's cold spots)."""
+
+    kind = "RMSUnder"
+
+    def deviation(self, d):
+        return np.maximum(0.0, self.dose_gy - d), -1.0
+
+
+class UniformRMS(_RMS):
+    """Root mean square deviation from ``dose_gy``: a target's homogeneity around its prescription."""
+
+    kind = "UniformRMS"
+
+    def deviation(self, d):
+        return d - self.dose_gy, 1.0
+
+
+# ===========================================================================
 # O5 — Constraints (penalty form) + fluence regularizers
 # ===========================================================================
 
@@ -466,6 +626,12 @@ __all__ = [
     "DVHMin",
     "DVHMax",
     "EUD",
+    "MeanDose",
+    "EUDMax",
+    "EUDMin",
+    "RMSOver",
+    "RMSUnder",
+    "UniformRMS",
     "ConstraintPenalty",
     "WeightRegularizer",
     "SmoothnessRegularizer",

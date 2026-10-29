@@ -725,3 +725,30 @@ dose, and OHIF loads a structure set only when it is dropped into a viewport of 
   Linux), and the eight findings of the hand checks with the commits that fixed them.
 - **Open:** the objects read by 3D Slicer with SlicerRT, left to the project lead; the record gives the steps and an
   empty results table. R6's hand check is done in OHIF and waits on the same Slicer check.
+
+## R11 — multi-criteria optimization (from 2026-10-29)
+
+Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
+
+### R11.1 Convex trade-off objectives and hard constraints
+
+- **Trade-off objectives** (`services/objectives.py`, D1): `MeanDose`, `EUDMax` (gEUD, `a >= 1`), `EUDMin` (`a <= 1`),
+  `RMSOver`, `RMSUnder`, `UniformRMS`. Each is the amount in Gy by which the structure misses its `dose_gy` level,
+  zero when met, and convex in the dose, so a blend of plans is bounded by its parents. The gEUD scales the dose by
+  its maximum before the power, so exponents up to 100 stay finite. `ObjectiveSpec.eud_a` carries the exponent (the
+  older `EUD` takes it too, 10 when unset as before); `is_tradeoff` and `check_tradeoffs` refuse the DVH surrogates,
+  the two-sided `EUD` and the squared penalties as trade-offs.
+- **Hard constraints** (`services/hard_constraints.py`, D2): `HardConstraint` (`Dmax <=`, `Dmin >=`, `Dmean <=`,
+  `gEUD` with the convex direction only), enforced by the method of multipliers around the request's solver: one
+  residual per voxel for `Dmax` and `Dmin`, one for `Dmean` and `gEUD`; `rho` starts at 10 and grows tenfold when the
+  worst violation has not fallen to a quarter; up to 12 rounds. A feasibility run (the constraint terms alone) comes
+  first; when it cannot meet them, `InfeasibleConstraintsError` names the constraints (the job fails with that message). An objective
+  the feasibility plan already meets is noted ("trades nothing"), the cause of the deliverable gap reported for a
+  commercial MCO. Nominal scenario only: the request refuses hard constraints with robustness until R11.6.
+- **Results:** `ConvergenceInfo.objective_values` (every objective's unweighted value, in Gy for trade-offs),
+  `hard_constraints` (achieved, violation, met), `constraint_rounds`, `notes`. An objective without `eud_a` and a
+  request without hard constraints keep their earlier hashes and cache keys (a test pins both).
+- **Tests** (`tests/test_r11_tradeoffs.py`): values in Gy; gradients against finite differences; convexity on random
+  doses (and the DVH surrogate's counterexample); spec ranges; the augmented Lagrangian against SciPy's SLSQP with the
+  constraints written out (organ maximum; organ mean and gEUD; target minimum); an impossible set; the service on the
+  analytic engine (an organ limit held and reported, a redundant objective noted, an infeasible set refused).

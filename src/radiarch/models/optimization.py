@@ -32,7 +32,7 @@ import hashlib
 import json
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -47,6 +47,9 @@ from .common import ResearchArtifact
 # Objectives — clinical dose goals
 # ---------------------------------------------------------------------------
 
+#: Objective types a multi-criteria run accepts as trade-offs (R11, D1).
+TRADEOFF_TYPES = ("MeanDose", "EUDMax", "EUDMin", "RMSOver", "RMSUnder", "UniformRMS")
+
 class ObjectiveSpec(BaseModel):
     """A single dose objective evaluated on one structure.
 
@@ -58,15 +61,30 @@ class ObjectiveSpec(BaseModel):
     * ``DVHMin`` / ``DVHMax`` — dose-volume-histogram goals: a fraction
       (``volume_fraction``) of the structure must receive at least /
       at most ``dose_gy``. Differentiable via a sigmoid surrogate.
-    * ``EUD`` — generalized equivalent uniform dose (Niemierko).
+    * ``EUD`` — generalized equivalent uniform dose (Niemierko), pulled toward
+      ``dose_gy`` from both sides.
+
+    Trade-off objectives (R11): convex in the dose, each valued in Gy and zero
+    when met, so a multi-criteria run can blend plans and bound the blend
+    (``docs/reports/mco-research-and-design.md``, D1). ``dose_gy`` is a level:
+    0 Gy makes an organ's objective "as low as possible".
+
+    * ``MeanDose`` — the mean dose above ``dose_gy``.
+    * ``EUDMax`` — the gEUD above ``dose_gy``, exponent ``eud_a >= 1`` (organs).
+    * ``EUDMin`` — the gEUD below ``dose_gy``, exponent ``eud_a <= 1`` (targets).
+    * ``RMSOver`` / ``RMSUnder`` — the root mean square of the dose above /
+      below ``dose_gy`` over the structure.
+    * ``UniformRMS`` — the root mean square deviation from ``dose_gy``.
 
     ``volume_fraction`` is required for the two DVH types and ignored
-    otherwise; the validator enforces this.
+    otherwise; ``eud_a`` is required for the two trade-off EUD types and
+    optional for ``EUD`` (10 when unset). The validator enforces this.
     """
 
     type: str = Field(
         ...,
-        description='One of "DMin", "DMax", "DUniform", "DVHMin", "DVHMax", "EUD".',
+        description='One of "DMin", "DMax", "DUniform", "DVHMin", "DVHMax", "EUD", '
+                    '"MeanDose", "EUDMax", "EUDMin", "RMSOver", "RMSUnder", "UniformRMS".',
     )
     structure_name: str = Field(..., min_length=1, max_length=128,
                                 description="Name of the target structure mask.")
@@ -78,8 +96,13 @@ class ObjectiveSpec(BaseModel):
         default=None, ge=0.0, le=1.0,
         description="Required for DVH* types: fraction of structure volume.",
     )
+    eud_a: Optional[float] = Field(
+        default=None, ge=-100.0, le=100.0,
+        description="gEUD exponent: required for EUDMax (>= 1) and EUDMin (<= 1, not 0); "
+                    "optional for EUD (10 when unset).",
+    )
 
-    _ALLOWED_TYPES = {"DMin", "DMax", "DUniform", "DVHMin", "DVHMax", "EUD"}
+    _ALLOWED_TYPES = {"DMin", "DMax", "DUniform", "DVHMin", "DVHMax", "EUD"} | set(TRADEOFF_TYPES)
     _DVH_TYPES = {"DVHMin", "DVHMax"}
 
     @model_validator(mode="after")
@@ -92,7 +115,18 @@ class ObjectiveSpec(BaseModel):
             raise ValueError(
                 f"volume_fraction is required for DVH objective type {self.type!r}"
             )
+        if self.type == "EUDMax" and (self.eud_a is None or self.eud_a < 1.0):
+            raise ValueError("EUDMax needs eud_a >= 1 (the gEUD is convex only there)")
+        if self.type == "EUDMin" and (self.eud_a is None or self.eud_a > 1.0 or self.eud_a == 0.0):
+            raise ValueError("EUDMin needs eud_a <= 1 and not 0 (the gEUD is concave only there)")
+        if self.eud_a is not None and abs(self.eud_a) < 1e-9:
+            raise ValueError("eud_a must be non-zero")
         return self
+
+    @property
+    def is_tradeoff(self) -> bool:
+        """Usable as a multi-criteria trade-off: convex, valued in Gy (D1)."""
+        return self.type in TRADEOFF_TYPES
 
     def hash(self) -> str:
         """Deterministic short hash folded into the run cache key."""
@@ -107,8 +141,19 @@ class ObjectiveSpec(BaseModel):
                 else None
             ),
         }
+        if self.eud_a is not None:          # only when set, so earlier objectives keep their hashes
+            payload["eud_a"] = round(self.eud_a, 9)
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
+def check_tradeoffs(objectives: List["ObjectiveSpec"]) -> None:
+    """Refuse objectives a multi-criteria run cannot blend (D1): the DVH surrogates and the two-sided
+    EUD are not convex, and the squared penalties do not read in Gy."""
+    bad = [f"{o.type}({o.structure_name})" for o in objectives if not o.is_tradeoff]
+    if bad:
+        raise ValueError(f"not trade-off objectives: {', '.join(bad)}; trade-offs are convex and read in Gy: "
+                         f"{', '.join(TRADEOFF_TYPES)}")
 
 
 class ConstraintSpec(BaseModel):
@@ -144,6 +189,54 @@ class ConstraintSpec(BaseModel):
             "value_gy": round(self.value_gy, 9),
             "weight": round(self.weight, 9),
         }
+        blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
+class HardConstraint(BaseModel):
+    """A limit the optimizer must meet, within ``tolerance_gy`` (R11, D2).
+
+    Unlike :class:`ConstraintSpec`, a weighted penalty, a hard constraint is
+    enforced by an augmented-Lagrangian loop around the solver, after a
+    feasibility run that refuses a set no plan can meet. Each is convex, so a
+    blend of plans that meet it meets it too:
+
+    * ``Dmax <= value`` and ``Dmin >= value`` — every voxel of the structure;
+    * ``Dmean <= value``;
+    * ``gEUD <= value`` with ``eud_a >= 1``, or ``gEUD >= value`` with ``eud_a <= 1``.
+    """
+
+    structure_name: str = Field(..., min_length=1, max_length=128)
+    metric: Literal["Dmax", "Dmin", "Dmean", "gEUD"]
+    op: Literal["<=", ">="]
+    value_gy: float = Field(..., ge=0.0)
+    eud_a: Optional[float] = Field(default=None, ge=-100.0, le=100.0)
+    tolerance_gy: float = Field(default=0.1, gt=0.0, le=10.0,
+                                description="The largest violation that still counts as met.")
+
+    @model_validator(mode="after")
+    def _convex(self) -> "HardConstraint":
+        if self.metric in ("Dmax", "Dmean") and self.op != "<=":
+            raise ValueError(f"{self.metric} takes <= (a lower bound on it is not convex)")
+        if self.metric == "Dmin" and self.op != ">=":
+            raise ValueError("Dmin takes >= (an upper bound on it is not convex)")
+        if self.metric == "gEUD":
+            a = self.eud_a
+            if a is None or abs(a) < 1e-9:
+                raise ValueError("a gEUD constraint needs a non-zero eud_a")
+            if self.op == "<=" and a < 1.0:
+                raise ValueError("gEUD <= needs eud_a >= 1")
+            if self.op == ">=" and a > 1.0:
+                raise ValueError("gEUD >= needs eud_a <= 1")
+        return self
+
+    @property
+    def label(self) -> str:
+        a = f"(a={self.eud_a:g})" if self.metric == "gEUD" else ""
+        return f"{self.structure_name} {self.metric}{a} {self.op} {self.value_gy:g} Gy"
+
+    def hash(self) -> str:
+        payload = self.model_dump(mode="json")
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
@@ -326,6 +419,11 @@ class OptimizationRunRequest(BaseModel):
     dose_engine: EngineSpec
     objectives: List[ObjectiveSpec] = Field(..., min_length=1, max_length=256)
     constraints: List[ConstraintSpec] = Field(default_factory=list, max_length=256)
+    hard_constraints: List[HardConstraint] = Field(
+        default_factory=list, max_length=64,
+        description="Limits met within their tolerance (augmented Lagrangian after a feasibility run); "
+                    "not with robustness yet (R11.6).",
+    )
     solver: SolverConfig
     init_weights_uri: Optional[str] = Field(
         default=None,
@@ -341,6 +439,12 @@ class OptimizationRunRequest(BaseModel):
         description="RBE applied to the influence matrices (and so to the optimized dose); "
                     "null = 1.1 for protons, 1.0 for photons. Objectives are then in Gy(RBE).",
     )
+
+    @model_validator(mode="after")
+    def _hard_constraints_nominal(self) -> "OptimizationRunRequest":
+        if self.hard_constraints and self.robustness.enabled:
+            raise ValueError("hard constraints apply to the nominal scenario; robust hard constraints come with R11.6")
+        return self
 
     def compute_cache_key(self) -> str:
         """SHA256 of a normalized JSON view of the optimization problem.
@@ -366,6 +470,8 @@ class OptimizationRunRequest(BaseModel):
             "robustness_hash": self.robustness.hash(),
             "rbe": self.rbe,
         }
+        if self.hard_constraints:           # only when given, so earlier runs keep their keys
+            payload["hard_constraints_hash"] = [c.hash() for c in self.hard_constraints]
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -373,6 +479,15 @@ class OptimizationRunRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Results
 # ---------------------------------------------------------------------------
+
+class HardConstraintOutcome(BaseModel):
+    """A hard constraint at the final weights."""
+
+    label: str
+    achieved_gy: float = Field(..., description="The constrained metric at the final dose (the worst voxel for Dmax/Dmin).")
+    violation_gy: float = Field(..., ge=0.0)
+    met: bool = Field(..., description="Violation within the constraint's tolerance.")
+
 
 class ConvergenceInfo(BaseModel):
     """Solver convergence summary for a completed optimization."""
@@ -388,6 +503,14 @@ class ConvergenceInfo(BaseModel):
         default_factory=dict,
         description="Residual penalty per constraint at the final weights.",
     )
+    objective_values: List[float] = Field(
+        default_factory=list,
+        description="Each objective's unweighted value at the final dose, in request order "
+                    "(in Gy for trade-off types; the penalty over its weight for the others).",
+    )
+    hard_constraints: List[HardConstraintOutcome] = Field(default_factory=list)
+    constraint_rounds: int = Field(default=0, ge=0, description="Augmented-Lagrangian rounds (0 without hard constraints).")
+    notes: List[str] = Field(default_factory=list, description="Warnings about the problem, e.g. an objective the constraints already meet.")
 
 
 class RobustStats(BaseModel):
@@ -460,8 +583,12 @@ class OptimizationJobStatus(BaseModel):
 
 
 __all__ = [
+    "TRADEOFF_TYPES",
     "ObjectiveSpec",
+    "check_tradeoffs",
     "ConstraintSpec",
+    "HardConstraint",
+    "HardConstraintOutcome",
     "RegularizationConfig",
     "SolverConfig",
     "RobustnessSpec",
