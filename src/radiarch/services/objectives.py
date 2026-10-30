@@ -431,7 +431,13 @@ class EUDMin(_TradeOff):
 
 
 class _RMS(_TradeOff):
-    """``sqrt(mean(e^2))`` of a per-voxel deviation ``e``: a norm of a convex function, so convex."""
+    """``sqrt(mean(e^2) + s^2) - s`` of a per-voxel deviation ``e``, ``s`` = :attr:`SMOOTHING_GY`: the root mean square,
+    smoothed where it reaches zero. The plain RMS is a norm with a corner at zero, like ``|x|``; L-BFGS-B stalls at
+    such a corner and reports success short of the optimum (R11.8: a TG-119 plan stopped with its target's cold-spot
+    RMS at exactly 0, beaten in its own weighted sum by a neighbour). The smoothed value is still convex (the norm of
+    ``(e / sqrt(n), s)``, less a constant), is 0 where the RMS is, and is below the RMS by at most ``s``."""
+
+    SMOOTHING_GY = 0.01
 
     def deviation(self, d: np.ndarray) -> Tuple[np.ndarray, float]:
         """The deviation and its derivative sign with respect to the dose."""
@@ -444,10 +450,9 @@ class _RMS(_TradeOff):
             return 0.0, np.zeros_like(d)
         e, sign = self.deviation(d)
         e = e * m
-        rms = float(np.sqrt(np.sum(e * e) / n))
-        if rms <= 0.0:
-            return 0.0, np.zeros_like(d)
-        return rms, sign * e / (n * rms)
+        s = self.SMOOTHING_GY
+        root = float(np.sqrt(np.sum(e * e) / n + s * s))
+        return root - s, sign * e / (n * root)
 
 
 class RMSOver(_RMS):

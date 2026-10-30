@@ -20,7 +20,7 @@ from radiarch.models.mco import AutoNavigateRequest, DeliverableRequest, Navigat
 from radiarch.models.optimization import HardConstraint, RobustnessSpec
 from radiarch.services.objectives import MeanDose, UniformRMS
 from radiarch.services.pareto import distance_to_inner, normalize, sandwich, Solved
-from radiarch.services.robust_mco import ScenarioTerm, StackedOps, WorstCase, scenario_wise
+from radiarch.services.robust_mco import SMOOTHING_GY, ScenarioTerm, StackedOps, WorstCase, scenario_wise, smoothing_width
 
 from test_r11_pareto import _mreq, msvc, svc  # noqa: F401  (the stubbed services: a proton beam model, the analytic engine)
 
@@ -79,6 +79,16 @@ class TestPieces:
                 E[idx] = 1e-6
                 fd = (terms(D + E)[0] - terms(D - E)[0]) / 2e-6
                 assert g[idx] == pytest.approx(fd, rel=1e-4, abs=1e-7)
+
+    def test_the_smoothing_width_follows_the_dose_level(self):
+        from radiarch.models.optimization import ObjectiveSpec
+
+        rms = ObjectiveSpec(type="UniformRMS", structure_name="PTV", dose_gy=60.0, weight=1.0)
+        mean = ObjectiveSpec(type="MeanDose", structure_name="OAR", dose_gy=0.0, weight=1.0)
+        cap = HardConstraint(structure_name="PTV", metric="Dmin", op=">=", value_gy=54.0)
+        assert smoothing_width([rms, mean], [cap]) == pytest.approx(0.3)                   # 0.5 % of 60 Gy
+        assert smoothing_width([rms.model_copy(update={"dose_gy": 2.0}), mean], []) == pytest.approx(0.01)
+        assert smoothing_width([mean, mean], []) == SMOOTHING_GY                           # no dose level named
 
     def test_a_constraint_in_one_scenario(self):
         ops, _, masks = _small()

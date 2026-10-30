@@ -1,0 +1,25 @@
+name: mco_robust_proton
+kind: mco_robust
+description: A robust proton Pareto set (R11) on a synthetic phantom - a cylindrical CTV, an organ 5 mm behind it, a bone slab over half the anterior field - with two fields (gantry 0 and 90) on MCsquare, against range errors of 3.5 % and 3 mm lateral setup errors. Checks the worst-case and nominal values, the CTV minimum in every scenario, the robust plans against the nominal set's plans in the scenarios, automatic navigation and the deliverable spots. Each solve takes up to 2000 iterations. Fast mode doubles the grid, widens the spots and runs fewer primaries.
+engine: mcsquare
+engine_params: {nb_primaries: 10000, nb_threads: 8}
+spacing_mm: 2.0
+spot_spacing_mm: 5.0
+gantry_deg: [0.0, 90.0]
+prescription_gy: 2.0
+iterations: 2000
+plan_budget: 7
+error_tolerance: 0.02
+tradeoffs:
+  - {type: UniformRMS, structure_name: CTV, dose_gy: 2.0, weight: 1.0}
+  - {type: MeanDose, structure_name: OAR, dose_gy: 0.0, weight: 1.0}
+hard_constraints:
+  - {structure_name: CTV, metric: Dmin, op: ">=", value_gy: 1.7, tolerance_gy: 0.02}
+scenarios:
+  - {name: range_up, range_scale: 1.035}
+  - {name: range_down, range_scale: 0.965}
+  - {name: shift_left, setup_shift_mm: [3.0, 0.0, 0.0]}
+  - {name: shift_right, setup_shift_mm: [-3.0, 0.0, 0.0]}
+goals:
+  - {structure: CTV, metric: "D95%[Gy]", op: ">=", value: 1.9, priority: 1}
+  - {structure: OAR, metric: "Dmean[Gy]", op: "<=", value: 0.5, priority: 2}

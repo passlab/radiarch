@@ -43,9 +43,9 @@ from ..models.mco import ErrorPoint, MCORunRequest, MCOResult, MCOStage, ParetoP
 from ..models.optimization import OptimizationRunRequest
 from .hard_constraints import InfeasibleConstraintsError, infeasible_message, solve_with_hard_constraints
 from .optimization import OptimizationService
-from .optimization_solvers import get_solver
+from .optimization_solvers import gain_on_offer, get_solver
 from .pareto import MIN_RANGE, Solved, normalize, sandwich
-from .robust_mco import StackedOps, WorstCase, scenario_terms, scenario_wise
+from .robust_mco import SMOOTHING_GY, StackedOps, WorstCase, scenario_terms, scenario_wise, smoothing_width
 
 MCOProgressCallback = Callable[[MCOStage, float, str], None]
 
@@ -132,10 +132,17 @@ def _noop(stage: MCOStage, fraction: float, message: str) -> None:
     pass
 
 
-def projected_gradient(grad: np.ndarray, x: np.ndarray) -> float:
-    """The largest component of the gradient projected on ``x >= 0`` (zero at a bound-constrained optimum)."""
-    g = np.asarray(grad, dtype=np.float64)
-    return float(np.max(np.abs(np.where(np.asarray(x) > 0.0, g, np.minimum(g, 0.0))))) if g.size else 0.0
+STALL_RELATIVE = 1e-5     # converged: the cost fell by at most this share of itself over the last STALL_WINDOW iterations
+
+
+def start_cost(dose_terms, regs, forward, w0: np.ndarray) -> float:
+    """The cost of ``dose_terms`` (and the weight terms ``regs``) at ``w0``: the scale a plan's gain on offer is
+    reported in."""
+    w0 = np.asarray(w0, dtype=np.float64)
+    f = float(dose_terms(forward(w0))[0])
+    if regs is not None:
+        f += float(regs(w0)[0])
+    return abs(f)
 
 
 @dataclass
@@ -153,6 +160,7 @@ class MCOOps:
     index: np.ndarray                       # the navigation voxels (flat indices on the dose grid)
     structures: Dict[str, np.ndarray]       # structure → boolean over the navigation voxels
     scenarios: List[str]                    # robust: the scenario names, nominal first; else empty
+    smoothing_gy: float = SMOOTHING_GY      # robust: the log-sum-exp width per unit weight (:func:`smoothing_width`)
 
     @property
     def robust(self) -> bool:
@@ -172,7 +180,7 @@ class MCOOps:
         """``(dose_terms, bound)`` for the weights ``raw``: the weighted sum (robust: its smoothed worst scenario) and,
         robust only, a lower bound on what any plan reaches in it (else None)."""
         if self.robust:
-            return scenario_wise([o.objective for o in self.objectives], self.masks, raw)
+            return scenario_wise([o.objective for o in self.objectives], self.masks, raw, self.smoothing_gy)
 
         def dose_terms(d: np.ndarray):
             loss, grad = 0.0, np.zeros(d.shape)
@@ -221,34 +229,43 @@ class MCOService:
 
         plans_x: List[np.ndarray] = []
 
+
         def solve(raw: np.ndarray, warm: Optional[int]) -> Solved:
             w0 = plans_x[warm] if warm is not None else start
             dose_terms, bound = ops.weighted(raw)
+            regs = ops.regs
+            cost0 = start_cost(dose_terms, regs, ops.forward, w0)
             if ops.terms:
                 out = solve_with_hard_constraints(ops.terms, ops.forward, ops.backward, w0, solver, max_iter, tol, dose_terms=dose_terms,
-                                                  weight_terms=ops.regs)
-                x, ok, dose = out.weights, out.success and out.met, out.dose
+                                                  weight_terms=regs, stall_tol=STALL_RELATIVE)
+                x, ok, dose, gain = out.weights, out.success and out.met, out.dose, out.remaining_gain
             else:
                 def cost_and_grad(w: np.ndarray):
                     d = ops.forward(w)
                     loss, gd = dose_terms(d)
                     gw = ops.backward(gd)
-                    if ops.regs is not None:
-                        rl, rg = ops.regs(np.asarray(w, dtype=np.float64))
+                    if regs is not None:
+                        rl, rg = regs(np.asarray(w, dtype=np.float64))
                         loss, gw = loss + rl, gw + rg
                     return float(loss), gw
-                x, conv = solver.run(cost_and_grad, w0, max_iter, tol)
+                x, conv = solver.run(cost_and_grad, w0, max_iter, tol, stall_tol=STALL_RELATIVE)
                 x = np.clip(np.asarray(x, dtype=np.float64).ravel(), 0.0, None)
-                # L-BFGS-B reports a failed line search at an optimum on the bound (an organ's anchor at zero
-                # fluence): a vanishing projected gradient counts as converged too
-                cost, g = cost_and_grad(x)
-                ok, dose = conv.success or projected_gradient(g, x) <= 1e-6 * (1.0 + abs(cost)), ops.forward(x)
+                # converged when the cost stopped falling (R11.8); the gain on offer is recorded, measured here for a
+                # solver that does not report it
+                gain = conv.remaining_gain
+                if gain is None:
+                    gain = gain_on_offer(cost_and_grad(x)[1], x, max(float(np.max(x)), float(np.max(w0))))
+                ok, dose = conv.success, ops.forward(x)
             plans_x.append(x)
-            return Solved(x=x, values=ops.values(dose), ok=ok, bound=None if bound is None else bound(dose))
+            rel = None if gain is None or cost0 <= 0.0 else float(gain / cost0)
+            return Solved(x=x, values=ops.values(dose), ok=ok, bound=None if bound is None else bound(dose), gain=rel)
 
         budget = request.budget
+        elapsed = {}                                       # plans so far -> seconds since the start, when the bound was computed
 
         def on_plan(plan, count: int, err: float) -> None:
+            if not np.isnan(err):
+                elapsed[count] = time.time() - t0
             stage = MCOStage.anchors if count <= n else MCOStage.sandwich
             bound = "" if np.isnan(err) else f", error bound {err:.3f}"
             on(stage, 0.08 + 0.82 * min(1.0, count / budget), f"{plan.kind} plan {count} of up to {budget}{bound}")
@@ -258,7 +275,7 @@ class MCOService:
             o = request.tradeoffs[i]
             notes.append(f"{o.type}({o.structure_name}) is the same in every anchor plan "
                          f"({res.ideal[i]:.3g} Gy): it trades nothing on these beams")
-        notes += [f"plan {k} did not converge" for k, p in enumerate(res.plans) if not p.solved.ok]
+        notes += [f"plan {k} did not converge: its cost was still falling at the iteration limit; it proves no supporting hyperplane, so the error bound leaves it out (more iterations help)" for k, p in enumerate(res.plans) if not p.solved.ok]
         empty = [k for k, p in enumerate(res.plans) if float(np.sum(p.solved.x)) <= 0.0]
         if empty:
             notes.append(f"plan(s) {', '.join(map(str, empty))} deliver no dose: without a hard constraint on target coverage "
@@ -291,8 +308,10 @@ class MCOService:
             plans=[ParetoPlan(index=k, kind=p.kind, weights=[float(w) for w in p.raw_weights],
                               values_gy=[round(float(v), 6) for v in p.solved.values], normalized=[round(float(v), 6) for v in norm[k]],
                               nominal_gy=None if nominal is None else [round(float(v), 6) for v in nominal[k]],
-                              converged=p.solved.ok) for k, p in enumerate(res.plans)],
-            error_history=[ErrorPoint(plans=c, error=round(e, 6)) for c, e in res.history], error_bound=round(res.error, 6),
+                              converged=p.solved.ok,
+                              gain=None if p.solved.gain is None else float(f"{p.solved.gain:.3g}"))
+                  for k, p in enumerate(res.plans)],
+            error_history=[ErrorPoint(plans=c, error=round(e, 6), seconds=round(elapsed.get(c, 0.0), 2)) for c, e in res.history], error_bound=round(res.error, 6),
             converged=res.error <= request.error_tolerance, stop_reason=res.stop_reason, notes=notes,
             navigation_structures=names, navigation_voxels=int(index.size),
             voxel_cc=float(np.prod(prob.geometry.spacing_mm)) / 1000.0,
@@ -351,7 +370,7 @@ class MCOService:
         cmasks = [structures[c.structure_name].astype(np.float64) for c in request.hard_constraints]
         return MCOOps([WorstCase(o) for o, _ in prob.obj_terms], [np.asarray(m).ravel()[index].astype(np.float64) for _, m in prob.obj_terms],
                       stacked.forward, stacked.backward, scenario_terms(request.hard_constraints, cmasks, scenarios), regs, index,
-                      structures, scenarios)
+                      structures, scenarios, smoothing_width(request.tradeoffs, request.hard_constraints))
 
     def project(self, mco_id: str, blend) -> Tuple[np.ndarray, np.ndarray, List[str]]:
         """A navigated blend moved onto the Pareto set: the plan that lowers the trade-offs' normalized sum as far as
@@ -392,10 +411,11 @@ def project_blend(objectives, masks, forward, backward, constraint_terms, x0: np
             loss, grad = loss + s * v, grad + s * g
         return loss, grad
 
-    out = solve_with_hard_constraints(list(constraint_terms) + caps, forward, backward, x0, solver, max_iter, tol, dose_terms=dose_terms)
+    out = solve_with_hard_constraints(list(constraint_terms) + caps, forward, backward, x0, solver, max_iter, tol, dose_terms=dose_terms,
+                                      stall_tol=STALL_RELATIVE)
     if not out.met:
         return np.asarray(x0, dtype=np.float64), d0, ["the projection did not hold every cap; the navigated plan is kept"]
     return out.weights, out.dose, []
 
 
-__all__ = ["MCOService", "MCOStore", "MCOOps", "MCOProgressCallback", "normalize", "project_blend"]
+__all__ = ["MCOService", "MCOStore", "MCOOps", "MCOProgressCallback", "normalize", "project_blend", "start_cost", "STALL_RELATIVE"]

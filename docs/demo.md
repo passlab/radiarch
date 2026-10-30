@@ -200,6 +200,11 @@ The `demo-lung-imrt` protocol grows the CTV (5 mm) and PTV (5 mm) from the GTV, 
 seven static fields, and judges the plan by the RTOG 0617 limits (cord, oesophagus, heart, lungs). It is a
 demonstration, not a site protocol: the dose engine and machine are radiarch's research models.
 
+`PROTOCOL=demo-lung-imrt-mco ./scripts/demo-lung.sh` makes the same plan by multi-criteria optimization: a Pareto set
+of five trade-offs (PTV homogeneity, lungs, heart and oesophagus mean dose, a cord EUD), navigated automatically by
+the protocol's goals and made deliverable. The viewer's MCO panel then moves along the set from the plan on screen
+(`docs/viewing.md`). Validation record R11 compares the two plans on this patient.
+
 NSCLC-Radiomics is distributed under CC BY-NC 3.0 (non-commercial use) with TCIA's data usage policy. Work that uses
 it cites the data and the paper:
 

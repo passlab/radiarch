@@ -80,6 +80,25 @@ ENGINE_CASES: Dict[str, Dict[str, Any]] = {
             "The beam data library is the generic IBA library shipped with the engine, not a commissioned machine.",
         ],
     },
+    "mco": {
+        "title": "Multi-criteria optimization (roadmap R11: Pareto sets, navigation, deliverable plans)",
+        "kinds": ("mco_front", "mco_protocol", "mco_robust"),
+        "limitations": [
+            "The Pareto plans are fluence plans (beamlet weights); navigation shows their blend. The deliverable plan is made "
+            "afterwards by dose mimicking, so it can differ from the navigated plan: the deviation tables above measure by how much.",
+            "The error bound is in the trade-offs normalized to ideal 0 and nadir 1 over the anchor plans, and it bounds the "
+            "distance to the Pareto set of these beams and this dose matrix, not the quality of the dose engine (the engines' "
+            "own records cover that).",
+            "The error bound is approximate. It takes each converged plan as optimal, and a solve counts as converged when its "
+            "cost stops falling (by at most 1e-5 of itself over 50 iterations), which does not prove optimality. Each plan "
+            "records its Frank-Wolfe gap, but on fluence problems that gap is too loose to certify the bound; a certified bound "
+            "is a follow-up.",
+            "Robust sets: the scenarios are a few range and setup errors, not a probabilistic model; the smoothing of the "
+            "worst case and the scenario-wise objective leave a gap in the bound (robust_gap) that more plans do not remove.",
+            "Automatic navigation is radiarch's own method built from published parts; the commercial systems' methods are "
+            "not published, so it is not compared with them here.",
+        ],
+    },
     "services": {
         "title": "Engine-independent services (geometry, registration, evaluation, DICOM RT)",
         "kinds": ("geometry_volumes", "dvh_crosscheck", "gamma_crosscheck", "rt_roundtrip", "registration_4d", "replan_cbct"),

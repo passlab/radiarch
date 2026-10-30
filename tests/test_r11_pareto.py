@@ -69,6 +69,43 @@ class TestSandwich:
         assert _true_error(res, solve, n) <= res.error + 1e-6
         assert len(res.plans) <= 4 * n + 1
 
+    @pytest.mark.parametrize("n", [3, 4])
+    def test_a_spherical_front_in_n_objectives(self, n):
+        # the scalable test problem: minimize f(x) = x over the ball |x - 1| <= 1; the front is the part of the sphere
+        # facing the origin, and a weighted sum has its minimum at 1 - w / |w|
+        def solve(w, warm):
+            x = 1.0 - w / np.linalg.norm(w)
+            return Solved(x, x.copy())
+        res = sandwich(solve, n, budget=4 * n + 1, tol=0.0)
+        errs = [e for _, e in res.history]
+        assert all(b <= a + 1e-9 for a, b in zip(errs, errs[1:])) and errs[-1] < errs[0]
+        for p in res.plans:
+            assert np.linalg.norm(p.solved.values - 1.0) == pytest.approx(1.0)          # every plan on the front
+        rng = np.random.default_rng(1)
+        P = res.normalized()
+        true = max(distance_to_inner(P, normalize(solve(rng.dirichlet(np.ones(n)), None).values, res.ideal, res.nadir))[0]
+                   for _ in range(300))
+        assert true <= res.error + 1e-9
+
+    def test_an_unconverged_plan_proves_nothing(self):
+        # a solve stopped short of the optimum (R11.8's proton case at 200 iterations): its point is worse than the
+        # front, and a hyperplane through it would cut off Pareto points and understate the error
+        good, n = _quadratics([[0, 0], [1, 0], [0.5, 0.9]])
+
+        def stopped(ok):
+            def solve(w, warm):
+                s = good(w, warm)
+                if len(calls) == n:                      # the balance plan stops early, well off the front
+                    x = s.x + np.array([0.0, 0.6])
+                    s = Solved(x, np.array([np.sum((x - a) ** 2) for a in np.array([[0, 0], [1, 0], [0.5, 0.9]])]), ok=ok)
+                calls.append(1)
+                return s
+            return solve
+        for ok, covered in ((False, True), (True, False)):
+            calls = []
+            res = sandwich(stopped(ok), n, budget=n + 1, tol=0.0)
+            assert (_true_error(res, good, n) <= res.error + 1e-6) is covered
+
     def test_weights_support_the_set_and_no_plan_dominates(self):
         solve, n = _quadratics([[0, 0], [1, 0], [0.5, 0.9]])
         res = sandwich(solve, n, budget=13, tol=0.0)
@@ -151,6 +188,99 @@ from test_optimization_service import svc  # noqa: E402,F401
 
 
 class TestService:
+    def test_every_solve_uses_the_stall_test(self, msvc, monkeypatch):
+        # converged when the cost has stopped falling (R11.8: tests on the projected gradient, absolute or relative to
+        # the run's start, and on the gain still on offer, failed on TG-119)
+        import radiarch.services.mco as mco_mod
+        from radiarch.services.mco import STALL_RELATIVE
+        from radiarch.services.optimization_solvers import get_solver
+
+        seen = []
+
+        class Recording:
+            def run(self, cost_and_grad, w0, max_iter, tol, callback=None, stall_tol=None):
+                seen.append(stall_tol)
+                return get_solver("L-BFGS-B").run(cost_and_grad, w0, max_iter, tol, callback=callback, stall_tol=stall_tol)
+        monkeypatch.setattr(mco_mod, "get_solver", lambda method: Recording())
+        res = msvc.run(_mreq(plan_budget=5))
+        assert len(seen) == len(res.plans) >= 3 and all(t == STALL_RELATIVE for t in seen)
+
+    def test_a_tiny_dose_matrix_still_moves(self):
+        from radiarch.services.mco import STALL_RELATIVE
+        from radiarch.services.optimization_solvers import get_solver
+
+        A = np.array([[1e-7, 2e-7], [3e-7, 0.0]])                        # gradients far below scipy's absolute tests
+        best = np.array([3.0, 2.0])
+        target = A @ best
+        terms = lambda d: (float(np.sum((d - target) ** 2)), 2 * (d - target))   # noqa: E731
+        fwd, bwd = (lambda w: A @ w), (lambda g: A.T @ g)                 # noqa: E731
+        cg = lambda w: (terms(fwd(w))[0], bwd(terms(fwd(w))[1]))          # noqa: E731
+        w0 = np.array([1.0, 1.0])
+        stuck, _ = get_solver("L-BFGS-B").run(cg, w0, 500, 1e-15)
+        assert np.allclose(stuck, w0)                                    # scipy's tests: it never moves
+        moved, info = get_solver("L-BFGS-B").run(cg, w0, 500, 1e-15, stall_tol=STALL_RELATIVE)
+        assert info.success and np.allclose(moved, best, rtol=1e-3)
+
+    def test_a_solve_runs_until_its_cost_stops_falling(self):
+        # scipy's cost-change test is absolute for costs below 1: one step that barely moves stops it, and scipy calls
+        # that converged (R11.8: a TG-119 plan and a lung anchor). With the stall test it is off.
+        from radiarch.services.optimization_solvers import get_solver
+
+        a, c = np.linspace(1.0, 50.0, 30), np.linspace(0.5, 2.0, 30)
+        cg = lambda w: (float(0.5 * np.sum(a * (w - c) ** 2)), a * (w - c))   # noqa: E731
+        w0 = np.full(30, 10.0)
+        lbfgsb = get_solver("L-BFGS-B")
+        x, info = lbfgsb.run(cg, w0, 2000, 1e-2)
+        assert info.success and np.abs(x - c).max() > 1e-2                    # scipy's word: converged, short of it
+        x, info = lbfgsb.run(cg, w0, 2000, 1e-2, stall_tol=1e-5)
+        assert info.success and np.abs(x - c).max() < 1e-5 and info.remaining_gain is not None
+
+    def test_a_solve_at_the_iteration_cap_is_judged_by_the_stall_test(self):
+        from radiarch.services.optimization_solvers import get_solver
+
+        a, c = np.linspace(1.0, 50.0, 30), np.linspace(0.5, 2.0, 30)
+        cg = lambda w: (float(0.5 * np.sum(a * (w - c) ** 2)), a * (w - c))   # noqa: E731
+        _, info = get_solver("L-BFGS-B").run(cg, np.full(30, 10.0), 3, 1e-15, stall_tol=1e-5)
+        assert not info.success and info.iterations == 3                       # still falling at the cap
+
+    def test_the_stall_test(self):
+        from radiarch.services.optimization_solvers import STALL_WINDOW, stalled
+
+        flat = [1.0 + 1e-7 * (STALL_WINDOW - k) for k in range(STALL_WINDOW + 1)]   # fell by 5e-6 of itself in the window
+        assert stalled(flat, 1e-5) and not stalled(flat, 1e-6)
+        assert not stalled(flat[1:], 1e-5)                                        # too short to judge
+        one_step = [2.0] * STALL_WINDOW + [1.0]                                   # a big step at the end: still falling
+        assert not stalled(one_step, 1e-5)
+        assert stalled([3e-9] * (STALL_WINDOW + 1), 1e-5)                         # free of the cost's scale
+
+    def test_the_gain_on_offer(self):
+        from radiarch.services.optimization_solvers import gain_on_offer
+
+        # a weight at 3 the gradient pushes up (box up to 6: gain 2 x 3) and one at 1e-6 it pushes down (gain 5e-6)
+        assert gain_on_offer(np.array([5.0, -2.0, 0.0]), np.array([1e-6, 3.0, 0.0]), 3.0) == pytest.approx(6.000005)
+        assert gain_on_offer(np.array([5.0, 0.0]), np.array([0.0, 2.0]), 2.0) == 0.0     # an optimum on x >= 0
+        assert gain_on_offer(np.array([-1.0]), np.array([0.0]), 0.0) == float("inf")     # no size to measure by
+
+    def test_the_nominal_dose_is_computed_in_float64(self, msvc):
+        # the engines' apply_influence works in float32: the cost became a staircase at 1e-7 of the weights, and line
+        # searches near an optimum failed (R11.8, TG-119)
+        req = _mreq()
+        prob = msvc.optimization._assemble_problem(msvc._base(req))
+        forward, backward, _ = msvc.optimization.nominal_ops(prob)
+        w = np.ones(backward(np.zeros(prob.grid_shape)).size)
+        d = forward(w)
+        assert d.dtype == np.float64 and np.any(forward(w * (1.0 + 1e-9)) != d)
+        g = np.random.default_rng(0).random(d.shape)
+        assert float(np.sum(d * g)) == pytest.approx(float(w @ backward(g)), rel=1e-12)   # the adjoint of the backward
+
+    def test_every_plan_records_the_gain_left(self, msvc):
+        # reported, not tested: the stall test decides convergence
+        for req in (_mreq(plan_budget=5), _mreq(plan_budget=5, hard_constraints=[
+                HardConstraint(structure_name="PTV", metric="Dmin", op=">=", value_gy=1.0, tolerance_gy=0.05)])):
+            res = msvc.run(req)
+            assert all(p.gain is not None and p.gain >= 0.0 for p in res.plans)
+            assert all(p.converged for p in res.plans)                          # a small problem converges within its budget
+
     def test_a_pareto_set_and_its_navigation_doses(self, msvc):
         stages = []
         res = msvc.run(_mreq(navigation_structures=["PTV"]), progress_callback=lambda s, f, m: stages.append(s.value))
@@ -228,12 +358,12 @@ def test_a_pareto_set_through_the_sdk(rx):
 
     geo = rx.build_geometry("1.2.3", hu_model="LINEAR")
     bm = geo.photon_beams([0, 90, 180, 270], machine="test-120", jaw_opening_mm=(60.0, 60.0), beamlet_size_mm=(10.0, 10.0))
-    ps = bm.mco([ops.uniform_rms("PTV", 2.0), ops.mean_dose("OAR")], engine="analytic", max_iterations=100, plan_budget=6)
+    ps = bm.mco([ops.uniform_rms("PTV", 2.0), ops.mean_dose("OAR")], engine="analytic", max_iterations=1000, plan_budget=6)
     assert isinstance(ps, ParetoSet) and ps.beam_model_id == bm.id and 3 <= len(ps.plans) <= 6
     rows = ps.table()
     assert rows[0]["kind"] == "anchor" and set(rows[0]) == {"plan", "kind", "UniformRMS(PTV)", "MeanDose(OAR)"}
     assert rx.get(f"/mco/{ps.id}")["mco_id"] == ps.id
-    assert bm.mco([ops.uniform_rms("PTV", 2.0), ops.mean_dose("OAR")], engine="analytic", max_iterations=100, plan_budget=6).id == ps.id
+    assert bm.mco([ops.uniform_rms("PTV", 2.0), ops.mean_dose("OAR")], engine="analytic", max_iterations=1000, plan_budget=6).id == ps.id
 
     graph = ps.lineage()
     assert {n["ref"]["kind"] for n in graph["nodes"]} >= {"mco", "beam_model", "geometry"}

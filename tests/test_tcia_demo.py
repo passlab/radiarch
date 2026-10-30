@@ -105,13 +105,16 @@ def test_the_lung_protocols_take_nsclc_radiomics_names():
 
     tcia_names = {"GTV": "GTV-1", "SpinalCord": "Spinal-Cord", "Lung_L": "Lung-Left", "Lung_R": "Lung-Right", "Heart": "Heart",
                   "Esophagus": "Esophagus"}
-    for pid in ("demo-lung-imrt", "lung-60gy-30fx-vmat", "lung-sbrt-54gy-3fx-vmat"):
+    for pid in ("demo-lung-imrt", "demo-lung-imrt-mco", "lung-60gy-30fx-vmat", "lung-sbrt-54gy-3fx-vmat"):
         p = load_protocol(pid)
         for name, tcia_name in tcia_names.items():
             assert tcia_name.lower() in {a.lower() for a in p.structure_aliases[name]} | {name.lower()}, (pid, name)
     demo = load_protocol("demo-lung-imrt")
     assert demo.beams.technique == "imrt" and demo.prescription.dose_gy == 60.0 and demo.engine.name == "pb"
     assert {g.structure for g in demo.goals} == {g.structure for g in load_protocol("lung-60gy-30fx-vmat").goals}
+    mco = load_protocol("demo-lung-imrt-mco")                    # the same plan by multi-criteria optimization (R11)
+    assert mco.mco is not None and mco.goals == demo.goals and mco.beams == demo.beams and mco.evaluation_template == demo.evaluation_template
+    assert {t.structure_name for t in mco.mco.tradeoffs} <= {s.name for s in demo.structures} | set(demo.structure_aliases)
 
 
 def test_the_compose_stack_shares_its_artifacts():

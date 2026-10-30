@@ -1,0 +1,20 @@
+name: mco_front_tg119
+kind: mco_front
+description: TG-119's C-shape (hard) as a two-objective Pareto set (R11) - the outer target's cold spots below 50 Gy (RMS under) against the core's EUD at a = 12, the target between 25 and 60 Gy in every plan (the floor only keeps the core's anchor from switching the beams off; a 40 Gy floor in the first run forced dose into the core next to it), nine static fields, CCC Dij. The front is drawn from the computed plans and the sandwich error bound followed as plans are added; the set is navigated automatically by TG-119's goals (coverage first), made deliverable as sequenced apertures normalised to the coverage goal, and graded like tg119_planning and against the R8 record's plan of the same case (reweighting rounds, fluence). Fast mode plans five plans at twice the grid and beamlet size.
+data: data/public/tg119
+case: c_shape_hard
+engine: ccc
+engine_params: {n_jobs: 8}
+spacing_mm: 3.0
+beamlet_mm: 5.0
+iterations: 200
+plan_budget: 9
+error_tolerance: 0.01
+sequence_levels: 10
+tradeoffs:
+  - {type: RMSUnder, structure_name: OuterTarget, dose_gy: 50.0, weight: 1.0}
+  - {type: EUDMax, structure_name: Core, dose_gy: 0.0, eud_a: 12.0, weight: 1.0}
+hard_constraints:
+  - {structure_name: OuterTarget, metric: Dmin, op: ">=", value_gy: 25.0}
+  - {structure_name: OuterTarget, metric: Dmax, op: "<=", value_gy: 60.0}
+record: docs/validation/2026-10-23-r8/results.json

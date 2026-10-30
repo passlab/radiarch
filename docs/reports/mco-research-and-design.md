@@ -225,6 +225,11 @@ refuses any type that is not convex. New objective types:
 Tail-mean (CVaR) objectives, the convex stand-in for DVH limits, come later. The existing `DVHMin`, `DVHMax` and
 two-sided `EUD` stay for ordinary optimization and are refused as trade-offs. Ideal and nadir values from the anchor
 plans normalize the objectives to [0, 1] for the algorithms. Sliders and reports show Gy.
+- **Corrected in R11.8.** The RMS types are smoothed where they reach zero: `sqrt(mean(e²) + s²) − s` with
+  s = 0.01 Gy. The plain RMS is a norm with a corner at zero, like `|x|`. L-BFGS-B stalled at that corner and
+  reported success short of the optimum: a TG-119 plan stopped with its target's cold-spot RMS at exactly 0 Gy and
+  was beaten in its own weighted sum by a neighbouring plan. The smoothed value is still convex and is below the
+  RMS by at most 0.01 Gy. Cached results with the RMS types are not reused.
 
 **D2. Constraints are hard, within a stated tolerance, and checked first.**
 - **Today.** A `ConstraintSpec` is a weighted penalty.
@@ -251,6 +256,47 @@ budget (default 3N + 1, at most 4N + 1). Each plan warm-starts from the nearest 
 computed once and cached. Solver tolerances are tight and fixed in the run's key, and the run is deterministic. The
 error bound is recorded after every plan, so the record shows how the approximation converged. A run takes at most
 eight trade-offs; RayStation's rule for more (pairs of the most anti-correlated objectives) is not built.
+- **Corrected in R11.8.** Faults found by the validation record:
+  - *Solves stopped where they started.* L-BFGS-B stops when the projected gradient falls below an absolute 1e-5.
+    The weighted sums read in Gy with weights divided by the trade-offs' ranges, so on TG-119's dose matrix their
+    gradient started below that test: the balance and sandwich plans stayed on an anchor, the front had two points,
+    and its stated bound was false. The projection (D6) did not move either. Scaling the cost was tried and rejected:
+    it also scaled the cost against the hard constraints' penalty terms, and the augmented-Lagrangian rounds no
+    longer converged.
+  - *A stalled step counted as convergence.* SciPy also stops when one step barely lowers the cost ("relative
+    reduction of f") and calls that converged. The test divides by the cost only above 1, so for MCO's small costs it
+    is absolute: one stalled step ended a TG-119 plan and a lung anchor short of the optimum.
+  - *A gradient test has no scale that fits every problem.* A test relative to the projected gradient at the run's
+    start came next. On TG-119 that gradient is tiny where the trade-offs barely pull, and the test asked for gains
+    far below what the arithmetic resolves: no plan passed.
+  - *The nominal dose was computed in float32.* The engines' `apply_influence` rounds the weights and the dose to
+    float32, so the cost was a staircase at about 1e-7 of the weights, and line searches near an optimum failed. MCO
+    and the hard-constraint solves now compute the dose in float64 from the same matrix as the gradient (the robust
+    path already did).
+  - *The gain still on offer was too loose to test.* A test on the Frank–Wolfe gap came next: `g·x − min g·y` over
+    weights up to twice the largest, the most the cost could still fall if an optimum lies in that box (convexity).
+    It is free of scale, but it lets every beamlet rise at once. With thousands of beamlets it stays far above any
+    cost that has stopped falling: on TG-119, even without hard constraints, it read 17,000 times a test of 1e-4 of
+    the start cost after 1000 iterations, with the cost no longer moving.
+  - *The penalty started too strong.* The augmented Lagrangian started at ρ = 10 whatever the objectives cost. On
+    TG-119 that penalty was thousands of times the objectives' cost, so the first round solved the hard constraints
+    alone and later rounds could not undo it. The penalty now starts where, with every residual at its tolerance, it
+    would be a tenth of the objectives' cost at the start, and never above 10. On TG-119's balance plan this halved
+    the plan's own cost at the same iteration budget (0.25 to 0.13); five times the iterations changed it by under 1 %.
+  - **The test now.** A solve counts as converged when its cost has stopped falling: over the last 50 iterations it
+    fell by at most 1e-5 of itself. A window is not ended by one stalled step, and the test is free of the cost's
+    scale. SciPy's own tests are off. A failed line search restarts L-BFGS-B from that point with fresh curvature
+    memory, within the same iteration budget; a restart that cannot take a step also counts as converged, since no
+    step lowers the cost. A solve with hard constraints is judged by its final augmented-Lagrangian round; the
+    earlier rounds solve for multipliers still moving. The test says the solve is no longer improving, not that it
+    is optimal, so **the error bound is approximate**: it takes the converged plans as optimal. Each Pareto plan still
+    records its gain on offer (`gain`, over its cost at its start), as information. A certified bound, from a gap that
+    is tight on fluence problems (a dual bound, or better conditioning), is a follow-up.
+  - *An unconverged plan proves nothing.* A plan stopped by the iteration limit lies above the front; a hyperplane
+    through it cuts off attainable points, so the bound came out too small (the robust proton case showed a robust
+    gap larger than its bound). Such a plan now gives no hyperplane to the outer set and is noted; its point still
+    counts in the inner set.
+  The run's key carries a new version, so sets computed before are not reused.
 
 **D4. Storage keeps navigation fast.**
 - **What is stored.** An MCO run stores each Pareto plan's weights, objective vector and dose, the last on the
@@ -325,8 +371,11 @@ Bokrantz; shared sweeps in VMAT), is the planned follow-up when the deviation ta
     So each solve gives its own lower bound for the outer set: `w . F(x) >= max_s w . f(x; s) >= v*` for every plan.
     The outer set stays valid. Its gap to the plans' own `w . F` cannot be closed by more plans and is reported as
     `robust_gap`.
-  - **Smoothing.** The maximum over scenarios is smoothed by a log-sum-exp of 0.01 Gy per unit weight, because a kink
-    stalls L-BFGS-B. The bound subtracts the most the smoothing adds.
+  - **Smoothing.** The maximum over scenarios is smoothed by a log-sum-exp, because a kink stalls L-BFGS-B. The bound
+    subtracts the most the smoothing adds. *Corrected in R11.8:* the width per unit weight was a fixed 0.01 Gy. It is
+    now 0.5 % of the highest dose level the trade-offs and hard constraints name, the prescription in practice
+    (0.01 Gy at 2 Gy, 0.3 Gy at 60 Gy), and 0.01 Gy when none is named. A fixed width is nearly a hard maximum at
+    photon doses.
   - **Hard constraints** hold in every scenario.
   - **Goals** are graded on the nominal dose with their worst case. Automatic navigation works on the worst cases.
   - **Deliverable.** A robust set is made deliverable for protons only. A sequenced photon plan would need its own

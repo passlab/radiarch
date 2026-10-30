@@ -1,0 +1,12 @@
+name: mco_protocol_lung
+kind: mco_protocol
+description: The lung demo (NSCLC-Radiomics LUNG1-002) planned by the demo-lung-imrt-mco protocol (R11 - the Pareto set of five trade-offs on seven static fields, automatic navigation by the protocol's goals, the navigated plan made deliverable as apertures) and by demo-lung-imrt (R10's reweighting rounds on the same fields), compared goal by goal against RTOG 0617; the navigated plan against its deliverable plan (apertures), and the same protocol with two arcs (its own Pareto set on the arcs' sectors, at most 8 plans) against its deliverable arcs; plans and minutes against the error bound. On the 4 mm grid of the lung demo. Fast mode runs N + 2 plans (N + 1 on the arcs) at twice the grid.
+data: data/public/nsclc-radiomics
+patient: LUNG1-002
+protocol: demo-lung-imrt-mco
+baseline: demo-lung-imrt
+spacing_mm: 4.0
+vmat_plan_budget: 8
+arcs:
+  - {arc_id: ARC1, start_deg: 181.0, stop_deg: 179.0, direction: CW, sectors: 12, control_point_spacing_deg: 4.0, collimator_deg: 15.0}
+  - {arc_id: ARC2, start_deg: 179.0, stop_deg: 181.0, direction: CC, sectors: 12, control_point_spacing_deg: 4.0, collimator_deg: -15.0}

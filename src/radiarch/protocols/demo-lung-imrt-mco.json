@@ -1,0 +1,219 @@
+{
+  "protocol_id": "demo-lung-imrt-mco",
+  "name": "Demo: the lung IMRT demo planned by multi-criteria optimization",
+  "site": "lung",
+  "version": "1",
+  "description": "demo-lung-imrt with an mco section (R11): the Pareto set of five trade-offs on its seven fields (PTV homogeneity, lungs, heart and oesophagus mean dose, a cord EUD at a high exponent), every plan within the cord limit and a PTV minimum, navigated automatically by the protocol's goals (PTV coverage first, the organs next) and made deliverable as apertures. Each plan's solve takes up to 300 iterations (the reweighting protocol's rounds take 100 each). Judged against the same RTOG 0617 limits.",
+  "source": "radiarch demo; dose limits from RTOG 0617 as in lung-60gy-30fx-vmat",
+  "prescription": {
+    "target": "PTV",
+    "dose_gy": 60.0,
+    "fractions": 30
+  },
+  "structure_aliases": {
+    "GTV": [
+      "GTV",
+      "GTV_Primary",
+      "Tumor",
+      "Tumour",
+      "GTVp",
+      "GTV-1",
+      "GTV1"
+    ],
+    "SpinalCord": [
+      "SpinalCord",
+      "Spinal_Cord",
+      "Cord",
+      "SPINAL_CORD",
+      "Spinal-Cord"
+    ],
+    "Esophagus": [
+      "Esophagus",
+      "Oesophagus",
+      "ESOPHAGUS"
+    ],
+    "Heart": [
+      "Heart",
+      "HEART"
+    ],
+    "Lung_L": [
+      "Lung_L",
+      "LLung",
+      "Lung_Left",
+      "LUNG_L",
+      "Left_Lung",
+      "Lung-Left"
+    ],
+    "Lung_R": [
+      "Lung_R",
+      "RLung",
+      "Lung_Right",
+      "LUNG_R",
+      "Right_Lung",
+      "Lung-Right"
+    ]
+  },
+  "structures": [
+    {
+      "op": "expand",
+      "name": "CTV",
+      "source": "GTV",
+      "margin_mm": 5.0
+    },
+    {
+      "op": "expand",
+      "name": "PTV",
+      "source": "CTV",
+      "margin_mm": 5.0
+    },
+    {
+      "op": "ring",
+      "name": "RingNear",
+      "source": "PTV",
+      "inner_mm": 3.0,
+      "outer_mm": 12.0
+    },
+    {
+      "op": "ring",
+      "name": "RingFar",
+      "source": "PTV",
+      "inner_mm": 20.0,
+      "outer_mm": 45.0
+    },
+    {
+      "op": "union",
+      "name": "Lungs",
+      "sources": [
+        "Lung_L",
+        "Lung_R"
+      ]
+    },
+    {
+      "op": "subtract",
+      "name": "Lungs-GTV",
+      "source": "Lungs",
+      "sources": [
+        "GTV"
+      ]
+    },
+    {
+      "op": "subtract",
+      "name": "Lungs-PTV",
+      "source": "Lungs",
+      "sources": [
+        "PTV"
+      ]
+    }
+  ],
+  "goals": [
+    {
+      "structure": "PTV",
+      "metric": "D95",
+      "op": ">=",
+      "gy": 60.0
+    },
+    {
+      "structure": "SpinalCord",
+      "metric": "Dmax",
+      "op": "<=",
+      "gy": 45.0
+    },
+    {
+      "structure": "Esophagus",
+      "metric": "Dmean",
+      "op": "<=",
+      "gy": 34.0
+    },
+    {
+      "structure": "Heart",
+      "metric": "D33",
+      "op": "<=",
+      "gy": 60.0
+    },
+    {
+      "structure": "Lungs-PTV",
+      "metric": "D37",
+      "op": "<=",
+      "gy": 20.0,
+      "dmax_term": false
+    }
+  ],
+  "extra_objectives": [
+    {
+      "type": "DMax",
+      "structure_name": "RingNear",
+      "dose_gy": 54.0,
+      "weight": 100.0
+    },
+    {
+      "type": "DMax",
+      "structure_name": "RingFar",
+      "dose_gy": 30.0,
+      "weight": 200.0
+    }
+  ],
+  "beams": {
+    "technique": "imrt",
+    "count": 7,
+    "sequence_levels": 5
+  },
+  "machine": "synthetic-120",
+  "engine": {
+    "name": "pb"
+  },
+  "beamlet_mm": 5.0,
+  "jaw_margin_mm": 10.0,
+  "iterations": 1000,
+  "rounds": 2,
+  "evaluation_template": "rtog-0617",
+  "mco": {
+    "tradeoffs": [
+      {
+        "type": "UniformRMS",
+        "structure_name": "PTV",
+        "dose_gy": 60.0,
+        "weight": 1.0
+      },
+      {
+        "type": "MeanDose",
+        "structure_name": "Lungs-PTV",
+        "dose_gy": 0.0,
+        "weight": 1.0
+      },
+      {
+        "type": "MeanDose",
+        "structure_name": "Heart",
+        "dose_gy": 0.0,
+        "weight": 1.0
+      },
+      {
+        "type": "MeanDose",
+        "structure_name": "Esophagus",
+        "dose_gy": 0.0,
+        "weight": 1.0
+      },
+      {
+        "type": "EUDMax",
+        "structure_name": "SpinalCord",
+        "dose_gy": 0.0,
+        "eud_a": 12.0,
+        "weight": 1.0
+      }
+    ],
+    "hard_constraints": [
+      {
+        "structure_name": "SpinalCord",
+        "metric": "Dmax",
+        "op": "<=",
+        "value_gy": 45.0
+      },
+      {
+        "structure_name": "PTV",
+        "metric": "Dmin",
+        "op": ">=",
+        "value_gy": 54.0
+      }
+    ],
+    "error_tolerance": 0.05
+  }
+}

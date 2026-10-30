@@ -51,9 +51,18 @@ class TestTradeoffValues:
         assert EUDMax("S", 0.0, 1.0).value(d, m) == pytest.approx(10.0)              # a = 1 is the mean
         assert EUDMax("S", 0.0, 60.0).value(d, m) == pytest.approx(12.0, abs=0.3)    # large a tends to the maximum
         assert EUDMin("S", 10.0, -60.0).value(d, m) == pytest.approx(2.0, abs=0.3)   # very negative a: the minimum
-        assert RMSOver("S", 10.0).value(d, m) == pytest.approx(np.sqrt(4.0 / 3.0))
-        assert RMSUnder("S", 10.0).value(d, m) == pytest.approx(np.sqrt(4.0 / 3.0))
-        assert UniformRMS("S", 10.0).value(d, m) == pytest.approx(np.sqrt(8.0 / 3.0))
+        s = RMSOver.SMOOTHING_GY                    # the RMS, smoothed at zero: below it by at most s
+        assert RMSOver("S", 10.0).value(d, m) == pytest.approx(np.sqrt(4.0 / 3.0 + s * s) - s)
+        assert RMSUnder("S", 10.0).value(d, m) == pytest.approx(np.sqrt(4.0 / 3.0 + s * s) - s)
+        assert UniformRMS("S", 10.0).value(d, m) == pytest.approx(np.sqrt(8.0 / 3.0), abs=s)
+
+    def test_the_rms_is_smooth_where_it_reaches_zero(self):
+        # the plain RMS has a corner at zero (L-BFGS-B stalled there, R11.8): smoothed, its value and gradient go to 0
+        m = np.ones(4)
+        for t in (0.0, 1e-4, 1e-2):
+            d = np.array([10.0 - t, 10.0, 11.0, 12.0])
+            v, g = RMSUnder("S", 10.0).value_and_grad(d, m)
+            assert v >= 0.0 and v <= t / 2.0 + 1e-12 and np.all(np.abs(g) <= t / (4 * RMSUnder.SMOOTHING_GY) + 1e-12)
 
     def test_an_organ_at_its_level_still_has_a_gradient(self):
         # at 0 Gy with a 0 Gy level the value is 0, but adding dose must cost: the one-sided subgradient, not zero
@@ -181,10 +190,10 @@ def _small_problem(seed: int = 0):
     return dij, target, organ
 
 
-def _solve(dij, terms, dose_terms, w0=None):
+def _solve(dij, terms, dose_terms, w0=None, stall_tol=None):
     w0 = np.ones(dij.shape[1]) if w0 is None else w0
     return solve_with_hard_constraints(terms, lambda w: dij @ w, lambda g: dij.T @ g, w0, get_solver("L-BFGS-B"),
-                                       500, 1e-12, dose_terms=dose_terms)
+                                       500, 1e-12, dose_terms=dose_terms, stall_tol=stall_tol)
 
 
 def _slsqp(dij, f, cons):
@@ -236,6 +245,51 @@ class TestAugmentedLagrangian:
         assert (dij @ out.weights)[:10].min() >= 8.0 - 0.01
         ref = _slsqp(dij, lambda d: spare.value(d, organ), [{"type": "ineq", "fun": lambda w: (dij @ w)[:10] - 8.0}])
         assert spare.value(dij @ out.weights, organ) == pytest.approx(ref.fun, rel=2e-3, abs=1e-3)
+
+    def test_the_penalty_starts_matched_to_the_objectives(self):
+        # a fixed start of 10 was thousands of times the objectives' cost on TG-119 (R11.8): with every residual at its
+        # tolerance, the penalty starts at RHO_SHARE of the cost, and the constraints still hold as the MCO solves them
+        from radiarch.services.hard_constraints import RHO_SHARE, RHO_START, rho_start
+
+        dij, target, organ = _small_problem()
+        cover = UniformRMS("PTV", 10.0)
+        free = _solve(dij, [], lambda d: cover(d, target))
+        limit = 0.6 * float((dij @ free.weights)[organ > 0].max())
+        con = HardConstraint(structure_name="OAR", metric="Dmax", op="<=", value_gy=limit, tolerance_gy=0.01)
+        term = HardConstraintTerm(con, organ)
+        rho = rho_start(2e-3, [term])
+        assert rho < RHO_START and rho / 2 * 10 * 0.01 ** 2 == pytest.approx(RHO_SHARE * 2e-3)    # 10 organ voxels at 0.01 Gy
+        assert rho_start(2.0, [term]) == rho_start(0.0, [term]) == RHO_START             # the ceiling; the feasibility run's
+
+        def small(d):                                                                    # a cost the old start swamped
+            v, g = cover(d, target)
+            return 1e-3 * v, 1e-3 * g
+        out = _solve(dij, [term], small, stall_tol=1e-5)
+        assert out.rho_start < RHO_START and out.rho_start == pytest.approx(rho_start(small(dij @ np.ones(8))[0], [term]))
+        assert out.met and out.success and (dij @ out.weights)[organ > 0].max() <= limit + 0.01
+        ref = _slsqp(dij, lambda d: cover.value(d, target), [{"type": "ineq", "fun": lambda w: limit - (dij @ w)[10:]}])
+        assert cover.value(dij @ out.weights, target) == pytest.approx(ref.fun, rel=2e-3, abs=1e-3)
+
+    def test_success_is_the_final_rounds(self):
+        # the early rounds solve for multipliers still moving, inexactly by design: an early round's stop does not
+        # make the result unconverged (R11.8)
+        dij, target, organ = _small_problem()
+        cover = UniformRMS("PTV", 10.0)
+        free = _solve(dij, [], lambda d: cover(d, target))
+        limit = 0.6 * float((dij @ free.weights)[organ > 0].max())
+        con = HardConstraint(structure_name="OAR", metric="Dmax", op="<=", value_gy=limit, tolerance_gy=0.01)
+
+        class FirstRoundShort:
+            calls = 0
+
+            def run(self, cost_and_grad, w0, max_iter, tol, callback=None, **kw):
+                FirstRoundShort.calls += 1
+                w, info = get_solver("L-BFGS-B").run(cost_and_grad, w0, max_iter, tol, callback=callback, **kw)
+                return w, info.model_copy(update={"success": info.success and FirstRoundShort.calls > 1})
+        out = solve_with_hard_constraints([HardConstraintTerm(con, organ)], lambda w: dij @ w, lambda g: dij.T @ g,
+                                          np.ones(dij.shape[1]), FirstRoundShort(), 500, 1e-12,
+                                          dose_terms=lambda d: cover(d, target))
+        assert out.met and out.rounds >= 2 and out.success
 
     def test_feasibility_run_reports_an_impossible_set(self):
         dij, target, organ = _small_problem()

@@ -45,6 +45,7 @@ class Solved:
     values: np.ndarray
     ok: bool = True
     bound: Optional[float] = None
+    gain: Optional[float] = None        # the gain still on offer at the stop over the cost at the start (reported, not tested)
 
 
 @dataclass
@@ -169,8 +170,12 @@ def sandwich(solve: Callable[[np.ndarray, Optional[int]], Solved], n: int, budge
     p = add("balance", np.full(n, 1.0 / n) / span, int(np.argmin(vals.sum(axis=1))))
     while True:
         P = out.normalized()
-        hyper = [supporting(q) for q in plans]
-        A, b = np.array([h[0] for h in hyper]), np.array([h[1] for h in hyper])
+        # a plan proves a supporting hyperplane only when its solve reached the optimum: an unconverged plan's would cut
+        # off attainable points and make the bound too small, so it is left out (its point still counts in the inner set).
+        # "Converged" is the solver's stall test, not a proof of optimality, so the bound is approximate (R11.8).
+        hyper = [supporting(q) for q in plans if q.solved.ok]
+        A = np.array([h[0] for h in hyper]).reshape(-1, n)
+        b = np.array([h[1] for h in hyper], dtype=float)
         lo = np.minimum(P.min(axis=0), 0.0) - 0.5
         hi = np.maximum(P.max(axis=0), 1.0) + 0.5
         err, vertex, lam, duals = sandwich_error(P, A, b, lo, hi)

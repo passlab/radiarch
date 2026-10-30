@@ -422,6 +422,25 @@ dose, the beamlet-size and field-size dependence of each engine, and which side 
 R100, R50 and D2cm, with CCC recomputing the delivered arcs; `hn_sib_vmat` plans a 70/56 Gy simultaneous
 integrated boost with two arcs on PDDCA head-and-neck CTs against the NCCN template.
 
+R11 (ADR 0019) adds the multi-criteria optimization cases and the `-mco` document of `radiarch.validation.report`:
+
+```bash
+python -m radiarch.validation.run --cases mco_front_tg119      # TG-119's C-shape as a two-objective Pareto set
+python -m radiarch.validation.run --cases mco_protocol_lung    # LUNG1-002: demo-lung-imrt-mco against demo-lung-imrt
+python -m radiarch.validation.run --cases mco_robust_proton    # a robust proton set on a phantom, MCsquare
+python -m radiarch.validation.report --engines mco --results validation/results/<run> --also validation/results/<run> ...
+```
+
+Every Pareto set is checked for what the algorithm guarantees: the error bound never grows, no plan
+dominates another, each plan is the best of the set in its own weighted sum, every hard constraint holds
+(robust: in every scenario). `mco_front` follows the bound as plans are added, navigates by TG-119's
+goals and grades the deliverable plan like `tg119_planning`; `mco_protocol` plans `LUNG1-002` by the
+`demo-lung-imrt-mco` protocol and by the reweighting rounds of `demo-lung-imrt`, goal by goal, with
+the deviation tables of its deliverable plans (static fields and two arcs); `mco_robust` compares
+robust and nominal sets in the scenarios. `LUNG1-002` is fetched with `radiarch fetch-tcia` into
+`RADIARCH_VALIDATION_DATA/nsclc-radiomics`. A run's stamp is the commit with `-dirty` when the code
+under `src/` differs from it.
+
 `tests/golden/` freezes the outputs captured from the vendored OpenTPS code before it was
 replaced (CCC beamlet matrix, SimpleFantom geometry, proton spots, the MCsquare input files);
 radiarch's own loaders, rasterizer, spot placement and drivers reproduce them on every push

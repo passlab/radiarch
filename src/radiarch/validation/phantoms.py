@@ -118,5 +118,51 @@ def sphere_target(radius_mm: float = 16.0, half_width_mm: float = 40.0, spacing_
     return Phantom(density, (spacing_mm,) * 3, (o, o, o), "sphere_target"), mask
 
 
+def write_case(out_dir, hu_zyx: np.ndarray, spacing_mm: float, origin_mm: Sequence[float], structures: dict, name: str):
+    """A phantom as a planning case the geometry service reads: a CT series (one file per slice, HU) and a structure
+    set of ``structures`` (name to a ``(z, y, x)`` mask on the CT grid). UIDs follow from ``name``, so the same phantom
+    gives the same files. Returns the directory."""
+    from pathlib import Path
+
+    import pydicom
+    from pydicom.dataset import FileMetaDataset
+    from pydicom.uid import ExplicitVRLittleEndian, generate_uid
+
+    from ..dicom.ct import read_ct_series
+    from ..dicom.writers import CaseContext, Structure, write_rtstruct
+
+    ct_image = "1.2.840.10008.5.1.4.1.1.2"
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    uid = lambda *parts: generate_uid(entropy_srcs=["radiarch-phantom", name, *map(str, parts)])  # noqa: E731
+    nz, ny, nx = hu_zyx.shape
+    files = []
+    for k in range(nz):
+        ds = pydicom.Dataset()
+        ds.file_meta = FileMetaDataset()
+        ds.file_meta.MediaStorageSOPClassUID, ds.file_meta.MediaStorageSOPInstanceUID = ct_image, uid("ct", k)
+        ds.file_meta.TransferSyntaxUID = ExplicitVRLittleEndian
+        ds.SOPClassUID, ds.SOPInstanceUID, ds.Modality = ct_image, uid("ct", k), "CT"
+        ds.PatientName, ds.PatientID, ds.PatientBirthDate, ds.PatientSex = f"PHANTOM^{name}", f"PHANTOM-{name}"[:64], "", "O"
+        ds.StudyInstanceUID, ds.SeriesInstanceUID, ds.FrameOfReferenceUID = uid("study"), uid("series"), uid("for")
+        ds.StudyDate, ds.StudyTime, ds.StudyID, ds.AccessionNumber, ds.ReferringPhysicianName = "20260101", "120000", "1", "", ""
+        ds.SeriesNumber, ds.InstanceNumber, ds.PatientPosition = 1, k + 1, "HFS"
+        ds.ImageType, ds.ImageOrientationPatient = ["DERIVED", "SECONDARY", "AXIAL"], [1, 0, 0, 0, 1, 0]
+        ds.ImagePositionPatient = [float(origin_mm[0]), float(origin_mm[1]), float(origin_mm[2]) + k * spacing_mm]
+        ds.PixelSpacing, ds.SliceThickness = [spacing_mm, spacing_mm], spacing_mm
+        ds.Rows, ds.Columns, ds.SamplesPerPixel, ds.PhotometricInterpretation = ny, nx, 1, "MONOCHROME2"
+        ds.BitsAllocated, ds.BitsStored, ds.HighBit, ds.PixelRepresentation = 16, 16, 15, 1
+        ds.RescaleIntercept, ds.RescaleSlope, ds.KVP = 0, 1, 120
+        ds.PixelData = np.ascontiguousarray(hu_zyx[k], dtype=np.int16).tobytes()
+        path = out / f"CT{k:03d}.dcm"
+        ds.save_as(str(path), enforce_file_format=True)
+        files.append(path)
+    ct = read_ct_series(files)
+    write_rtstruct(CaseContext.from_ct(ct), [Structure(name=n, mask_zyx=np.asarray(m, bool)) for n, m in structures.items()],
+                   out / "RS.dcm", label=name[:16], description=f"synthetic phantom {name}",
+                   origin_mm=tuple(float(v) for v in origin_mm), spacing_mm=(spacing_mm,) * 3)
+    return out
+
+
 __all__ = ["Phantom", "WATER", "LUNG", "BONE", "AIR", "water_box", "slab_phantom",
-           "lung_slab", "bone_slab", "thorax_like", "sphere_target"]
+           "lung_slab", "bone_slab", "thorax_like", "sphere_target", "write_case"]

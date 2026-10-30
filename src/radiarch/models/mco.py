@@ -24,7 +24,8 @@ from .job import JobState
 from .optimization import HardConstraint, ObjectiveSpec, RobustnessSpec, SolverConfig, check_tradeoffs
 from .vmat import ArcSpec
 
-MCO_VERSION = "1"
+MCO_VERSION = "2"          # 2 (R11.8): solves converge when their cost stops falling; unconverged plans prove no bound; the
+                           # penalty starts matched to the objectives; robust smoothing follows the dose level
 MAX_TRADEOFFS = 8
 
 
@@ -103,13 +104,21 @@ class ParetoPlan(BaseModel):
     values_gy: List[float] = Field(..., description="Each trade-off's value at this plan, in Gy (robust: its worst case over the scenarios).")
     normalized: List[float] = Field(..., description="The same, normalized to ideal 0 and nadir 1.")
     nominal_gy: Optional[List[float]] = Field(default=None, description="Robust: each trade-off's value on the nominal dose.")
-    converged: bool = True
+    converged: bool = Field(default=True, description="The solve's cost stopped falling: by at most 1e-5 of itself over its "
+                                                      "last 50 iterations. Not a proof of optimality.")
+    gain: Optional[float] = Field(default=None, description="The gain still on offer when the solve stopped, over its cost at its "
+                                  "start: the Frank-Wolfe gap over weights up to twice the largest, the most a plan could still gain "
+                                  "if an optimum lies in that box. Reported, not tested: on fluence problems the box makes it "
+                                  "a valid but loose bound.")
 
 
 class ErrorPoint(BaseModel):
     plans: int
     error: float = Field(..., description="The sandwich bound on the distance from any Pareto point to the plans' "
-                                          "convex hull, in normalized objectives.")
+                                          "convex hull, in normalized objectives. Approximate: it takes the converged plans "
+                                          "as optimal.")
+    seconds: Optional[float] = Field(default=None, description="Time since the run started when the bound was computed (setup "
+                                                               "and the dose matrix included).")
 
 
 class MCOStage(str, Enum):
@@ -137,7 +146,8 @@ class MCOResult(ResearchArtifact):
     nadir_gy: List[float] = Field(..., description="Each trade-off's worst value over the anchor plans.")
     plans: List[ParetoPlan]
     error_history: List[ErrorPoint] = Field(default_factory=list)
-    error_bound: float
+    error_bound: float = Field(..., description="The last error point's bound (approximate: converged plans are taken "
+                                                "as optimal).")
     converged: bool = Field(..., description="The error bound reached the tolerance within the budget.")
     stop_reason: str = ""
     notes: List[str] = Field(default_factory=list)

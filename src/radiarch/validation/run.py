@@ -495,6 +495,8 @@ from .cases_r9 import KINDS_R9  # noqa: E402
 KINDS.update(KINDS_R9)
 from .cases_r10 import KINDS_R10  # noqa: E402
 KINDS.update(KINDS_R10)
+from .cases_r11 import KINDS_R11  # noqa: E402
+KINDS.update(KINDS_R11)
 
 
 def load_cases() -> Dict[str, dict]:
@@ -526,8 +528,13 @@ def _cpu() -> str:
 
 
 def _git_commit() -> str:
+    """HEAD's short hash, with ``-dirty`` when the code under ``src/`` differs from it (a record names the code it ran)."""
     try:
-        return subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=RADIARCH_ROOT, capture_output=True, text=True).stdout.strip() or "unknown"
+        head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=RADIARCH_ROOT, capture_output=True, text=True).stdout.strip()
+        if not head:
+            return "unknown"
+        changed = subprocess.run(["git", "status", "--porcelain", "--", "src"], cwd=RADIARCH_ROOT, capture_output=True, text=True).stdout.strip()
+        return f"{head}-dirty" if changed else head
     except Exception:  # pragma: no cover
         return "unknown"
 

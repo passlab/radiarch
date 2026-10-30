@@ -269,10 +269,13 @@ class OptimizationService:
     def nominal_ops(prob: "_Problem"):
         """``forward`` (weights → nominal dose), ``backward`` (a dose gradient → weights) and the regularizers'
         ``weight_terms``: the pieces a solve outside :meth:`run` needs (hard constraints, the Pareto set)."""
-        inf, mat = prob.scenario_dij[prob.scenarios[0].hash()]
+        _, mat = prob.scenario_dij[prob.scenarios[0].hash()]
 
         def forward(w: np.ndarray) -> np.ndarray:
-            return prob.engine.apply_influence(inf, np.asarray(w, dtype=np.float32), prob.grid_shape).dose
+            # in float64, like ``backward`` (R11.8): the engines' apply_influence rounds the weights and the dose to
+            # float32, which makes the cost a staircase at about 1e-7 of the weights; line searches near an optimum
+            # then fail and a solve cannot tell a stall from convergence (TG-119's Pareto plans)
+            return np.asarray(mat @ np.asarray(w, dtype=np.float64).ravel()).reshape(prob.grid_shape, order="C")
 
         def backward(grad_dose: np.ndarray) -> np.ndarray:
             return np.asarray(mat.T @ np.asarray(grad_dose).ravel(order="C"), dtype=np.float64)

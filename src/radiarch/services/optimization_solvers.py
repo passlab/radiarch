@@ -24,6 +24,29 @@ from scipy.optimize import minimize
 
 from ..models.optimization import ConvergenceInfo
 
+GAIN_BOX = 2.0          # the box of the gain on offer: weights up to this multiple of the largest weight
+MAX_RESTARTS = 100      # restarts of L-BFGS-B after a stall (a safety cap: the iteration budget is the limit)
+STALL_WINDOW = 50       # the stall test's window, in iterations
+
+
+def stalled(history: List[float], rel: float, window: int = STALL_WINDOW) -> bool:
+    """The cost has stopped falling: over the last ``window`` iterations it fell by at most ``rel`` of itself. A window,
+    unlike scipy's one-step test, is not ended by a single step that barely moves, and ``rel`` is free of the cost's scale."""
+    return len(history) > window and history[-window - 1] - history[-1] <= rel * abs(history[-1])
+
+
+def gain_on_offer(grad, x: np.ndarray, scale: float) -> float:
+    """The most a solve could still gain, to first order, from ``x``: the Frank-Wolfe gap ``g.x - min g.y`` over
+    ``0 <= y <= GAIN_BOX * scale``. Zero at an optimum on ``x >= 0``; if an optimum lies in that box, the cost at ``x``
+    is above it by at most this much (convexity). Free of how the cost and the weights are scaled."""
+    g = np.asarray(grad, dtype=float).ravel()
+    x = np.clip(np.asarray(x, dtype=float).ravel(), 0.0, None)
+    if not g.size:
+        return 0.0
+    if scale <= 0.0 and np.any(g < 0.0):
+        return float("inf")             # all weights zero and a weight would lower the cost: no size to measure by
+    return float(g @ x - GAIN_BOX * float(scale) * np.minimum(g, 0.0).sum())
+
 
 # Signature of the value+gradient oracle. Returning both together (vs. two
 # separate calls) lets us pass ``jac=True`` to scipy and avoids recomputing
@@ -41,7 +64,8 @@ IterationCallback = Callable[[int, float, np.ndarray], None]
 class SolverPlugin(Protocol):
     """Contract every optimization engine implements.
 
-    ``run`` minimizes ``cost_and_grad`` starting from ``w0``. Implementations
+    ``run`` minimizes ``cost_and_grad`` starting from ``w0``; ``stall_tol``, when given, is the stall test
+    (:func:`stalled`) for a solver that supports it (L-BFGS-B), else ignored. Implementations
     must enforce non-negativity of the returned weights (fluence cannot be
     negative) and must populate a :class:`ConvergenceInfo` so the caller can
     report success / iteration count / cost trajectory without knowing which
@@ -57,6 +81,7 @@ class SolverPlugin(Protocol):
         max_iter: int,
         convergence_tol: float,
         callback: Optional[IterationCallback] = None,
+        stall_tol: Optional[float] = None,
     ) -> Tuple[np.ndarray, ConvergenceInfo]:
         ...
 
@@ -92,6 +117,7 @@ class LBFGSBSolver:
         max_iter: int,
         convergence_tol: float,
         callback: Optional[IterationCallback] = None,
+        stall_tol: Optional[float] = None,
     ) -> Tuple[np.ndarray, ConvergenceInfo]:
         """Minimize ``cost_and_grad`` from ``w0`` under ``w >= 0``.
 
@@ -110,15 +136,24 @@ class LBFGSBSolver:
         # the objective at the iterate immediately before invoking the
         # callback, so the cache is warm and exact.
         cost_history: List[float] = []
-        last_eval: dict = {"x": None, "cost": None}
+        last_eval: dict = {"x": None, "cost": None, "grad": None}
         iteration = 0
+        scale = float(np.max(x0)) if n else 0.0         # the gain's box: the largest weight seen so far
+        done = {"stalled": False}
 
         def _objective(x: np.ndarray) -> Tuple[float, np.ndarray]:
             cost, grad = cost_and_grad(x)
             cost = float(cost)
+            grad = np.asarray(grad, dtype=float).ravel()
             last_eval["x"] = np.array(x, copy=True)
             last_eval["cost"] = cost
-            return cost, np.asarray(grad, dtype=float).ravel()
+            last_eval["grad"] = grad
+            return cost, grad
+
+        def _gain(x: np.ndarray, grad: np.ndarray) -> float:
+            nonlocal scale
+            scale = max(scale, float(np.max(x)) if n else 0.0)
+            return gain_on_offer(grad, x, scale)
 
         def _scipy_callback(xk: np.ndarray) -> None:
             nonlocal iteration
@@ -133,20 +168,43 @@ class LBFGSBSolver:
             cost_history.append(cost)
             if callback is not None:
                 callback(iteration, cost, np.array(xk, copy=True))
+            if stall_tol is not None and stalled(cost_history, stall_tol):
+                done["stalled"] = True
+                raise StopIteration     # converged by the stall test; scipy ends the solve here
 
         logger.debug(
             "L-BFGS-B start: n={} max_iter={} ftol={}", n, max_iter, convergence_tol
         )
 
-        res = minimize(
-            fun=_objective,
-            x0=x0,
-            method="L-BFGS-B",
-            jac=True,  # _objective returns (cost, grad) together
-            bounds=[(0, None)] * n,  # non-negativity of fluence weights
-            options={"maxiter": max_iter, "ftol": convergence_tol},
-            callback=_scipy_callback,
-        )
+        # With ``stall_tol`` (multi-criteria solves, R11.8) the solve has converged when its cost has stopped falling
+        # (:func:`stalled`), whatever stopped scipy. scipy's own tests are off: its projected-gradient test is absolute
+        # (it stops a problem with small gradients before it moves), and so is its cost-change test for costs below 1
+        # (one step that barely moves ends the solve, and scipy calls that converged). A failed line search restarts
+        # L-BFGS-B from there with fresh curvature memory, within the same iteration budget; a restart that cannot take
+        # a step means no step lowers the cost. The gain still on offer (:func:`gain_on_offer`) is reported, not tested:
+        # its box makes it a valid but loose bound on a fluence problem, far above a cost that has stopped falling.
+        x_start, used, restarts, gain, stuck = x0, 0, 0, None, False
+        while True:
+            res = minimize(
+                fun=_objective,
+                x0=x_start,
+                method="L-BFGS-B",
+                jac=True,  # _objective returns (cost, grad) together
+                bounds=[(0, None)] * n,  # non-negativity of fluence weights
+                options={"maxiter": max_iter - used,
+                         **({"ftol": convergence_tol} if stall_tol is None else {"ftol": 0.0, "gtol": 0.0})},
+                callback=_scipy_callback,
+            )
+            used += int(res.nit)
+            if stall_tol is None or done["stalled"]:
+                break
+            failed = any(m in str(res.message) for m in ("REDUCTION OF F", "ABNORMAL"))
+            if failed and res.nit == 0:
+                stuck = True
+                break
+            if not failed or used >= max_iter or restarts >= MAX_RESTARTS:
+                break
+            x_start, restarts = np.asarray(res.x, dtype=float).ravel(), restarts + 1
 
         w_final = np.asarray(res.x, dtype=float).ravel()
         # Belt-and-braces: the bounds already guarantee w >= 0, but clip away
@@ -159,9 +217,16 @@ class LBFGSBSolver:
         if not cost_history or cost_history[-1] != final_cost:
             cost_history.append(final_cost)
 
+        if stall_tol is None:
+            success = bool(res.success)
+        else:
+            gain = _gain(w_final, np.asarray(res.jac, dtype=float).ravel())
+            # the stall test, a restart with no step to take, or a projected gradient of exactly zero
+            success = (done["stalled"] or stuck or stalled(cost_history, stall_tol)
+                       or "PROJECTED GRADIENT" in str(res.message))
         info = ConvergenceInfo(
-            success=bool(res.success),
-            iterations=int(res.nit),
+            success=success,
+            iterations=used,
             final_cost=final_cost,
             cost_history=cost_history,
             # The solver enforces the only hard constraint it knows about
@@ -169,12 +234,15 @@ class LBFGSBSolver:
             # constraint violations to report at this layer. Per-objective
             # penalty residuals are computed by the service, not the solver.
             constraint_violations={},
+            remaining_gain=gain,
         )
         logger.debug(
-            "L-BFGS-B done: success={} nit={} final_cost={:.6g}",
+            "L-BFGS-B done: success={} nit={} final_cost={:.6g} ({}){}",
             info.success,
             info.iterations,
             info.final_cost,
+            res.message,
+            "" if stall_tol is None else f", gain on offer {gain:.3g}, {restarts} restart(s)",
         )
         return w_final, info
 
@@ -213,6 +281,7 @@ class AdamSolver:
         max_iter: int,
         convergence_tol: float,
         callback: Optional[IterationCallback] = None,
+        stall_tol: Optional[float] = None,
     ) -> Tuple[np.ndarray, ConvergenceInfo]:
         w = np.clip(np.asarray(w0, dtype=float).ravel(), 0.0, None)
         m = np.zeros_like(w)
@@ -292,6 +361,7 @@ class ProjectedGradientSolver:
         max_iter: int,
         convergence_tol: float,
         callback: Optional[IterationCallback] = None,
+        stall_tol: Optional[float] = None,
     ) -> Tuple[np.ndarray, ConvergenceInfo]:
         w = np.clip(np.asarray(w0, dtype=float).ravel(), 0.0, None)
         tol = convergence_tol if convergence_tol and convergence_tol > 0 else 1e-9
@@ -378,6 +448,11 @@ def get_solver(method: str) -> SolverPlugin:
 
 
 __all__ = [
+    "GAIN_BOX",
+    "MAX_RESTARTS",
+    "STALL_WINDOW",
+    "gain_on_offer",
+    "stalled",
     "CostAndGrad",
     "IterationCallback",
     "SolverPlugin",

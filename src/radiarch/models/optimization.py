@@ -156,6 +156,8 @@ class ObjectiveSpec(BaseModel):
             payload["eud_a"] = round(self.eud_a, 9)
         if self.reference_dose_uri is not None:
             payload["reference"] = [self.reference_dose_uri, self.reference_role]
+        if self.type in ("RMSOver", "RMSUnder", "UniformRMS"):
+            payload["rms_smoothing_gy"] = 0.01      # R11.8: smoothed at zero, so results before it are not reused
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
 
@@ -486,6 +488,7 @@ class OptimizationRunRequest(BaseModel):
         }
         if self.hard_constraints:           # only when given, so earlier runs keep their keys
             payload["hard_constraints_hash"] = [c.hash() for c in self.hard_constraints]
+            payload["hard_constraints_version"] = 2     # 2 (R11.8): the penalty starts matched to the objectives
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -516,6 +519,11 @@ class ConvergenceInfo(BaseModel):
     constraint_violations: Dict[str, float] = Field(
         default_factory=dict,
         description="Residual penalty per constraint at the final weights.",
+    )
+    remaining_gain: Optional[float] = Field(
+        default=None,
+        description="The first-order gain still on offer at the final weights, when the solver was given a stall test "
+                    "(MCO solves; optimization_solvers.gain_on_offer).",
     )
     objective_values: List[float] = Field(
         default_factory=list,

@@ -75,8 +75,9 @@ def test_report_renders_every_engine_from_a_run(tmp_path):
     out = tmp_path / "reports"
     paths = report.write_reports(run_dir, out)
     names = {p.name for p in paths}
-    assert len(paths) == 4 and (out / "LATEST.md").is_file() and any("-ccc-" in n for n in names) and any("-mcsquare-" in n for n in names)
+    assert len(paths) == 5 and (out / "LATEST.md").is_file() and any("-ccc-" in n for n in names) and any("-mcsquare-" in n for n in names)
     assert any("-pb-" in n for n in names)          # R8: the native pencil-beam engine has its own document
+    assert any("-mco-" in n for n in names)         # R11: multi-criteria optimization has its own document
     ccc = next(p for p in paths if "-ccc-" in p.name).read_text()
     assert "RESEARCH USE ONLY" in ccc and "every graded check passed" in ccc and "PDD10 (%)" in ccc and "| Medical physicist" in ccc
     assert "binary_sha256" in ccc and "scatter_settings" in ccc

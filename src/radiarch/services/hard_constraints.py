@@ -11,6 +11,11 @@ solvers: each round minimizes the objectives plus, for every constraint residual
 then updates ``mu <- max(0, mu + rho c)`` and raises ``rho`` tenfold when the worst violation has not fallen to a
 quarter. ``Dmax`` and ``Dmin`` have one residual per voxel of the structure, ``Dmean`` and ``gEUD`` one each.
 
+``rho`` starts matched to the objectives (:func:`rho_start`): with every residual at its tolerance, the penalty is a
+tenth of their cost at the start, and never above 10. A fixed start of 10 was, on TG-119, thousands of times that: the
+first round solved the constraints alone and later rounds could not undo it (R11.8). Above 10 (few residuals, tight
+tolerances) the penalty only makes the rounds ill-conditioned, so 10 stays the ceiling.
+
 Before that, a feasibility run minimizes the constraint terms alone. If even that leaves a violation beyond a
 constraint's tolerance, no plan on these beams meets the set, and :class:`InfeasibleConstraintsError` names the
 constraints that fail, as a commercial MCO does before it generates any plan.
@@ -28,8 +33,9 @@ from ..models.optimization import HardConstraint, HardConstraintOutcome
 from .objectives import _geud
 
 AL_ROUNDS = 12          # outer rounds before giving up on a tolerance
-RHO_START = 10.0
+RHO_START = 10.0        # the feasibility run's, and the ceiling of a solve's (rho_start)
 RHO_MAX = 1e8
+RHO_SHARE = 0.1         # the penalty's share of the objectives' cost at the start, every residual at its tolerance
 
 
 class InfeasibleConstraintsError(ValueError):
@@ -132,10 +138,22 @@ class ConstrainedSolve:
     iterations: int
     cost_history: List[float] = field(default_factory=list)
     success: bool = True
+    remaining_gain: Optional[float] = None   # the final round's, when the solver reports it
+    rho_start: float = RHO_START
 
     @property
     def met(self) -> bool:
         return all(o.met for o in self.outcomes)
+
+
+def rho_start(cost: float, terms: Sequence[HardConstraintTerm]) -> float:
+    """The penalty to start at for objectives that cost ``cost`` at the start: with every residual of ``terms`` at its
+    tolerance, ``rho / 2 * sum n_t tol_t^2`` is ``RHO_SHARE`` of the cost; at most ``RHO_START``, and ``RHO_START``
+    when either side is zero."""
+    spread = sum(float(t.mu.size) * float(t.spec.tolerance_gy) ** 2 for t in terms)
+    if cost <= 0.0 or spread <= 0.0:
+        return RHO_START
+    return min(2.0 * RHO_SHARE * float(cost) / spread, RHO_START)
 
 
 def solve_with_hard_constraints(
@@ -150,20 +168,25 @@ def solve_with_hard_constraints(
     weight_terms: Optional[Callable[[np.ndarray], Tuple[float, np.ndarray]]] = None,
     rounds: int = AL_ROUNDS,
     callback=None,
+    stall_tol: Optional[float] = None,
 ) -> ConstrainedSolve:
     """Minimize ``dose_terms`` (and ``weight_terms``) subject to ``terms`` by the method of multipliers.
 
     ``forward`` maps weights to the dose grid, ``backward`` a dose-grid gradient to weights. Without ``dose_terms``
     this is the feasibility run: the constraint terms alone. Stops when every violation is within its tolerance or
-    after ``rounds``; the multipliers start at zero for each call.
+    after ``rounds``; the multipliers start at zero for each call and ``rho`` at :func:`rho_start`. ``stall_tol`` goes
+    to the solver (its stall test).
     """
     for t in terms:
         t.mu = np.zeros_like(t.mu)
-    rho = RHO_START
     w = np.asarray(w0, dtype=np.float64).ravel()
+    cost0 = 0.0
+    if dose_terms is not None:
+        cost0 = float(dose_terms(forward(w))[0]) + (float(weight_terms(w)[0]) if weight_terms is not None else 0.0)
+    rho = rho0 = rho_start(abs(cost0), terms)
     history: List[float] = []
     iterations = 0
-    success = True
+    success, remaining_gain = True, None
     worst_prev = np.inf
     dose = forward(w)
     r = 0
@@ -182,15 +205,16 @@ def solve_with_hard_constraints(
                 loss, gw = loss + rl, gw + rg
             return float(loss), np.asarray(gw, dtype=np.float64)
 
-        w, conv = solver.run(cost_and_grad, w, max_iter, tol, callback=callback)
+        w, conv = solver.run(cost_and_grad, w, max_iter, tol, callback=callback, **({"stall_tol": stall_tol} if stall_tol is not None else {}))
         w = np.clip(np.asarray(w, dtype=np.float64).ravel(), 0.0, None)
         iterations += conv.iterations
         history.extend(conv.cost_history)
-        success = success and conv.success
+        # the final round's: earlier rounds solve for multipliers still moving, inexactly by design (R11.8)
+        success, remaining_gain = conv.success, conv.remaining_gain
         dose = forward(w)
         excess = [t.violation(dose) - t.spec.tolerance_gy for t in terms]
         worst = max(t.violation(dose) for t in terms) if terms else 0.0
-        logger.debug("augmented Lagrangian round {}: rho={:.3g}, worst violation {:.4g} Gy", r, rho, worst)
+        logger.debug("augmented Lagrangian round {}: rho={:.3g}, worst violation {:.4g} Gy, {} iterations", r, rho, worst, conv.iterations)
         if all(e <= 0.0 for e in excess):
             break
         for t in terms:
@@ -199,7 +223,8 @@ def solve_with_hard_constraints(
             rho = min(rho * 10.0, RHO_MAX)
         worst_prev = worst
     return ConstrainedSolve(weights=w, dose=dose, outcomes=[t.outcome(dose) for t in terms], rounds=r,
-                            iterations=iterations, cost_history=history, success=success)
+                            iterations=iterations, cost_history=history, success=success, remaining_gain=remaining_gain,
+                            rho_start=rho0)
 
 
 def infeasible_message(outcomes: Sequence[HardConstraintOutcome]) -> str:
@@ -207,5 +232,5 @@ def infeasible_message(outcomes: Sequence[HardConstraintOutcome]) -> str:
     return "no plan on these beams meets the hard constraints: " + "; ".join(failing)
 
 
-__all__ = ["AL_ROUNDS", "InfeasibleConstraintsError", "HardConstraintTerm", "ObjectiveCap", "ConstrainedSolve",
+__all__ = ["AL_ROUNDS", "RHO_SHARE", "rho_start", "InfeasibleConstraintsError", "HardConstraintTerm", "ObjectiveCap", "ConstrainedSolve",
            "solve_with_hard_constraints", "infeasible_message"]
