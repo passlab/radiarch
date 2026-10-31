@@ -13,7 +13,7 @@ linear program, dose mimicking for the deliverable plan, and the scenario-wise w
 
 The research report `docs/reports/mco-research-and-design.md` reviews that literature and the two products and
 states nine design decisions (D1 to D9), each with what was built. This ADR records the decisions in brief and their
-consequences. The validation record `docs/validation/2026-10-29-r11/` tests them on TG-119, a lung patient and a
+consequences. The validation record `docs/validation/2026-10-31-r11/` tests them on TG-119, a lung patient and a
 proton phantom.
 
 ## Decisions
@@ -63,6 +63,11 @@ proton phantom.
   bound is approximate. A test on the gain still on offer (a Frank–Wolfe gap) was tried and dropped: on fluence
   problems it is too loose to pass. Each plan still records that gain. A certified bound is a follow-up. The Pareto
   set's key carries a version, so sets computed before the corrections are not reused.
+- The record itself found that the photon deliverable step fails on the lung patient: one sequencing pass and a
+  200-iteration mimic under-cover the target, and the coverage normalisation then inflates the hot spots (PTV D0.03cc
+  86 Gy with seven fields, 149 Gy with two arcs, on 60 Gy; the spinal cord's maximum 41.8 Gy where the navigated
+  plan had 10.6). The step is to be corrected (sequencing and meterset rounds as in R10, a hot-spot term in the
+  mimic, the judgement after normalisation) and the lung case rerun as a dated correction of the record (R11.9).
 - The algorithm tests of the report's section 5 run in CI on problems with known answers (`tests/test_r11_*.py`).
   The validation cases (`mco_front`, `mco_protocol`, `mco_robust`) run on a workstation with the public data; the
   proton phantom case also runs in the nightly harness.

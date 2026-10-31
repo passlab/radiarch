@@ -931,3 +931,28 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
     `tests/test_r11_viewer_client.py`, against a served API with a key.
   - `tests/test_r11_viewer_browser.py`: the panel in headless Chromium (CI's viewer job).
   - The test conftest now clears every cached route service between tests (`_navigation`, `_deliverables` too).
+
+### R11.8 Record and ADR 0019 (2026-10-31)
+
+- **The record** `docs/validation/2026-10-31-r11/`: README for the reviewing physicist, the MCO document
+  (`report --engines mco`), `results.json` and `run-summary.md`. Three cases from `b4085b0`, one per process: TG-119
+  (55 min) and the robust proton phantom (35 min) on the 20-core workstation; the lung patient (8 h) on a 96-core
+  server, because its two-arc stage (24 beams, 19,008 beamlets) needs about 7 GB and two workstation attempts were
+  stopped by a memory guard with the results unwritten (the runner writes them at the end). Heavy validation runs now
+  go to a server, the tree synced at a commit; the record stamps the commit, `-dirty` when `src/` differs.
+- **Findings.** The Pareto machinery holds on all three cases (bounds non-increasing, no dominated plan, hard
+  constraints within tolerance, converged plans best in their own sums). The bound is loose on the photon cases: at
+  200 iterations no TG-119 solve met the convergence test, so the bound stays the box bound (0.64); the lung's seven
+  fields reach 0.56 (5 of 16 converged at 1000 iterations), its arcs 0.79 (none of 8); the proton sets converge
+  (0.071 robust, 0.020 nominal). The TG-119 deliverable plan is hotter in the target than the reweighting plan (D10
+  60.9 against 53.9 Gy; no hot-dose trade-off in the set) and spares the core more; the proton deliverable plan's
+  CTV D95 is 1.79 against the navigated 1.90 Gy.
+- **A fault found by the record: the lung deliverable plans are not acceptable plans.** The navigated plans are
+  uniform (PTV RMS 0.5 Gy); the deliverable plans are not: seven fields RMS 11.2 Gy and PTV D0.03cc 85.8 Gy, two arcs
+  RMS 24.2 Gy, D0.03cc 149 Gy, cord maximum 41.8 Gy (navigated 10.6) and 319,505 MU, on a 60 Gy prescription. The
+  graded goals pass (coverage and organ limits); the deviation tables and hot-spot rows show it. Mechanism: the
+  deliverable step sequences the navigated fluence once (18 segments for seven fields; the R10 loop's rounds make
+  43) and mimics for 200 iterations, the result under-covers the PTV, and the coverage normalisation (×1.17, ×1.42)
+  inflates the hot spots. Correction planned as R11.9 (sequencing and meterset rounds as in R10, a hot-spot term in
+  the mimic, more iterations, the judgement after normalisation) with the lung case rerun as a dated correction of
+  the record, the project lead's choice. ADR 0019 records the fault among its consequences.

@@ -192,7 +192,6 @@ them in batches and from workflow engines.
   table of goals per case), `radiarch protocols`; CWL tool descriptions for workflow engines.
 - [x] R10.5 Harness and record (`docs/validation/2026-10-26-r10/`, commit `92ce40d`): a protocol run reproduces its harness case; a batch case over the LCTSC thoraces;
   ADR 0017.
-
 ### R13 — Viewer integration (done; 3D Slicer check waiting)
 Viewing stays outside radiarch: the RT objects go to a DICOMweb server that OHIF reads, and a radiarch
 OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH, goals).
@@ -271,8 +270,12 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   `radiarch plan` (Pareto set, automatic navigation by the goals, deliverable plan); the MCO panel in the OHIF
   extension (sliders, value fields, locks, automatic navigation, goals, DVHs, make deliverable, export and open)
   (about 0.5 ew)
-- [ ] R11.8 Record and ADR 0019: the algorithm tests of report §5 in CI; the TG-119 C-shape front, the lung demo
+- [x] R11.8 Record and ADR 0019: the algorithm tests of report §5 in CI; the TG-119 C-shape front, the lung demo
   (automatic navigation against the R10 protocol plan, navigated against deliverable, plans against the error bound),
-  a robust proton case; physicist sign-off (about 0.5 ew)
+  a robust proton case (`docs/validation/2026-10-31-r11/`, 2026-10-31); physicist sign-off waiting (about 0.5 ew)
+- [ ] R11.9 The photon deliverable step corrected (the record's lung plans are not acceptable: one sequencing pass
+  and a short mimic under-cover the target, the normalisation inflates the hot spots): sequencing and meterset
+  rounds as in R10, a hot-spot term in the mimic, the judgement after normalisation; the lung case rerun as a dated
+  correction of the R11 record (about 0.25 ew)
 - [ ] Later **(open)**: shared-aperture or shared-sweep Pareto plans so navigation shows the deliverable dose;
   tail-mean (CVaR) trade-offs; Pareto sets across beam arrangements; the TROTS benchmark
