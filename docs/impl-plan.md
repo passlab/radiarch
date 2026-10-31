@@ -192,6 +192,10 @@ them in batches and from workflow engines.
   table of goals per case), `radiarch protocols`; CWL tool descriptions for workflow engines.
 - [x] R10.5 Harness and record (`docs/validation/2026-10-26-r10/`, commit `92ce40d`): a protocol run reproduces its harness case; a batch case over the LCTSC thoraces;
   ADR 0017.
+- [x] R10.6 `radiarch dose` (2026-10-31): an RT Plan's dose recomputed on a CT with its structures in one process
+  (`--ct --structures --plan [--engine auto|ccc|pb|mcsquare] [--spacing] --export [--label] [--json]`), the RT Dose
+  referencing the given structure set; `Geometry.import_plan` and `BeamModel.recalculate` in the SDK; a CWL tool.
+
 ### R13 — Viewer integration (done; 3D Slicer check waiting)
 Viewing stays outside radiarch: the RT objects go to a DICOMweb server that OHIF reads, and a radiarch
 OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH, goals).

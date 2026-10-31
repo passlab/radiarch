@@ -103,6 +103,22 @@ class Geometry(_Object):
         beams = [BeamSpec(beam_id=b, gantry_deg=g, couch_deg=c, collimator_deg=col) for b, g, c, col in sector_beams(specs)]
         return self.beams(beams, modality="PHOTON_IMRT", machine=machine, isocenter_mm=isocenter_mm, **delivery)
 
+    def import_plan(self, path: Union[str, Path], *, machine: Optional[str] = None, strict_frame: bool = True,
+                    beamlet_mm: Seq[float] = (5.0, 5.0), registration: Union["Registration", str, None] = None) -> "BeamModel":
+        """A DICOM RT Plan or RT Ion Plan as a beam model of this geometry, with the plan's own metersets
+        (``BeamModel.recalculate`` computes its dose). ``path`` is a file the server can read (in this process, a local
+        file). ``machine`` names the machine model (default the photon default); ``strict_frame=False`` accepts a plan
+        from another frame of reference, with a ``registration`` into this one."""
+        from ..models.beam_model import BeamModelResult
+
+        body: Dict[str, Any] = {"geometry_id": self.id, "path": str(Path(path).expanduser()), "strict_frame_of_reference": bool(strict_frame),
+                                "beamlet_spacing_mm": [float(v) for v in beamlet_mm]}
+        if machine:
+            body["machine_model_id"] = machine
+        if registration is not None:
+            body["registration_id"] = registration.id if isinstance(registration, Registration) else str(registration)
+        return BeamModel(self.client, self.client.post("/beam-model/import", body, BeamModelResult))
+
     def evaluate(self, dose: Union["Dose", str], prescription_gy: float, **kwargs) -> "Evaluation":
         dose_id = dose.id if isinstance(dose, Dose) else dose
         return _evaluate(self.client, self.id, prescription_gy, dose_id=dose_id, **kwargs)
@@ -160,6 +176,18 @@ class BeamModel(_Object):
         w = [float(v) for v in weights]
         req = DoseComputeRequest(geometry_id=gid, beam_model_id=self.id, engine=_engine(engine), weights=WeightVector(length=len(w), values=w))
         return Dose(self.client, self.client.submit("dose", "/dose/compute", req, DoseResult))
+
+    def recalculate(self, *, engine: Union[str, EngineSpec, dict, None] = "auto", rbe: Optional[float] = None) -> "Dose":
+        """The dose of an imported plan with the plan's own metersets (``Geometry.import_plan``). ``engine`` "auto" is
+        MCsquare for a proton plan and the pencil beam for a photon plan; ``rbe`` null is 1.1 for protons, 1.0 for photons."""
+        from ..models.dose import DoseResult
+
+        if engine in (None, "auto"):
+            engine = "mcsquare" if "PROTON" in str(getattr(self.result.modality, "value", self.result.modality)).upper() else "pb"
+        body: Dict[str, Any] = {"geometry_id": self.result.geometry_id, "beam_model_id": self.id, "engine": _engine(engine).model_dump(mode="json")}
+        if rbe is not None:
+            body["rbe"] = float(rbe)
+        return Dose(self.client, self.client.submit("dose", "/dose/recalculate", body, DoseResult))
 
     def export(self, *, dose: Union["Dose", str, None] = None, **request) -> "Export":
         """RT objects of a plan with its own metersets (an imported plan, arcs, a sequence's apertures)."""

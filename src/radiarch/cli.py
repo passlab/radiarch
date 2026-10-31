@@ -7,6 +7,7 @@
     radiarch plan --protocol demo-phantom-imrt --study <uid> --push --new-export    a marked copy ("copy 2") of an earlier export
     radiarch batch --protocol lung-60gy-30fx-vmat --cases cases.csv --out results
     radiarch fetch-tcia --collection NSCLC-Radiomics --patient LUNG1-002 --cache tcia --push    a public case into the PACS
+    radiarch dose --ct /dicom/case1 --structures /dicom/case1/RS.dcm --plan /plans/RP.dcm --export rt    an RT Plan's dose recomputed
 
 A protocol is a shipped id or a JSON file. Without ``--server`` (or ``RADIARCH_SERVER``) the planning runs in this
 process; with it, on that server (``--api-key`` or ``RADIARCH_API_KEY``). ``cases.csv`` has a header with
@@ -157,6 +158,93 @@ def cmd_fetch_tcia(args) -> int:
     return 0
 
 
+def _dicom_uids(path: Path) -> Dict[str, str]:
+    import pydicom
+
+    ds = pydicom.dcmread(str(path), stop_before_pixels=True)
+    return {"study": str(ds.StudyInstanceUID), "series": str(ds.SeriesInstanceUID), "sop": str(ds.SOPInstanceUID),
+            "modality": str(getattr(ds, "Modality", ""))}
+
+
+def _first_ct(directory: Path) -> Path:
+    import pydicom
+
+    for p in sorted(directory.rglob("*")):
+        if p.is_file():
+            try:
+                ds = pydicom.dcmread(str(p), stop_before_pixels=True, specific_tags=["Modality"])
+            except Exception:
+                continue
+            if str(getattr(ds, "Modality", "")) == "CT":
+                return p
+    raise SystemExit(f"{directory}: no CT image found")
+
+
+def cmd_dose(args) -> int:
+    """The dose of an RT Plan on a CT with its structures: the plan imported as a beam model with its own metersets, its
+    dose recomputed by an engine, and written as an RT Dose (with the plan as radiarch re-writes it) that references the
+    given structure set."""
+    import tempfile
+
+    print(INTENDED_USE, file=sys.stderr)
+    ct_dir = Path(args.ct)
+    if not ct_dir.is_dir():
+        raise SystemExit(f"{ct_dir}: not a directory")
+    if not Path(args.plan).is_file():
+        raise SystemExit(f"{args.plan}: plan file not found")
+    ct = _dicom_uids(_first_ct(ct_dir))
+    rtstruct = None
+    root = ct_dir
+    staged = None
+    if args.structures:
+        rs_path = Path(args.structures)
+        if not rs_path.is_file():
+            raise SystemExit(f"{rs_path}: structure set file not found")
+        rtstruct = _dicom_uids(rs_path)
+        if rtstruct["modality"] != "RTSTRUCT":
+            raise SystemExit(f"{rs_path}: not an RT Structure Set ({rtstruct['modality'] or 'no modality'})")
+        if ct_dir.resolve() not in rs_path.resolve().parents:
+            # the geometry service reads one directory: the CT's files and the structure set, linked side by side
+            staged = tempfile.TemporaryDirectory(prefix="radiarch-dose-")
+            root = Path(staged.name)
+            for i, f in enumerate(sorted(q for q in ct_dir.rglob("*") if q.is_file())):
+                (root / f"{i:05d}-{f.name}").symlink_to(f.resolve())
+            (root / "RS.dcm").symlink_to(rs_path.resolve())
+    exp = None
+    try:
+        with _client(args) as rx:
+            geo = rx.build_geometry(ct["study"], data_root=str(root), spacing_mm=args.spacing, ct_series_uid=ct["series"],
+                                    rtstruct_uid=rtstruct["sop"] if rtstruct else None)
+            bm = geo.import_plan(args.plan, machine=args.machine, strict_frame=not args.any_frame)
+            dose = bm.recalculate(engine=args.engine)
+            d, s = dose.result, dose.result.statistics
+            print(f"dose {dose.id}: {d.engine_name} {d.engine_version}, {bm.result.modality.value}, "
+                  f"{bm.result.fluence_elements.total_count} fluence elements, max {s.max_gy:.2f} mean {s.mean_gy:.2f} {d.dose_units}")
+            if args.export or args.push:
+                objects = ["rtplan", "rtdose"] if rtstruct else ["rtstruct", "rtplan", "rtdose"]
+                exp = bm.export(dose=dose, label=args.label, objects=objects, rtstruct_uid=rtstruct["sop"] if rtstruct else None,
+                                push=bool(args.push))
+                if args.export:
+                    files = exp.download(args.export)
+                    print(f"RT objects: {', '.join(str(f) for f in files)}")
+                if args.push:
+                    r = exp.result
+                    if not r.pushed:
+                        print(f"push failed: {r.push_error}", file=sys.stderr)
+                        return 3
+                    print(f"pushed {len(r.objects)} RT objects of study {r.study_instance_uid} (export {r.export_id})")
+                    if r.viewer_url:
+                        print(f"open in the viewer: {r.viewer_url}")
+            if args.json:
+                record = {"geometry_id": geo.id, "beam_model_id": bm.id, "dose": d.model_dump(mode="json"),
+                          "export": exp.result.model_dump(mode="json") if exp is not None else None}
+                Path(args.json).write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
+    finally:
+        if staged is not None:
+            staged.cleanup()
+    return 0
+
+
 def _read_cases(path: Path, base: Optional[Path]) -> List[Dict[str, Any]]:
     with open(path, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
@@ -253,6 +341,20 @@ def build_parser() -> argparse.ArgumentParser:
             s.add_argument("--out", required=True, help="output directory: summary.csv, summary.md, runs.jsonl")
             s.add_argument("--export", action="store_true", help="also write each case's RT objects under out/<case_id>/")
         s.set_defaults(func=func)
+    s = sub.add_parser("dose", parents=[common], help="the dose of an RT Plan on a CT and its structures, recomputed by an engine")
+    s.add_argument("--ct", required=True, help="a directory with the CT series (and its structure set, unless --structures)")
+    s.add_argument("--structures", help="the RT Structure Set file; the written RT objects reference it (default: the set in the CT directory)")
+    s.add_argument("--plan", required=True, help="the RT Plan or RT Ion Plan file")
+    s.add_argument("--engine", default="auto", choices=["auto", "ccc", "pb", "mcsquare"],
+                   help="dose engine (default auto: pb for a photon plan, mcsquare for a proton plan)")
+    s.add_argument("--spacing", type=float, default=None, help="dose grid spacing (mm); default the geometry service's")
+    s.add_argument("--machine", help="the machine model the plan is delivered on (default the photon default)")
+    s.add_argument("--any-frame", action="store_true", help="accept a plan whose frame of reference is not the CT's")
+    s.add_argument("--export", help="write the RT Dose and the plan as re-written into this directory")
+    s.add_argument("--push", action="store_true", help="push them to the server's DICOMweb destination (RADIARCH_DICOMWEB_URL)")
+    s.add_argument("--label", default="RESEARCH", help="RT Plan label (default RESEARCH)")
+    s.add_argument("--json", help="write the geometry, beam model, dose and export records as JSON")
+    s.set_defaults(func=cmd_dose)
     s = sub.add_parser("fetch-tcia", help="download a public patient (CT and structure set) from The Cancer Imaging Archive")
     s.add_argument("--collection", default="NSCLC-Radiomics", help="TCIA collection (default NSCLC-Radiomics)")
     s.add_argument("--patient", required=True, help="the patient ID in the collection, e.g. LUNG1-002")

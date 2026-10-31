@@ -956,3 +956,23 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   inflates the hot spots. Correction planned as R11.9 (sequencing and meterset rounds as in R10, a hot-spot term in
   the mimic, more iterations, the judgement after normalisation) with the lung case rerun as a dated correction of
   the record, the project lead's choice. ADR 0019 records the fault among its consequences.
+
+## `radiarch dose`: an RT Plan's dose recomputed from a shell (2026-10-31)
+
+- **Command** (`cli.py`): `radiarch dose --ct DIR [--structures FILE] --plan FILE [--engine auto|ccc|pb|mcsquare]
+  [--spacing MM] [--machine ID] [--any-frame] [--export DIR] [--push] [--label] [--json FILE]`. The CT directory's
+  study and series UIDs are read from its first CT image; a structure set given outside that directory is linked
+  beside the CT's files in a temporary directory, since the geometry service reads one directory. Then, through the
+  SDK in this process (or on `--server`): the geometry, `POST /beam-model/import` with the plan's path,
+  `POST /dose/recalculate` with the engine (`auto` picks the pencil beam for a photon plan and MCsquare for a proton
+  plan), and the export of the RT Dose and the plan as re-written, which reference the given structure set
+  (`rtstruct_uid`) instead of writing a new one; without `--structures` the structure set is written too. The
+  command prints the engine, modality, element count and the dose's maximum and mean, and writes the records as
+  JSON. Exit 3 when a push is refused, as `radiarch plan`.
+- **SDK** (`sdk/objects.py`): `Geometry.import_plan(path, machine=, strict_frame=, beamlet_mm=, registration=)` and
+  `BeamModel.recalculate(engine="auto", rbe=)`.
+- **CWL**: `cwl/radiarch-dose.cwl`, checked by `test_cwl_tools_match_the_command`.
+- **Tests** (`tests/test_dose_command.py`): a 24-voxel water phantom written as a CT series and a structure set, one
+  anterior field of 200 MU in its frame of reference; the structure set moved outside the CT directory, the command
+  run with `--engine auto`, the written RT Plan references the given structure set, the RT Dose the written plan, and
+  its maximum equals the dose record's; the structure set written when none is given; the three refusals.

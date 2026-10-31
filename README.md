@@ -274,6 +274,18 @@ curl -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
 The plan's frame of reference must be the geometry's (a plan from another CT needs a registration,
 roadmap R9). Arcs are discretized per control-point interval at the mid-angle.
 
+From a shell, `radiarch dose` does the whole thing in one process: the CT and its structure set become a
+geometry, the plan a beam model with its own metersets, an engine computes the dose, and the RT Dose is
+written (with the plan as radiarch re-writes it) referencing the structure set given:
+
+```bash
+radiarch dose --ct /dicom/case1 --structures /dicom/case1/RS.dcm --plan /plans/RP.dcm --export rt --json dose.json
+#   --engine auto (pb for a photon plan, mcsquare for a proton plan), ccc, pb or mcsquare; --spacing, --machine, --any-frame, --push
+```
+
+In Python: `bm = geo.import_plan("RP.dcm"); dose = bm.recalculate(engine="auto"); bm.export(dose=dose).download("rt")`.
+A CWL tool description wraps the command (`src/radiarch/cwl/radiarch-dose.cwl`).
+
 ## DICOM RT out
 
 `radiarch.dicom.writers` writes the RT objects of a case on one shared context, every one labelled

@@ -121,7 +121,7 @@ def test_batch_goes_on_past_a_failed_case(cli_env, tmp_path, capsys):
     assert main(["protocol", "lung-sbrt-54gy-3fx-vmat"]) == 0 and json.loads(capsys.readouterr().out)["prescription"]["fractions"] == 3
 
 
-@pytest.mark.parametrize("name", ["radiarch-plan.cwl", "radiarch-batch.cwl"])
+@pytest.mark.parametrize("name", ["radiarch-plan.cwl", "radiarch-batch.cwl", "radiarch-dose.cwl"])
 def test_cwl_tools_match_the_command(name):
     """Each CWL tool calls a real subcommand, and every input it binds is an option of that subcommand."""
     tool = yaml.safe_load((CWL_DIR / name).read_text(encoding="utf-8"))
