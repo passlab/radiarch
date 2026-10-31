@@ -376,6 +376,29 @@ def robust_phantom(spacing_mm: float):
     return hu, origin, {"CTV": target, "OAR": organ}
 
 
+def _robust_against_nominal(ops, robust_plans, robust_weights, nominal_weights, n_scenarios: int):
+    """The nominal plans (indices) that meet every hard constraint of ``ops`` in every scenario, and the largest amount
+    by which a converged robust plan's scenario-wise weighted sum exceeds the best of theirs, less the smoothing's slack
+    (-inf when there is nothing to compare). A robust plan minimizes that sum over plans that meet the constraints in
+    every scenario, so only such nominal plans are its rivals."""
+    stacks = [ops.forward(np.asarray(w, float)) for w in nominal_weights]
+    feasible = [k for k, st in enumerate(stacks) if all(t.violation(st) <= t.spec.tolerance_gy for t in ops.terms)]
+    worst_gap = -np.inf
+    for p, x in zip(robust_plans, robust_weights):
+        if not p.converged or not feasible:      # an unconverged plan does not minimize its objective: nothing to compare
+            continue
+        raw = np.array(p.weights)
+
+        def scenario_wise(stack):
+            per = np.array([o.per_scenario(stack, m) for o, m in zip(ops.objectives, ops.masks)])   # trade-offs x scenarios
+            return float((raw[:, None] * per).sum(axis=0).max())
+        mine = scenario_wise(ops.forward(np.asarray(x, float)))
+        best_nominal = min(scenario_wise(stacks[k]) for k in feasible)
+        slack = ops.smoothing_gy * raw.sum() * np.log(n_scenarios) + 1e-3 * abs(mine)
+        worst_gap = max(worst_gap, mine - best_nominal - slack)
+    return feasible, worst_gap
+
+
 def run_mco_robust(spec: dict, ctx: Context) -> CaseResult:
     res = CaseResult(spec["name"], spec["kind"])
     from ..models.beam_model import BeamModelBuildRequest, BeamSetSpec, BeamSpec, DeliveryParams, Modality
@@ -433,30 +456,23 @@ def run_mco_robust(spec: dict, ctx: Context) -> CaseResult:
             robust.robust_gap is not None and robust.robust_gap <= robust.error_bound + 1e-6,
             "the part of the bound more plans cannot remove (the scenario-wise sum against the trade-offs' own worst cases)")
 
-    # each robust plan against every nominal plan in its own scenario-wise objective: the robust plan minimizes it
+    # each robust plan against every nominal plan in its own scenario-wise objective: the robust plan minimizes it over
+    # the plans that meet the hard constraints in every scenario, so only nominal plans that also meet them there are
+    # rivals (a nominal plan that underdoses the target in a scenario can have a lower sum; R11.8's record showed one)
     prob = msvc.optimization._assemble_problem(msvc._base(robust_req))
     ops = msvc.ops(prob, robust_req)
     w_nom = np.load(nominal.weights_uri)
-    worst_gap = -np.inf
-    for p, x in zip(robust.plans, np.load(robust.weights_uri)):
-        if not p.converged:                      # an unconverged plan does not minimize its objective: nothing to compare
-            continue
-        raw = np.array(p.weights)
-
-        def scenario_wise(w):
-            stack = ops.forward(np.asarray(w, float))
-            per = np.array([o.per_scenario(stack, m) for o, m in zip(ops.objectives, ops.masks)])   # trade-offs x scenarios
-            return float((raw[:, None] * per).sum(axis=0).max())
-        mine = scenario_wise(x)
-        best_nominal = min(scenario_wise(w) for w in w_nom)
-        slack = ops.smoothing_gy * raw.sum() * np.log(len(robust.scenarios)) + 1e-3 * abs(mine)
-        worst_gap = max(worst_gap, mine - best_nominal - slack)
+    feasible, worst_gap = _robust_against_nominal(ops, robust.plans, np.load(robust.weights_uri), w_nom, len(robust.scenarios))
+    res.add("nominal plans that meet the hard constraints in every scenario", f"{len(feasible)} of {len(w_nom)}", "informative", None,
+            "the others underdose or overdose in some scenario, which the robust plans are built to avoid; only these are "
+            "compared with the robust plans below")
     if not np.isfinite(worst_gap):
-        res.add("converged robust plans protect their worst scenario better than any nominal plan", "no converged robust plan", "<= 0",
-                None, "more iterations are needed before this can be judged")
+        res.add("converged robust plans protect their worst scenario better than any nominal plan", "nothing to compare", "<= 0",
+                None, "no converged robust plan" if feasible else "no nominal plan meets the hard constraints in every scenario")
     else:
         res.add("converged robust plans protect their worst scenario better than any nominal plan", round(float(worst_gap), 4), "<= 0",
-            bool(worst_gap <= 0.0), "max over robust plans of (its scenario-wise weighted sum − the best nominal plan's), less the smoothing's slack")
+            bool(worst_gap <= 0.0), "max over robust plans of (its scenario-wise weighted sum − the best nominal plan's that meets "
+                                    "the hard constraints in every scenario), less the smoothing's slack")
     nom_bal = next(p for p in nominal.plans if p.kind == "balance")
     rob_bal = next(p for p in robust.plans if p.kind == "balance")
     nb_worst = ops.values(ops.forward(w_nom[nom_bal.index].astype(float)))

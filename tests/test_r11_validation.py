@@ -79,3 +79,22 @@ def test_the_set_checks_catch_a_broken_set(msvc):  # noqa: F811
     failed = {n for n, p in _graded(res).items() if p is False}
     assert any("never grows" in n for n in failed) and any("own weighted sum" in n for n in failed) and any("hard constraint" in n for n in failed)
     assert next(c for c in res.checks if "dominated by another plan" in c.name).value >= 1
+
+
+def test_robust_plans_are_compared_only_with_nominal_plans_that_hold_in_every_scenario(msvc):  # noqa: F811
+    # a nominal plan that misses the target in a scenario can have a lower scenario-wise sum than any robust plan: it is
+    # no rival, since a robust plan minimizes over plans that meet the hard constraints in every scenario (R11.8's record)
+    from radiarch.validation.cases_r11 import _robust_against_nominal
+
+    rreq = _mreq(robustness=ROB, hard_constraints=COVER)
+    robust, nominal = msvc.run(rreq), msvc.run(_mreq(hard_constraints=COVER))
+    ops = msvc.ops(msvc.optimization._assemble_problem(msvc._base(rreq)), rreq)
+    w_rob, w_nom = np.load(robust.weights_uri), np.load(nominal.weights_uri)
+    feasible, gap = _robust_against_nominal(ops, robust.plans, w_rob, w_nom, len(robust.scenarios))
+    expected = [k for k, w in enumerate(w_nom) if all(t.violation(ops.forward(w)) <= t.spec.tolerance_gy for t in ops.terms)]
+    assert feasible == expected
+    off = np.vstack([w_nom, np.zeros_like(w_nom[:1])])                   # no dose: the organs' best, the target missed
+    feasible2, gap2 = _robust_against_nominal(ops, robust.plans, w_rob, off, len(robust.scenarios))
+    assert feasible2 == expected and gap2 == gap
+    _, none = _robust_against_nominal(ops, robust.plans, w_rob, off[-1:], len(robust.scenarios))
+    assert none == -np.inf                                                # nothing to compare
