@@ -23,6 +23,7 @@ import hashlib
 import json
 from datetime import datetime
 from enum import Enum
+from pathlib import Path
 from typing import Union, Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -227,8 +228,10 @@ class GeometryBuildRequest(BaseModel):
     def compute_cache_key(self) -> str:
         """Deterministic sha256 over the inputs that affect the output.
 
-        Excludes ``data_root_override`` (a developer convenience — the
-        actual CT/RTSTRUCT UIDs fully determine the geometry content).
+        ``data_root_override`` joins it when the CT series or the structure set is
+        not named: the folder then decides which series and structure set are read
+        (a folder without a structure set once left a geometry with no structures
+        that a later run on the right folder reused).
         """
         payload = {
             "study": self.patient_ref.dicom_study_uid,
@@ -239,6 +242,8 @@ class GeometryBuildRequest(BaseModel):
             "hu_model": self.hu_to_density_model.value,
             "name_map": self._normalized_name_map(),
         }
+        if self.data_root_override and not (self.patient_ref.ct_series_uid and self.patient_ref.rtstruct_uid):
+            payload["data_root"] = str(Path(self.data_root_override).expanduser().resolve())
         # NRRD source is content-addressed by path; only added when used so
         # existing DICOM/upload cache keys are unchanged.
         if self.patient_ref.nrrd_ct_path:

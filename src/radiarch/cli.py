@@ -27,6 +27,12 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 INTENDED_USE = "RESEARCH USE ONLY. NOT FOR CLINICAL USE."
+DEFAULT_SPACING_MM = 3.0     # the dose grid the records plan on; a CT's own grid (about 1 x 1 x 3 mm) is twenty times the work
+
+
+def _spacing(value: Optional[float]) -> Optional[float]:
+    """The dose grid spacing to build the geometry with: None (the CT's own grid) for 0."""
+    return None if value is None or float(value) <= 0 else float(value)
 
 
 def _progress(service: str, job: Dict[str, Any]) -> None:
@@ -114,7 +120,7 @@ def cmd_protocol(args) -> int:
 def cmd_plan(args) -> int:
     print(INTENDED_USE, file=sys.stderr)
     with _client(args) as rx:
-        run = _plan_one(rx, _protocol(args.protocol), args.study, args.data, args.spacing)
+        run = _plan_one(rx, _protocol(args.protocol), args.study, args.data, _spacing(args.spacing))
         _print_goals(run)
         if run.result.mco_id:
             _print_mco(rx, run)
@@ -213,7 +219,7 @@ def cmd_dose(args) -> int:
     exp = None
     try:
         with _client(args) as rx:
-            geo = rx.build_geometry(ct["study"], data_root=str(root), spacing_mm=args.spacing, ct_series_uid=ct["series"],
+            geo = rx.build_geometry(ct["study"], data_root=str(root), spacing_mm=_spacing(args.spacing), ct_series_uid=ct["series"],
                                     rtstruct_uid=rtstruct["sop"] if rtstruct else None)
             bm = geo.import_plan(args.plan, machine=args.machine, strict_frame=not args.any_frame)
             dose = bm.recalculate(engine=args.engine)
@@ -276,7 +282,7 @@ def cmd_batch(args) -> int:
             print(f"[{i}/{len(cases)}] {case['case_id']}", file=sys.stderr, flush=True)
             row: Dict[str, Any] = {"case_id": case["case_id"]}
             try:
-                run = _plan_one(rx, protocol, case["study_uid"], case["data_root"], case["spacing_mm"] or args.spacing)
+                run = _plan_one(rx, protocol, case["study_uid"], case["data_root"], _spacing(case["spacing_mm"] if case["spacing_mm"] is not None else args.spacing))
                 row.update({"run_id": run.id, "passed": run.passed, "normalisation": round(run.normalisation, 4), "deliverable": run.deliverable,
                             "seconds": round(time.time() - t0, 1)})
                 for g in run.goals_table():
@@ -322,7 +328,8 @@ def build_parser() -> argparse.ArgumentParser:
     for name, func, helptext in (("plan", cmd_plan, "plan one patient with a protocol"), ("batch", cmd_batch, "plan a list of cases with a protocol")):
         s = sub.add_parser(name, parents=[common], help=helptext)
         s.add_argument("--protocol", required=True, help="a shipped protocol id or a protocol JSON file")
-        s.add_argument("--spacing", type=float, default=None, help="dose grid spacing (mm); default the protocol service's")
+        s.add_argument("--spacing", type=float, default=DEFAULT_SPACING_MM,
+                       help=f"dose grid spacing (mm); default {DEFAULT_SPACING_MM:g}, 0 = the CT's own grid (slow: tens of millions of voxels)")
         s.add_argument("--label", default="RESEARCH", help="RT Plan and structure set label (default RESEARCH)")
         if name == "plan":
             s.add_argument("--study", required=True, help="the DICOM study instance UID")
@@ -347,7 +354,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--plan", required=True, help="the RT Plan or RT Ion Plan file")
     s.add_argument("--engine", default="auto", choices=["auto", "ccc", "pb", "mcsquare"],
                    help="dose engine (default auto: pb for a photon plan, mcsquare for a proton plan)")
-    s.add_argument("--spacing", type=float, default=None, help="dose grid spacing (mm); default the geometry service's")
+    s.add_argument("--spacing", type=float, default=DEFAULT_SPACING_MM,
+                   help=f"dose grid spacing (mm); default {DEFAULT_SPACING_MM:g}, 0 = the CT's own grid")
     s.add_argument("--machine", help="the machine model the plan is delivered on (default the photon default)")
     s.add_argument("--any-frame", action="store_true", help="accept a plan whose frame of reference is not the CT's")
     s.add_argument("--export", help="write the RT Dose and the plan as re-written into this directory")

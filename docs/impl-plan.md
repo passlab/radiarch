@@ -198,6 +198,9 @@ them in batches and from workflow engines.
 - [x] R10.7 `lung-60gy-30fx-vmat-itv` (2026-10-31): the lung VMAT protocol for a patient whose target is an ITV (ITV,
   ITV_Primary, iGTV, ITVp): CTV = ITV + 5 mm, PTV = CTV + 5 mm, the template's Lungs-GTV as the lungs less the ITV;
   everything else the base protocol's, checked field by field; plans a phantom contoured as iGTV.
+- [x] R10.8 (2026-11-01) The commands plan on a 3 mm dose grid by default (`--spacing 0`: the CT's own grid; a
+  round trip on the CT's own grid took 5 h 40 min); a geometry's cache key carries the data folder when the series
+  or structure set is not named; the command line runs self-contained in the image.
 
 ### R13 — Viewer integration (done; 3D Slicer check waiting)
 Viewing stays outside radiarch: the RT objects go to a DICOMweb server that OHIF reads, and a radiarch

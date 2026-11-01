@@ -43,7 +43,7 @@ def cli_env(env, monkeypatch, tmp_path):  # noqa: F811
 
 
 def test_plan_one_patient(cli_env, tmp_path, capsys):
-    code = main(["plan", "--protocol", str(cli_env), "--study", "1.2.3", "--export", str(tmp_path / "rt"), "--json", str(tmp_path / "run.json"),
+    code = main(["plan", "--protocol", str(cli_env), "--study", "1.2.3", "--spacing", "0", "--export", str(tmp_path / "rt"), "--json", str(tmp_path / "run.json"),
                  "--poll", "0.01"])
     out = capsys.readouterr().out
     assert code == 0 and "PTV D95 >= 2" in out and "Liver Dmean <= 1" in out and "missing" in out
@@ -62,7 +62,7 @@ def test_plan_and_push_prints_the_viewer_link(cli_env, tmp_path, capsys, monkeyp
     monkeypatch.setenv("RADIARCH_DICOMWEB_URL", "http://pacs.invalid/dicom-web")
     monkeypatch.setenv("RADIARCH_VIEWER_URL", "http://localhost:3000")
     get_settings.cache_clear()
-    code = main(["plan", "--protocol", str(cli_env), "--study", "1.2.3", "--push", "--poll", "0.01"])
+    code = main(["plan", "--protocol", str(cli_env), "--study", "1.2.3", "--spacing", "0", "--push", "--poll", "0.01"])
     out = capsys.readouterr().out
     assert code == 0 and sent and "pushed" in out
     assert "open in the viewer: http://localhost:3000/viewer?StudyInstanceUIDs=1.2.826.0.1.3680043.8.498.6000" in out
@@ -70,7 +70,7 @@ def test_plan_and_push_prints_the_viewer_link(cli_env, tmp_path, capsys, monkeyp
     def refuse(self, paths, raise_errors=False):
         raise RuntimeError("PACS unreachable")
     monkeypatch.setattr(dicomweb.DICOMwebNotifier, "store_instances", refuse)
-    code = main(["plan", "--protocol", str(cli_env), "--study", "1.2.3", "--push", "--poll", "0.01"])
+    code = main(["plan", "--protocol", str(cli_env), "--study", "1.2.3", "--spacing", "0", "--push", "--poll", "0.01"])
     assert code == 3 and "PACS unreachable" in capsys.readouterr().err
     get_settings.cache_clear()
 
@@ -85,7 +85,7 @@ def test_a_rerun_pushes_the_same_objects_and_a_new_export_marks_its_copy(cli_env
                         lambda self, paths, raise_errors=False: sent.append(sorted(pydicom.dcmread(p).SOPInstanceUID for p in paths)) or True)
     monkeypatch.setenv("RADIARCH_DICOMWEB_URL", "http://pacs.invalid/dicom-web")
     get_settings.cache_clear()
-    args = ["plan", "--protocol", str(cli_env), "--study", "1.2.3", "--push", "--poll", "0.01"]
+    args = ["plan", "--protocol", str(cli_env), "--study", "1.2.3", "--spacing", "0", "--push", "--poll", "0.01"]
     assert main(args) == 0 and "stored export" not in capsys.readouterr().err
     assert main(args) == 0 and "the stored export of this plan" in capsys.readouterr().err
     assert len(sent) == 2 and sent[0] == sent[1]
@@ -105,7 +105,7 @@ def test_batch_goes_on_past_a_failed_case(cli_env, tmp_path, capsys):
     cases = tmp_path / "cases.csv"
     cases.write_text("case_id,study_uid,data_root\nA,1.2.3,a\nB,9.9.9-missing,b\nC,1.2.4,c\n", encoding="utf-8")
     code = main(["batch", "--protocol", str(cli_env), "--cases", str(cases), "--data-root", str(tmp_path), "--out", str(tmp_path / "out"),
-                 "--export", "--poll", "0.01"])
+                 "--export", "--spacing", "0", "--poll", "0.01"])                    # the stub CT's masks are on its own grid
     assert code == 1                                                     # one case failed
     rows = list(csv.DictReader(open(tmp_path / "out" / "summary.csv", encoding="utf-8")))
     by = {r["case_id"]: r for r in rows}

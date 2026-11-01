@@ -33,7 +33,7 @@ inputs:
     inputBinding: {prefix: --engine}
   spacing_mm:
     type: float?
-    doc: Dose grid spacing in mm.
+    doc: Dose grid spacing in mm (default 3; 0 = the CT's own grid).
     inputBinding: {prefix: --spacing}
   machine:
     type: string?

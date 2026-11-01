@@ -1040,3 +1040,18 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   single-objective solves under the hard constraints); a fluence smoothness regularizer in the MCO solves
   (`SolverConfig.regularization`, which the MCO request already carries) would address that upstream and is not
   turned on here.
+
+## A 3 mm default dose grid; the data folder in the geometry's cache key (2026-11-01)
+
+- **Default spacing.** A one-patient round trip in the image (a lung patient, 133 CT slices, two arcs) took 5 h 40 min:
+  without `--spacing` the geometry inherits the CT's own grid (about 1 x 1 x 3 mm, 35 million voxels), which no record
+  plans on (the lung protocols' records use 3 mm; the R11 lung demo 4 mm). `radiarch plan`, `batch` and `dose` now
+  default to 3 mm (`DEFAULT_SPACING_MM`); `--spacing 0` keeps the CT's own grid; a cases file's `spacing_mm` still wins
+  for its case. The CWL tools say so. Tests built on the stub CT, whose masks exist only on its own grid, pass
+  `--spacing 0`.
+- **Cache key.** The same round trip at 3 mm then failed with an empty structure index: an earlier invocation on a
+  folder without the structure set had built and cached a 3 mm geometry with no structures, and the key, which left
+  out the data folder, matched the later run on the right folder. The key now carries the resolved data folder when
+  the CT series or the structure set is not named (keys for named UIDs and uploads are unchanged).
+- Tests (`tests/test_dose_command.py`): a folder without its structure set and the folder with it give two
+  geometries, the second reused on a rerun; the three commands' default is 3 mm and `--spacing 0` gives the CT's grid.

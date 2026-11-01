@@ -111,3 +111,40 @@ def test_the_command_runs_in_this_process_whatever_the_server_environment_says(d
     assert code == 0, capsys.readouterr().out
     assert json.loads((tmp_path / "dose.json").read_text())["dose"]["statistics"]["max_gy"] > 0.5
     assert get_settings().database_url == "" and get_settings().broker_url == "memory://"
+
+
+def test_a_folder_without_its_structure_set_does_not_poison_the_cache(dose_env, tmp_path, capsys):
+    """The geometry cache key carries the data folder when the series or structure set is not named: a geometry built
+    from a folder that lacks the structure set is not reused for the folder that has it (a 3 mm round trip once got
+    an empty structure index that way)."""
+    import shutil
+
+    from radiarch.sdk import Radiarch
+
+    case, _ = _case(tmp_path)
+    bare = tmp_path / "ct-only"
+    shutil.copytree(case, bare)
+    (bare / "RS.dcm").unlink()
+    study = str(pydicom.dcmread(str(case / "CT000.dcm"), stop_before_pixels=True).StudyInstanceUID)
+    with Radiarch.local(poll_interval=0.01) as rx:
+        empty = rx.build_geometry(study, data_root=str(bare), spacing_mm=3.0)
+        full = rx.build_geometry(study, data_root=str(case), spacing_mm=3.0)
+        again = rx.build_geometry(study, data_root=str(case), spacing_mm=3.0)
+    assert sorted(empty.result.structure_index) == [] and sorted(full.result.structure_index) == ["Body", "PTV"]
+    assert full.id != empty.id and again.id == full.id
+
+
+def test_the_dose_grid_defaults_to_3_mm_and_0_is_the_cts_own(dose_env, tmp_path, capsys):
+    from radiarch.cli import DEFAULT_SPACING_MM, build_parser
+
+    assert DEFAULT_SPACING_MM == 3.0
+    for cmd in (["plan", "--protocol", "x", "--study", "1"], ["batch", "--protocol", "x", "--cases", "c", "--out", "o"],
+                ["dose", "--ct", "d", "--plan", "p"]):
+        assert build_parser().parse_args(cmd).spacing == 3.0
+    case, plan = _case(tmp_path)
+    for spacing, expect in (([], 3.0), (["--spacing", "0"], 5.0)):             # the phantom CT's own grid is 5 mm
+        code = main(["dose", "--ct", str(case), "--plan", str(plan), "--engine", "pb", "--json", str(tmp_path / "d.json"), "--poll", "0.01"] + spacing)
+        assert code == 0, capsys.readouterr().out
+        from radiarch.services.geometry import GeometryService
+        gid = json.loads((tmp_path / "d.json").read_text())["geometry_id"]
+        assert GeometryService().store.get_by_id(gid).grid_spec.spacing_mm[0] == pytest.approx(expect)

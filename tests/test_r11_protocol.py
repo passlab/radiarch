@@ -80,6 +80,6 @@ def test_the_command_prints_the_pareto_set(rx, tmp_path, capsys, monkeypatch):  
     path = tmp_path / "mco.json"
     path.write_text(json.dumps(MCO), encoding="utf-8")
     monkeypatch.delenv("RADIARCH_SERVER", raising=False)
-    code = main(["plan", "--protocol", str(path), "--study", "1.2.3", "--poll", "0.01"])
+    code = main(["plan", "--protocol", str(path), "--study", "1.2.3", "--spacing", "0", "--poll", "0.01"])
     out = capsys.readouterr().out
     assert code == 0 and "Pareto set" in out and "navigate from state" in out and "deviation" in out
