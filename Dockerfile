@@ -39,6 +39,10 @@ RUN mkdir -p /data/artifacts /data/sessions
 ARG RADIARCH_BUILD_COMMIT=""
 ENV RADIARCH_BUILD_COMMIT=${RADIARCH_BUILD_COMMIT}
 
+# The package runs from /app (the builder's editable install points at the build stage, which is gone), as the
+# compose services set; without this the radiarch command finds no module.
+ENV PYTHONPATH=/app
+
 # Default environment
 ENV RADIARCH_ENVIRONMENT=production \
     RADIARCH_MCSQUARE_DIR=/app/engines/mcsquare \

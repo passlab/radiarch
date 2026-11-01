@@ -246,3 +246,25 @@ jobs:
           path: |
             validation/results
             validation/reports
+
+  image:
+    # The API image (the Dockerfile): built from the commit, then the radiarch command inside it lists the shipped
+    # protocols and takes the dose command's options. Catches an image that builds but cannot run the package
+    # (the runtime stage once lacked the package on its path).
+    name: Image (build and the command line)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: >-
+      github.event_name == 'push' || github.event_name == 'pull_request'
+      || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build --build-arg RADIARCH_BUILD_COMMIT=$(git rev-parse --short=7 HEAD) -t radiarch:ci .
+      - name: The command line runs in the image
+        run: |
+          docker run --rm radiarch:ci radiarch protocols | tee protocols.txt
+          grep -q lung-60gy-30fx-vmat-itv protocols.txt
+          docker run --rm radiarch:ci radiarch dose --help | grep -q -- --structures
+          docker run --rm radiarch:ci python -c "import radiarch, os; print(os.environ['RADIARCH_BUILD_COMMIT'])" | grep -qE '^[0-9a-f]{7}$'

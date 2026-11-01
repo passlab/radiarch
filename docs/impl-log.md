@@ -987,3 +987,13 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
 - Tests (`tests/test_protocol_itv_variant.py`): the two protocols compared field by field outside the target's
   derivation; a 5 mm thorax phantom with lungs, cord, oesophagus, heart and an `iGTV` planned by the variant through
   `radiarch plan` (about a minute), the run's alias map naming the iGTV as the ITV.
+
+## The image runs the command line; CI builds the image (2026-11-01)
+
+- The first R11.8 image (from `b0d296b`) built but `radiarch protocols` in it found no module: the builder stage's
+  editable install leaves a path file pointing at the build stage, which the runtime stage does not have, and only
+  the compose services set `PYTHONPATH=/app`. The Dockerfile now sets it, so the image runs the command line on its
+  own (a Galaxy tool or `docker run` calls `radiarch dose` without compose).
+- CI's new job "Image (build and the command line)" builds the image from the commit and runs `radiarch protocols`
+  (the ITV variant listed), `radiarch dose --help` and an import in it, so an image that builds but cannot run the
+  package is caught.
