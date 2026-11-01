@@ -59,7 +59,7 @@ class TestProtons:
         res = msvc.run(_mreq(hard_constraints=[HardConstraint(structure_name="PTV", metric="Dmin", op=">=", value_gy=5.0)]))
         assert target_structures(res) == ["PTV"]
         svc_d = DeliverableService(base_dir=tmp_path / "d", mco_service=msvc)
-        out = svc_d.run(res.mco_id, DeliverableRequest())
+        out = svc_d.run(res.mco_id, DeliverableRequest(project=True))
         assert out.technique == "proton" and out.projected and out.dose_id is None and out.beam_model_id == res.beam_model_id
         assert any("minimum spot meterset" in n for n in out.notes)
         rows = {r.name: r for r in out.deviation}
@@ -67,7 +67,7 @@ class TestProtons:
         assert all(r.worse_by <= 0.011 and not r.flagged for r in rows.values())       # projected: no trade-off worse
         opt = msvc.optimization.store.get_by_id(out.optimization_id)
         assert opt.cache_key.startswith(f"mco:{res.mco_id}:") and opt.geometry_id == res.geometry_id
-        assert svc_d.run(res.mco_id, DeliverableRequest()).deliverable_id == out.deliverable_id            # cached
+        assert svc_d.run(res.mco_id, DeliverableRequest(project=True)).deliverable_id == out.deliverable_id   # cached
         with pytest.raises(ValueError, match="no state"):
             svc_d.run(res.mco_id, DeliverableRequest(state_id="nope"))
 
@@ -91,7 +91,7 @@ def test_a_deliverable_photon_plan_through_the_sdk(rx, tmp_path):
     goals = {"goals": [{"structure": "PTV", "metric": "D95%[Gy]", "op": ">=", "value": 1.5, "priority": 1},
                        {"structure": "OAR", "metric": "Dmean[Gy]", "op": "<=", "value": 1.0, "priority": 2}]}
     plan = ps.deliverable(st, levels=5, max_iterations=60, goals=goals, normalise={"structure": "PTV", "metric": "D95", "gy": 1.8},
-                          tolerance_gy=0.05)
+                          tolerance_gy=0.05, project=True)
     assert isinstance(plan, MCOPlan) and plan.technique == "imrt" and plan.sequence_id and plan.state_id == st.state_id
     assert plan.projected and plan.normalisation > 0 and plan.dose_id
     names = [r["name"] for r in plan.deviation_table()]
@@ -103,7 +103,10 @@ def test_a_deliverable_photon_plan_through_the_sdk(rx, tmp_path):
     dose = plan.dose()
     assert dose.id == plan.dose_id
     assert ps.deliverable(st, levels=5, max_iterations=60, goals=goals, normalise={"structure": "PTV", "metric": "D95", "gy": 1.8},
-                          tolerance_gy=0.05).id == plan.id                                                     # cached
+                          tolerance_gy=0.05, project=True).id == plan.id                                       # cached
+    blend = ps.deliverable(st, levels=5, max_iterations=60, goals=goals, normalise={"structure": "PTV", "metric": "D95", "gy": 1.8},
+                          tolerance_gy=0.05)
+    assert not blend.projected and blend.id != plan.id and all(r["projected"] is None for r in blend.deviation_table())   # the default: the blend
     graph = rx.get(f"/lineage/optimization/{plan.optimization_id}")
     assert {n["ref"]["kind"] for n in graph["nodes"]} >= {"optimization", "mco", "beam_model", "geometry"}
     exp = plan.export(label="MCO", prescription={"dose_gy": 2.0, "fractions": 2})
@@ -116,3 +119,95 @@ def test_a_deliverable_photon_plan_through_the_sdk(rx, tmp_path):
     with pytest.raises(RadiarchError) as e:
         rx.get("/mco/deliverables/no-such-plan")
     assert e.value.status_code == 404
+
+
+def test_planning_goals_from_a_clinical_goal_set():
+    from radiarch.models.evaluation import GoalSetSpec
+    from radiarch.services.mco_deliverable import planning_goals
+
+    gs = GoalSetSpec(goals=[{"structure": "PTV", "metric": "D95%[Gy]", "op": ">=", "value": 60.0, "priority": 1},
+                            {"structure": "Cord", "metric": "Dmax[Gy]", "op": "<=", "value": 45.0, "priority": 2},
+                            {"structure": "Eso", "metric": "Dmean[Gy]", "op": "<=", "value": 34.0, "priority": 2},
+                            {"structure": "Heart", "metric": "D33%[Gy]", "op": "<=", "value": 60.0, "priority": 2},
+                            {"structure": "Lungs", "metric": "V20Gy[%]", "op": "<=", "value": 37.0, "priority": 2},
+                            {"structure": "PTV", "metric": "D0.03cc[Gy]", "op": "<=", "value": 72.0, "priority": 2}])
+    assert planning_goals(gs) == [{"structure": "PTV", "metric": "D95", "op": ">=", "gy": 60.0},
+                                  {"structure": "Cord", "metric": "Dmax", "op": "<=", "gy": 45.0},
+                                  {"structure": "Eso", "metric": "Dmean", "op": "<=", "gy": 34.0},
+                                  {"structure": "Heart", "metric": "D33", "op": "<=", "gy": 60.0}]
+    assert planning_goals(None) == []
+
+
+def test_the_deliverable_metersets_are_driven_by_the_goals_in_rounds(rx, monkeypatch):
+    """R11.9: the meterset optimization takes, with the mimic, each target's hot-spot term (no hotter than the navigated
+    plan past the tolerance) and the goals' objectives; a goal that fails after normalisation triples its weight (an
+    organ limit 5 % lower) and the metersets are optimized again, up to ``rounds`` times."""
+    from radiarch.services.apertures import ApertureService
+    from radiarch.sdk import ops
+
+    seen = []
+    real = ApertureService.sequence
+
+    def capture(self, optimization_id, request):
+        seen.append(request)
+        return real(self, optimization_id, request)
+
+    monkeypatch.setattr(ApertureService, "sequence", capture)
+    geo = rx.build_geometry("1.2.3", hu_model="LINEAR")
+    bm = geo.photon_beams([0, 90, 180, 270], machine="test-120", jaw_opening_mm=(60.0, 60.0), beamlet_size_mm=(10.0, 10.0))
+    ps = bm.mco([ops.uniform_rms("PTV", 2.0), ops.mean_dose("OAR")], engine="analytic", max_iterations=100, plan_budget=6,
+                hard_constraints=[ops.hard("PTV", "Dmin", ">=", 1.0)])
+    goals = {"goals": [{"structure": "PTV", "metric": "D95%[Gy]", "op": ">=", "value": 1.5, "priority": 1},
+                       {"structure": "OAR", "metric": "Dmean[Gy]", "op": "<=", "value": 0.001, "priority": 2}]}   # the OAR goal cannot hold
+    plan = ps.deliverable("balance", levels=5, max_iterations=60, goals=goals, prescription_gy=2.0, rounds=2,
+                          normalise={"structure": "PTV", "metric": "D95", "gy": 1.8}, tolerance_gy=0.05)
+    assert len(seen) == 2 and len(plan.rounds) == 2, plan.rounds
+    assert plan.rounds[0]["failed"] == ["OAR Dmean"] and plan.rounds[1]["failed"] == ["OAR Dmean"]
+    assert all(r["normalisation"] > 0 for r in plan.rounds)
+    first, second = seen
+    kinds = [(o.type, o.structure_name) for o in first.objectives]
+    assert ("ReferenceDose", "PTV") in kinds and ("ReferenceDose", "OAR") in kinds       # the mimic
+    hot = [o for o in first.objectives if o.type == "DMax" and o.structure_name == "PTV"]
+    assert len(hot) == 1 and hot[0].dose_gy > 1.0                                          # the hot-spot term: navigated max + tolerance
+    assert ("DUniform", "PTV") in kinds and ("DVHMin", "PTV") in kinds                     # the goals' objectives
+    oar1 = [o for o in first.objectives if o.type == "DVHMax" and o.structure_name == "OAR"][0]
+    oar2 = [o for o in second.objectives if o.type == "DVHMax" and o.structure_name == "OAR"][0]
+    assert oar2.weight == pytest.approx(3.0 * oar1.weight) and oar2.dose_gy == pytest.approx(0.95 * oar1.dose_gy)
+    assert plan.request.rounds == 2 and plan.request.hot_spot_gy is None
+    assert first.levels == 5 == second.levels                                              # no peak capped: the request's levels
+
+    # a goal set that holds in the first round stops there; no goals: the mimic and the hot-spot term alone, one round
+    seen.clear()
+    easy = ps.deliverable("balance", levels=5, max_iterations=60, goals={"goals": goals["goals"][:1]}, prescription_gy=2.0, rounds=3,
+                          normalise={"structure": "PTV", "metric": "D95", "gy": 1.8})
+    assert len(easy.rounds) == 1 and easy.rounds[0]["failed"] == [] and len(seen) == 1
+    seen.clear()
+    bare = ps.deliverable("balance", levels=5, max_iterations=60, rounds=3, hot_spot_gy=2.5)
+    assert len(bare.rounds) == 1 and len(seen) == 1
+    types = {(o.type, o.structure_name): o for o in seen[0].objectives}
+    assert set(types) == {("ReferenceDose", "PTV"), ("ReferenceDose", "OAR"), ("DMax", "PTV")} and types[("DMax", "PTV")].dose_gy == 2.5
+
+
+def test_the_navigated_fluence_is_capped_before_sequencing():
+    """A few high beamlets would close most of a beam's field at the sequencer's fluence steps; each beam's peaks are
+    capped at peak_ratio times its median nonzero weight, and a note says how much fluence that was."""
+    from radiarch.services.mco_deliverable import capped_fluence
+
+    class _Beam:
+        def __init__(self, beam_id, n):
+            self.beam_id, self.n = beam_id, n
+
+        def beamlets(self):
+            return np.zeros((self.n, 4))
+
+    class _Plan:
+        beams = [_Beam("B1", 10), _Beam("B2", 5)]
+
+    w = np.array([1.0] * 8 + [30.0, 0.0] + [2.0, 2.0, 2.0, 0.0, 50.0])
+    capped, notes = capped_fluence(_Plan(), w, 6.0)
+    assert capped[:10].tolist() == [1.0] * 8 + [6.0, 0.0] and capped[10:].tolist() == [2.0, 2.0, 2.0, 0.0, 12.0]
+    assert len(notes) == 2 and notes[0].startswith("beam B1: 1 of 10 beamlets capped at 6 x the median (6)") and "B2" in notes[1]
+    same, none = capped_fluence(_Plan(), w, None)
+    assert same.tolist() == w.tolist() and none == []
+    smooth, no_notes = capped_fluence(_Plan(), np.ones(15), 6.0)
+    assert smooth.tolist() == [1.0] * 15 and no_notes == []

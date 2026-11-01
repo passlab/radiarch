@@ -571,9 +571,9 @@ algorithm until its bound on the distance from any Pareto plan to the computed o
 objectives above (two to eight); hard constraints hold in every plan, and a coverage constraint on the target
 (`PTV Dmin >=`) keeps organ anchors from switching every beamlet off (the run notes a plan that delivers no dose).
 Navigation blends the stored plans, so a slider move needs no dose calculation. A navigation state is made deliverable
-by projecting it onto the Pareto set and mimicking its dose: apertures for static fields, arcs when given, the spots
-themselves for protons; a deviation table compares the deliverable plan with the navigated one and flags what got
-worse. Design: `docs/reports/mco-research-and-design.md`.
+by mimicking its dose: apertures for static fields, arcs when given, the spots themselves for protons; for photons
+the metersets are also driven by the goals and a hot-spot term in reweighting rounds. A deviation table compares
+the deliverable plan with the navigated one and flags what got worse. Design: `docs/reports/mco-research-and-design.md`.
 
 **Robust MCO** (`robustness`: scenarios, as in robust optimization): each plan minimizes the worst scenario of its
 weighted sum, hard constraints hold in every scenario, and every trade-off value is its worst case over the scenarios,
@@ -590,7 +590,7 @@ it. A robust set is made deliverable for protons only (422 for photons).
 | `POST /api/v1/mco/{mco_id}/navigate` | A slider `move`, a `reference` point, `clamps` and `locks` from a state (the balance plan by default): the blend, exact trade-off values, DVHs and graded goals. |
 | `POST /api/v1/mco/{mco_id}/auto-navigate` | The blend that best meets a goal set (template or inline), priority 1 first, then 2, then 3; met goals stay met. |
 | `GET /api/v1/mco/{mco_id}/states` | The stored navigation states, the balance plan first; `/states/{state_id}` one of them. |
-| `POST /api/v1/mco/{mco_id}/deliverable` | A state made deliverable (200 cached / 202 job): projection, apertures or `arcs` mimicking its dose, optional `normalise`, the deviation table. |
+| `POST /api/v1/mco/{mco_id}/deliverable` | A state made deliverable (200 cached / 202 job): apertures or `arcs` mimicking its dose (`project` first, optional), goal-driven `rounds`, optional `normalise`, the deviation table. |
 | `GET /api/v1/mco/deliverables/{id}` | The deliverable plan (beam model, dose, technique) and its deviation table; `/deliverables/jobs/{job_id}` its job. |
 | `GET /api/v1/mco/deliverables?dose_id=` | The deliverable plans that made a dose (or `beam_model_id`), newest first: how the viewer finds a plan's Pareto set. |
 

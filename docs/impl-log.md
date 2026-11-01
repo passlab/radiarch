@@ -1009,3 +1009,34 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
 - `tests/test_dose_command.py`: `radiarch dose` under production-style settings that name unreachable hosts; the
   phantom plan in the image with the fixed package mounted, by hand.
 
+## R11.9: the deliverable step corrected (2026-11-01)
+
+- **The cause.** The R11 record's lung deliverable plans (PTV D0.03cc 86 and 149 Gy on 60 Gy) came from the
+  projection onto the Pareto set that preceded sequencing. Analysed on a kept fast-mode run: the navigated blend has
+  2,904 of 3,080 beamlets open, peaks under five times a beam's median and 5 to 10 apertures above the machine's
+  minimum area per beam at the protocol's 5 fluence levels; the projection's solve (the sum of the normalized
+  trade-offs, each capped at its navigated value, under the hard constraints, up to 1,000 iterations) left 600
+  beamlets, peaks up to 95 times the median and three beams with no valid aperture: 12 segments in all, a plan that
+  under-covered the target, and a coverage normalisation (2.46 in fast mode) that inflated what was left. The same
+  held for the arcs' sectors (1,163 of 13,440 beamlets). The old code and the first correction (goal objectives,
+  rounds, a hot-spot term) failed the fast case alike (191 and 189 Gy); a cap on the peaks alone brought the
+  normalisation to 1.65; sequencing the blend brought it to 1.185 with 42 segments, the arcs to 1.27 with 67,000 MU
+  (2.7 million before), and PTV D0.03cc to 78 Gy against the R10 reweighting plan's 77 Gy in the same fast run.
+- **The correction** (`services/mco_deliverable.py`, `models/mco.py`): the deliverable plan is made from the
+  navigated blend; `project` is an option, off by default. For photons the metersets are optimized against the mimic
+  with each target's hot-spot term (`hot_spot_gy`; null = the navigated maximum plus `tolerance_gy`) and, with
+  `goals` and a prescription, the planner's goal objectives (`objectives_for`; `planning_goals` turns the clinical
+  goal set into its rows), in `rounds` like the reweighting planner's (normalise, judge the goals, a failed goal's
+  weight x3, an organ limit x0.95; default 3). Before sequencing, `capped_fluence` caps a beam's peaks at
+  `peak_ratio` (6) times its median nonzero weight, with at least 2 x peak_ratio fluence levels when it triggers.
+  The deliverable records its `rounds`. The protocol path passes its rounds (`arc_rounds` for arcs). The record
+  grades the deliverable's normalisation within 15 % of 1 and reports the rounds.
+- **Tests** (`tests/test_r11_deliverable.py`): the goal rows from a clinical goal set; the objectives the sequencing
+  receives (mimic, hot spot, goals) and the reweighting between rounds, a goal set that holds stopping at one, the
+  bare request's terms; the cap. The projection's tests pass `project=True`; the SDK test checks the default makes
+  a different plan with no projected column. The heavy check is the lung case in fast mode on a server, through
+  SMIS's site-run script with the working tree synced.
+- **Follow-up.** The Pareto anchors are themselves spiky (PTV maxima of 96 to 216 Gy on the navigation voxels for the
+  single-objective solves under the hard constraints); a fluence smoothness regularizer in the MCO solves
+  (`SolverConfig.regularization`, which the MCO request already carries) would address that upstream and is not
+  turned on here.

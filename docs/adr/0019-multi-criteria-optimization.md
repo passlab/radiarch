@@ -32,10 +32,12 @@ proton phantom.
    move, a reference point, clamps and locks are one LP over the blend weights; the blended dose is evaluated exactly,
    with goals and DVHs, in well under a second. Automatic navigation meets a goal template level by level, a met
    higher goal held. Radiarch's own method, built from published parts; RayStation's is not published.
-4. **The deliverable plan mimics the navigated dose and reports the difference** (D7). The navigated plan is first
-   projected onto the Pareto set (no trade-off worse), then made deliverable: static fields as sequenced apertures,
-   arcs, or proton spots. A one-sided reference-dose objective pulls the deliverable dose toward the navigated one.
-   A deviation table gives every trade-off and goal, navigated against deliverable, flagged past a tolerance.
+4. **The deliverable plan mimics the navigated dose and reports the difference** (D7). The navigated blend is made
+   deliverable: static fields as sequenced apertures, arcs, or proton spots. A one-sided reference-dose objective
+   pulls the deliverable dose toward the navigated one; for photons the metersets are also driven by each target's
+   hot-spot term and the goals, in reweighting rounds judged after normalisation. Projecting the blend onto the
+   Pareto set first (no trade-off worse) is an option, off by default (see the consequences). A deviation table gives
+   every trade-off and goal, navigated against deliverable, flagged past a tolerance.
 5. **Robust sets use the scenario-wise worst case** (D8). Each plan minimizes the worst scenario of its weighted sum,
    smoothed; trade-offs report their worst case over the scenarios and their nominal value; hard constraints hold in
    every scenario. The outer bound comes from each solve's own lower bound and stays valid; the gap it leaves is
@@ -63,11 +65,15 @@ proton phantom.
   bound is approximate. A test on the gain still on offer (a Frank–Wolfe gap) was tried and dropped: on fluence
   problems it is too loose to pass. Each plan still records that gain. A certified bound is a follow-up. The Pareto
   set's key carries a version, so sets computed before the corrections are not reused.
-- The record itself found that the photon deliverable step fails on the lung patient: one sequencing pass and a
-  200-iteration mimic under-cover the target, and the coverage normalisation then inflates the hot spots (PTV D0.03cc
-  86 Gy with seven fields, 149 Gy with two arcs, on 60 Gy; the spinal cord's maximum 41.8 Gy where the navigated
-  plan had 10.6). The step is to be corrected (sequencing and meterset rounds as in R10, a hot-spot term in the
-  mimic, the judgement after normalisation) and the lung case rerun as a dated correction of the record (R11.9).
+- The record itself found that the photon deliverable step fails on the lung patient (PTV D0.03cc 86 Gy with seven
+  fields, 149 Gy with two arcs, on 60 Gy; the spinal cord's maximum 41.8 Gy where the navigated plan had 10.6). The
+  cause, found in the correction (R11.9, 2026-11-01): the projection onto the Pareto set that preceded sequencing
+  left a sparse, spiky fluence (600 of 3,080 beamlets, three beams with no aperture above the machine's minimum
+  area, 12 segments in all) where the navigated blend was smooth; the sequenced plan under-covered the target and the
+  coverage normalisation inflated what was left. The deliverable plan is now made from the blend, and the projection
+  is an option, off by default. The metersets are also driven by the goals and a hot-spot term in reweighting rounds
+  judged after normalisation, and a beam's peaks are capped before sequencing; the record grades the normalisation
+  (within 15 % of 1). The lung case is rerun as a dated correction of the record.
 - The algorithm tests of the report's section 5 run in CI on problems with known answers (`tests/test_r11_*.py`).
   The validation cases (`mco_front`, `mco_protocol`, `mco_robust`) run on a workstation with the public data; the
   proton phantom case also runs in the nightly harness.

@@ -326,11 +326,16 @@ against, as in RayStation. A request takes milliseconds to a fraction of a secon
 - **How it solves.** DVH goals are not linear in `λ`, so each level is a small constrained problem in at most a few
   dozen variables, solved by `scipy.optimize` (SLSQP from the starting state, then COBYLA while a shortfall remains).
   Each evaluation is one weighted sum of the plans' doses on the goal's structure.
-- **Projection.** It is optional and on by default, and it runs as the first step of making the deliverable plan
-  (D7), because it is an optimization on the full dose matrix rather than a navigation step. It moves the navigated
-  plan onto the Pareto set by minimizing the sum of the normalized trade-offs with none of them above its navigated
-  value, under the hard constraints. This is a variant of Bokrantz & Miettinen's projection (`min t` subject to
-  `f_i ≤ f_i(nav) + t`), which improves the objectives evenly; both give a plan at least as good in every objective.
+- **Projection.** It is optional and off by default (`project`), and it runs as the first step of making the
+  deliverable plan (D7) when asked, because it is an optimization on the full dose matrix rather than a navigation
+  step. It moves the navigated plan onto the Pareto set by minimizing the sum of the normalized trade-offs with none
+  of them above its navigated value, under the hard constraints. This is a variant of Bokrantz & Miettinen's
+  projection (`min t` subject to `f_i ≤ f_i(nav) + t`), which improves the objectives evenly; both give a plan at
+  least as good in every objective. *Off by default since the correction of the R11 record (2026-11-01):* on the lung
+  patient the projection's solve left a sparse, spiky fluence (600 of 3,080 beamlets, peaks up to 95 times a beam's
+  median, three beams with no aperture above the machine's minimum area) where the blend had 2,904 beamlets open and
+  peaks under five times the median; the sequencer could not deliver it, and the record's hot spots followed. The
+  blend of Pareto plans is what navigation shows, and it is what the deliverable plan is made from.
 - **Provenance.** This is radiarch's own method, built from published parts. RayStation's algorithm for the same task
   is not published, and the record says so.
 
@@ -350,8 +355,13 @@ How each technique uses it:
 - **Protons:** the projected spot weights are the plan. Radiarch's proton machine model has no minimum spot meterset,
   so there is nothing to re-optimize; the plan is exported by its optimization record.
 
-First the navigated plan is projected onto the Pareto set (D6), and its dose is the reference the deliverable plan
-mimics. Then:
+The navigated blend's dose is the reference the deliverable plan mimics (its projection onto the Pareto set, D6, when
+asked). For photons the metersets are optimized against that mimic together with each target's hot-spot term (no
+hotter than the navigated plan past the tolerance) and, when goals are given, the planner's goal objectives (R10's
+`objectives_for`), in goal-driven rounds like the reweighting planner's: the plan is normalized, its goals judged, a
+failed goal's weight tripled and an organ limit lowered 5 %, and the metersets optimized again (default three
+rounds). Before sequencing, any beam whose peaks exceed six times its median nonzero weight is capped there, with
+finer fluence steps; a peaked map is otherwise quantized to its peaks and most of its field closes. Then:
 - the plan is normalized to the main target's coverage goal when asked (R10; photons);
 - it is stored as a beam model and dose like any other plan;
 - it carries a *deviation table*: every trade-off and goal, navigated (and projected) against deliverable. A

@@ -33,7 +33,7 @@ def test_arcs_mimic_the_navigated_dose(env):  # noqa: F811
                    ObjectiveSpec(type="MeanDose", structure_name="OAR", dose_gy=0.0, weight=1.0)],
         hard_constraints=[HardConstraint(structure_name="PTV", metric="Dmin", op=">=", value_gy=1.6)],
         solver=SolverConfig(method="L-BFGS-B", max_iterations=60), plan_budget=4))
-    out = DeliverableService().run(mco.mco_id, DeliverableRequest(arcs=[arc], max_iterations=60))
+    out = DeliverableService().run(mco.mco_id, DeliverableRequest(arcs=[arc], max_iterations=60, project=True))
     assert out.technique == "vmat" and out.vmat_id and out.dose_id and out.projected
     rows = {r.name: r for r in out.deviation}
     assert set(rows) == {"UniformRMS(PTV)", "MeanDose(OAR)"}

@@ -237,7 +237,7 @@ class TestService:
 
         res = robust_set
         svc_d = DeliverableService(base_dir=tmp_path / "d", mco_service=msvc)
-        out = svc_d.run(res.mco_id, DeliverableRequest())
+        out = svc_d.run(res.mco_id, DeliverableRequest(project=True))
         assert out.technique == "proton" and out.projected
         rows = {r.name: r for r in out.deviation}
         assert set(rows) == {"UniformRMS(PTV)", "MeanDose(OAR)"}

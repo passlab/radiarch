@@ -536,6 +536,7 @@ class AutoplanService:
         d = DeliverableService(mco_service=mco).run(res.mco_id, DeliverableRequest(
             state_id=state.state_id, arcs=b.arcs if b.technique == "vmat" else [], fractions=fx, levels=b.sequence_levels,
             machine_model_id=protocol.machine, max_iterations=protocol.iterations, goals=goal_set, prescription_gy=rx,
+            rounds=protocol.arc_rounds if b.technique == "vmat" else protocol.rounds,
             normalise=NormaliseSpec(structure=target, metric=cover["metric"], gy=cover["gy"] * NORMALISATION_HEADROOM)))
         history = [{"mco_id": res.mco_id, "plans": len(res.plans), "error_bound": res.error_bound, "stop_reason": res.stop_reason},
                    {"state_id": state.state_id, "levels": [lv.model_dump() for lv in state.levels]},

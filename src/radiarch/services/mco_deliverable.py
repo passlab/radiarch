@@ -24,7 +24,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 from loguru import logger
@@ -100,6 +100,58 @@ class DeliverableStore:
         os.replace(tmp_i, self._index)
 
 
+def planning_goals(goal_set) -> List[dict]:
+    """A clinical goal set as the planner's goal rows (structure, metric, op, gy), the form ``objectives_for`` and
+    ``goal_met`` take: ``D95%[Gy]`` → ``D95``, ``Dmax[Gy]`` → ``Dmax``, ``Dmean[Gy]`` → ``Dmean``. Goals in other
+    metrics (``V20Gy[%]``, ``D0.03cc[Gy]``) do not drive the metersets; the deviation table still reports them."""
+    from .clinical_goals import parse_metric
+
+    rows: List[dict] = []
+    for g in (goal_set.goals if goal_set is not None else []):
+        try:
+            m = parse_metric(g.metric)
+        except ValueError:
+            continue
+        if m.kind != "D" or m.unit != "Gy":
+            continue
+        if m.stat in ("max", "mean"):
+            metric = "Dmax" if m.stat == "max" else "Dmean"
+        elif m.arg_unit == "%" and m.arg is not None:
+            metric = f"D{m.arg:g}"
+        else:
+            continue
+        rows.append({"structure": g.structure, "metric": metric, "op": g.op, "gy": float(g.value)})
+    return rows
+
+
+def capped_fluence(plan, weights: np.ndarray, peak_ratio: Optional[float]) -> Tuple[np.ndarray, List[str]]:
+    """The beamlet weights with each beam's peaks capped at ``peak_ratio`` times its median nonzero weight. A map
+    sequenced by equal fluence steps keeps a cell only when it holds at least half a step, so a few high beamlets
+    (hard constraints push them up where a voxel is cold) close most of a beam's field; capping them keeps the field
+    open, and the meterset optimization recovers what the peaks did where it can. Returns the weights and a note
+    per capped beam."""
+    w = np.asarray(weights, dtype=np.float64).copy()
+    notes: List[str] = []
+    if peak_ratio is None:
+        return w, notes
+    offset = 0
+    for beam in plan.beams:
+        n = int(beam.beamlets().shape[0])
+        seg = w[offset:offset + n]
+        offset += n
+        nonzero = seg[seg > 0]
+        if nonzero.size == 0:
+            continue
+        cap = float(peak_ratio) * float(np.median(nonzero))
+        over = seg > cap
+        if over.any():
+            lost = float(seg[over].sum() - cap * over.sum()) / float(seg.sum())
+            notes.append(f"beam {beam.beam_id}: {int(over.sum())} of {n} beamlets capped at {peak_ratio:g} x the median "
+                         f"({cap:.3g}), {100 * lost:.1f} % of its fluence")
+            seg[over] = cap
+    return w, notes
+
+
 def _noop(stage: DeliverableStage, fraction: float, message: str) -> None:
     pass
 
@@ -163,7 +215,13 @@ class DeliverableService:
         dose_full = forward(x)
         projected_stack = ops.navigation(ops.forward(x))
 
-        # 2. the navigated plan as an optimization (its weights and dose): the reference, and the input of sequencing
+        # 2. the navigated plan as an optimization: its dose is the reference the deliverable plan mimics; its weights,
+        #    with each beam's peaks capped, are the fluence the sequencing starts from
+        modality = prob.beam_model.result.modality
+        x_seq, cap_notes = x, []
+        if modality is Modality.photon_imrt:
+            x_seq, cap_notes = capped_fluence(prob.beam_model.plan, x, request.peak_ratio)
+            notes += cap_notes
         opt_key = f"{MCO_PLAN_PREFIX}{mco_id}:{key}"
         opt = osvc.store.lookup_by_cache_key(opt_key)
         if opt is None:
@@ -177,27 +235,75 @@ class DeliverableService:
                                                    f"of Pareto set {mco_id}"]),
                 rbe_factor=prob.rbe, dose_units=dose_units_for(prob.rbe), compute_time_s=0.0, geometry_id=result.geometry_id,
                 beam_model_id=result.beam_model_id, engine_name=prob.engine.name, engine_version=prob.engine.version)
-            osvc.store.save(opt_id=opt_id, cache_key=opt_key, weights=x.astype(np.float32), dose=dose_full,
+            osvc.store.save(opt_id=opt_id, cache_key=opt_key, weights=x_seq.astype(np.float32), dose=dose_full,
                             spacing_mm=prob.geometry.spacing_mm, result=opt)
 
-        # 3. the deliverable plan
-        modality = prob.beam_model.result.modality
+        # 3. the deliverable plan: apertures or arcs from the navigated fluence, their metersets optimized against the
+        #    navigated dose (the mimic), each target's hot spot and the goals; goal-driven rounds as the reweighting
+        #    planner's, each judged after normalisation (the record of 2026-10-31 found a mimic alone under-covering the
+        #    target, the normalisation then inflating the hot spots)
         targets = request.targets or target_structures(result)
         mimic = [ObjectiveSpec(type="ReferenceDose", structure_name=nm, dose_gy=0.0,
                                weight=request.target_priority if nm in targets else 1.0, reference_dose_uri=opt.dose_ref_uri,
                                reference_role="target" if nm in targets else "organ") for nm in result.navigation_structures]
         sequence_id = vmat_id = dose_id = None
-        if modality is Modality.photon_imrt and request.arcs:
-            on(DeliverableStage.mimicking, 0.35, "arcs from the navigated sector fluence, metersets mimicking its dose")
-            vm = VMATService().arcs(opt.optimization_id, ArcRequest(
-                objectives=mimic, arcs=request.arcs, fractions=request.fractions, machine_model_id=request.machine_model_id,
-                dose_engine=mreq.dose_engine, max_iterations=request.max_iterations))
-            technique, vmat_id, beam_model_id, dose_id, deliverable = "vmat", vm.vmat_id, vm.beam_model_id, vm.dose_id, vm.deliverable
-        elif modality is Modality.photon_imrt:
-            on(DeliverableStage.mimicking, 0.35, "apertures from the navigated fluence, metersets mimicking its dose")
-            seq = ApertureService().sequence(opt.optimization_id, SequenceRequest(
-                objectives=mimic, levels=request.levels, machine_model_id=request.machine_model_id, max_iterations=request.max_iterations))
-            technique, sequence_id, beam_model_id, dose_id, deliverable = "imrt", seq.sequence_id, seq.beam_model_id, seq.dose_id, seq.deliverable
+        rounds_log: List[Dict[str, Any]] = []
+        if modality is Modality.photon_imrt:
+            from .autoplan import goal_met, objectives_for
+            from .geometry import GeometryService
+            from .geometry_bundle import load_geometry_arrays
+
+            arrays = load_geometry_arrays(GeometryService().store.get_by_id(result.geometry_id))
+            d_nav = np.asarray(dose_full, dtype=np.float64)
+            d_nav = d_nav.reshape(prob.grid_shape) if d_nav.size == int(np.prod(prob.grid_shape)) else d_nav
+            hot: List[ObjectiveSpec] = []
+            for nm in targets:
+                mask = osvc._resolve_mask(prob.geometry, nm, prob.grid_shape) > 0
+                if mask.shape == d_nav.shape and mask.any():
+                    limit = request.hot_spot_gy or float(d_nav[mask].max()) + request.tolerance_gy
+                    hot.append(ObjectiveSpec(type="DMax", structure_name=nm, dose_gy=limit, weight=30.0 * request.target_priority))
+            goal_rows = [g for g in planning_goals(request.goals) if g["structure"] in arrays.structure_index]
+            rx = request.prescription_gy or (request.normalise.gy if request.normalise is not None else None)
+            main_target = next((nm for nm in ([request.normalise.structure] if request.normalise is not None else []) + list(targets)
+                                if nm in arrays.structure_index), None)
+            if goal_rows and (rx is None or main_target is None):
+                notes.append("the goals did not drive the metersets: they need prescription_gy (or normalise.gy) and a target")
+                goal_rows = []
+            masks = {g["structure"]: arrays.mask_zyx(arrays.structure_index[g["structure"]]) for g in goal_rows}
+            coverage_targets = {g["structure"] for g in goal_rows if g["op"].startswith(">")}
+            scale: Dict[int, float] = {}
+            level: Dict[int, float] = {}
+            for r in range(max(1, int(request.rounds))):
+                objectives = mimic + hot + (objectives_for(arrays, main_target, rx, goal_rows, scale, level) if goal_rows else [])
+                if request.arcs:
+                    on(DeliverableStage.mimicking, 0.35 + 0.4 * r / request.rounds,
+                       f"round {r + 1}: arcs from the navigated sector fluence, metersets mimicking its dose")
+                    vm = VMATService().arcs(opt.optimization_id, ArcRequest(
+                        objectives=objectives, arcs=request.arcs, fractions=request.fractions, machine_model_id=request.machine_model_id,
+                        dose_engine=mreq.dose_engine, max_iterations=request.max_iterations))
+                    technique, vmat_id, beam_model_id, dose_id, deliverable = "vmat", vm.vmat_id, vm.beam_model_id, vm.dose_id, vm.deliverable
+                else:
+                    on(DeliverableStage.mimicking, 0.35 + 0.4 * r / request.rounds,
+                       f"round {r + 1}: apertures from the navigated fluence, metersets mimicking its dose")
+                    levels = max(int(request.levels), int(np.ceil(2 * request.peak_ratio)) if cap_notes else 0)   # a peaked map: finer steps
+                    seq = ApertureService().sequence(opt.optimization_id, SequenceRequest(
+                        objectives=objectives, levels=levels, machine_model_id=request.machine_model_id,
+                        max_iterations=request.max_iterations))
+                    technique, sequence_id, beam_model_id, dose_id, deliverable = "imrt", seq.sequence_id, seq.beam_model_id, seq.dose_id, seq.deliverable
+                raw = read_volume(DoseService().dose_store.get_by_id(dose_id).dose_grid_uri)
+                judged, k_r = raw, 1.0
+                if request.normalise is not None:
+                    mask = osvc._resolve_mask(prob.geometry, request.normalise.structure, prob.grid_shape) > 0
+                    judged, k_r = normalise_to_goal(raw, raw[mask], request.normalise.metric, request.normalise.gy)
+                failed = [i for i, g in enumerate(goal_rows) if not goal_met(judged[masks[g["structure"]]], g)]
+                rounds_log.append({"round": r + 1, "normalisation": round(float(k_r), 4),
+                                   "failed": [f"{goal_rows[i]['structure']} {goal_rows[i]['metric']}" for i in failed]})
+                if not failed:
+                    break
+                for i in failed:
+                    scale[i] = scale.get(i, 1.0) * 3.0
+                    if goal_rows[i]["structure"] not in coverage_targets:
+                        level[i] = level.get(i, 1.0) * 0.95
         else:
             technique, beam_model_id, deliverable = "proton", result.beam_model_id, True
             notes.append("proton spots are delivered as weighted: the proton machine model has no minimum spot meterset, "
@@ -224,7 +330,8 @@ class DeliverableService:
             deliverable_id=str(uuid.uuid4()), cache_key=key, mco_id=mco_id, state_id=state.state_id, geometry_id=result.geometry_id,
             blend=state.blend, projected=projected, technique=technique, optimization_id=opt.optimization_id, sequence_id=sequence_id,
             vmat_id=vmat_id, beam_model_id=beam_model_id, dose_id=dose_id, normalisation=float(k), deliverable=bool(deliverable),
-            deviation=rows, flagged=sum(r.flagged for r in rows), request=request, notes=notes, seconds=round(time.time() - t0, 1),
+            deviation=rows, flagged=sum(r.flagged for r in rows), request=request, rounds=rounds_log, notes=notes,
+            seconds=round(time.time() - t0, 1),
             created_at=datetime.now(timezone.utc))
         self.store.save(out)
         on(DeliverableStage.done, 1.0, f"deliverable {out.deliverable_id}: {out.flagged} flagged")
@@ -265,4 +372,4 @@ class DeliverableService:
         return rows
 
 
-__all__ = ["DeliverableService", "DeliverableStore", "DeliverableRefused", "target_structures", "MCO_PLAN_PREFIX"]
+__all__ = ["DeliverableService", "DeliverableStore", "DeliverableRefused", "target_structures", "planning_goals", "capped_fluence", "MCO_PLAN_PREFIX"]

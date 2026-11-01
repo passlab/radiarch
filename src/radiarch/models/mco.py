@@ -13,7 +13,7 @@ import hashlib
 import json
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -270,7 +270,10 @@ class DeliverableRequest(BaseModel):
     ``tolerance_volume`` (volumes, in % or cc) is flagged."""
 
     state_id: str = Field(default="balance", max_length=64)
-    project: bool = True
+    project: bool = Field(default=False,
+                          description="Project the navigated blend onto the Pareto set first (no trade-off worse) and make that plan "
+                                      "deliverable. Off by default: the projection's solve leaves a sparse, spiky fluence the sequencer "
+                                      "cannot deliver (the record of 2026-10-31); the blend of Pareto plans is what navigation shows.")
     arcs: List[ArcSpec] = Field(default_factory=list, max_length=8)
     fractions: int = Field(default=1, ge=1, le=100, description="For VMAT's machine limits, and EQD2 goals.")
     levels: int = Field(default=10, ge=1, le=100, description="Fluence levels per beam when sequencing apertures.")
@@ -283,6 +286,18 @@ class DeliverableRequest(BaseModel):
     prescription_gy: Optional[float] = Field(default=None, gt=0.0)
     tolerance_gy: float = Field(default=1.0, gt=0.0)
     tolerance_volume: float = Field(default=1.0, gt=0.0)
+    rounds: int = Field(default=3, ge=1, le=10,
+                        description="Goal-driven rounds on the deliverable metersets (photons), as the reweighting planner's: the "
+                                    "plan is normalised, its goals judged, a failed goal's weight tripled and an organ limit lowered "
+                                    "5 %, and the metersets optimized again; stops when every goal holds.")
+    hot_spot_gy: Optional[float] = Field(default=None, gt=0.0,
+                                         description="The targets' maximum-dose term in the meterset optimization; null = each "
+                                                     "target's navigated maximum plus tolerance_gy (no hotter than navigated).")
+    peak_ratio: Optional[float] = Field(default=6.0, gt=1.0, le=100.0,
+                                        description="Before sequencing, each beam's fluence is capped at this multiple of its median "
+                                                    "nonzero beamlet weight, and the apertures take at least 2 x peak_ratio fluence levels: "
+                                                    "a peaked map (hard constraints push a few beamlets high) is otherwise quantized to "
+                                                    "its peaks and most of the field closes, which under-covers the target. Null = off.")
 
     def compute_cache_key(self, mco_cache_key: str, blend: List[float]) -> str:
         payload = {"mco": mco_cache_key, "blend": [round(float(v), 9) for v in blend],
@@ -330,6 +345,7 @@ class MCODeliverable(ResearchArtifact):
     flagged: int = 0
     request: Optional[DeliverableRequest] = Field(default=None, description="What it was made with (a viewer makes another state "
                                                                        "deliverable the same way).")
+    rounds: List[Dict[str, Any]] = Field(default_factory=list, description="Each meterset round's normalisation and the goals it failed (photons).")
     notes: List[str] = Field(default_factory=list)
     seconds: float = 0.0
     created_at: Optional[datetime] = None

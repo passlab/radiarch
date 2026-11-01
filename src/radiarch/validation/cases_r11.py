@@ -154,6 +154,13 @@ def _deviation_checks(res: CaseResult, label: str, d) -> None:
                 + (f"; projected {r.projected:.2f}" if r.projected is not None else ""))
     res.add(f"{label}: flagged rows of the deviation table", d.flagged, "informative", None,
             "a flag is a row where the deliverable plan is worse than the navigated one past its tolerance")
+    if d.technique != "proton":
+        res.add(f"{label}: normalisation of the deliverable plan within 15 % of 1", round(d.normalisation, 4), "0.85 to 1.15",
+                0.85 <= d.normalisation <= 1.15,
+                "the metersets as optimized cover the target nearly as navigated; a larger factor inflates the hot spots "
+                "(the record of 2026-10-31 found 1.17 and 1.42 on the lung patient)")
+        res.add(f"{label}: meterset rounds", len(d.rounds), "informative", None,
+                "; ".join(f"round {r['round']}: normalisation {r['normalisation']}, failed {r['failed'] or 'none'}" for r in d.rounds))
 
 
 # ---------------------------------------------------------------------------

@@ -280,9 +280,10 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
 - [x] R11.8 Record and ADR 0019: the algorithm tests of report §5 in CI; the TG-119 C-shape front, the lung demo
   (automatic navigation against the R10 protocol plan, navigated against deliverable, plans against the error bound),
   a robust proton case (`docs/validation/2026-10-31-r11/`, 2026-10-31); physicist sign-off waiting (about 0.5 ew)
-- [ ] R11.9 The photon deliverable step corrected (the record's lung plans are not acceptable: one sequencing pass
-  and a short mimic under-cover the target, the normalisation inflates the hot spots): sequencing and meterset
-  rounds as in R10, a hot-spot term in the mimic, the judgement after normalisation; the lung case rerun as a dated
+- [ ] R11.9 The photon deliverable step corrected (the record's lung plans are not acceptable; the cause was the
+  projection onto the Pareto set before sequencing, which left a sparse, spiky fluence): the deliverable plan is made
+  from the navigated blend, projection optional; goal-driven meterset rounds as in R10, a hot-spot term, a cap on a
+  beam's peaks; built and checked on the lung case in fast mode 2026-11-01; the lung case rerun at 4 mm as a dated
   correction of the R11 record (about 0.25 ew)
 - [ ] Later **(open)**: shared-aperture or shared-sweep Pareto plans so navigation shows the deliverable dose;
   tail-mean (CVaR) trade-offs; Pareto sets across beam arrangements; the TROTS benchmark
