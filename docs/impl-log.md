@@ -976,3 +976,14 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   anterior field of 200 MU in its frame of reference; the structure set moved outside the CT directory, the command
   run with `--engine auto`, the written RT Plan references the given structure set, the RT Dose the written plan, and
   its maximum equals the dose record's; the structure set written when none is given; the three refusals.
+
+## The ITV variant of the lung VMAT protocol (2026-10-31)
+
+- `src/radiarch/protocols/lung-60gy-30fx-vmat-itv.json`: `lung-60gy-30fx-vmat` for a patient whose target is an
+  ITV, the tumour over the breathing phases, contoured as ITV, ITV_Primary, iGTV, ITVp, ITV-1 or ITV1. CTV = ITV +
+  5 mm and PTV = CTV + 5 mm; the RTOG 0617 template's `Lungs-GTV` is derived as the lungs less the ITV, since the GTV
+  of one phase is not what such a case contours. Prescription, goals, arcs, machine, engine, rounds and template are
+  the base protocol's. Generated from the base protocol's file, so a change there is a change here to make too.
+- Tests (`tests/test_protocol_itv_variant.py`): the two protocols compared field by field outside the target's
+  derivation; a 5 mm thorax phantom with lungs, cord, oesophagus, heart and an `iGTV` planned by the variant through
+  `radiarch plan` (about a minute), the run's alias map naming the iGTV as the ITV.

@@ -1,0 +1,187 @@
+{
+  "protocol_id": "lung-60gy-30fx-vmat-itv",
+  "name": "Lung, conventional fractionation, two VMAT arcs, targets from the ITV",
+  "site": "lung",
+  "version": "1",
+  "description": "The lung-60gy-30fx-vmat protocol for a patient whose target is an ITV (the tumour over the breathing phases): CTV = ITV + 5 mm, PTV = CTV + 5 mm, 60 Gy in 30 fractions, the same arcs, goals and rounds. The evaluation template's Lungs-GTV is the lungs less the ITV here. Accepts the ITV as ITV, ITV_Primary, iGTV or ITVp.",
+  "source": "RTOG 0617 dose limits (spinal cord, oesophagus, heart, lungs); radiarch goal template rtog-0617",
+  "prescription": {
+    "target": "PTV",
+    "dose_gy": 60.0,
+    "fractions": 30
+  },
+  "structure_aliases": {
+    "ITV": [
+      "ITV",
+      "ITV_Primary",
+      "iGTV",
+      "ITVp",
+      "ITV-1",
+      "ITV1"
+    ],
+    "SpinalCord": [
+      "SpinalCord",
+      "Spinal_Cord",
+      "Cord",
+      "SPINAL_CORD",
+      "Spinal-Cord"
+    ],
+    "Esophagus": [
+      "Esophagus",
+      "Oesophagus",
+      "ESOPHAGUS"
+    ],
+    "Heart": [
+      "Heart",
+      "HEART"
+    ],
+    "Lung_L": [
+      "Lung_L",
+      "LLung",
+      "Lung_Left",
+      "LUNG_L",
+      "Left_Lung",
+      "Lung-Left"
+    ],
+    "Lung_R": [
+      "Lung_R",
+      "RLung",
+      "Lung_Right",
+      "LUNG_R",
+      "Right_Lung",
+      "Lung-Right"
+    ]
+  },
+  "structures": [
+    {
+      "op": "expand",
+      "name": "CTV",
+      "source": "ITV",
+      "margin_mm": 5.0
+    },
+    {
+      "op": "expand",
+      "name": "PTV",
+      "source": "CTV",
+      "margin_mm": 5.0
+    },
+    {
+      "op": "ring",
+      "name": "RingNear",
+      "source": "PTV",
+      "inner_mm": 3.0,
+      "outer_mm": 12.0
+    },
+    {
+      "op": "ring",
+      "name": "RingFar",
+      "source": "PTV",
+      "inner_mm": 20.0,
+      "outer_mm": 45.0
+    },
+    {
+      "op": "union",
+      "name": "Lungs",
+      "sources": [
+        "Lung_L",
+        "Lung_R"
+      ]
+    },
+    {
+      "op": "subtract",
+      "name": "Lungs-GTV",
+      "source": "Lungs",
+      "sources": [
+        "ITV"
+      ]
+    },
+    {
+      "op": "subtract",
+      "name": "Lungs-PTV",
+      "source": "Lungs",
+      "sources": [
+        "PTV"
+      ]
+    }
+  ],
+  "goals": [
+    {
+      "structure": "PTV",
+      "metric": "D95",
+      "op": ">=",
+      "gy": 60.0
+    },
+    {
+      "structure": "SpinalCord",
+      "metric": "Dmax",
+      "op": "<=",
+      "gy": 45.0
+    },
+    {
+      "structure": "Esophagus",
+      "metric": "Dmean",
+      "op": "<=",
+      "gy": 34.0
+    },
+    {
+      "structure": "Heart",
+      "metric": "D33",
+      "op": "<=",
+      "gy": 60.0
+    },
+    {
+      "structure": "Lungs-PTV",
+      "metric": "D37",
+      "op": "<=",
+      "gy": 20.0,
+      "dmax_term": false
+    }
+  ],
+  "extra_objectives": [
+    {
+      "type": "DMax",
+      "structure_name": "RingNear",
+      "dose_gy": 54.0,
+      "weight": 100.0
+    },
+    {
+      "type": "DMax",
+      "structure_name": "RingFar",
+      "dose_gy": 30.0,
+      "weight": 200.0
+    }
+  ],
+  "beams": {
+    "technique": "vmat",
+    "arcs": [
+      {
+        "arc_id": "ARC1",
+        "start_deg": 181.0,
+        "stop_deg": 179.0,
+        "direction": "CW",
+        "sectors": 12,
+        "control_point_spacing_deg": 4.0,
+        "collimator_deg": 15.0
+      },
+      {
+        "arc_id": "ARC2",
+        "start_deg": 179.0,
+        "stop_deg": 181.0,
+        "direction": "CC",
+        "sectors": 12,
+        "control_point_spacing_deg": 4.0,
+        "collimator_deg": -15.0
+      }
+    ]
+  },
+  "machine": "synthetic-120",
+  "engine": {
+    "name": "pb"
+  },
+  "beamlet_mm": 5.0,
+  "jaw_margin_mm": 10.0,
+  "iterations": 150,
+  "rounds": 3,
+  "arc_rounds": 3,
+  "evaluation_template": "rtog-0617"
+}

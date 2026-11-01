@@ -195,6 +195,9 @@ them in batches and from workflow engines.
 - [x] R10.6 `radiarch dose` (2026-10-31): an RT Plan's dose recomputed on a CT with its structures in one process
   (`--ct --structures --plan [--engine auto|ccc|pb|mcsquare] [--spacing] --export [--label] [--json]`), the RT Dose
   referencing the given structure set; `Geometry.import_plan` and `BeamModel.recalculate` in the SDK; a CWL tool.
+- [x] R10.7 `lung-60gy-30fx-vmat-itv` (2026-10-31): the lung VMAT protocol for a patient whose target is an ITV (ITV,
+  ITV_Primary, iGTV, ITVp): CTV = ITV + 5 mm, PTV = CTV + 5 mm, the template's Lungs-GTV as the lungs less the ITV;
+  everything else the base protocol's, checked field by field; plans a phantom contoured as iGTV.
 
 ### R13 — Viewer integration (done; 3D Slicer check waiting)
 Viewing stays outside radiarch: the RT objects go to a DICOMweb server that OHIF reads, and a radiarch
