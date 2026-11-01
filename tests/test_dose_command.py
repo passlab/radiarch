@@ -94,3 +94,20 @@ def test_the_structure_set_in_the_ct_directory_and_the_errors(dose_env, tmp_path
         main(["dose", "--ct", str(case), "--structures", str(plan), "--plan", str(plan), "--poll", "0.01"])
     with pytest.raises(SystemExit, match="plan file not found"):
         main(["dose", "--ct", str(case), "--plan", str(tmp_path / "none.dcm"), "--poll", "0.01"])
+
+
+def test_the_command_runs_in_this_process_whatever_the_server_environment_says(dose_env, tmp_path, monkeypatch, capsys):
+    """A container image's defaults name its compose services (production, a Postgres host, a Redis broker); the command
+    without --server runs self-contained all the same: jobs in this process, no database, an in-memory broker."""
+    from radiarch.config import get_settings
+
+    monkeypatch.setenv("RADIARCH_ENVIRONMENT", "production")
+    monkeypatch.setenv("RADIARCH_DATABASE_URL", "postgresql+psycopg://radiarch:radiarch@postgres.invalid:5432/radiarch")
+    monkeypatch.setenv("RADIARCH_BROKER_URL", "redis://redis.invalid:6379/0")
+    monkeypatch.setenv("RADIARCH_RESULT_BACKEND", "redis://redis.invalid:6379/1")
+    get_settings.cache_clear()
+    case, plan = _case(tmp_path)
+    code = main(["dose", "--ct", str(case), "--plan", str(plan), "--engine", "pb", "--json", str(tmp_path / "dose.json"), "--poll", "0.01"])
+    assert code == 0, capsys.readouterr().out
+    assert json.loads((tmp_path / "dose.json").read_text())["dose"]["statistics"]["max_gy"] > 0.5
+    assert get_settings().database_url == "" and get_settings().broker_url == "memory://"

@@ -997,3 +997,15 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
 - CI's new job "Image (build and the command line)" builds the image from the commit and runs `radiarch protocols`
   (the ITV variant listed), `radiarch dose --help` and an import in it, so an image that builds but cannot run the
   package is caught.
+
+## The command line runs self-contained in the image (2026-11-01)
+
+- A standalone `docker run … radiarch plan` in the R11.8 image failed: the image's defaults name its compose services
+  (production, so jobs wait for a worker; a Postgres host; a Redis broker). Found by the one-patient round trip's
+  first run. The fix is in the command, not the defaults: `Radiarch.local()` (the client without `--server`, which
+  the command line and notebooks use) now runs self-contained whatever RADIARCH_ENVIRONMENT, RADIARCH_DATABASE_URL
+  and RADIARCH_BROKER_URL say: jobs eager in this process, no database, an in-memory broker and result backend. The
+  server's and the compose services' settings are untouched.
+- `tests/test_dose_command.py`: `radiarch dose` under production-style settings that name unreachable hosts; the
+  phantom plan in the image with the fixed package mounted, by hand.
+

@@ -59,10 +59,23 @@ class Radiarch:
 
     @classmethod
     def local(cls, **kwargs) -> "Radiarch":
-        """The radiarch app in this process (no server): for notebooks, scripts on the planning machine, tests."""
-        from fastapi.testclient import TestClient
-        from ..app import create_app
+        """The radiarch app in this process (no server): for notebooks, scripts on the planning machine, tests, and the
+        command line in a container. Self-contained: jobs run in this process, there is no database, and the broker and
+        result backend are in memory, whatever RADIARCH_ENVIRONMENT, RADIARCH_DATABASE_URL and RADIARCH_BROKER_URL say
+        (a container image's defaults name its compose services, which a standalone ``docker run`` does not have)."""
+        import os
 
+        from fastapi.testclient import TestClient
+
+        from ..config import get_settings
+
+        os.environ.update({"RADIARCH_DATABASE_URL": "", "RADIARCH_BROKER_URL": "memory://", "RADIARCH_RESULT_BACKEND": "cache+memory://"})
+        get_settings.cache_clear()
+        from ..app import create_app
+        from ..tasks.celery_app import celery_app
+
+        celery_app.conf.task_always_eager = True
+        celery_app.conf.task_eager_propagates = True
         return cls("/api/v1", http=TestClient(create_app()), **kwargs)
 
     def close(self) -> None:

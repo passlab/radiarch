@@ -286,6 +286,10 @@ radiarch dose --ct /dicom/case1 --structures /dicom/case1/RS.dcm --plan /plans/R
 In Python: `bm = geo.import_plan("RP.dcm"); dose = bm.recalculate(engine="auto"); bm.export(dose=dose).download("rt")`.
 A CWL tool description wraps the command (`src/radiarch/cwl/radiarch-dose.cwl`).
 
+Without `--server`, `radiarch plan` and `radiarch dose` run self-contained in their process: jobs in-process, no
+database, an in-memory broker, whatever the environment says. So the image runs them standalone, with no compose
+services: `docker run --rm -v /dicom/case1:/data radiarch:<tag> radiarch dose --ct /data --plan /data/RP.dcm --export /data/rt`.
+
 ## DICOM RT out
 
 `radiarch.dicom.writers` writes the RT objects of a case on one shared context, every one labelled
