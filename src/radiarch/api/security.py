@@ -84,4 +84,34 @@ async def api_key_auth(request: Request) -> Optional[str]:
     return presented[:6]
 
 
-__all__ = ["api_key_auth"]
+
+
+def _clean_user(value: str) -> str:
+    """A user name fit for the records and for a DICOM person name: printable, no DICOM delimiters, at most 64."""
+    cleaned = "".join(c for c in value.strip() if c.isprintable() and c not in "\\^=")
+    return cleaned[:64]
+
+
+async def requester(request: Request) -> Optional[str]:
+    """The requesting user, when a trusted proxy names one (``trusted_user_header`` with ``trusted_proxy_secret``).
+
+    Radiarch does not authenticate the user: it trusts the proxy, and the proxy proves itself with the shared
+    secret. A request that carries the user header without the right secret is refused (401), so a caller that
+    reaches radiarch around the proxy cannot claim a user. Without the setting, or without the header, None."""
+    settings = get_settings()
+    header = getattr(settings, "trusted_user_header", "")         # settings stubbed without it: off
+    if not header:
+        return None
+    value = request.headers.get(header)
+    if value is None:
+        return None
+    expected = settings.trusted_proxy_secret.get_secret_value() if settings.trusted_proxy_secret else ""
+    presented = request.headers.get(settings.trusted_proxy_secret_header, "")
+    if not expected or not presented or not _constant_time_eq(presented, expected):
+        logger.warning("requester: a user header without the trusted proxy's secret; refused")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="untrusted user header")
+    user = _clean_user(value)
+    return user or None
+
+
+__all__ = ["api_key_auth", "requester"]

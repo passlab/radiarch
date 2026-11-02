@@ -41,6 +41,8 @@ class MCORunRequest(BaseModel):
     in every scenario, and the trade-offs' values are their worst cases over the scenarios (their nominal values are
     reported too). Only the ``WORST_CASE`` aggregation applies, and it is the default here."""
 
+    requested_by: Optional[str] = Field(default=None, max_length=64,
+                                        description="Set by the server from a trusted proxy's user header; a value sent here is replaced.")
     plan_id: Optional[str] = Field(default=None, max_length=36, description="Owning plan id (not in the cache key).")
     geometry_id: str = Field(..., min_length=1, max_length=36)
     beam_model_id: str = Field(..., min_length=1, max_length=36)
@@ -132,6 +134,8 @@ class MCOStage(str, Enum):
 
 
 class MCOResult(ResearchArtifact):
+    requested_by: Optional[str] = Field(default=None, description="The user a trusted proxy named on the request that made this "
+                                                                 "(a cached result keeps its first requester).")
     mco_id: str
     cache_key: str
     geometry_id: str
@@ -175,6 +179,8 @@ class NavigateRequest(BaseModel):
     are. ``clamps`` are upper bounds in Gy that hold whatever else moves; ``locks`` hold objectives at no worse than
     where they are. With neither ``move`` nor ``reference`` the state is re-evaluated (for new goals or clamps)."""
 
+    requested_by: Optional[str] = Field(default=None, max_length=64,
+                                        description="Set by the server from a trusted proxy's user header; a value sent here is replaced.")
     from_state: str = Field(default="balance", max_length=64)
     move: Dict[str, float] = Field(default_factory=dict, max_length=1)
     reference: Dict[str, float] = Field(default_factory=dict, max_length=MAX_TRADEOFFS)
@@ -202,6 +208,8 @@ class AutoNavigateRequest(BaseModel):
     value) of what level 1 reached; then level 3; then the trade-offs' sum with every goal held. Clamps and locks hold
     throughout."""
 
+    requested_by: Optional[str] = Field(default=None, max_length=64,
+                                        description="Set by the server from a trusted proxy's user header; a value sent here is replaced.")
     goals: GoalSetSpec
     prescription_gy: Optional[float] = Field(default=None, gt=0.0)
     fractions: Optional[int] = Field(default=None, ge=1, le=100)
@@ -231,6 +239,8 @@ class DVHCurve(BaseModel):
 class NavigationState(ResearchArtifact):
     """A point on the Pareto set: a blend of its plans, its exact values and goals (D5)."""
 
+    requested_by: Optional[str] = Field(default=None, description="The user a trusted proxy named on the request that made this "
+                                                                 "(a cached result keeps its first requester).")
     state_id: str
     mco_id: str
     name: Optional[str] = None
@@ -269,6 +279,8 @@ class DeliverableRequest(BaseModel):
     trade-off and goal by goal; a deliverable value worse by more than ``tolerance_gy`` (doses) or
     ``tolerance_volume`` (volumes, in % or cc) is flagged."""
 
+    requested_by: Optional[str] = Field(default=None, max_length=64,
+                                        description="Set by the server from a trusted proxy's user header; a value sent here is replaced.")
     state_id: str = Field(default="balance", max_length=64)
     project: bool = Field(default=False,
                           description="Project the navigated blend onto the Pareto set first (no trade-off worse) and make that plan "
@@ -301,7 +313,7 @@ class DeliverableRequest(BaseModel):
 
     def compute_cache_key(self, mco_cache_key: str, blend: List[float]) -> str:
         payload = {"mco": mco_cache_key, "blend": [round(float(v), 9) for v in blend],
-                   **self.model_dump(mode="json", exclude={"state_id"})}
+                   **self.model_dump(mode="json", exclude={"state_id", "requested_by"})}
         return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
@@ -326,6 +338,8 @@ class DeliverableStage(str, Enum):
 
 
 class MCODeliverable(ResearchArtifact):
+    requested_by: Optional[str] = Field(default=None, description="The user a trusted proxy named on the request that made this "
+                                                                 "(a cached result keeps its first requester).")
     deliverable_id: str
     cache_key: str
     mco_id: str

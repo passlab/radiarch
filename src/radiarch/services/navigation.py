@@ -313,7 +313,7 @@ class Navigator:
             blend=[round(float(v), 9) for v in lam], values_gy=[round(float(v), 6) for v in exact],
             nominal_gy=[round(float(v), 6) for v in nominal] if self.robust else None, bound_gy=[round(float(v), 6) for v in bound],
             normalized=[round(float(v), 6) for v in (exact - self.ideal) / self.span], clamps=clamps, notes=notes, goals=goals,
-            levels=levels or [], dvh=dvh,
+            levels=levels or [], dvh=dvh, requested_by=getattr(req, "requested_by", None),
             created_at=datetime.now(timezone.utc))
 
 

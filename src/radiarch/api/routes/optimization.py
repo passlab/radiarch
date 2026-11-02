@@ -38,7 +38,7 @@ from ...services.audit import emit, make_event
 from ...services.dose_engines import EngineRegistryError
 from ...services.optimization import OptimizationService
 from ...services.optimization_persistence import WEIGHTS_FILENAME
-from ..security import api_key_auth
+from ..security import api_key_auth, requester
 
 router = APIRouter(
     prefix="/optimize",
@@ -79,7 +79,9 @@ async def run_optimization(
     request: OptimizationRunRequest,
     response: Response,
     api_key_prefix: Optional[str] = Depends(api_key_auth),
+    user: Optional[str] = Depends(requester),
 ):
+    request = request.model_copy(update={"requested_by": user})
     try:
         cache_key = request.compute_cache_key()
         service = _service()

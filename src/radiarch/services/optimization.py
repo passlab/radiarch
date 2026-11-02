@@ -200,6 +200,7 @@ class OptimizationService:
         paths = self.store.prepare(opt_id)
         result = OptimizationResult(
             optimization_id=opt_id,
+            requested_by=request.requested_by,
             cache_key=cache_key,
             weights_ref_uri=str(paths.weights),
             dose_ref_uri=str(paths.dose),

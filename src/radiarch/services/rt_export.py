@@ -63,6 +63,15 @@ class RTExportError(ValueError):
     """The export cannot be made from what the stores hold."""
 
 
+class RTPushRefused(RuntimeError):
+    """The archive refused the push of an export while ``dicomweb_push_required`` is set: the export fails (the write is
+    the record). A new export's objects are removed, so a retry writes them again."""
+
+    def __init__(self, export_id: str, error: Optional[str]) -> None:
+        super().__init__(f"the DICOMweb push of export {export_id} was refused: {error}")
+        self.export_id, self.error = export_id, error
+
+
 class _Source:
     def __init__(self, geometry: GeometryResult, beam_model: BeamModelResult, plan, dose_zyx: Optional[np.ndarray],
                  dose_id: Optional[str], rbe: float, dose_units: str, engine_name: Optional[str], weights: np.ndarray) -> None:
@@ -168,6 +177,8 @@ class RTExportService:
         ctx = self._context(src.geometry, src)
         if copy_number > 1:
             ctx.series_note = f"copy {copy_number}"
+        if request.requested_by:
+            ctx.operator = request.requested_by        # Operators' Name: the user a trusted proxy named
         export_id = str(uuid.uuid4())
         out = self.directory(export_id)
         out.mkdir(parents=True, exist_ok=True)
@@ -243,7 +254,7 @@ class RTExportService:
                                              beam=_beam_name(beam, n), summation="BEAM"))
 
         result = RTExportResult(
-            export_id=export_id, geometry_id=src.geometry.geometry_id, beam_model_id=src.beam_model.beam_model_id,
+            requested_by=request.requested_by, export_id=export_id, geometry_id=src.geometry.geometry_id, beam_model_id=src.beam_model.beam_model_id,
             dose_id=src.dose_id, plan_id=request.plan_id, modality=src.beam_model.modality, directory=str(out),
             study_instance_uid=ctx.study_instance_uid, frame_of_reference_uid=ctx.frame_of_reference_uid,
             rtstruct_uid=rtstruct_uid, plan_sop_class_uid=plan_sop_class if "rtplan" in request.objects else None,
@@ -256,6 +267,11 @@ class RTExportService:
             ok, err = self._push([o.path for o in objects])
             result.pushed, result.push_error = ok, err
             result.viewer_url = viewer_link(result.study_instance_uid) if ok else None
+            if not ok and get_settings().dicomweb_push_required:
+                import shutil
+
+                shutil.rmtree(out, ignore_errors=True)          # not kept: the archive's copy is the record
+                raise RTPushRefused(export_id, err)
         self._save(result)
         logger.info("RT export {}: {} objects in {}", export_id, len(objects), out)
         return result
@@ -267,6 +283,8 @@ class RTExportService:
             result.pushed, result.push_error = ok, err
             result.viewer_url = viewer_link(result.study_instance_uid) if ok else None
             self._save(result)
+            if not ok and get_settings().dicomweb_push_required:
+                raise RTPushRefused(result.export_id, err)
         logger.info("RT export {}: the stored export of this plan and settings{}", result.export_id, ", pushed again" if request.push else "")
         return result.model_copy(update={"reused": True})
 
@@ -643,4 +661,4 @@ def _beam_name(beam, number: int) -> str:
     return beam.name or beam.beam_id or f"B{number}"
 
 
-__all__ = ["RTExportService", "RTExportError", "MANIFEST"]
+__all__ = ["RTExportService", "RTExportError", "MANIFEST", "RTPushRefused"]

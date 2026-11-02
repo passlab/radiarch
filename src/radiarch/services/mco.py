@@ -301,7 +301,7 @@ class MCOService:
         norm = res.normalized()
         root = self.store.dir(mco_id)
         result = MCOResult(
-            mco_id=mco_id, cache_key=key, geometry_id=request.geometry_id, beam_model_id=request.beam_model_id,
+            requested_by=request.requested_by, mco_id=mco_id, cache_key=key, geometry_id=request.geometry_id, beam_model_id=request.beam_model_id,
             engine_name=prob.engine.name, engine_version=prob.engine.version, rbe_factor=prob.rbe, dose_units=dose_units_for(prob.rbe),
             tradeoffs=request.tradeoffs, hard_constraints=request.hard_constraints,
             ideal_gy=[round(float(v), 6) for v in res.ideal], nadir_gy=[round(float(v), 6) for v in res.nadir],

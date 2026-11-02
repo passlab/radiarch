@@ -288,5 +288,8 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   from the navigated blend, projection optional; goal-driven meterset rounds as in R10, a hot-spot term, a cap on a
   beam's peaks; built and checked on the lung case in fast mode 2026-11-01; the lung case rerun at 4 mm as a dated
   correction of the R11 record (about 0.25 ew)
+- [x] R11.10 (2026-11-01) Planning behind a gateway: the user a trusted proxy names (header plus shared secret) kept
+  as `requested_by` on optimizations, Pareto sets, navigation states, deliverable plans and exports, and as the
+  exported objects' Operators' Name; an export fails when its push is refused and the push is required
 - [ ] Later **(open)**: shared-aperture or shared-sweep Pareto plans so navigation shows the deliverable dose;
   tail-mean (CVaR) trade-offs; Pareto sets across beam arrangements; the TROTS benchmark

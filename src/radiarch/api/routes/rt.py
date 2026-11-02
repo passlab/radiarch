@@ -14,11 +14,13 @@ from functools import lru_cache
 
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse
 
 from ...models.rt_export import RTExportRequest, RTExportResult, RTPushRequest, RTPushResult, RTRecordRequest, RTRecordResult
-from ...services.rt_export import RTExportError, RTExportService
+from ...config import get_settings
+from ...services.rt_export import RTExportError, RTExportService, RTPushRefused
+from ..security import requester
 
 router = APIRouter(prefix="/rt", tags=["rt-objects"])
 
@@ -31,10 +33,14 @@ def _service() -> RTExportService:
 @router.post("/export", response_model=RTExportResult, summary="Write the DICOM RT objects of a plan.",
              responses={200: {"description": "Objects written; the manifest lists them."},
                         404: {"description": "The plan, geometry or dose was not found."},
-                        422: {"description": "The plan cannot be exported as asked."}})
-async def export_rt_objects(request: RTExportRequest) -> RTExportResult:
+                        422: {"description": "The plan cannot be exported as asked."},
+                        502: {"description": "The archive refused the push and RADIARCH_DICOMWEB_PUSH_REQUIRED is set: nothing kept."}})
+async def export_rt_objects(request: RTExportRequest, user: Optional[str] = Depends(requester)) -> RTExportResult:
+    request = request.model_copy(update={"requested_by": user})
     try:
         return _service().export(request)
+    except RTPushRefused as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
     except RTExportError as exc:
         raise HTTPException(status_code=404 if "not found" in str(exc) else 422, detail=str(exc)) from exc
     except ValueError as exc:
@@ -81,6 +87,9 @@ async def write_records(export_id: str, request: RTRecordRequest) -> RTRecordRes
 @router.post("/exports/{export_id}/push", response_model=RTPushResult, summary="Push the export's objects with STOW-RS.")
 async def push_export(export_id: str, request: RTPushRequest) -> RTPushResult:
     try:
-        return _service().push(export_id, url=request.url, username=request.username, password=request.password, kinds=request.kinds)
+        out = _service().push(export_id, url=request.url, username=request.username, password=request.password, kinds=request.kinds)
     except RTExportError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if out.error and get_settings().dicomweb_push_required:
+        raise HTTPException(status_code=502, detail=f"the DICOMweb push of export {export_id} was refused: {out.error}")
+    return out

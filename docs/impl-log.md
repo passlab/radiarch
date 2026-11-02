@@ -1055,3 +1055,29 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   the CT series or the structure set is not named (keys for named UIDs and uploads are unchanged).
 - Tests (`tests/test_dose_command.py`): a folder without its structure set and the folder with it give two
   geometries, the second reused on a rerun; the three commands' default is 3 mm and `--spacing 0` gives the CT's grid.
+
+## R11.10: the requesting user from a trusted proxy; an export that fails when its push is refused (2026-11-01)
+
+- **Why.** A deployment can put radiarch behind a gateway that authenticates people, with one API key for the
+  gateway. The planning then needs to say who asked for each result, and an export written to an archive through
+  that gateway must not count as done when the archive refused it.
+- **The user** (`api/security.py` `requester`, settings `trusted_user_header`, `trusted_proxy_secret`,
+  `trusted_proxy_secret_header`): when both are set, a request that carries the user header and the proxy's secret
+  names its user; the name is cleaned for the records and a DICOM person name (printable, no `^ \ =`, at most 64
+  characters). A user header without the right secret is refused with 401, so a caller that reaches radiarch around
+  the gateway cannot claim a user; radiarch does not authenticate the user itself and must be reachable only through
+  the gateway. The optimization, MCO run, navigate, auto-navigate, deliverable and export routes set the request's
+  `requested_by` from it, replacing any value in the body; the services keep it on `OptimizationResult`,
+  `MCOResult`, `NavigationState`, `MCODeliverable` and `RTExportResult`, and the export writes it as Operators' Name
+  (otherwise "radiarch"). It is not part of any cache key: a cached result keeps its first requester.
+- **The push** (setting `dicomweb_push_required`): an export with `push` whose STOW-RS push is refused raises
+  `RTPushRefused`; a new export's objects are removed and nothing is recorded, a stored export pushed again keeps its
+  record with `pushed: false`; the routes answer 502 (`POST /rt/export`, `POST /rt/exports/{id}/push`). Off by
+  default: an export is kept with `pushed: false` and the error, as before.
+- **Tests** (`tests/test_trusted_proxy.py`): the header ignored when not configured and a body value replaced; the
+  user read with the secret, cleaned and truncated; refused without it or with a wrong one, and when no secret is
+  set; the user on each of the five results and as Operators' Name in RP, RD and RS, a cached optimization keeping
+  its first requester, an export without a user naming "radiarch"; with the push refused, an export kept with
+  `pushed: false` when not required and failing with 502 (nothing left in the store, a stored export pushed again
+  refused, the push route refused) when required.
+

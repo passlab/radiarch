@@ -28,7 +28,7 @@ from ...services.audit import emit, make_event
 from ...services.mco import MCOService
 from ...services.mco_deliverable import DeliverableRefused, DeliverableService
 from ...services.navigation import NavigationError, NavigationService
-from ..security import api_key_auth
+from ..security import api_key_auth, requester
 
 router = APIRouter(prefix="/mco", tags=["mco"])
 
@@ -63,7 +63,9 @@ class MCORunResponse(BaseModel):
 @router.post("/run", summary="The Pareto set of a beam model (R11).",
              responses={200: {"description": "The same set was computed before."}, 202: {"description": "A job: poll /mco/jobs/{job_id}."},
                         422: {"description": "Not trade-off objectives, or invalid constraints."}})
-async def run_mco(request: MCORunRequest, response: Response, api_key_prefix: Optional[str] = Depends(api_key_auth)):
+async def run_mco(request: MCORunRequest, response: Response, api_key_prefix: Optional[str] = Depends(api_key_auth),
+                  user: Optional[str] = Depends(requester)):
+    request = request.model_copy(update={"requested_by": user})
     key = request.compute_cache_key()
     cached = _service().store.lookup_by_cache_key(key)
     if cached is not None:
@@ -131,8 +133,9 @@ async def get_mco(mco_id: str) -> MCOResult:
 @router.post("/{mco_id}/navigate", response_model=NavigationState, summary="Navigate the Pareto set (R11.3).",
              responses={404: {"description": "Unknown Pareto set or state."},
                         422: {"description": "An unknown objective, or no blend meets the clamps."}})
-async def navigate(mco_id: str, request: NavigateRequest) -> NavigationState:
+async def navigate(mco_id: str, request: NavigateRequest, user: Optional[str] = Depends(requester)) -> NavigationState:
     _known(mco_id)
+    request = request.model_copy(update={"requested_by": user})
     try:
         return _navigation().navigate(mco_id, request)
     except NavigationError as exc:
@@ -144,8 +147,9 @@ async def navigate(mco_id: str, request: NavigateRequest) -> NavigationState:
 @router.post("/{mco_id}/auto-navigate", response_model=NavigationState, summary="Automatic navigation by goal priority (R11.4).",
              responses={404: {"description": "Unknown Pareto set or state."},
                         422: {"description": "An unknown objective or template, a goal needing a prescription, or clamps no blend meets."}})
-async def auto_navigate(mco_id: str, request: AutoNavigateRequest) -> NavigationState:
+async def auto_navigate(mco_id: str, request: AutoNavigateRequest, user: Optional[str] = Depends(requester)) -> NavigationState:
     _known(mco_id)
+    request = request.model_copy(update={"requested_by": user})
     try:
         return _navigation().auto_navigate(mco_id, request)
     except NavigationError as exc:
@@ -174,8 +178,9 @@ async def get_state(mco_id: str, state_id: str) -> NavigationState:
                         404: {"description": "Unknown Pareto set or state."},
                         422: {"description": "A robust photon Pareto set (robust deliverables are made for protons)."}})
 async def make_deliverable(mco_id: str, request: DeliverableRequest, response: Response,
-                           api_key_prefix: Optional[str] = Depends(api_key_auth)):
+                           api_key_prefix: Optional[str] = Depends(api_key_auth), user: Optional[str] = Depends(requester)):
     _known(mco_id)
+    request = request.model_copy(update={"requested_by": user})
     try:
         key = _deliverables().cache_key(mco_id, request)
     except DeliverableRefused as exc:

@@ -425,6 +425,8 @@ class OptimizationRunRequest(BaseModel):
     how often the solver snapshots weights to disk.
     """
 
+    requested_by: Optional[str] = Field(default=None, max_length=64,
+                                        description="Set by the server from a trusted proxy's user header; a value sent here is replaced.")
     plan_id: Optional[str] = Field(
         default=None, max_length=36,
         description="Owning plan id (downstream ref only — not in cache key).",
@@ -559,6 +561,8 @@ class CheckpointInfo(BaseModel):
 class OptimizationResult(ResearchArtifact):
     """Output of a completed optimization run."""
 
+    requested_by: Optional[str] = Field(default=None, description="The user a trusted proxy named on the request that made this "
+                                                                 "(a cached result keeps its first requester).")
     optimization_id: str
     cache_key: str
     weights_ref_uri: str = Field(

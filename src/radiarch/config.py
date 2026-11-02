@@ -257,6 +257,26 @@ class Settings(BaseSettings):
         description="Header name carrying the API key.",
     )
 
+    # The requesting user, from a trusted proxy (D70-style deployments: radiarch reachable only through a gateway that
+    # authenticates people). Both must be set for the user header to be read; a request carrying the user header
+    # without the matching secret is refused.
+    trusted_user_header: str = Field(
+        default="",
+        description="Header a trusted proxy puts the requesting user in (e.g. X-Forwarded-User); empty = no user recorded.",
+    )
+    trusted_proxy_secret: Optional[SecretStr] = Field(
+        default=None,
+        description="The secret the trusted proxy sends in trusted_proxy_secret_header with every request it forwards.",
+    )
+    trusted_proxy_secret_header: str = Field(default="X-Proxy-Secret", description="Header carrying the trusted proxy's secret.")
+
+    # An export whose DICOMweb push is refused fails (the archive's copy is the record), instead of being kept with
+    # pushed=false and the error.
+    dicomweb_push_required: bool = Field(
+        default=False,
+        description="Fail an export (HTTP 502, the written objects removed) when its push to RADIARCH_DICOMWEB_URL is refused.",
+    )
+
     # Test-only dose engines (the analytic engine: right shape, wrong physics)
     allow_test_engines: Optional[bool] = Field(
         default=None,

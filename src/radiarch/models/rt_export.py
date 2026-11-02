@@ -35,6 +35,8 @@ class RTExportRequest(BaseModel):
     """Which plan to export, and what to write. Exactly one of ``sequence_id``,
     ``optimization_id`` and ``beam_model_id`` names the plan."""
 
+    requested_by: Optional[str] = Field(default=None, max_length=64,
+                                        description="Set by the server from a trusted proxy's user header; a value sent here is replaced.")
     sequence_id: Optional[str] = Field(default=None, max_length=36, description="An aperture sequence (photons): its plan carries the segment MU and its dose is the segment dose.")
     optimization_id: Optional[str] = Field(default=None, max_length=36, description="A proton optimization: its weights become the spot metersets; its dose is written.")
     beam_model_id: Optional[str] = Field(default=None, max_length=36, description="A beam model whose plan has its own metersets (an imported plan, a basic plan).")
@@ -67,7 +69,7 @@ class RTExportRequest(BaseModel):
 
     def compute_cache_key(self) -> str:
         """The plan and every setting that shapes the objects; not ``push`` or ``new_export``, which do not."""
-        payload = self.model_dump(mode="json", exclude={"push", "new_export"})
+        payload = self.model_dump(mode="json", exclude={"push", "new_export", "requested_by"})
         blob = json.dumps({"version": EXPORT_VERSION, **payload}, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -104,6 +106,8 @@ class RTObjectRef(BaseModel):
 
 
 class RTExportResult(ResearchArtifact):
+    requested_by: Optional[str] = Field(default=None, description="The user a trusted proxy named on the request that made this "
+                                                                 "(a cached result keeps its first requester).")
     export_id: str
     geometry_id: str
     beam_model_id: str

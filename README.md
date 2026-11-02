@@ -197,6 +197,9 @@ All settings use `RADIARCH_` prefix. Place them in `.env` or export as env vars.
 | `RADIARCH_ORTHANC_DICOMWEB_ROOT` | `/dicom-web` | Orthanc's DICOMweb path under `RADIARCH_ORTHANC_BASE_URL`, where studies are read from |
 | `RADIARCH_BUILD_COMMIT` | `""` | The commit an image was built from (a build argument); else the git checkout's. Every DICOM object states `[release, "git <commit>"]` in Software Versions |
 | `RADIARCH_API_KEY` | `""` | `X-API-Key` required on every `/api/v1` route except `/info`; empty disables auth (dev only) |
+| `RADIARCH_TRUSTED_USER_HEADER` | `""` | Behind a gateway that authenticates people: the header it names the user in (e.g. `X-Forwarded-User`). The user is kept as `requested_by` on optimizations, Pareto sets, navigation states, deliverable plans and exports, and is the exported objects' Operators' Name. Empty = no user recorded |
+| `RADIARCH_TRUSTED_PROXY_SECRET` | unset | The gateway's shared secret, sent in `RADIARCH_TRUSTED_PROXY_SECRET_HEADER` (`X-Proxy-Secret`); a user header without it is refused (401). Radiarch trusts the gateway, so it must be reachable only through it |
+| `RADIARCH_DICOMWEB_PUSH_REQUIRED` | `false` | `true`: an export whose push to `RADIARCH_DICOMWEB_URL` is refused fails (502) and its objects are removed, so the archive's copy is the record; `false`: kept with `pushed: false` and the error |
 | `RADIARCH_ALLOW_TEST_ENGINES` | unset | Permit the test-only `analytic` engine (wrong physics by design). Unset = only when `RADIARCH_ENVIRONMENT=dev` |
 | `RADIARCH_DATA_ROOT` | `""` | DICOM (CT + RTSTRUCT) directory read when no upload or PACS study is given; empty = the bundled `tests/data/SimpleFantomWithStruct` |
 | `RADIARCH_MCSQUARE_DIR`, `RADIARCH_CCC_ENGINE_DIR` | `engines/…` | Engine asset directories |

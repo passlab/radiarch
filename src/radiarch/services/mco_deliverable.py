@@ -327,7 +327,8 @@ class DeliverableService:
         delivered_stack = projected_stack if dose_id is None else ops.navigation(np.asarray(delivered))      # protons: the projected plan
         rows = self._deviation(mco_id, request, lam, projected_stack if projected else None, delivered_stack)
         out = MCODeliverable(
-            deliverable_id=str(uuid.uuid4()), cache_key=key, mco_id=mco_id, state_id=state.state_id, geometry_id=result.geometry_id,
+            requested_by=request.requested_by, deliverable_id=str(uuid.uuid4()), cache_key=key, mco_id=mco_id, state_id=state.state_id,
+            geometry_id=result.geometry_id,
             blend=state.blend, projected=projected, technique=technique, optimization_id=opt.optimization_id, sequence_id=sequence_id,
             vmat_id=vmat_id, beam_model_id=beam_model_id, dose_id=dose_id, normalisation=float(k), deliverable=bool(deliverable),
             deviation=rows, flagged=sum(r.flagged for r in rows), request=request, rounds=rounds_log, notes=notes,
