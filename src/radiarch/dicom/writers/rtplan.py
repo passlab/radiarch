@@ -232,7 +232,8 @@ def _arc_control_points(arc, beam: PhotonBeam, bounds: Optional[Sequence[float]]
 
 def build_rtplan(ctx: CaseContext, plan: PhotonPlan, *, rtstruct_uid: str, options: Optional[PlanWriteOptions] = None) -> Dataset:
     opt = options or PlanWriteOptions()
-    n_fractions = int(opt.prescription.fractions) if opt.prescription else 1
+    dicom = getattr(plan, "dicom", None)          # an imported plan without a prescription: its source's fractions
+    n_fractions = int(opt.prescription.fractions) if opt.prescription else int(dicom.n_fractions if dicom is not None else 1)
     plan = per_fraction(plan, n_fractions)          # DICOM's metersets are one fraction's; radiarch's photon plans hold the course's
     ds = new_dataset(ctx, SOP.RTPLAN, "RTPLAN", series_number=opt.series_number, series_instance_uid=opt.series_instance_uid,
                      sop_instance_uid=opt.sop_instance_uid)

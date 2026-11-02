@@ -254,11 +254,19 @@ async def recalculate_dose(
         raise HTTPException(status_code=422, detail="beam model was not imported from an RT Plan (no plan metersets); use /dose/compute with explicit weights")
     if bm.geometry_id != request.geometry_id:
         raise HTTPException(status_code=422, detail=f"beam model {request.beam_model_id} belongs to geometry {bm.geometry_id}, not {request.geometry_id}")
+    if bm.fluence_elements.total_count < 1:
+        raise HTTPException(status_code=422, detail="the imported plan has no aperture wider than a beamlet, so no fluence elements "
+                                                    "to carry its metersets; it cannot be recomputed here")
+    engine = request.engine
+    if bm.modality.value == "PHOTON_IMRT" and engine.name in ("pb", "ccc"):
+        # the plan as delivered: its apertures at their own metersets (the beamlet columns lose a sliding-window arc's
+        # narrow apertures); an explicit fluence parameter stays
+        engine = engine.model_copy(update={"params": {"fluence": "apertures", **engine.params}})
     compute_request = DoseComputeRequest(
         plan_id=request.plan_id,
         geometry_id=request.geometry_id,
         beam_model_id=request.beam_model_id,
-        engine=request.engine,
+        engine=engine,
         weights=WeightVector(length=bm.fluence_elements.total_count, weights_uri=bm.plan_weights_uri),
         scenarios=request.scenarios,
         rbe=request.rbe,

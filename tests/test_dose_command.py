@@ -51,7 +51,8 @@ def _case(tmp_path: Path):
     case = write_case(tmp_path / "case", hu, 5.0, (-57.5, -57.5, -57.5), {"Body": body, "PTV": ptv}, "dose-command")
     for_uid = str(pydicom.dcmread(str(case / "CT000.dcm"), stop_before_pixels=True).FrameOfReferenceUID)
     cps = [{"cmw": 0.0, "gantry": 0.0, "iso": [0, 0, 0], "xj": [-50, 50], "yj": [-50, 50]}, {"cmw": 1.0}]
-    plan = F.save(F.photon_rtplan([{"number": 1, "name": "AP", "cps": cps}], {1: 200.0}, for_uid=for_uid), tmp_path / "RP-in.dcm")
+    plan = F.save(F.photon_rtplan([{"number": 1, "name": "AP", "cps": cps}], {1: 200.0}, for_uid=for_uid, n_fractions=2),
+                  tmp_path / "RP-in.dcm")
     return case, Path(plan)
 
 
@@ -74,6 +75,9 @@ def test_the_dose_of_a_plan_on_a_ct_with_a_structure_set_elsewhere(dose_env, tmp
     rd = pydicom.dcmread(str(files["RD.dcm"]))
     rp = pydicom.dcmread(str(files["RP.dcm"]))
     assert rp.RTPlanLabel == "RESEARCH"
+    src = pydicom.dcmread(str(plan))
+    assert int(rp.FractionGroupSequence[0].NumberOfFractionsPlanned) == int(src.FractionGroupSequence[0].NumberOfFractionsPlanned) == 2
+    assert float(rp.FractionGroupSequence[0].ReferencedBeamSequence[0].BeamMeterset) == pytest.approx(200.0, rel=1e-4)   # per fraction
     assert rp.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID == rs_uid
     assert rd.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID == rp.SOPInstanceUID
     assert float(np.asarray(rd.pixel_array).max() * float(rd.DoseGridScaling)) == pytest.approx(record["dose"]["statistics"]["max_gy"], rel=0.02)
@@ -148,3 +152,74 @@ def test_the_dose_grid_defaults_to_3_mm_and_0_is_the_cts_own(dose_env, tmp_path,
         from radiarch.services.geometry import GeometryService
         gid = json.loads((tmp_path / "d.json").read_text())["geometry_id"]
         assert GeometryService().store.get_by_id(gid).grid_spec.spacing_mm[0] == pytest.approx(expect)
+
+
+def _sweep_arc(tmp_path, case, widths, name: str) -> Path:
+    """An arc of 10 control points over 36 degrees whose leaves sweep slits across 40 mm, 200 MU: the leaf pairs below
+    the axis open ``widths[0]`` mm, those above ``widths[1]`` mm (sliding-window apertures like the arcs radiarch makes)."""
+    for_uid = str(pydicom.dcmread(str(case / "CT000.dcm"), stop_before_pixels=True).FrameOfReferenceUID)
+    bounds = [float(v) for v in np.arange(-50.0, 50.1, 5.0)]               # 20 leaf pairs of 5 mm
+    n = len(bounds) - 1
+    cps = []
+    for k in range(10):
+        left = -20.0 + 4.0 * k
+        a = [left if -20.0 <= bounds[i] < 20.0 else 0.0 for i in range(n)]
+        b = [left + (widths[0] if bounds[i] < 0.0 else widths[1]) if -20.0 <= bounds[i] < 20.0 else 0.0 for i in range(n)]
+        cp = {"cmw": k / 9.0, "gantry": 4.0 * k, "mlc": a + b}
+        if k == 0:
+            cp.update({"iso": [0.0, 0.0, 0.0], "xj": [-40.0, 40.0], "yj": [-40.0, 40.0], "coll": 0.0})
+        cps.append(cp)
+    ds = F.photon_rtplan([{"number": 1, "name": "ARC", "cps": cps}], {1: 200.0}, bounds=bounds, for_uid=for_uid)
+    ds.BeamSequence[0].BeamType = "DYNAMIC"
+    ds.BeamSequence[0].ControlPointSequence[0].GantryRotationDirection = "CW"
+    return Path(F.save(ds, tmp_path / name))
+
+
+def test_an_arc_is_recomputed_through_its_apertures(dose_env, tmp_path, capsys):
+    """A sliding-window arc's slits can be narrower than a beamlet. Recomputed through the beamlet columns they vanish
+    (the fault a round trip found: a VMAT plan's RT Plan recomputed 19 % low); the recalculation goes through the
+    apertures, so half the leaf pairs at 3 mm and half at 10 mm deliver about 13/10 of what the 10 mm half alone does."""
+    from radiarch.models.dose import DoseComputeRequest, DoseResult, EngineSpec, WeightVector
+    from radiarch.sdk import Radiarch
+
+    case, _ = _case(tmp_path)
+    study = str(pydicom.dcmread(str(case / "CT000.dcm"), stop_before_pixels=True).StudyInstanceUID)
+    plan = _sweep_arc(tmp_path, case, (3.0, 10.0), "arc.dcm")
+    with Radiarch.local(poll_interval=0.01) as rx:
+        geo = rx.build_geometry(study, data_root=str(case), spacing_mm=3.0)
+        bm = geo.import_plan(plan)
+        apertures = bm.recalculate(engine="pb")
+        w = [float(v) for v in np.load(bm.result.plan_weights_uri)]
+        req = DoseComputeRequest(geometry_id=geo.id, beam_model_id=bm.id, engine=EngineSpec(name="pb"),
+                                 weights=WeightVector(length=len(w), values=w))
+        beamlets = rx.submit("dose", "/dose/compute", req, DoseResult)
+    a = np.asarray(nib_load(apertures.result.dose_grid_uri)); b = np.asarray(nib_load(beamlets.dose_grid_uri))
+    assert apertures.result.engine_name == "pb" and a.max() > 0.1
+    assert 1.15 <= a.sum() / b.sum() <= 1.5, (a.sum(), b.sum())
+    from radiarch.sdk import RadiarchError
+
+    only_narrow = _sweep_arc(tmp_path, case, (3.0, 3.0), "narrow.dcm")             # every slit narrower than a beamlet
+    with Radiarch.local(poll_interval=0.01) as rx:
+        geo = rx.build_geometry(study, data_root=str(case), spacing_mm=3.0)
+        with pytest.raises(RadiarchError) as e:
+            geo.import_plan(only_narrow).recalculate(engine="pb")
+    assert e.value.status_code == 422 and "beamlet" in str(e.value.detail)
+
+
+def nib_load(uri):
+    from radiarch.services.autoplan import read_volume
+
+    return read_volume(uri)
+
+
+def test_the_apertures_mode_computes_the_plans_own_metersets_only():
+    from radiarch.models.photon_plan import MLCRow, PhotonBeam, PhotonPlan, PhotonSegment
+    from radiarch.services.dose_engines.protocol import EngineParamError
+    from radiarch.services.dose_engines.pb import own_metersets
+
+    seg = PhotonSegment(control_point_index=0, mu=100.0, x_jaw_mm=(-20.0, 20.0), y_jaw_mm=(-20.0, 20.0),
+                        mlc_rows=[MLCRow(y_min_mm=-20.0, y_max_mm=20.0, x_left_mm=-20.0, x_right_mm=20.0)])
+    plan = PhotonPlan(beams=[PhotonBeam(beam_id="B", gantry_deg=0.0, segments=[seg])])
+    own_metersets(plan, plan.beamlet_mu())
+    with pytest.raises(EngineParamError, match="own metersets"):
+        own_metersets(plan, plan.beamlet_mu() * 1.1)

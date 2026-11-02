@@ -275,7 +275,10 @@ curl -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
 ```
 
 The plan's frame of reference must be the geometry's (a plan from another CT needs a registration,
-roadmap R9). Arcs are discretized per control-point interval at the mid-angle.
+roadmap R9). Arcs are discretized per control-point interval at the mid-angle. A photon plan is recomputed
+through its apertures at their own metersets (`pb` and `ccc`; engine parameter `fluence: apertures`, set by the
+route), so a sliding-window arc's slits narrower than a beamlet count; the re-exported RT Plan keeps the source's
+fractions.
 
 From a shell, `radiarch dose` does the whole thing in one process: the CT and its structure set become a
 geometry, the plan a beam model with its own metersets, an engine computes the dose, and the RT Dose is

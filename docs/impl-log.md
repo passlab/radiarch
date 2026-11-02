@@ -1081,3 +1081,22 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   `pushed: false` when not required and failing with 502 (nothing left in the store, a stored export pushed again
   refused, the push route refused) when required.
 
+## A recomputed photon plan goes through its apertures (2026-11-01)
+
+- **Found** by the one-patient round trip: `radiarch dose` on a VMAT plan's exported RT Plan gave a dose well below
+  the plan's own RT Dose (gamma 3 %/3 mm pass 48 %, mean difference 4 Gy); on a phantom VMAT plan, a median ratio of
+  1.19 with the same metersets, while a seven-field static plan recomputed within 0.6 %. `POST /dose/recalculate`
+  computed an imported plan through the beam model's beamlet columns, which keep a cell only when its centre is open
+  and drop leaf pairs no wider than a beamlet: most of a sliding-window arc's narrow apertures. The arc plan's own
+  dose goes through the exact apertures (`segment_dose_matrix`, `fluence: apertures`).
+- **Fix.** The recalculation route gives a photon plan's `pb` or `ccc` engine `fluence: apertures` (an explicit value
+  stays): `pb` computes every aperture at its segment's meterset (`compute_plan_dose` without weights), `ccc` its
+  delivered dose through coverage beamlets (`compute_delivered_dose`, which R8 used for the same reason). Both refuse
+  weights other than the plan's own (`own_metersets`). A plan whose every aperture is narrower than a beamlet has no
+  fluence elements to carry its metersets and is refused with a clear 422. The phantom VMAT plan now recomputes equal
+  to its RT Dose (median ratio 1.0000, mean difference 0.00 Gy).
+- **And** the re-export of an imported photon plan stated one fraction with the course's metersets; the RT Plan writer
+  now takes the source plan's fractions when no prescription is given.
+- Tests (`tests/test_dose_command.py`): an arc whose leaf pairs sweep 3 mm and 10 mm slits recomputes through the
+  apertures to about 13/10 of the beamlet columns' dose; an arc of 3 mm slits only is refused; weights other than the
+  plan's own are refused; the re-exported RT Plan keeps the source's two fractions and its per-fraction meterset.

@@ -511,6 +511,14 @@ class _Run:
     exponent: float = DEFAULT_LATERAL_EXPONENT
 
 
+def own_metersets(plan: PhotonPlan, weights: np.ndarray) -> None:
+    """``fluence: apertures`` computes the plan's own metersets (its segments'); weights that differ are refused."""
+    own = np.asarray(plan.beamlet_mu(), dtype=np.float64)
+    w = np.asarray(weights, dtype=np.float64).ravel()
+    if w.shape != own.shape or not np.allclose(w, own, rtol=1e-4, atol=1e-6):
+        raise EngineParamError("fluence 'apertures' computes the plan's own metersets (an imported plan's); these weights differ")
+
+
 @dataclass
 class PencilBeamEngine:
     """Photon dose engine on singular-value-decomposed pencil kernels (NumPy, optional CuPy)."""
@@ -975,8 +983,14 @@ class PencilBeamEngine:
         if origin is None:
             raise EngineParamError("geometry has no grid origin; the engine cannot place the isocenter")
         p = dict(params or {})
-        p.setdefault("fluence", "beamlets")
-        dose = self.compute_plan_dose(geometry.density, geometry.spacing_mm, origin, plan, weights, scenario, p)
+        if str(p.get("fluence", "beamlets")).lower() == "apertures":
+            # a delivered plan (an imported RT Plan): every aperture exactly, at its own meterset; the beamlet columns keep
+            # only cells whose centre is open and drop leaf pairs no wider than a beamlet, most of a sliding-window arc
+            own_metersets(plan, weights)
+            dose = self.compute_plan_dose(geometry.density, geometry.spacing_mm, origin, plan, None, scenario, p)
+        else:
+            p.setdefault("fluence", "beamlets")
+            dose = self.compute_plan_dose(geometry.density, geometry.spacing_mm, origin, plan, weights, scenario, p)
         return NominalDose(dose=dose)
 
     def apply_influence(self, influence: InfluenceData, weights: np.ndarray, grid_shape: tuple) -> NominalDose:

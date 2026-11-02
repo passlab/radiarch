@@ -291,5 +291,8 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
 - [x] R11.10 (2026-11-01) Planning behind a gateway: the user a trusted proxy names (header plus shared secret) kept
   as `requested_by` on optimizations, Pareto sets, navigation states, deliverable plans and exports, and as the
   exported objects' Operators' Name; an export fails when its push is refused and the push is required
+- [x] (2026-11-01) A recomputed imported photon plan goes through its apertures: a VMAT plan's RT Plan had
+  recomputed 19 % low (a sliding-window arc's slits narrower than a beamlet dropped); its re-export keeps the
+  source's fractions
 - [ ] Later **(open)**: shared-aperture or shared-sweep Pareto plans so navigation shows the deliverable dose;
   tail-mean (CVaR) trade-offs; Pareto sets across beam arrangements; the TROTS benchmark

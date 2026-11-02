@@ -364,6 +364,16 @@ class CCCEngine:
         weights = np.asarray(weights, dtype=np.float32)
         if weights.shape != (expected,):
             raise EngineParamError(f"weights shape {weights.shape} != ({expected},)")
+        p = dict(params or {})
+        if str(p.pop("fluence", "beamlets")).lower() == "apertures":
+            # a delivered plan (an imported RT Plan): every aperture through its coverage beamlets, at its own meterset
+            from .pb import own_metersets
+
+            if scenario is not None and getattr(scenario, "name", "nominal") != "nominal":
+                raise EngineParamError("ccc fluence 'apertures' computes the nominal dose only")
+            own_metersets(beam_model.plan, weights)
+            origin = self._origin(geometry)
+            return NominalDose(dose=self.compute_delivered_dose(geometry.density, geometry.spacing_mm, origin, beam_model.plan, params=p))
         influence = self.build_influence(geometry, beam_model, scenario, params)
         return self.apply_influence(influence, weights, tuple(np.asarray(geometry.density).shape))
 
