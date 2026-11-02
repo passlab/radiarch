@@ -130,6 +130,7 @@ services:
   # ---- Viewer (profile "viewer") ----
   # OHIF with radiarch's extensions and plan review mode; Orthanc's DICOMweb and radiarch's API behind one origin, the
   # API key added by the proxy (docs/viewing.md). Published on localhost only: whoever reaches it uses radiarch.
+  #   scripts/fetch-viewer.sh                 (once: the packages, passlab/radiarch-ohif at viewer.ref, into viewer/)
   #   docker compose --profile viewer up -d   ->  http://localhost:3000/plan-review?StudyInstanceUIDs=<study>
   viewer:
     profiles: ["viewer"]

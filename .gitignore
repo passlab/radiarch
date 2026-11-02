@@ -49,3 +49,6 @@ validation/r7-*/
 validation/r8-*/
 validation/cache/
 validation/reports/
+
+# The viewer packages: a checkout of passlab/radiarch-ohif at viewer.ref (CI clones it here)
+/viewer/

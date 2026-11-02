@@ -1,4 +1,4 @@
-"""R11.7: the viewer's API client (viewer/radiarch-client) on a Pareto set, against a running radiarch.
+"""R11.7: the viewer's API client (libs/radiarch-client in passlab/radiarch-ohif) on a Pareto set, against a running radiarch.
 
 A Pareto set is computed on the stub patient (four static fields, the analytic engine), its balance plan made
 deliverable and exported, as an MCO protocol's plan would be. radiarch's app is served with the API key required, and
@@ -18,7 +18,7 @@ import subprocess
 import pytest
 
 from test_r6_rt_export_service import env  # noqa: F401
-from test_r13_viewer_client import CLIENT, KEY, NODE, api  # noqa: F401
+from test_r13_viewer_client import CLIENT, KEY, NO_VIEWER, NODE, api  # noqa: F401
 
 
 def mco_export():
@@ -54,7 +54,7 @@ def mco_export():
     return svc, exp, res, plan
 
 
-@pytest.mark.skipif(NODE is None, reason="node is not installed")
+@NO_VIEWER
 def test_the_viewer_client_on_a_pareto_set(api, tmp_path):  # noqa: F811
     from radiarch.services.mco_deliverable import DeliverableService
 

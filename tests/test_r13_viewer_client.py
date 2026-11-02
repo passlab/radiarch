@@ -1,4 +1,4 @@
-"""Roadmap R13.2c: the viewer's API client (viewer/radiarch-client, JavaScript) against a running radiarch.
+"""Roadmap R13.2c: the viewer's API client (libs/radiarch-client in passlab/radiarch-ohif, JavaScript) against a running radiarch.
 
 radiarch's app is served by uvicorn in a thread, with the API key required. An export is written. The client's
 Node tests then:
@@ -24,8 +24,11 @@ import pytest
 from test_r6_rt_export_service import env  # noqa: F401
 from test_r13_viewer import _export
 
-CLIENT = Path(__file__).resolve().parent.parent / "viewer" / "radiarch-client"
+# the packages live in passlab/radiarch-ohif; CI checks it out at viewer.ref into viewer/
+VIEWER = Path(os.environ.get("RADIARCH_OHIF_DIR") or Path(__file__).resolve().parent.parent / "viewer")
+CLIENT = VIEWER / "libs" / "radiarch-client"
 NODE = shutil.which("node")
+NO_VIEWER = pytest.mark.skipif(NODE is None or not CLIENT.is_dir(), reason="needs node and the radiarch-ohif packages in viewer/ (at viewer.ref) or RADIARCH_OHIF_DIR")
 KEY = "r13-test-key"
 TEMPLATE = "rtog-0617"
 
@@ -66,7 +69,7 @@ def api(env, monkeypatch):  # noqa: F811
     get_settings.cache_clear()
 
 
-@pytest.mark.skipif(NODE is None, reason="node is not installed")
+@NO_VIEWER
 def test_the_viewer_client_against_radiarch(api, tmp_path):
     from radiarch.models.evaluation import EvaluationRequest, GoalSetSpec
     from radiarch.services.evaluation import EvaluationService

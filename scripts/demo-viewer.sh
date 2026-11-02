@@ -3,6 +3,7 @@
 # plan made by the shipped demo protocol (5-field IMRT, radiarch's pencil-beam engine) inside the API container, its RT
 # objects pushed to Orthanc, and the link that opens them in the viewer. Research use only; not for clinical use.
 #
+#   scripts/fetch-viewer.sh                           # once: the viewer packages into viewer/
 #   docker compose --profile viewer up -d --build     # first: the stack with the viewer
 #   ./scripts/demo-viewer.sh                          # then: about two minutes
 #

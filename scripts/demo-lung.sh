@@ -5,6 +5,7 @@
 # radiarch's pencil-beam engine, RTOG 0617 dose limits) inside the API container, its RT objects pushed to Orthanc,
 # and the link that opens them in the viewer: contours, the dose colour wash and the DVHs. Research use only.
 #
+#   scripts/fetch-viewer.sh                           # once: the viewer packages into viewer/
 #   docker compose --profile viewer up -d --build     # first: the stack with the viewer
 #   ./scripts/demo-lung.sh                            # then: a ~60 MB download and some minutes of planning
 #

@@ -1118,3 +1118,25 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
 - **Not done** (decided): a free-breathing variant. `lung-60gy-30fx-vmat` already plans a GTV-only case (CTV = GTV +
   5 mm, PTV = CTV + 5 mm, the R8 harness's margins); a free-breathing variant would need a motion margin that no
   record or physicist has set, and no case of the batch needs it.
+
+## The viewer packages move to their own repository (2026-11-02; radiarch-ohif created 2026-10-31)
+
+- **Why.** One OHIF installation can hold several projects' extensions. Each project then adds its packages to one
+  OHIF checkout, and the installation builds once. That works best when the viewer packages are a repository of their
+  own, usable with radiarch's API or, for the RT Dose layer, with any DICOMweb server.
+- **Where.** passlab/radiarch-ohif holds what was `viewer/`, with its history: both extensions, the plan review mode,
+  `rt-dose-core`, `radiarch-client`, `scripts/build-ohif.sh` and the standalone image. Its CI runs the packages' own
+  tests and builds the image.
+- **Names.** OHIF's convention: `@radiarch/extension-rt-dose` (was `ohif-extension-rt-dose`),
+  `@radiarch/extension-planning` (was `ohif-extension-radiarch`) and `@radiarch/mode-plan-review`, in
+  `extensions/rt-dose`, `extensions/planning` and `modes/plan-review`; `libs/rt-dose-core` and `libs/radiarch-client`.
+  The mode's route stays `plan-review`, so radiarch's viewer links do not change.
+- **`--add-only`.** `scripts/build-ohif.sh --add-only OHIF_DIR` places and registers the packages in an OHIF checkout
+  and neither installs nor builds. The clone-and-build mode and `OHIF_DIR` stay as they were. A Node test runs the
+  script on a stub checkout with `node` and `npx` stubbed.
+- **Radiarch.** `viewer.ref` pins the radiarch-ohif commit radiarch is tested with. `scripts/fetch-viewer.sh` checks it
+  out into `viewer/` (now ignored by git), for CI, `docker compose --profile viewer` and the demo scripts. CI's full
+  suite runs the tests against radiarch's objects and API there (`test_r13_viewer_core`, `test_r13_viewer_client`,
+  `test_r11_viewer_client`), and the Viewer job builds the image from it and runs the browser tests. Without the
+  checkout those tests skip and say why; `RADIARCH_OHIF_DIR` points them at another checkout. ADR 0018 records the
+  move; README, `docs/viewing.md` and `docs/demo.md` add the fetch step.

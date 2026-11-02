@@ -173,6 +173,7 @@ The RT objects radiarch writes (structure set, plan, dose with its DVHs, images;
 a DICOMweb server, and the viewer shows them. With the Docker Compose stack and its viewer profile:
 
 ```bash
+scripts/fetch-viewer.sh          # once: the viewer packages into viewer/
 docker compose --profile viewer up -d --build
 ./scripts/demo-lung.sh            # a public lung-cancer patient into Orthanc, a plan with demo-lung-imrt, pushed
 ```

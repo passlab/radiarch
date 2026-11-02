@@ -10,7 +10,7 @@ today give its display sets `Modality: 'PMAP'`. `CornerstoneCacheService._getVol
 that has its own `load()` as a derived volume only when `Modality === 'PMAP'`. Any other modality with `load()` is
 handled like SEG or RTSTRUCT: the display set is loaded, but no volume is passed on to the viewport.
 
-radiarch's RT Dose extension (`viewer/ohif-extension-rt-dose`) therefore labels RT Dose display sets `PMAP`.
+radiarch's RT Dose extension (`@radiarch/extension-rt-dose` in passlab/radiarch-ohif) therefore labels RT Dose display sets `PMAP`.
 That has three costs:
 - the series list shows the dose as "PMAP";
 - the extension relies on an internal string;

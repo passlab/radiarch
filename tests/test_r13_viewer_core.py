@@ -1,4 +1,4 @@
-"""Roadmap R13.2b: the viewer's RT Dose core (viewer/rt-dose-core, JavaScript) against radiarch's own objects.
+"""Roadmap R13.2b: the viewer's RT Dose core (libs/rt-dose-core in passlab/radiarch-ohif, JavaScript) against radiarch's own objects.
 
 This test writes fixtures, then runs the core's Node tests on them:
 - the dose, structure set and DVHs of a radiarch export;
@@ -31,7 +31,9 @@ from pydicom.valuerep import DSfloat, IS
 from test_r6_rt_export_service import env  # noqa: F401
 from test_r13_viewer import _export
 
-CORE = Path(__file__).resolve().parent.parent / "viewer" / "rt-dose-core"
+from test_r13_viewer_client import VIEWER  # noqa: E402  (passlab/radiarch-ohif, checked out at viewer.ref)
+
+CORE = VIEWER / "libs" / "rt-dose-core"
 NODE = shutil.which("node")
 
 
@@ -145,7 +147,7 @@ def _synthetic(name: str, *, iop, ipp, spacing_rc, rel_offsets, shape_yx, bits, 
     return ds
 
 
-@pytest.mark.skipif(NODE is None, reason="node is not installed")
+@pytest.mark.skipif(NODE is None or not CORE.is_dir(), reason="needs node and the radiarch-ohif packages in viewer/ (at viewer.ref) or RADIARCH_OHIF_DIR")
 def test_the_viewer_core_reads_radiarch_doses(env, tmp_path):
     out = tmp_path / "fixtures"
     out.mkdir()

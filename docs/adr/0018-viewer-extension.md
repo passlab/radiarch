@@ -69,3 +69,11 @@ Writing the viewer twice would split the effort and the tests.
   OHIF's PET/CT fusion already overlays volumes this way.
 - An RT Dose from another system may have no DVH module. The dose layer then computes the DVH in the
   browser and says so.
+- *Moved, 2026-10-31.* The packages (both extensions, the mode, `rt-dose-core`, `radiarch-client`, the build script and
+  the standalone image) moved from `viewer/` to their own repository, passlab/radiarch-ohif, with their history, so
+  that one OHIF installation can hold them beside other projects' extensions. They took OHIF's naming:
+  `@radiarch/extension-rt-dose` (was `ohif-extension-rt-dose`), `@radiarch/extension-planning` (was
+  `ohif-extension-radiarch`) and `@radiarch/mode-plan-review`, under `extensions/`, `modes/` and `libs/`. Its build
+  script has an `--add-only` mode that only places and registers them. Radiarch pins the commit it is tested with (`viewer.ref`);
+  `scripts/fetch-viewer.sh` checks it out into `viewer/`, where CI's tests against radiarch's objects and API and the
+  browser test find it. Decision 1's "in radiarch's repository" now reads "in radiarch's viewer repository".

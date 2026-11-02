@@ -59,12 +59,16 @@ mode. Its nginx proxy puts Orthanc's DICOMweb (`/dicom-web`) and radiarch's API 
 the same origin and adds radiarch's API key to every API request, so the browser never holds the key.
 
 ```bash
+scripts/fetch-viewer.sh                        # once: the viewer packages into viewer/
 docker compose --profile viewer up -d          # api, worker, orthanc, and the viewer on 127.0.0.1:3000
 # push an export (RADIARCH_DICOMWEB_URL=http://orthanc:8042/dicom-web), then open
 #   http://localhost:3000/plan-review?StudyInstanceUIDs=<study>
 ```
 
-The image is `viewer/standalone/Dockerfile` (built from `viewer/`). It is configured by these
+The image is `standalone/Dockerfile` of the viewer packages, which live in
+[passlab/radiarch-ohif](https://github.com/passlab/radiarch-ohif). `scripts/fetch-viewer.sh` puts that repository, at
+the commit radiarch is tested with (`viewer.ref`), into `viewer/`, and the compose file builds the image from there.
+It is configured by these
 environment variables:
 
 | Variable | What it sets |
@@ -161,7 +165,7 @@ Headless Chromium then opens the plan review mode and checks:
 - the CT is drawn;
 - inside OHIF, the dose is a second volume on the CT's grid:
   - its values are the file's dose in % of the prescription;
-  - its opacity unit distance is 0.15 mm (see "How the dose is shown" in `viewer/README.md`);
+  - its opacity unit distance is 0.15 mm (see "How the dose is shown" in radiarch-ohif's `README.md`);
   - the colour map is the isodose map, transparent below 30 %;
   - the window runs from 0 to 120 %;
   - each isodose band has its own colour;

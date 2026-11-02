@@ -22,8 +22,8 @@ radiarch/
   docker-compose.yml    # Full stack: API + Worker + Redis + Postgres + Orthanc (+ the viewer, profile "viewer")
   .env.example          # Documented env var template
   scripts/              # smoke_test.sh, demo-lung.sh and demo-viewer.sh (a plan into the viewer), install-dev.sh, fetch-engines.sh
-  viewer/               # OHIF packages: rt-dose-core, the RT Dose and radiarch extensions, the plan review mode,
-                        # standalone/ (the viewer image: OHIF + nginx proxy) (viewer/README.md)
+  viewer/               # not tracked: passlab/radiarch-ohif at viewer.ref (scripts/fetch-viewer.sh): the OHIF
+                        # packages, the plan review mode and the standalone viewer image
   demo/                 # CLI demos per service (show_*.py) + compare_engines.py; walkthrough in docs/demo.md
   engines/              # Dose engine assets run as subprocesses (engines/README.md)
     mcsquare/           # MCsquare launcher + Linux binaries, Materials/, BDL/, Scanners/ (Apache 2.0)
@@ -68,6 +68,7 @@ the stack then needs about 4 GB of memory. No GPU on the server; the viewer draw
 git clone https://github.com/passlab/radiarch.git && cd radiarch
 cp .env.example .env                                   # as shipped: no API key, for a machine only you use
 export RADIARCH_BUILD_COMMIT=$(git rev-parse --short=7 HEAD)   # stamped into every DICOM object radiarch writes
+scripts/fetch-viewer.sh                                # once: the viewer packages into viewer/
 docker compose --profile viewer up -d --build          # api, worker, redis, postgres, orthanc and the viewer
 curl http://localhost:8000/api/v1/info                 # the API answers once its container is up
 ```

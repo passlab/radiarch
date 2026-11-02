@@ -76,6 +76,9 @@ jobs:
       - name: Checkout (full — includes the engine assets and DICOM test data)
         uses: actions/checkout@v4
 
+      - name: The viewer packages (passlab/radiarch-ohif at viewer.ref, into viewer/)
+        run: scripts/fetch-viewer.sh
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -107,7 +110,8 @@ jobs:
   viewer-build:
     # R13 (ADR 0018): the standalone viewer image (OHIF 3.13.13 built with radiarch's extensions and mode, nginx with the
     # proxy), then the browser test: a CT and a plan in Orthanc, radiarch's API with a key, the image in front of both,
-    # headless Chromium through the plan review mode. The dose core's and the client's tests run in Full Tests.
+    # headless Chromium through the plan review mode. The dose core's and the client's tests against radiarch run in Full
+    # Tests; the packages' own tests run in passlab/radiarch-ohif's CI.
     name: Viewer (image and browser test)
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -126,16 +130,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "24"
-
-      - name: Package tests without fixtures or a server (colormap, DVH parsing, goal rows)
-        run: |
-          node --test viewer/rt-dose-core/test/core.test.js
-          node --test viewer/radiarch-client/test/client.test.js
-          node --test viewer/radiarch-client/test/mco.test.js
+      - name: The viewer packages (passlab/radiarch-ohif at viewer.ref, into viewer/)
+        run: scripts/fetch-viewer.sh
 
       - name: Build the viewer image (OHIF with radiarch's packages, nginx)
         run: docker build -f viewer/standalone/Dockerfile -t radiarch-viewer:ci viewer/
