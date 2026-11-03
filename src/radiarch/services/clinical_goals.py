@@ -145,6 +145,18 @@ def evaluate_goal(goal: ClinicalGoal, doses: np.ndarray, voxel_cc: float, prescr
 # Templates and name resolution
 # ---------------------------------------------------------------------------
 
+def scaled_goal(goal: ClinicalGoal, factor: float, from_gy: float, to_gy: float) -> ClinicalGoal:
+    """A target goal at another prescription: a dose goal's value times ``factor`` (D95%[Gy] >= 60 -> 70 at 70/60), a
+    volume goal's dose argument times ``factor`` (V60Gy[%] -> V70Gy[%]); relative and volume-only goals unchanged."""
+    m = parse_metric(goal.metric)
+    note = (goal.note + "; " if goal.note else "") + f"scaled from {from_gy:g} Gy to the prescription {to_gy:g} Gy"
+    if m.kind == "D" and m.unit == "Gy":
+        return goal.model_copy(update={"value": round(goal.value * factor, 4), "note": note})
+    if m.kind == "V" and m.arg_unit == "Gy" and m.arg is not None:
+        return goal.model_copy(update={"metric": f"V{round(m.arg * factor, 2):g}Gy[{m.unit}]", "note": note})
+    return goal
+
+
 def builtin_templates() -> Dict[str, Path]:
     return {p.stem: p for p in sorted(GOALS_DIR.glob("*.json"))}
 

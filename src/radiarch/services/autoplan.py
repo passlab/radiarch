@@ -484,7 +484,8 @@ class AutoplanService:
             from .evaluation import EvaluationService
             ev = EvaluationService().run(EvaluationRequest(dose_id=dose_id, geometry_id=pgeo.geometry_id, prescription_gy=rx,
                                                            target_structure=target, fractions=protocol.prescription.fractions,
-                                                           goals=GoalSetSpec(template_id=protocol.evaluation_template)))
+                                                           goals=GoalSetSpec(template_id=protocol.evaluation_template,
+                                                                             scale_to_prescription=True)))
             evaluation_id = ev.evaluation_id
         result = ProtocolRunResult(
             run_id=str(uuid.uuid4()), protocol=protocol, geometry_id=geo.geometry_id, planning_geometry_id=pgeo.geometry_id,

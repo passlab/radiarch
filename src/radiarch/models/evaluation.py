@@ -115,6 +115,10 @@ class GoalSetSpec(BaseModel):
     dose_basis: Optional[str] = Field(default=None, description='"physical" or "EQD2"; null = the template\'s, else physical.')
     alpha_beta_gy: Dict[str, float] = Field(default_factory=dict, description="Per-structure α/β for EQD2; defaults by structure type.")
     skip_missing: bool = Field(default=True, description="Goals whose structure the geometry lacks are reported, not failed.")
+    scale_to_prescription: bool = Field(
+        default=False,
+        description="The template's goals on the target follow the request's prescription when it differs from the template's "
+                    "(their doses times prescription over the template's); goals on other structures stay.")
 
     @model_validator(mode="after")
     def _check(self) -> "GoalSetSpec":
@@ -128,6 +132,8 @@ class GoalSetSpec(BaseModel):
         payload = {"template_id": self.template_id, "goals": [g.hash_payload() for g in self.goals],
                    "aliases": self.structure_aliases, "dose_basis": self.dose_basis,
                    "alpha_beta": {k: round(v, 6) for k, v in self.alpha_beta_gy.items()}, "skip_missing": self.skip_missing}
+        if self.scale_to_prescription:          # only when on, so existing evaluations keep their keys
+            payload["scale_to_prescription"] = True
         return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:16]
 
 

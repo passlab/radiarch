@@ -66,3 +66,32 @@ def test_the_variant_plans_a_patient_whose_target_is_an_igtv(dose_env, tmp_path,
     assert run["aliased"]["ITV"] == "iGTV" and "GTV" not in run["aliased"]
     assert run["deliverable"] and run["normalisation"] > 0
     assert "PTV D95 >= 60" in out and "Lungs-PTV D37 <= 20" in out
+
+
+def test_the_template_follows_a_prescription_other_than_its_own(dose_env, tmp_path, capsys):  # noqa: F811
+    """rtog-0617 is written for 60 Gy. A 70 Gy plan of the variant is graded with the template's target rows at 70 Gy
+    (PTV V70Gy[%] >= 95, PTV D0.03cc <= 84 Gy); the organ rows keep RTOG 0617's absolute limits."""
+    from radiarch.models.evaluation import ClinicalGoal
+    from radiarch.services.clinical_goals import scaled_goal
+    from radiarch.services.evaluation import EvaluationService
+
+    g = scaled_goal(ClinicalGoal(structure="PTV", metric="V60Gy[%]", op=">=", value=95.0), 70 / 60, 60, 70)
+    assert g.metric == "V70Gy[%]" and g.value == 95.0 and "scaled from 60 Gy" in g.note
+    assert scaled_goal(ClinicalGoal(structure="PTV", metric="D0.03cc[Gy]", op="<=", value=72.0), 70 / 60, 60, 70).value == 84.0
+    assert scaled_goal(ClinicalGoal(structure="PTV", metric="V95%[%]", op=">=", value=95.0), 70 / 60, 60, 70).metric == "V95%[%]"
+
+    protocol = json.loads((Path(__file__).resolve().parents[1] / "src/radiarch/protocols/lung-60gy-30fx-vmat-itv.json").read_text())
+    protocol.update({"protocol_id": "test-itv-70", "prescription": {"target": "PTV", "dose_gy": 70.0, "fractions": 35}})
+    protocol["goals"][0]["gy"] = 70.0
+    for o in protocol["extra_objectives"]:
+        o["dose_gy"] = round(o["dose_gy"] * 70 / 60, 3)
+    path = tmp_path / "p70.json"
+    path.write_text(json.dumps(protocol), encoding="utf-8")
+    case, study = _thorax(tmp_path)
+    assert main(["plan", "--protocol", str(path), "--study", study, "--data", str(case), "--json", str(tmp_path / "run.json"),
+                 "--poll", "0.01"]) == 0, capsys.readouterr().out
+    run = json.loads((tmp_path / "run.json").read_text())
+    rows = {(r.structure, r.metric): r for r in EvaluationService().store.get_by_id(run["evaluation_id"]).goals.results}
+    assert ("PTV", "V70Gy[%]") in rows and ("PTV", "V60Gy[%]") not in rows
+    assert rows[("PTV", "D0.03cc[Gy]")].value == 84.0 and "scaled" in rows[("PTV", "D0.03cc[Gy]")].note
+    assert rows[("SpinalCord", "D0.03cc[Gy]")].value == 50.5 and rows[("Esophagus", "Dmean[Gy]")].value == 34.0

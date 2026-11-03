@@ -1100,3 +1100,21 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
 - Tests (`tests/test_dose_command.py`): an arc whose leaf pairs sweep 3 mm and 10 mm slits recomputes through the
   apertures to about 13/10 of the beamlet columns' dose; an arc of 3 mm slits only is refused; weights other than the
   plan's own are refused; the re-exported RT Plan keeps the source's two fractions and its per-fraction meterset.
+
+## A protocol's evaluation template follows its prescription (2026-11-02)
+
+- **Why.** A batch plans each patient at its own prescription (60 Gy in 30 fractions to 70 Gy in 35) with copies of
+  `lung-60gy-30fx-vmat-itv`. Its evaluation template, `rtog-0617`, is written for 60 Gy: its target rows (PTV V60Gy[%]
+  >= 95, PTV D0.03cc[Gy] <= 72, 120 % of 60 Gy) graded a 70 Gy plan against 60 Gy.
+- **The option** (`models/evaluation.py` `GoalSetSpec.scale_to_prescription`, `services/clinical_goals.py`
+  `scaled_goal`, `services/evaluation.py`): when on and the request's prescription differs from the template's, the
+  template's goals on the request's target structure scale with the ratio (a dose value times it, a volume goal's dose
+  argument times it: V60Gy[%] -> V70Gy[%]; D0.03cc <= 72 -> 84 Gy; relative goals such as V95%[%] unchanged) and say
+  so in their note; goals on other structures keep their absolute limits. Off by default; in the goal set's hash only
+  when on. Protocol runs turn it on.
+- Tests (`tests/test_protocol_itv_variant.py`): the scaling of each metric form; the variant at 70 Gy in 35 fractions
+  plans the thorax phantom, and its evaluation has PTV V70Gy[%] and D0.03cc <= 84 Gy, the cord and oesophagus rows at
+  RTOG 0617's limits.
+- **Not done** (decided): a free-breathing variant. `lung-60gy-30fx-vmat` already plans a GTV-only case (CTV = GTV +
+  5 mm, PTV = CTV + 5 mm, the R8 harness's margins); a free-breathing variant would need a motion margin that no
+  record or physicist has set, and no case of the batch needs it.

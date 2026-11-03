@@ -237,7 +237,7 @@ class EvaluationService:
 
     def _grade(self, request: EvaluationRequest, dose: np.ndarray, scenario_doses: Dict[str, np.ndarray],
                masks: np.ndarray, index: Dict[str, int], encoding: str, voxel_volume_cc: float):
-        from .clinical_goals import evaluate_goal, load_template, resolve_structure
+        from .clinical_goals import evaluate_goal, load_template, resolve_structure, scaled_goal
         from .radiobiology import NTCP_MODELS, TCP_MODELS, default_alpha_beta, eqd2, lkb_ntcp, poisson_tcp
 
         available = list(index.keys())
@@ -257,8 +257,17 @@ class EvaluationService:
             spec = request.goals
             template = load_template(spec.template_id) if spec.template_id else None
             goals = list(template.goals) if template else []
-            goals += list(spec.goals)
             aliases = dict(template.aliases) if template else {}
+            rx_t = template.prescription_gy if template else None
+            if (spec.scale_to_prescription and rx_t and request.prescription_gy and request.target_structure
+                    and abs(float(request.prescription_gy) - float(rx_t)) > 1e-6):
+                # the template's target rows at the plan's prescription; organ limits are absolute and stay
+                target = resolve_structure(request.target_structure, available, aliases, spec.structure_aliases)
+                factor = float(request.prescription_gy) / float(rx_t)
+                goals = [scaled_goal(g, factor, float(rx_t), float(request.prescription_gy))
+                         if target is not None and resolve_structure(g.structure, available, aliases, spec.structure_aliases) == target
+                         else g for g in goals]
+            goals += list(spec.goals)
             basis = spec.dose_basis or (template.dose_basis if template else "physical")
             prescription = request.prescription_gy
             results: List[GoalResult] = []
