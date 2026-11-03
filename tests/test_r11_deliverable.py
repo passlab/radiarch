@@ -174,6 +174,9 @@ def test_the_deliverable_metersets_are_driven_by_the_goals_in_rounds(rx, monkeyp
     oar2 = [o for o in second.objectives if o.type == "DVHMax" and o.structure_name == "OAR"][0]
     assert oar2.weight == pytest.approx(3.0 * oar1.weight) and oar2.dose_gy == pytest.approx(0.95 * oar1.dose_gy)
     assert plan.request.rounds == 2 and plan.request.hot_spot_gy is None
+    hard = {(c.metric, c.op): c for c in first.hard_constraints}                          # R11.9 (A): coverage and the hot spot, hard
+    assert set(hard) == {("gEUD", ">="), ("Dmax", "<=")} and hard[("gEUD", ">=")].value_gy == 1.8 and hard[("gEUD", ">=")].eud_a == -10.0
+    assert hard[("Dmax", "<=")].value_gy == pytest.approx(1.2 * 2.0) and "hard_constraints" in plan.rounds[0]
     assert first.levels == 5 == second.levels                                              # no peak capped: the request's levels
 
     # a goal set that holds in the first round stops there; no goals: the mimic and the hot-spot term alone, one round
@@ -183,9 +186,13 @@ def test_the_deliverable_metersets_are_driven_by_the_goals_in_rounds(rx, monkeyp
     assert len(easy.rounds) == 1 and easy.rounds[0]["failed"] == [] and len(seen) == 1
     seen.clear()
     bare = ps.deliverable("balance", levels=5, max_iterations=60, rounds=3, hot_spot_gy=2.5)
-    assert len(bare.rounds) == 1 and len(seen) == 1
+    assert len(bare.rounds) == 1 and len(seen) == 1 and seen[0].hard_constraints == []            # no normalise: no limits
     types = {(o.type, o.structure_name): o for o in seen[0].objectives}
     assert set(types) == {("ReferenceDose", "PTV"), ("ReferenceDose", "OAR"), ("DMax", "PTV")} and types[("DMax", "PTV")].dose_gy == 2.5
+    seen.clear()
+    off = ps.deliverable("balance", levels=5, max_iterations=60, rounds=1, normalise={"structure": "PTV", "metric": "D95", "gy": 1.8},
+                         hard_coverage=False)
+    assert seen[0].hard_constraints == [] and "hard_constraints" not in off.rounds[0]
 
 
 def test_the_navigated_fluence_is_capped_before_sequencing():
@@ -211,3 +218,35 @@ def test_the_navigated_fluence_is_capped_before_sequencing():
     assert same.tolist() == w.tolist() and none == []
     smooth, no_notes = capped_fluence(_Plan(), np.ones(15), 6.0)
     assert smooth.tolist() == [1.0] * 15 and no_notes == []
+
+
+def _two_segment_problem():
+    import scipy.sparse as sp
+
+    S = sp.csr_matrix(np.array([[1.0, 0.2], [0.8, 0.3], [0.9, 0.0], [0.0, 0.1]]))      # 4 voxels, 2 segments
+    grid = (1, 2, 2)
+    organ = np.zeros(grid); organ.flat[2:] = 1.0
+    target = np.zeros(grid); target.flat[:2] = 1.0
+
+    def cost(d):                                                                          # the organ's dose pulls everything down
+        s = float((d * organ).sum())
+        return s * s, 2.0 * s * organ
+    return S, grid, cost, target
+
+
+def test_the_meterset_solves_meet_hard_constraints():
+    """R11.9 (A): the segment and the arc-interval meterset solves hold a coverage limit the objectives alone would give up."""
+    from radiarch.models.optimization import HardConstraint
+    from radiarch.services.hard_constraints import HardConstraintTerm
+    from radiarch.services.sequencing import optimize_segment_weights
+    from radiarch.services.vmat import optimize_interval_mu
+
+    S, grid, cost, target = _two_segment_problem()
+    spec = HardConstraint(structure_name="T", metric="Dmin", op=">=", value_gy=1.0, tolerance_gy=0.01)
+    free, _ = optimize_segment_weights(S, grid, cost, np.ones(2), max_iterations=200)
+    assert float((S @ free)[:2].min()) < 0.5                                              # unconstrained: the target is given up
+    held, conv = optimize_segment_weights(S, grid, cost, np.ones(2), max_iterations=200, hard_terms=[HardConstraintTerm(spec, target)])
+    assert float((S @ held)[:2].min()) >= 1.0 - 0.02 and conv.success and list(conv.constraint_violations.values()) == [0.0]
+    mu_min = np.array([0.05, 0.05])
+    mu, conv = optimize_interval_mu(S, grid, cost, np.ones(2), mu_min, max_iterations=200, hard_terms=[HardConstraintTerm(spec, target)])
+    assert np.all(mu >= mu_min - 1e-12) and float((S @ mu)[:2].min()) >= 1.0 - 0.02 and conv.success

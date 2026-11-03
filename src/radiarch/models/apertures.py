@@ -10,7 +10,7 @@ from typing import Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from .common import ResearchArtifact
-from .optimization import ConstraintSpec, ConvergenceInfo, ObjectiveSpec
+from .optimization import ConstraintSpec, ConvergenceInfo, ObjectiveSpec, HardConstraint
 
 
 class SequenceRequest(BaseModel):
@@ -24,6 +24,8 @@ class SequenceRequest(BaseModel):
     plan_id: Optional[str] = Field(default=None, max_length=36)
     objectives: List[ObjectiveSpec] = Field(..., min_length=1, max_length=256)
     constraints: List[ConstraintSpec] = Field(default_factory=list, max_length=256)
+    hard_constraints: List[HardConstraint] = Field(default_factory=list, max_length=16,
+                                                   description="Limits the metersets must meet (R11.2's augmented Lagrangian).")
     machine_model_id: Optional[str] = Field(default=None, description="Null = the beam model's machine, else the default photon machine.")
     levels: int = Field(default=10, ge=1, le=100, description="Fluence quantization steps per beam.")
     energy_mv: Optional[float] = Field(default=None, gt=0.0)
@@ -41,6 +43,8 @@ class SequenceRequest(BaseModel):
             "solver": self.solver_method,
             "max_iterations": self.max_iterations,
         }
+        if self.hard_constraints:          # only when given, so earlier sequences keep their keys
+            payload["hard_constraints"] = [c.hash() for c in self.hard_constraints]
         return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 

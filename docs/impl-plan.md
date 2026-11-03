@@ -287,7 +287,9 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   projection onto the Pareto set before sequencing, which left a sparse, spiky fluence): the deliverable plan is made
   from the navigated blend, projection optional; goal-driven meterset rounds as in R10, a hot-spot term, a cap on a
   beam's peaks; built and checked on the lung case in fast mode 2026-11-01; the lung case rerun at 4 mm as a dated
-  correction of the R11 record (about 0.25 ew)
+  correction of the R11 record (about 0.25 ew). 2026-11-03: not a fix at 4 mm (normalisation 1.37 fields, 1.27 arcs);
+  design note `docs/reports/mco-deliverable-options.md`; option A (coverage and the hot spot as hard constraints of
+  the meterset solve) built: fast-mode lung case 1.09 / 1.10, PTV D0.03cc 75 / 78 Gy; the 4 mm check is next
 - [x] R11.10 (2026-11-01) Planning behind a gateway: the user a trusted proxy names (header plus shared secret) kept
   as `requested_by` on optimizations, Pareto sets, navigation states, deliverable plans and exports, and as the
   exported objects' Operators' Name; an export fails when its push is refused and the push is required

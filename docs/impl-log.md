@@ -1140,3 +1140,24 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   `test_r11_viewer_client`), and the Viewer job builds the image from it and runs the browser tests. Without the
   checkout those tests skip and say why; `RADIARCH_OHIF_DIR` points them at another checkout. ADR 0018 records the
   move; README, `docs/viewing.md` and `docs/demo.md` add the fetch step.
+
+## R11.9, option A: coverage and the hot spot as hard constraints of the meterset solve (2026-11-03)
+
+- **Why.** At 4 mm the pushed R11.9 left the lung case's deliverable plans needing normalisation 1.37 (seven fields)
+  and 1.27 (two arcs); the cause and two designs are in `docs/reports/mco-deliverable-options.md`, and the project lead
+  chose A. A third attempt (re-optimizing the fluence before sequencing) gave 4.57 in fast mode and was reverted.
+- **The solves** (`services/sequencing.py` `constrained_metersets`, `optimize_segment_weights`; `services/vmat.py`
+  `optimize_interval_mu`, `plan_arcs`): with `hard_terms`, the segment or interval metersets minimize the objectives
+  subject to R11.2's hard-constraint terms by the augmented Lagrangian (the arcs on the metersets above each interval's
+  minimum). The convergence record gives each constraint's excess (0 when met). `SequenceRequest` and `ArcRequest` take
+  `hard_constraints`, in their cache keys only when given; `hard_constraint_terms` builds the terms on the dose grid.
+- **The deliverable step** (`DeliverableRequest.hard_coverage`, default on, and `max_dose_factor`, 1.2): with a
+  `normalise` goal, the metersets must hold the target's gEUD (a = -10) at or above the goal's dose and its maximum at
+  or below 1.2 times the prescription (RTOG 0617's 120 %), each within 0.5 Gy. The normalisation is then a check near 1,
+  not a correction that scales the hot spots with the coverage. Each round records the constraints' excess.
+- **Fast-mode lung case** (8 mm, on the compute server): normalisation 1.09 (seven fields) and 1.10 (arcs), both inside
+  the record's 15 % check; PTV D0.03cc 74.8 and 78.0 Gy, against 189 and 191 Gy before and the R10 reweighting plan's
+  77 Gy in the same run; PTV V60Gy 95.4 % and 95.1 %. The 4 mm check follows before the record's correction.
+- Tests (`tests/test_r11_deliverable.py`): a two-segment problem whose objective gives up the target, held at its
+  minimum by the segment and the arc-interval solves; the deliverable's two limits, off with `hard_coverage=false` and
+  without `normalise`.

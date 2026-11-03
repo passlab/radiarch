@@ -228,6 +228,43 @@ def coverage_matrix(plan: PhotonPlan, maps: List[FluenceMap], apertures: List[Ap
     return sp.csc_matrix((vals, (rows, cols)), shape=(int(offsets[-1]), len(apertures)), dtype=np.float64)
 
 
+def hard_constraint_terms(optimization_service, specs: Sequence, geometry, grid_shape: Tuple[int, int, int]) -> List:
+    """R11.2's hard-constraint terms for ``specs`` (:class:`~radiarch.models.optimization.HardConstraint`) on the dose grid."""
+    from .hard_constraints import HardConstraintTerm
+
+    return [HardConstraintTerm(s, optimization_service._resolve_mask(geometry, s.structure_name, grid_shape)) for s in specs]
+
+
+def constrained_metersets(S: sp.csr_matrix, grid_shape: Tuple[int, int, int], cost_terms: Callable[[np.ndarray], Tuple[float, np.ndarray]],
+                          z0: np.ndarray, base: Optional[np.ndarray], hard_terms: Sequence, method: str, max_iterations: int,
+                          tol: float = 1e-9) -> Tuple[np.ndarray, object]:
+    """Minimize ``cost_terms`` over ``z >= 0`` with ``dose = base + S @ z``, subject to ``hard_terms`` (R11.2's
+    :class:`~radiarch.services.hard_constraints.HardConstraintTerm`) by the augmented Lagrangian. Returns ``z`` and a
+    :class:`~radiarch.models.optimization.ConvergenceInfo` whose ``constraint_violations`` give each constraint's
+    excess in Gy (0 when met) and whose ``success`` is false when one is not met."""
+    from ..models.optimization import ConvergenceInfo
+    from .hard_constraints import solve_with_hard_constraints
+    from .optimization_solvers import get_solver
+
+    S = S.tocsr()
+    ST = S.T.tocsr()
+    b = np.zeros(S.shape[0]) if base is None else np.asarray(base, dtype=np.float64).ravel()
+
+    def forward(z: np.ndarray) -> np.ndarray:
+        return (b + np.asarray(S @ np.asarray(z, dtype=np.float64))).reshape(grid_shape)
+
+    def backward(g: np.ndarray) -> np.ndarray:
+        return np.asarray(ST @ np.asarray(g).ravel(order="C"), dtype=np.float64)
+
+    out = solve_with_hard_constraints(list(hard_terms), forward, backward, np.asarray(z0, dtype=np.float64), get_solver(method),
+                                      max_iterations, tol, dose_terms=cost_terms)
+    conv = ConvergenceInfo(success=bool(out.success and out.met), iterations=int(out.iterations),
+                           final_cost=float(cost_terms(out.dose)[0]), cost_history=[float(v) for v in out.cost_history][-200:],
+                           constraint_violations={o.label: (0.0 if o.met else round(float(o.violation_gy), 4)) for o in out.outcomes},
+                           notes=[f"hard constraints: {sum(o.met for o in out.outcomes)} of {len(out.outcomes)} met after {out.rounds} round(s)"])
+    return np.clip(np.asarray(out.weights, dtype=np.float64), 0.0, None), conv
+
+
 def optimize_segment_weights(
     segment_dose: sp.csr_matrix,
     grid_shape: Tuple[int, int, int],
@@ -236,10 +273,14 @@ def optimize_segment_weights(
     method: str = "L-BFGS-B",
     max_iterations: int = 200,
     tol: float = 1e-9,
+    hard_terms: Sequence = (),
 ) -> Tuple[np.ndarray, object]:
-    """Minimize the plan objectives over segment metersets ``w >= 0`` with ``dose = S @ w``."""
+    """Minimize the plan objectives over segment metersets ``w >= 0`` with ``dose = S @ w``; with ``hard_terms``,
+    subject to them (:func:`constrained_metersets`)."""
     from .optimization_solvers import get_solver
 
+    if hard_terms:
+        return constrained_metersets(segment_dose, grid_shape, cost_terms, w0, None, hard_terms, method, max_iterations, tol)
     S = segment_dose.tocsr()
     ST = S.T.tocsr()
 
@@ -365,8 +406,9 @@ def sequence_plan(
     max_iterations: int = 200,
     energy_mv: Optional[float] = None,
     name: Optional[str] = None,
+    hard_terms: Sequence = (),
 ) -> SequencingResult:
-    """Fluence → apertures → machine limits → segment weights → deliverable plan."""
+    """Fluence → apertures → machine limits → segment weights (subject to ``hard_terms``) → deliverable plan."""
     mlc = machine.mlc
     maps = fluence_maps(plan, weights, mlc)
     apertures: List[Aperture] = []
@@ -383,7 +425,7 @@ def sequence_plan(
     cov = coverage_matrix(plan, maps, apertures, mlc)
     S = (dij.tocsr() @ cov.tocsc()).tocsr()
     w0 = np.asarray([ap.level_weight for ap in apertures])
-    mu, conv = optimize_segment_weights(S, grid_shape, cost_terms, w0, method, max_iterations)
+    mu, conv = optimize_segment_weights(S, grid_shape, cost_terms, w0, method, max_iterations, hard_terms=hard_terms)
     # segments under the minimum MU are removed and the rest re-optimized, a few rounds at most
     for _ in range(5):
         keep = mu >= machine.min_mu_per_segment
@@ -393,7 +435,7 @@ def sequence_plan(
         apertures = [ap for ap, k in zip(apertures, keep) if k]
         cov = cov[:, np.flatnonzero(keep)]
         S = (dij.tocsr() @ cov.tocsc()).tocsr()
-        mu, conv = optimize_segment_weights(S, grid_shape, cost_terms, mu[keep], method, max_iterations)
+        mu, conv = optimize_segment_weights(S, grid_shape, cost_terms, mu[keep], method, max_iterations, hard_terms=hard_terms)
     keep = mu >= machine.min_mu_per_segment
     if not keep.any():
         raise ValueError("every segment fell under the machine's minimum MU; the fluence is too low for this machine")

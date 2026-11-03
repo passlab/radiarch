@@ -33,7 +33,7 @@ from ..config import get_settings
 from ..models.beam_model import Modality
 from ..models.dose import dose_units_for
 from ..models.mco import DeliverableRequest, DeliverableStage, DeviationRow, MCODeliverable
-from ..models.optimization import ConvergenceInfo, ObjectiveSpec, OptimizationResult
+from ..models.optimization import ConvergenceInfo, ObjectiveSpec, OptimizationResult, HardConstraint
 from .clinical_goals import parse_metric
 from .mco import MCOService
 from .navigation import NavigationService
@@ -271,6 +271,15 @@ class DeliverableService:
                 goal_rows = []
             masks = {g["structure"]: arrays.mask_zyx(arrays.structure_index[g["structure"]]) for g in goal_rows}
             coverage_targets = {g["structure"] for g in goal_rows if g["op"].startswith(">")}
+            hard: List[HardConstraint] = []
+            if request.hard_coverage and request.normalise is not None:
+                # the record's lung plans: apertures that under-cover, a normalisation that scales the hot spots up with the
+                # coverage (1.27 to 1.37). Coverage and the hot spot as limits of the meterset solve itself (R11.9, option A)
+                cover_target, rx_max = request.normalise.structure, (rx or request.normalise.gy)
+                hard = [HardConstraint(structure_name=cover_target, metric="gEUD", op=">=", value_gy=float(request.normalise.gy), eud_a=-10.0,
+                                       tolerance_gy=0.5),
+                        HardConstraint(structure_name=cover_target, metric="Dmax", op="<=", value_gy=round(request.max_dose_factor * rx_max, 3),
+                                       tolerance_gy=0.5)]
             scale: Dict[int, float] = {}
             level: Dict[int, float] = {}
             for r in range(max(1, int(request.rounds))):
@@ -280,7 +289,7 @@ class DeliverableService:
                        f"round {r + 1}: arcs from the navigated sector fluence, metersets mimicking its dose")
                     vm = VMATService().arcs(opt.optimization_id, ArcRequest(
                         objectives=objectives, arcs=request.arcs, fractions=request.fractions, machine_model_id=request.machine_model_id,
-                        dose_engine=mreq.dose_engine, max_iterations=request.max_iterations))
+                        dose_engine=mreq.dose_engine, max_iterations=request.max_iterations, hard_constraints=hard))
                     technique, vmat_id, beam_model_id, dose_id, deliverable = "vmat", vm.vmat_id, vm.beam_model_id, vm.dose_id, vm.deliverable
                 else:
                     on(DeliverableStage.mimicking, 0.35 + 0.4 * r / request.rounds,
@@ -288,7 +297,7 @@ class DeliverableService:
                     levels = max(int(request.levels), int(np.ceil(2 * request.peak_ratio)) if cap_notes else 0)   # a peaked map: finer steps
                     seq = ApertureService().sequence(opt.optimization_id, SequenceRequest(
                         objectives=objectives, levels=levels, machine_model_id=request.machine_model_id,
-                        max_iterations=request.max_iterations))
+                        max_iterations=request.max_iterations, hard_constraints=hard))
                     technique, sequence_id, beam_model_id, dose_id, deliverable = "imrt", seq.sequence_id, seq.beam_model_id, seq.dose_id, seq.deliverable
                 raw = read_volume(DoseService().dose_store.get_by_id(dose_id).dose_grid_uri)
                 judged, k_r = raw, 1.0
@@ -296,8 +305,10 @@ class DeliverableService:
                     mask = osvc._resolve_mask(prob.geometry, request.normalise.structure, prob.grid_shape) > 0
                     judged, k_r = normalise_to_goal(raw, raw[mask], request.normalise.metric, request.normalise.gy)
                 failed = [i for i, g in enumerate(goal_rows) if not goal_met(judged[masks[g["structure"]]], g)]
+                conv_r = (vm if request.arcs else seq).convergence
                 rounds_log.append({"round": r + 1, "normalisation": round(float(k_r), 4),
-                                   "failed": [f"{goal_rows[i]['structure']} {goal_rows[i]['metric']}" for i in failed]})
+                                   "failed": [f"{goal_rows[i]['structure']} {goal_rows[i]['metric']}" for i in failed],
+                                   **({"hard_constraints": dict(getattr(conv_r, "constraint_violations", {}) or {})} if hard else {})})
                 if not failed:
                     break
                 for i in failed:

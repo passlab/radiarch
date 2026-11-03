@@ -302,6 +302,13 @@ class DeliverableRequest(BaseModel):
                         description="Goal-driven rounds on the deliverable metersets (photons), as the reweighting planner's: the "
                                     "plan is normalised, its goals judged, a failed goal's weight tripled and an organ limit lowered "
                                     "5 %, and the metersets optimized again; stops when every goal holds.")
+    hard_coverage: bool = Field(default=True,
+                                description="Photons, with normalise: the metersets meet the target's coverage and hot-spot limits as hard "
+                                            "constraints (the target's gEUD with a = -10 at or above normalise.gy, its maximum at or below "
+                                            "max_dose_factor times the prescription), so the normalisation is a check near 1 instead "
+                                            "of a correction that scales the hot spots with the coverage.")
+    max_dose_factor: float = Field(default=1.2, gt=1.0, le=2.0,
+                                   description="The target's maximum dose limit as a multiple of the prescription (1.2: RTOG 0617's).")
     hot_spot_gy: Optional[float] = Field(default=None, gt=0.0,
                                          description="The targets' maximum-dose term in the meterset optimization; null = each "
                                                      "target's navigated maximum plus tolerance_gy (no hotter than navigated).")

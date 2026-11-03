@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from .common import ResearchArtifact
 from .dose import EngineSpec
-from .optimization import ConstraintSpec, ConvergenceInfo, ObjectiveSpec
+from .optimization import ConstraintSpec, ConvergenceInfo, ObjectiveSpec, HardConstraint
 from .photon_plan import arc_step_deg
 
 
@@ -76,6 +76,8 @@ class ArcRequest(BaseModel):
     plan_id: Optional[str] = Field(default=None, max_length=36)
     objectives: List[ObjectiveSpec] = Field(..., min_length=1, max_length=256)
     constraints: List[ConstraintSpec] = Field(default_factory=list, max_length=256)
+    hard_constraints: List[HardConstraint] = Field(default_factory=list, max_length=16,
+                                                   description="Limits the metersets must meet (R11.2's augmented Lagrangian).")
     arcs: List[ArcSpec] = Field(..., min_length=1, max_length=8)
     machine_model_id: Optional[str] = Field(default=None, description="Null = the beam model's machine, else the default photon machine.")
     energy_mv: Optional[float] = Field(default=None, gt=0.0)
@@ -98,6 +100,8 @@ class ArcRequest(BaseModel):
             "solver": self.solver_method,
             "max_iterations": self.max_iterations,
         }
+        if self.hard_constraints:          # only when given, so earlier sequences keep their keys
+            payload["hard_constraints"] = [c.hash() for c in self.hard_constraints]
         return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")).hexdigest()
 
 

@@ -30,7 +30,7 @@ from .dose import DoseService, _summary_stats
 from .dose_persistence import DOSE_FILENAME
 from .machine_model import PhotonMachineModel
 from .optimization import OptimizationService
-from .sequencing import sequence_plan
+from .sequencing import hard_constraint_terms, sequence_plan
 
 
 class ApertureStore:
@@ -134,7 +134,8 @@ class ApertureService:
 
         res = sequence_plan(plan, weights, dij, grid_shape, cost_terms, machine, levels=request.levels,
                             method=request.solver_method, max_iterations=request.max_iterations,
-                            energy_mv=request.energy_mv, name=f"{plan.name}-{machine.machine_id}")
+                            energy_mv=request.energy_mv, name=f"{plan.name}-{machine.machine_id}",
+                            hard_terms=hard_constraint_terms(self.optimization_service, request.hard_constraints, geometry, grid_shape))
 
         # the aperture plan as a beam model of its own
         sequence_id = str(uuid.uuid4())
