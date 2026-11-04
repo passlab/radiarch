@@ -192,9 +192,10 @@ any DICOMweb server and ingest NRRD.
 Writes go to a temporary folder and are renamed into place, so a crash never leaves a
 half-written result under a valid key. Doses, influence matrices, optimizations, beam-angle
 searches and evaluations have size caps: a periodic cleanup evicts the least recently read
-entries above the cap and keeps entries younger than a minimum age. The cleanup does not yet
-consult the lineage locks, so an approved version can be evicted (an open task of R12; the
-delete routes do refuse). Postgres holds plans, jobs and artifact rows.
+entries above the cap and keeps entries younger than a minimum age. It never evicts a version
+that was approved or one an approved version derives from (the lineage locks, as the delete
+routes); when the state file cannot be read it evicts nothing. Postgres holds plans, jobs and
+artifact rows.
 
 ### 4.8 Validation harness
 
@@ -259,7 +260,6 @@ the audit log and storage hygiene. The pencil-beam engine uses a GPU through CuP
   10 x 10 cm, within 2 %); photon scatter is not scaled and interface build-up is not modelled.
 - VMAT leaf trajectories come from sliding-window sweeps of sector fluence, not from direct
   leaf optimization.
-- Store cleanup can evict an approved version (it does not consult the lineage locks yet).
 - Not yet built: registration, 4D and replanning (R9); the scripting SDK and planning protocols
   (R10); viewer integration (R13); multi-criteria optimization (R11).
 

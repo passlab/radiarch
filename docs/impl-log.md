@@ -1219,3 +1219,17 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   result is the R11 record's correction.
 - Test (`tests/test_r11_deliverable.py`): with scripted normalisations, the gEUD level follows them and stops at the
   cap, and the round nearest 1 is kept; a wider band stops sooner; a first round inside the band is the only one.
+
+## Store cleanup keeps what an approval locks (2026-11-04)
+
+- **Why.** The periodic cleanup evicted dose, influence, optimization, beam-angle and evaluation entries by size and
+  last read only. An approved version, or one it derives from, could be deleted, although the delete routes refuse
+  both (R12, ADR 0013).
+- **Change** (`tasks/cleanup_tasks.py`): each sweep keeps the entries whose `kind:id` is in the lineage service's
+  lock set (every version ever approved and its ancestry), and reports them as `locked_kept`. With no state file
+  nothing was approved and the sweep runs as before. A state file that cannot be parsed stops the whole sweep (the
+  lineage service reads one as "nothing approved"), with a `failed` audit event.
+- Test (`tests/test_r12_lineage.py`): two sequenced plans, one segment dose approved, every store over its cap with no
+  entry young enough to be spared. With the state file cut in half, nothing is evicted. With it intact, only the
+  approved dose and its optimization are left.
+- Docs: `architecture.md` (the known gap removed), ADR 0013 decision 4, `PRODUCTION.md` (disk hygiene).

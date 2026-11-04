@@ -99,6 +99,50 @@ def test_states_and_immutability(env):  # noqa: F811
     assert (Path(env) / "lineage" / "states.json").is_file()
 
 
+def test_the_store_cleanup_keeps_what_an_approval_locks(env, monkeypatch):  # noqa: F811
+    from radiarch.config import get_settings
+    from radiarch.models.apertures import SequenceRequest
+    from radiarch.models.dose import EngineSpec
+    from radiarch.models.optimization import ObjectiveSpec, OptimizationRunRequest, SolverConfig
+    from radiarch.services.apertures import ApertureService
+    from radiarch.services.lineage import LineageService
+    from radiarch.services.optimization import OptimizationService
+    from radiarch.tasks import cleanup_tasks
+
+    geo, bm, opt, seq = _photon_pipeline()
+    other = OptimizationService().run(OptimizationRunRequest(
+        geometry_id=geo.geometry_id, beam_model_id=bm.beam_model_id, dose_engine=EngineSpec(name="analytic"),
+        objectives=[ObjectiveSpec(type="DUniform", structure_name="PTV", dose_gy=3.0, weight=1.0)],
+        solver=SolverConfig(method="L-BFGS-B", max_iterations=20)))
+    other_seq = ApertureService().sequence(other.optimization_id, SequenceRequest(
+        objectives=[ObjectiveSpec(type="DUniform", structure_name="PTV", dose_gy=3.0, weight=1.0)], levels=5, max_iterations=20))
+    LineageService().transition(VersionRef(kind="dose", id=seq.dose_id),
+                                StateRecord(state=VersionState.approved, actor="physicist:ab", authority="ois"))
+    # every store over its cap and no entry young enough to be spared: only the locks keep anything
+    for k in ("DOSE", "INFLUENCE", "OPTIMIZATION", "BAO", "EVALUATION"):
+        monkeypatch.setenv(f"RADIARCH_{k}_STORE_MAX_GB", "1e-9")
+    monkeypatch.setenv("RADIARCH_DOSE_MIN_AGE_HOURS", "0")
+    get_settings.cache_clear()
+    ids = lambda folder: {p.name for p in (Path(env) / folder).iterdir() if (p / "meta.json").is_file()}  # noqa: E731
+    doses_before, opts_before = ids("doses"), ids("optimization")
+    assert {seq.dose_id, other_seq.dose_id} <= doses_before and {opt.optimization_id, other.optimization_id} <= opts_before
+
+    # the state file broken: nothing goes (the lineage service would read it as nothing approved)
+    states = Path(env) / "lineage" / "states.json"
+    kept = states.read_text()
+    states.write_text(kept[: len(kept) // 2])
+    summary = cleanup_tasks.cleanup_dose_stores()
+    assert summary["skipped"] and "unreadable" in summary["reason"]
+    assert ids("doses") == doses_before and ids("optimization") == opts_before
+    states.write_text(kept)
+
+    # the approved segment dose and the optimization it derives from stay; the rest is evicted
+    summary = cleanup_tasks.cleanup_dose_stores()
+    assert ids("doses") == {seq.dose_id} and ids("optimization") == {opt.optimization_id}
+    assert summary["dose"]["locked_kept"] == 1 and summary["dose"]["evicted_count"] == len(doses_before) - 1
+    assert summary["optimization"]["locked_kept"] == 1 and summary["optimization"]["evicted_count"] == len(opts_before) - 1
+
+
 def _expand_request():
     from radiarch.models.geometry import GeometryDeriveRequest, StructureOperation
 

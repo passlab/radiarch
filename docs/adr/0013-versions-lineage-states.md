@@ -42,7 +42,7 @@ feet), without radiarch taking a decision that belongs to the record system
 4. **Approved versions are immutable, and so is everything they derive
    from.** A version that was ever approved (superseded or retired later or
    not) locks itself and its whole ancestry: the delete routes of every
-   store answer 409. Caches are content-addressed, so re-running the same
+   store answer 409, and the store cleanup never evicts them (2026-11-04). Caches are content-addressed, so re-running the same
    inputs reuses the approved version rather than replacing it.
 5. **A dataset manifest's transformation record is a view too.**
    `GET /lineage/{kind}/{id}/derivation?dataset_id=&version=` renders a

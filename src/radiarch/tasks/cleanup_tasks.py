@@ -14,6 +14,9 @@ Eviction rules
   on every read via ``DoseStore.get_by_id``; if you don't see mtime
   bumps, the read-path isn't touching the file).
 * Eviction stops once total size drops below the cap (no overshoot).
+* A version that was ever approved, and every version it derives from, is
+  never evicted (the lineage locks, R12, as the delete routes). When the
+  locks cannot be read, nothing is evicted on that tick.
 
 Operationally
 -------------
@@ -31,12 +34,13 @@ Operationally
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import List, Tuple
+from typing import AbstractSet, List, Tuple
 
 from loguru import logger
 
@@ -86,8 +90,9 @@ def _evict_to_cap(
     entries: List[_Entry],
     cap_bytes: int,
     min_age_seconds: float,
+    keep: AbstractSet[str] = frozenset(),
 ) -> Tuple[int, int]:
-    """Delete oldest-access entries until total size ≤ cap.
+    """Delete oldest-access entries until total size ≤ cap, never one whose id is in ``keep``.
 
     Returns ``(evicted_count, bytes_freed)``.
     """
@@ -101,7 +106,7 @@ def _evict_to_cap(
     now = time.time()
     candidates = [
         e for e in entries
-        if (now - e.atime_s) >= min_age_seconds
+        if (now - e.atime_s) >= min_age_seconds and e.id not in keep
     ]
     # Oldest-first by access time.
     candidates.sort(key=lambda e: e.atime_s)
@@ -135,6 +140,14 @@ def cleanup_dose_stores() -> dict:
     artifact_dir = Path(settings.artifact_dir)
 
     min_age_s = settings.dose_min_age_hours * 3600.0
+    try:
+        locked = _locked_keys()
+    except Exception as exc:
+        # an approval that cannot be read could be one the sweep would break
+        logger.error(f"cleanup: the lineage locks could not be read, nothing evicted: {exc}")
+        summary = {"skipped": True, "reason": f"lineage locks unreadable: {exc}"}
+        emit(make_event("cleanup.swept", state="failed", extra=summary))
+        return summary
 
     summary = {
         "dose": _sweep_store(
@@ -142,12 +155,14 @@ def cleanup_dose_stores() -> dict:
             settings.dose_store_max_gb,
             min_age_s,
             "dose",
+            locked,
         ),
         "influence": _sweep_store(
             artifact_dir / "influence",
             settings.influence_store_max_gb,
             min_age_s,
             "influence",
+            locked,
         ),
         # O20 — sweep the optimization store under the same LRU + min-age
         # policy, and additionally prune stale per-run checkpoints.
@@ -156,6 +171,7 @@ def cleanup_dose_stores() -> dict:
             settings.optimization_store_max_gb,
             min_age_s,
             "optimization",
+            locked,
         ),
         "optimization_checkpoints": _prune_optimization_checkpoints(
             artifact_dir / "optimization",
@@ -167,6 +183,7 @@ def cleanup_dose_stores() -> dict:
             settings.bao_store_max_gb,
             min_age_s,
             "bao",
+            locked,
         ),
         # Service 6 — evaluation reports (metadata-only).
         "evaluation": _sweep_store(
@@ -174,6 +191,7 @@ def cleanup_dose_stores() -> dict:
             settings.evaluation_store_max_gb,
             min_age_s,
             "evaluation",
+            locked,
         ),
     }
 
@@ -185,26 +203,42 @@ def cleanup_dose_stores() -> dict:
     return summary
 
 
+def _locked_keys() -> AbstractSet[str]:
+    """``kind:id`` of every version that was approved and of everything it derives from."""
+    from ..services.lineage import LineageService
+
+    root = Path(get_settings().artifact_dir) / "lineage"
+    states = root / "states.json"
+    if not states.is_file():
+        return frozenset()                      # nothing was ever approved
+    json.loads(states.read_text())              # the service reads a broken state file as "nothing approved"; the sweep must not
+    return LineageService(root).locked_keys()
+
+
 def _sweep_store(
     base_dir: Path,
     cap_gb: float,
     min_age_s: float,
     label: str,
+    locked: AbstractSet[str] = frozenset(),
 ) -> dict:
+    """``label`` is the store's lineage kind; its entries in ``locked`` are kept."""
     if not base_dir.is_dir():
         return {"skipped": True, "reason": "base_dir does not exist"}
 
     cap_bytes = int(cap_gb * 1024**3)
     entries = _enumerate_entries(base_dir)
     total_bytes = sum(e.size_bytes for e in entries)
+    keep = {e.id for e in entries if f"{label}:{e.id}" in locked}
 
-    evicted, freed = _evict_to_cap(entries, cap_bytes, min_age_s)
+    evicted, freed = _evict_to_cap(entries, cap_bytes, min_age_s, keep)
 
     result = {
         "store": label,
         "entries_before": len(entries),
         "bytes_before": total_bytes,
         "cap_bytes": cap_bytes,
+        "locked_kept": len(keep),
         "evicted_count": evicted,
         "bytes_freed": freed,
     }

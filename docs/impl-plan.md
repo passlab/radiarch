@@ -126,7 +126,8 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] Lineage graph over every store; descendants; attribution
 - [x] States (draft, approved, superseded, retired) and recorded transitions; delete routes refuse locked versions
 - [x] Dataset-manifest derivation record; capability declaration
-- [ ] Store cleanup that respects the locks (it can evict an approved version today) **(open)**
+- [x] (2026-11-04) Store cleanup that respects the locks: an approved version and everything it derives from are never
+  evicted; a state file that cannot be read stops the sweep
 - [ ] Engine binary digest in the attribution **(open)**
 - [ ] Lineage across radiarch instances; an immutable audit trail **(open)**
 

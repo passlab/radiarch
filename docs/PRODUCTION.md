@@ -207,7 +207,10 @@ The cleanup task (`radiarch.cleanup.dose_stores`) runs every
 least-recently-accessed entries when a store exceeds its cap.
 Entries younger than `RADIARCH_DOSE_MIN_AGE_HOURS` (default: 24 h)
 are **protected** — never evicted — to shield an in-flight
-optimization loop.
+optimization loop. So is every version that was approved and
+everything it derives from (the lineage locks); if
+`lineage/states.json` cannot be read, the task evicts nothing and
+its audit event is `failed`.
 
 Set caps to 70-80 % of the underlying filesystem capacity. The task
 sweeps both `doses/` and `influence/` independently, so a single
