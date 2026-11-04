@@ -1165,3 +1165,16 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   objects, that the store was temporary and removed, and the environment restored. The CI image job now runs
   `radiarch dose` as uid 12345 on a read-only image with only `/tmp` and the output folder writable, the plan given
   as a folder.
+
+## `radiarch dose --dose-only`: the RT Dose of the plan as given (2026-11-03)
+
+- **Why.** A regeneration takes a structure set and a plan and returns their dose. The export wrote the RT Dose with a
+  re-written plan, and the dose referenced that plan's new SOP Instance UID, not the plan it was given.
+- **Export** (`models/rt_export.py`, `services/rt_export.py`): `rtplan_uid` references an existing RT Plan (an RT Ion
+  Plan for protons) instead of a written one, as `rtstruct_uid` does for the structure set; the dose's
+  ReferencedRTPlanSequence names it. Refused with `rtplan` among the objects, and with per-beam doses or DRRs, which
+  name the written plan's beam numbers. In the cache key only when given, so earlier exports keep their keys.
+- **Command** (`cli.py`, `cwl/radiarch-dose.cwl`): `--dose-only` exports only the RT Dose, with `rtplan_uid` the given
+  plan's SOP Instance UID. The dose carries the CT's study and frame of reference (the plan's, checked on import).
+- Test (`tests/test_dose_command.py`): with `--dose-only` the export holds one RD whose referenced plan is the input's
+  SOP class and instance, in the CT's study and frame; the two refusals; the cache key differs with the reference.

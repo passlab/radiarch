@@ -39,6 +39,10 @@ inputs:
     type: string?
     doc: The machine model the plan is delivered on.
     inputBinding: {prefix: --machine}
+  dose_only:
+    type: boolean?
+    doc: Write only the RT Dose, referencing the given plan (no re-written plan or structure set).
+    inputBinding: {prefix: --dose-only}
   label:
     type: string?
     doc: RT Plan label (default RESEARCH).

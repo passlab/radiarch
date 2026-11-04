@@ -100,6 +100,35 @@ def test_the_structure_set_in_the_ct_directory_and_the_errors(dose_env, tmp_path
         main(["dose", "--ct", str(case), "--plan", str(tmp_path / "none.dcm"), "--poll", "0.01"])
 
 
+def test_dose_only_writes_an_rt_dose_that_names_the_plan_it_was_given(dose_env, tmp_path, capsys):
+    """A regeneration takes a structure set and a plan and returns the dose alone: with --dose-only the export is one RT
+    Dose whose referenced plan is the input plan (its SOP class and instance), in the CT's study and frame of reference."""
+    from radiarch.models.rt_export import RTExportRequest
+
+    case, plan = _case(tmp_path)
+    rs = tmp_path / "structures" / "RS.dcm"
+    rs.parent.mkdir()
+    (case / "RS.dcm").rename(rs)
+    code = main(["dose", "--ct", str(case), "--structures", str(rs), "--plan", str(plan), "--engine", "pb", "--dose-only",
+                 "--export", str(tmp_path / "rt"), "--json", str(tmp_path / "dose.json"), "--poll", "0.01"])
+    assert code == 0, capsys.readouterr().out
+    assert sorted(p.name for p in (tmp_path / "rt").iterdir()) == ["RD.dcm"]
+    rd, src = pydicom.dcmread(str(tmp_path / "rt" / "RD.dcm")), pydicom.dcmread(str(plan), stop_before_pixels=True)
+    ct = pydicom.dcmread(str(case / "CT000.dcm"), stop_before_pixels=True)
+    ref = rd.ReferencedRTPlanSequence[0]
+    assert len(rd.ReferencedRTPlanSequence) == 1
+    assert (ref.ReferencedSOPClassUID, ref.ReferencedSOPInstanceUID) == (src.SOPClassUID, src.SOPInstanceUID)
+    assert (rd.StudyInstanceUID, rd.FrameOfReferenceUID) == (ct.StudyInstanceUID, ct.FrameOfReferenceUID)
+    record = json.loads((tmp_path / "dose.json").read_text())["export"]
+    assert [o["kind"] for o in record["objects"]] == ["RTDOSE"] and record["plan_sop_instance_uid"] is None
+    with pytest.raises(ValueError, match="not both"):
+        RTExportRequest(beam_model_id="b", objects=["rtplan", "rtdose"], rtstruct_uid="1.2", rtplan_uid="1.3")
+    with pytest.raises(ValueError, match="beam numbers"):
+        RTExportRequest(beam_model_id="b", objects=["rtdose"], per_beam_dose=True, rtplan_uid="1.3")
+    plain = RTExportRequest(beam_model_id="b", objects=["rtdose"])
+    assert plain.compute_cache_key() != plain.model_copy(update={"rtplan_uid": "1.3"}).compute_cache_key()
+
+
 def test_the_structures_and_the_plan_given_as_their_series_folders(dose_env, tmp_path, capsys):
     """A workflow engine hands every input as the folder of its series: the command takes the one structure set and the
     one plan in them, and refuses a folder with none or with more than one."""

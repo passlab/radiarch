@@ -249,9 +249,12 @@ def cmd_dose(args) -> int:
             print(f"dose {dose.id}: {d.engine_name} {d.engine_version}, {bm.result.modality.value}, "
                   f"{bm.result.fluence_elements.total_count} fluence elements, max {s.max_gy:.2f} mean {s.mean_gy:.2f} {d.dose_units}")
             if args.export or args.push:
-                objects = ["rtplan", "rtdose"] if rtstruct else ["rtstruct", "rtplan", "rtdose"]
+                if args.dose_only:      # the dose of the plan as given: its RT Dose names that plan, nothing is re-written
+                    objects, rtplan_uid = ["rtdose"], _dicom_uids(plan_path)["sop"]
+                else:
+                    objects, rtplan_uid = (["rtplan", "rtdose"] if rtstruct else ["rtstruct", "rtplan", "rtdose"]), None
                 exp = bm.export(dose=dose, label=args.label, objects=objects, rtstruct_uid=rtstruct["sop"] if rtstruct else None,
-                                push=bool(args.push))
+                                rtplan_uid=rtplan_uid, push=bool(args.push))
                 if args.export:
                     files = exp.download(args.export)
                     print(f"RT objects: {', '.join(str(f) for f in files)}")
@@ -382,6 +385,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--machine", help="the machine model the plan is delivered on (default the photon default)")
     s.add_argument("--any-frame", action="store_true", help="accept a plan whose frame of reference is not the CT's")
     s.add_argument("--export", help="write the RT Dose and the plan as re-written into this directory")
+    s.add_argument("--dose-only", action="store_true",
+                   help="write only the RT Dose, referencing the given plan (no re-written plan or structure set)")
     s.add_argument("--push", action="store_true", help="push them to the server's DICOMweb destination (RADIARCH_DICOMWEB_URL)")
     s.add_argument("--label", default="RESEARCH", help="RT Plan label (default RESEARCH)")
     s.add_argument("--json", help="write the geometry, beam model, dose and export records as JSON")
