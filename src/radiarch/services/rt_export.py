@@ -203,7 +203,7 @@ class RTExportService:
 
         # 2. DRRs need the plan's SOP instance UID before the plan is written
         plan_sop_class = SOP.RTPLAN if isinstance(src.plan, PhotonPlan) else SOP.RTIONPLAN
-        plan_uid = _new_uid()
+        plan_uid = request.rtplan_uid or _new_uid()
         options = self._plan_options(request, src, roi_numbers, arrays)
         options.sop_instance_uid = plan_uid
         beams = list(src.plan.beams)

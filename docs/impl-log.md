@@ -1161,3 +1161,41 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
 - Tests (`tests/test_r11_deliverable.py`): a two-segment problem whose objective gives up the target, held at its
   minimum by the segment and the arc-interval solves; the deliverable's two limits, off with `hard_coverage=false` and
   without `normalise`.
+
+## `radiarch dose`: the structure set and the plan as their series folders (2026-11-03)
+
+- **Why.** A workflow engine that hands each input over as the folder of its series passed
+  `--plan <folder>`, and the command stopped: it took only a file there.
+- **Command** (`cli.py` `_the_one`): `--structures` and `--plan` take a file as before, or a folder. In a folder the
+  command reads each file's header and takes the one RT Structure Set or the one RT Plan (an RT Ion Plan too); copies
+  of one instance count once. A folder with none, or with more than one, is refused with a message that says which.
+  The CWL tool (`cwl/radiarch-dose.cwl`) takes a File or a Directory for both.
+- Test (`tests/test_dose_command.py`): the structure set and the plan each in its own series folder, outside the CT's,
+  with the written RT Plan referencing that structure set; a folder with no plan, one with no structure set, and one
+  with two plans refused.
+
+## The command line under another uid: a temporary artifact store (2026-11-03)
+
+- **Why.** A workflow engine ran the image's `radiarch dose` as its job account's uid. The image's artifact folder
+  (`/data/artifacts`) is root's, so the geometry store's first `mkdir` failed with permission denied.
+- **Change** (`sdk/client.py` `Radiarch.local`): when the configured artifact folder cannot be created or written, the
+  in-process app keeps its artifacts in a fresh temporary folder (under `TMPDIR`) and removes it when the client
+  closes; `RADIARCH_ARTIFACT_DIR` is then restored. A writable folder is used as before. Nothing else in the command
+  writes outside `TMPDIR` and `--export`: the engines' working folders are temporary already.
+- Tests: `tests/test_dose_command.py` runs the command with an artifact folder no one can create, and checks the RT
+  objects, that the store was temporary and removed, and the environment restored. The CI image job now runs
+  `radiarch dose` as uid 12345 on a read-only image with only `/tmp` and the output folder writable, the plan given
+  as a folder.
+
+## `radiarch dose --dose-only`: the RT Dose of the plan as given (2026-11-03)
+
+- **Why.** A regeneration takes a structure set and a plan and returns their dose. The export wrote the RT Dose with a
+  re-written plan, and the dose referenced that plan's new SOP Instance UID, not the plan it was given.
+- **Export** (`models/rt_export.py`, `services/rt_export.py`): `rtplan_uid` references an existing RT Plan (an RT Ion
+  Plan for protons) instead of a written one, as `rtstruct_uid` does for the structure set; the dose's
+  ReferencedRTPlanSequence names it. Refused with `rtplan` among the objects, and with per-beam doses or DRRs, which
+  name the written plan's beam numbers. In the cache key only when given, so earlier exports keep their keys.
+- **Command** (`cli.py`, `cwl/radiarch-dose.cwl`): `--dose-only` exports only the RT Dose, with `rtplan_uid` the given
+  plan's SOP Instance UID. The dose carries the CT's study and frame of reference (the plan's, checked on import).
+- Test (`tests/test_dose_command.py`): with `--dose-only` the export holds one RD whose referenced plan is the input's
+  SOP class and instance, in the CT's study and frame; the two refusals; the cache key differs with the reference.

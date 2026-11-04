@@ -290,6 +290,11 @@ radiarch dose --ct /dicom/case1 --structures /dicom/case1/RS.dcm --plan /plans/R
 #   --engine auto (pb for a photon plan, mcsquare for a proton plan), ccc, pb or mcsquare; --spacing, --machine, --any-frame, --push
 ```
 
+`--structures` and `--plan` also take a folder, as a workflow engine hands over a series: the command uses the one
+structure set or plan in it and refuses a folder with none or more than one.
+With `--dose-only` the export is the RT Dose alone, referencing the plan given (its SOP class and instance UIDs) in the
+CT's study and frame of reference: no re-written plan and no structure set.
+
 In Python: `bm = geo.import_plan("RP.dcm"); dose = bm.recalculate(engine="auto"); bm.export(dose=dose).download("rt")`.
 A CWL tool description wraps the command (`src/radiarch/cwl/radiarch-dose.cwl`).
 
@@ -299,6 +304,8 @@ CT's own grid, typically 1 x 1 x 3 mm and about twenty times the work; the recor
 Without `--server`, `radiarch plan` and `radiarch dose` run self-contained in their process: jobs in-process, no
 database, an in-memory broker, whatever the environment says. So the image runs them standalone, with no compose
 services: `docker run --rm -v /dicom/case1:/data radiarch:<tag> radiarch dose --ct /data --plan /data/RP.dcm --export /data/rt`.
+Under another uid than root (a workflow engine's job account), where the image's artifact folder cannot be written,
+the command keeps its artifacts in a temporary folder and removes it at the end; the outputs go to `--export`.
 
 ## DICOM RT out
 

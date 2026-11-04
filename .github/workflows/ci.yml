@@ -264,3 +264,12 @@ jobs:
           grep -q lung-60gy-30fx-vmat-itv protocols.txt
           docker run --rm radiarch:ci radiarch dose --help | grep -q -- --structures
           docker run --rm radiarch:ci python -c "import radiarch, os; print(os.environ['RADIARCH_BUILD_COMMIT'])" | grep -qE '^[0-9a-f]{7}$'
+      - name: The dose command under another uid, on a read-only image
+        run: |
+          # a workflow engine may run the image as its job account's uid, with only /tmp and the outputs writable
+          mkdir -p "$RUNNER_TEMP/case" "$RUNNER_TEMP/out" && chmod 777 "$RUNNER_TEMP/out"
+          docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -w /tmp -v "$PWD/tests:/t:ro" -v "$RUNNER_TEMP/case:/out" radiarch:ci \
+            python -c "import sys; from pathlib import Path; sys.path[:0] = ['/t']; from test_dose_command import _case; _case(Path('/out'))"
+          docker run --rm --user 12345:12345 --read-only --tmpfs /tmp -v "$RUNNER_TEMP/case:/in:ro" -v "$RUNNER_TEMP/out:/out" radiarch:ci \
+            radiarch dose --ct /in/case --plan /in --engine pb --export /out/rt
+          test -s "$RUNNER_TEMP/out/rt/RD.dcm"

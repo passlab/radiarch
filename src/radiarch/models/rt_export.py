@@ -55,6 +55,9 @@ class RTExportRequest(BaseModel):
     drr_size_mm: Tuple[float, float] = Field(default=(300.0, 300.0))
     drr_pixel_mm: Tuple[float, float] = Field(default=(1.0, 1.0))
     rtstruct_uid: Optional[str] = Field(default=None, max_length=64, description="Reference an existing structure set instead of writing one.")
+    rtplan_uid: Optional[str] = Field(default=None, max_length=64,
+                                      description="Reference an existing RT Plan (an RT Ion Plan for protons) instead of writing one: "
+                                                  "the dose names it, e.g. the imported plan whose dose was recomputed.")
     push: bool = Field(default=False, description="Push the objects with STOW-RS to RADIARCH_DICOMWEB_URL after writing.")
     predecessor_plan_uid: Optional[str] = Field(default=None, max_length=64,
                                                 description="The plan this one replaces (a re-plan, R9): referenced with RTPlanRelationship PREDECESSOR.")
@@ -70,6 +73,8 @@ class RTExportRequest(BaseModel):
     def compute_cache_key(self) -> str:
         """The plan and every setting that shapes the objects; not ``push`` or ``new_export``, which do not."""
         payload = self.model_dump(mode="json", exclude={"push", "new_export", "requested_by"})
+        if payload.get("rtplan_uid") is None:
+            payload.pop("rtplan_uid", None)          # earlier exports keep their keys
         blob = json.dumps({"version": EXPORT_VERSION, **payload}, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
@@ -83,6 +88,10 @@ class RTExportRequest(BaseModel):
             raise ValueError(f"unknown objects {bad}; choose from {list(OBJECT_KINDS)}")
         if "rtstruct" not in self.objects and "rtplan" in self.objects and not self.rtstruct_uid:
             raise ValueError("an RT Plan references a structure set: write rtstruct too or give rtstruct_uid")
+        if self.rtplan_uid and "rtplan" in self.objects:
+            raise ValueError("reference an existing plan (rtplan_uid) or write one, not both")
+        if self.rtplan_uid and (self.per_beam_dose or "rtimage" in self.objects):
+            raise ValueError("per-beam doses and DRRs name the written plan's beam numbers: not with rtplan_uid")
         if self.per_beam_dose and "rtdose" not in self.objects:
             raise ValueError("per_beam_dose needs rtdose among the objects")
         if (self.dose_summation == "MULTI_PLAN") != bool(self.summed_plan_uids):

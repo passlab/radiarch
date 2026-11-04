@@ -186,6 +186,31 @@ def _first_ct(directory: Path) -> Path:
     raise SystemExit(f"{directory}: no CT image found")
 
 
+def _the_one(path: Path, modality: str, what: str) -> Path:
+    """A file as given, or the one object of ``modality`` in a folder (a workflow engine hands a series as its folder);
+    a folder with none, or with more than one, is refused."""
+    import pydicom
+
+    if path.is_file():
+        return path
+    if not path.is_dir():
+        raise SystemExit(f"{path}: {what} file or folder not found")
+    found: Dict[str, Path] = {}
+    for p in sorted(path.rglob("*")):
+        if p.is_file():
+            try:
+                ds = pydicom.dcmread(str(p), stop_before_pixels=True, specific_tags=["Modality", "SOPInstanceUID"])
+            except Exception:
+                continue
+            if str(getattr(ds, "Modality", "")) == modality:
+                found.setdefault(str(getattr(ds, "SOPInstanceUID", p)), p)
+    if not found:
+        raise SystemExit(f"{path}: no {what} in this folder")
+    if len(found) > 1:
+        raise SystemExit(f"{path}: {len(found)} {what}s in this folder; name one file")
+    return next(iter(found.values()))
+
+
 def cmd_dose(args) -> int:
     """The dose of an RT Plan on a CT with its structures: the plan imported as a beam model with its own metersets, its
     dose recomputed by an engine, and written as an RT Dose (with the plan as radiarch re-writes it) that references the
@@ -196,16 +221,13 @@ def cmd_dose(args) -> int:
     ct_dir = Path(args.ct)
     if not ct_dir.is_dir():
         raise SystemExit(f"{ct_dir}: not a directory")
-    if not Path(args.plan).is_file():
-        raise SystemExit(f"{args.plan}: plan file not found")
+    plan_path = _the_one(Path(args.plan), "RTPLAN", "RT Plan")
     ct = _dicom_uids(_first_ct(ct_dir))
     rtstruct = None
     root = ct_dir
     staged = None
     if args.structures:
-        rs_path = Path(args.structures)
-        if not rs_path.is_file():
-            raise SystemExit(f"{rs_path}: structure set file not found")
+        rs_path = _the_one(Path(args.structures), "RTSTRUCT", "RT Structure Set")
         rtstruct = _dicom_uids(rs_path)
         if rtstruct["modality"] != "RTSTRUCT":
             raise SystemExit(f"{rs_path}: not an RT Structure Set ({rtstruct['modality'] or 'no modality'})")
@@ -221,15 +243,18 @@ def cmd_dose(args) -> int:
         with _client(args) as rx:
             geo = rx.build_geometry(ct["study"], data_root=str(root), spacing_mm=_spacing(args.spacing), ct_series_uid=ct["series"],
                                     rtstruct_uid=rtstruct["sop"] if rtstruct else None)
-            bm = geo.import_plan(args.plan, machine=args.machine, strict_frame=not args.any_frame)
+            bm = geo.import_plan(str(plan_path), machine=args.machine, strict_frame=not args.any_frame)
             dose = bm.recalculate(engine=args.engine)
             d, s = dose.result, dose.result.statistics
             print(f"dose {dose.id}: {d.engine_name} {d.engine_version}, {bm.result.modality.value}, "
                   f"{bm.result.fluence_elements.total_count} fluence elements, max {s.max_gy:.2f} mean {s.mean_gy:.2f} {d.dose_units}")
             if args.export or args.push:
-                objects = ["rtplan", "rtdose"] if rtstruct else ["rtstruct", "rtplan", "rtdose"]
+                if args.dose_only:      # the dose of the plan as given: its RT Dose names that plan, nothing is re-written
+                    objects, rtplan_uid = ["rtdose"], _dicom_uids(plan_path)["sop"]
+                else:
+                    objects, rtplan_uid = (["rtplan", "rtdose"] if rtstruct else ["rtstruct", "rtplan", "rtdose"]), None
                 exp = bm.export(dose=dose, label=args.label, objects=objects, rtstruct_uid=rtstruct["sop"] if rtstruct else None,
-                                push=bool(args.push))
+                                rtplan_uid=rtplan_uid, push=bool(args.push))
                 if args.export:
                     files = exp.download(args.export)
                     print(f"RT objects: {', '.join(str(f) for f in files)}")
@@ -350,8 +375,9 @@ def build_parser() -> argparse.ArgumentParser:
         s.set_defaults(func=func)
     s = sub.add_parser("dose", parents=[common], help="the dose of an RT Plan on a CT and its structures, recomputed by an engine")
     s.add_argument("--ct", required=True, help="a directory with the CT series (and its structure set, unless --structures)")
-    s.add_argument("--structures", help="the RT Structure Set file; the written RT objects reference it (default: the set in the CT directory)")
-    s.add_argument("--plan", required=True, help="the RT Plan or RT Ion Plan file")
+    s.add_argument("--structures", help="the RT Structure Set file, or a folder with exactly one; the written RT objects reference it "
+                                        "(default: the set in the CT directory)")
+    s.add_argument("--plan", required=True, help="the RT Plan or RT Ion Plan file, or a folder with exactly one")
     s.add_argument("--engine", default="auto", choices=["auto", "ccc", "pb", "mcsquare"],
                    help="dose engine (default auto: pb for a photon plan, mcsquare for a proton plan)")
     s.add_argument("--spacing", type=float, default=DEFAULT_SPACING_MM,
@@ -359,6 +385,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--machine", help="the machine model the plan is delivered on (default the photon default)")
     s.add_argument("--any-frame", action="store_true", help="accept a plan whose frame of reference is not the CT's")
     s.add_argument("--export", help="write the RT Dose and the plan as re-written into this directory")
+    s.add_argument("--dose-only", action="store_true",
+                   help="write only the RT Dose, referencing the given plan (no re-written plan or structure set)")
     s.add_argument("--push", action="store_true", help="push them to the server's DICOMweb destination (RADIARCH_DICOMWEB_URL)")
     s.add_argument("--label", default="RESEARCH", help="RT Plan label (default RESEARCH)")
     s.add_argument("--json", help="write the geometry, beam model, dose and export records as JSON")

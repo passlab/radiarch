@@ -96,8 +96,69 @@ def test_the_structure_set_in_the_ct_directory_and_the_errors(dose_env, tmp_path
         main(["dose", "--ct", str(empty), "--plan", str(plan), "--poll", "0.01"])
     with pytest.raises(SystemExit, match="not an RT Structure Set"):
         main(["dose", "--ct", str(case), "--structures", str(plan), "--plan", str(plan), "--poll", "0.01"])
-    with pytest.raises(SystemExit, match="plan file not found"):
+    with pytest.raises(SystemExit, match="RT Plan file or folder not found"):
         main(["dose", "--ct", str(case), "--plan", str(tmp_path / "none.dcm"), "--poll", "0.01"])
+
+
+def test_dose_only_writes_an_rt_dose_that_names_the_plan_it_was_given(dose_env, tmp_path, capsys):
+    """A regeneration takes a structure set and a plan and returns the dose alone: with --dose-only the export is one RT
+    Dose whose referenced plan is the input plan (its SOP class and instance), in the CT's study and frame of reference."""
+    from radiarch.models.rt_export import RTExportRequest
+
+    case, plan = _case(tmp_path)
+    rs = tmp_path / "structures" / "RS.dcm"
+    rs.parent.mkdir()
+    (case / "RS.dcm").rename(rs)
+    code = main(["dose", "--ct", str(case), "--structures", str(rs), "--plan", str(plan), "--engine", "pb", "--dose-only",
+                 "--export", str(tmp_path / "rt"), "--json", str(tmp_path / "dose.json"), "--poll", "0.01"])
+    assert code == 0, capsys.readouterr().out
+    assert sorted(p.name for p in (tmp_path / "rt").iterdir()) == ["RD.dcm"]
+    rd, src = pydicom.dcmread(str(tmp_path / "rt" / "RD.dcm")), pydicom.dcmread(str(plan), stop_before_pixels=True)
+    ct = pydicom.dcmread(str(case / "CT000.dcm"), stop_before_pixels=True)
+    ref = rd.ReferencedRTPlanSequence[0]
+    assert len(rd.ReferencedRTPlanSequence) == 1
+    assert (ref.ReferencedSOPClassUID, ref.ReferencedSOPInstanceUID) == (src.SOPClassUID, src.SOPInstanceUID)
+    assert (rd.StudyInstanceUID, rd.FrameOfReferenceUID) == (ct.StudyInstanceUID, ct.FrameOfReferenceUID)
+    record = json.loads((tmp_path / "dose.json").read_text())["export"]
+    assert [o["kind"] for o in record["objects"]] == ["RTDOSE"] and record["plan_sop_instance_uid"] is None
+    with pytest.raises(ValueError, match="not both"):
+        RTExportRequest(beam_model_id="b", objects=["rtplan", "rtdose"], rtstruct_uid="1.2", rtplan_uid="1.3")
+    with pytest.raises(ValueError, match="beam numbers"):
+        RTExportRequest(beam_model_id="b", objects=["rtdose"], per_beam_dose=True, rtplan_uid="1.3")
+    plain = RTExportRequest(beam_model_id="b", objects=["rtdose"])
+    assert plain.compute_cache_key() != plain.model_copy(update={"rtplan_uid": "1.3"}).compute_cache_key()
+
+
+def test_the_structures_and_the_plan_given_as_their_series_folders(dose_env, tmp_path, capsys):
+    """A workflow engine hands every input as the folder of its series: the command takes the one structure set and the
+    one plan in them, and refuses a folder with none or with more than one."""
+    import shutil
+
+    case, plan = _case(tmp_path)
+    rs_dir, plan_dir = tmp_path / "inputs" / "rs-series", tmp_path / "inputs" / "plan-series"
+    rs_dir.mkdir(parents=True)
+    plan_dir.mkdir()
+    (case / "RS.dcm").rename(rs_dir / "1.2.3.dcm")
+    shutil.copy(plan, plan_dir / "4.5.6.dcm")
+    rs_uid = str(pydicom.dcmread(str(rs_dir / "1.2.3.dcm"), stop_before_pixels=True).SOPInstanceUID)
+    code = main(["dose", "--ct", str(case), "--structures", str(rs_dir), "--plan", str(plan_dir), "--engine", "pb",
+                 "--export", str(tmp_path / "rt"), "--poll", "0.01"])
+    assert code == 0, capsys.readouterr().out
+    rp = pydicom.dcmread(str(tmp_path / "rt" / "RP.dcm"))
+    assert rp.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID == rs_uid
+    assert sorted(p.name for p in (tmp_path / "rt").iterdir()) == ["RD.dcm", "RP.dcm"]
+    with pytest.raises(SystemExit, match="no RT Plan in this folder"):
+        main(["dose", "--ct", str(case), "--plan", str(rs_dir), "--poll", "0.01"])
+    with pytest.raises(SystemExit, match="no RT Structure Set in this folder"):
+        main(["dose", "--ct", str(case), "--structures", str(plan_dir), "--plan", str(plan_dir), "--poll", "0.01"])
+    second = F.photon_rtplan([{"number": 1, "name": "AP", "cps": [{"cmw": 0.0, "gantry": 90.0, "iso": [0, 0, 0], "xj": [-50, 50],
+                                                                  "yj": [-50, 50]}, {"cmw": 1.0}]}], {1: 100.0})
+    F.save(second, plan_dir / "7.8.9.dcm")
+    with pytest.raises(SystemExit, match="2 RT Plans in this folder; name one file"):
+        main(["dose", "--ct", str(case), "--plan", str(plan_dir), "--poll", "0.01"])
+    shutil.copy(plan_dir / "4.5.6.dcm", plan_dir / "copy-of-4.5.6.dcm")             # a second copy of one instance counts once
+    with pytest.raises(SystemExit, match="2 RT Plans"):
+        main(["dose", "--ct", str(case), "--plan", str(plan_dir), "--poll", "0.01"])
 
 
 def test_the_command_runs_in_this_process_whatever_the_server_environment_says(dose_env, tmp_path, monkeypatch, capsys):
@@ -115,6 +176,29 @@ def test_the_command_runs_in_this_process_whatever_the_server_environment_says(d
     assert code == 0, capsys.readouterr().out
     assert json.loads((tmp_path / "dose.json").read_text())["dose"]["statistics"]["max_gy"] > 0.5
     assert get_settings().database_url == "" and get_settings().broker_url == "memory://"
+
+
+def test_an_artifact_folder_it_cannot_write_gives_a_temporary_store(dose_env, tmp_path, monkeypatch, capsys):
+    """A container run under a job account's uid cannot write the image's artifact folder: the command keeps its
+    artifacts in a temporary folder instead, removes it when it ends, and leaves RADIARCH_ARTIFACT_DIR as it was."""
+    import os
+    import tempfile
+
+    case, plan = _case(tmp_path)
+    blocked = tmp_path / "a-file"
+    blocked.write_text("")
+    unwritable = str(blocked / "artifacts")                 # under a regular file: no one can create it, root included
+    monkeypatch.setenv("RADIARCH_ARTIFACT_DIR", unwritable)
+    scratch = tmp_path / "tmp"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    code = main(["dose", "--ct", str(case), "--plan", str(plan), "--engine", "pb", "--export", str(tmp_path / "rt"),
+                 "--json", str(tmp_path / "dose.json"), "--poll", "0.01"])
+    assert code == 0, capsys.readouterr().out
+    assert sorted(p.name for p in (tmp_path / "rt").iterdir()) == ["RD.dcm", "RP.dcm", "RS.dcm"]
+    assert "radiarch-artifacts-" in json.loads((tmp_path / "dose.json").read_text())["dose"]["dose_grid_uri"]
+    assert list(scratch.iterdir()) == [], "the temporary store is removed"
+    assert os.environ["RADIARCH_ARTIFACT_DIR"] == unwritable
 
 
 def test_a_folder_without_its_structure_set_does_not_poison_the_cache(dose_env, tmp_path, capsys):
