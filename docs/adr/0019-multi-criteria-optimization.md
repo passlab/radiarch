@@ -35,7 +35,9 @@ proton phantom.
 4. **The deliverable plan mimics the navigated dose and reports the difference** (D7). The navigated blend is made
    deliverable: static fields as sequenced apertures, arcs, or proton spots. A one-sided reference-dose objective
    pulls the deliverable dose toward the navigated one; for photons the metersets are also driven by each target's
-   hot-spot term and the goals, in reweighting rounds judged after normalisation. Projecting the blend onto the
+   hot-spot term and the goals, in reweighting rounds judged after normalisation, and the meterset solve holds the
+   target's coverage (a gEUD, its level calibrated over the rounds until the normalisation is near 1) and its maximum
+   as hard constraints. Projecting the blend onto the
    Pareto set first (no trade-off worse) is an option, off by default (see the consequences). A deviation table gives
    every trade-off and goal, navigated against deliverable, flagged past a tolerance.
 5. **Robust sets use the scenario-wise worst case** (D8). Each plan minimizes the worst scenario of its weighted sum,
@@ -73,7 +75,14 @@ proton phantom.
   coverage normalisation inflated what was left. The deliverable plan is now made from the blend, and the projection
   is an option, off by default. The metersets are also driven by the goals and a hot-spot term in reweighting rounds
   judged after normalisation, and a beam's peaks are capped before sequencing; the record grades the normalisation
-  (within 15 % of 1). The lung case is rerun as a dated correction of the record.
+  (within 15 % of 1). At 4 mm that was not enough (normalisation 1.37 and 1.27): the apertures still under-covered the
+  target and nothing in the meterset solve held coverage. The meterset solve now holds the target's gEUD (a = -10) at
+  or above the coverage goal and its maximum at or below 1.2 times the prescription as hard constraints, by R11.2's
+  augmented Lagrangian (`docs/reports/mco-deliverable-options.md`, option A). At 4 mm these held and the plans still
+  needed 1.11: a gEUD is not the coverage goal. Its level is therefore set on the plan, multiplied by each round's
+  normalisation until that is within 3 % of 1 (in fast mode 0.985 and 0.971, PTV D0.03cc 71 and 70 Gy, organ doses
+  higher within their limits). The lung case is rerun at 4 mm as a dated correction of the record; keeping the
+  deliverable plan's organ doses near the navigated plan's is left to shared-aperture Pareto sets (B1).
 - The algorithm tests of the report's section 5 run in CI on problems with known answers (`tests/test_r11_*.py`).
   The validation cases (`mco_front`, `mco_protocol`, `mco_robust`) run on a workstation with the public data; the
   proton phantom case also runs in the nightly harness.

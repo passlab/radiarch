@@ -282,6 +282,7 @@ class DeliverableService:
                                        tolerance_gy=0.5)]
             scale: Dict[int, float] = {}
             level: Dict[int, float] = {}
+            best = None
             for r in range(max(1, int(request.rounds))):
                 objectives = mimic + hot + (objectives_for(arrays, main_target, rx, goal_rows, scale, level) if goal_rows else [])
                 if request.arcs:
@@ -308,13 +309,25 @@ class DeliverableService:
                 conv_r = (vm if request.arcs else seq).convergence
                 rounds_log.append({"round": r + 1, "normalisation": round(float(k_r), 4),
                                    "failed": [f"{goal_rows[i]['structure']} {goal_rows[i]['metric']}" for i in failed],
-                                   **({"hard_constraints": dict(getattr(conv_r, "constraint_violations", {}) or {})} if hard else {})})
-                if not failed:
+                                   **({"hard_constraints": dict(getattr(conv_r, "constraint_violations", {}) or {}),
+                                       "coverage_gy": hard[0].value_gy} if hard else {})})
+                # the plan kept: a round whose goals hold before one that fails, then the normalisation nearest 1
+                rank = (bool(failed), abs(float(np.log(k_r))) if k_r > 0 else float("inf"))
+                if best is None or rank < best[0]:
+                    best = (rank, r, technique, sequence_id, vmat_id, beam_model_id, dose_id, deliverable)
+                calibrated = not hard or abs(float(k_r) - 1.0) <= request.normalise_band
+                if not failed and calibrated:
                     break
                 for i in failed:
                     scale[i] = scale.get(i, 1.0) * 3.0
                     if goal_rows[i]["structure"] not in coverage_targets:
                         level[i] = level.get(i, 1.0) * 0.95
+                if not calibrated:
+                    # the gEUD is not the coverage goal (the 4 mm lung case met gEUD >= 60 Gy and still needed 1.11 for its
+                    # D95): its level moves to where this round's normalisation puts the goal, below the maximum's limit
+                    hard = [hard[0].model_copy(update={"value_gy": round(min(hard[0].value_gy * float(k_r), 0.95 * hard[1].value_gy), 3)})] + hard[1:]
+            _, kept, technique, sequence_id, vmat_id, beam_model_id, dose_id, deliverable = best
+            rounds_log[kept]["kept"] = True
         else:
             technique, beam_model_id, deliverable = "proton", result.beam_model_id, True
             notes.append("proton spots are delivered as weighted: the proton machine model has no minimum spot meterset, "

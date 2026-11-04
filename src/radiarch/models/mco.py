@@ -301,12 +301,18 @@ class DeliverableRequest(BaseModel):
     rounds: int = Field(default=3, ge=1, le=10,
                         description="Goal-driven rounds on the deliverable metersets (photons), as the reweighting planner's: the "
                                     "plan is normalised, its goals judged, a failed goal's weight tripled and an organ limit lowered "
-                                    "5 %, and the metersets optimized again; stops when every goal holds.")
+                                    "5 %, and the metersets optimized again; stops when every goal holds and, with hard_coverage, the "
+                                    "normalisation is within normalise_band of 1. The round whose goals hold with the normalisation "
+                                    "nearest 1 is kept.")
     hard_coverage: bool = Field(default=True,
                                 description="Photons, with normalise: the metersets meet the target's coverage and hot-spot limits as hard "
                                             "constraints (the target's gEUD with a = -10 at or above normalise.gy, its maximum at or below "
                                             "max_dose_factor times the prescription), so the normalisation is a check near 1 instead "
                                             "of a correction that scales the hot spots with the coverage.")
+    normalise_band: float = Field(default=0.03, ge=0.0, le=0.5,
+                                  description="With hard_coverage: while a round's normalisation is further than this from 1, the next "
+                                              "round's coverage constraint takes its level times that normalisation (a gEUD is not the "
+                                              "coverage goal, so its level is found on the plan), at most 0.95 times the maximum's limit.")
     max_dose_factor: float = Field(default=1.2, gt=1.0, le=2.0,
                                    description="The target's maximum dose limit as a multiple of the prescription (1.2: RTOG 0617's).")
     hot_spot_gy: Optional[float] = Field(default=None, gt=0.0,

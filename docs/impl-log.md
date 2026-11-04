@@ -1199,3 +1199,23 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   plan's SOP Instance UID. The dose carries the CT's study and frame of reference (the plan's, checked on import).
 - Test (`tests/test_dose_command.py`): with `--dose-only` the export holds one RD whose referenced plan is the input's
   SOP class and instance, in the CT's study and frame; the two refusals; the cache key differs with the reference.
+
+## R11.9: the coverage constraint calibrated on the plan (2026-11-04)
+
+- **Why.** At 4 mm, option A met its two limits on the lung case (run `20261104-000104-f5597f9` on the compute server,
+  every graded check passing) and still needed normalisation 1.111 (seven fields) and 1.108 (arcs), with the PTV
+  D0.03cc at 80 Gy on 60 Gy. A gEUD (a = -10) at 60 Gy is not the coverage goal (D95 at 60 Gy): it holds with a cold
+  edge, which the normalisation then scales up with the hot spots.
+- **Change** (`services/mco_deliverable.py`, `DeliverableRequest.normalise_band`, default 0.03): while a round's
+  normalisation is further than the band from 1, the next round's gEUD level is its level times that normalisation,
+  at most 0.95 times the maximum's limit. The rounds stop when every goal holds and the normalisation is within the
+  band. The plan kept is a round whose goals hold, then the one whose normalisation is nearest 1 (before, the last
+  round's). Each round's log gives the gEUD level (`coverage_gy`), and the kept round is marked.
+- **Fast-mode lung case** (8 mm, on the compute server, from the uncommitted change): both plans in two rounds,
+  normalisation 1.091 then 0.985 (seven fields) and 1.104 then 0.971 (arcs); PTV D0.03cc 71.0 and 70.0 Gy, under the
+  protocol's 72 Gy and the reweighting plan's 77 Gy in the same run; PTV V60Gy 95.3 %. Every graded check passes.
+  Organ doses rise within their limits: heart mean 15.1 and 19.4 Gy against the navigated plans' 8.9 and 4.9,
+  esophagus mean 8.1 and 9.9 Gy; the deviation tables flag 6 and 9 rows. The 4 mm run of this commit follows, and its
+  result is the R11 record's correction.
+- Test (`tests/test_r11_deliverable.py`): with scripted normalisations, the gEUD level follows them and stops at the
+  cap, and the round nearest 1 is kept; a wider band stops sooner; a first round inside the band is the only one.

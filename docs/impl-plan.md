@@ -289,7 +289,11 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   beam's peaks; built and checked on the lung case in fast mode 2026-11-01; the lung case rerun at 4 mm as a dated
   correction of the R11 record (about 0.25 ew). 2026-11-03: not a fix at 4 mm (normalisation 1.37 fields, 1.27 arcs);
   design note `docs/reports/mco-deliverable-options.md`; option A (coverage and the hot spot as hard constraints of
-  the meterset solve) built: fast-mode lung case 1.09 / 1.10, PTV D0.03cc 75 / 78 Gy; the 4 mm check is next
+  the meterset solve) built: fast-mode lung case 1.09 / 1.10, PTV D0.03cc 75 / 78 Gy. 2026-11-04: at 4 mm option A
+  met its limits and still needed 1.11 / 1.11 (PTV D0.03cc 80 Gy); the coverage constraint's level is now calibrated
+  on the plan over the rounds (`normalise_band`): fast-mode lung case 0.985 / 0.971, PTV D0.03cc 71 / 70 Gy, organ
+  doses higher within their limits. The 4 mm run of that commit is next, as the R11 record's correction; then B1
+  (shared-aperture Pareto sets)
 - [x] R11.10 (2026-11-01) Planning behind a gateway: the user a trusted proxy names (header plus shared secret) kept
   as `requested_by` on optimizations, Pareto sets, navigation states, deliverable plans and exports, and as the
   exported objects' Operators' Name; an export fails when its push is refused and the push is required

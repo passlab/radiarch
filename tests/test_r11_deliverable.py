@@ -179,10 +179,11 @@ def test_the_deliverable_metersets_are_driven_by_the_goals_in_rounds(rx, monkeyp
     assert hard[("Dmax", "<=")].value_gy == pytest.approx(1.2 * 2.0) and "hard_constraints" in plan.rounds[0]
     assert first.levels == 5 == second.levels                                              # no peak capped: the request's levels
 
-    # a goal set that holds in the first round stops there; no goals: the mimic and the hot-spot term alone, one round
+    # a goal set that holds in the first round stops there (without the coverage constraints, whose level rounds of their
+    # own calibrate); no goals: the mimic and the hot-spot term alone, one round
     seen.clear()
     easy = ps.deliverable("balance", levels=5, max_iterations=60, goals={"goals": goals["goals"][:1]}, prescription_gy=2.0, rounds=3,
-                          normalise={"structure": "PTV", "metric": "D95", "gy": 1.8})
+                          normalise={"structure": "PTV", "metric": "D95", "gy": 1.8}, hard_coverage=False)
     assert len(easy.rounds) == 1 and easy.rounds[0]["failed"] == [] and len(seen) == 1
     seen.clear()
     bare = ps.deliverable("balance", levels=5, max_iterations=60, rounds=3, hot_spot_gy=2.5)
@@ -193,6 +194,58 @@ def test_the_deliverable_metersets_are_driven_by_the_goals_in_rounds(rx, monkeyp
     off = ps.deliverable("balance", levels=5, max_iterations=60, rounds=1, normalise={"structure": "PTV", "metric": "D95", "gy": 1.8},
                          hard_coverage=False)
     assert seen[0].hard_constraints == [] and "hard_constraints" not in off.rounds[0]
+
+
+def test_the_coverage_constraint_is_calibrated_until_the_normalisation_is_near_1(rx, monkeypatch):
+    """R11.9: a gEUD at the coverage dose is not the coverage goal (the 4 mm lung case met it and still needed 1.11).
+    While a round's normalisation is outside normalise_band, the next round's gEUD level is scaled by it, never above
+    0.95 times the maximum's limit; the round nearest 1 is the plan."""
+    import radiarch.services.autoplan as autoplan
+    from radiarch.services.apertures import ApertureService
+    from radiarch.sdk import ops
+
+    seen, made = [], []
+    real_sequence, real_normalise = ApertureService.sequence, autoplan.normalise_to_goal
+
+    def capture(self, optimization_id, request):
+        seen.append(request)
+        made.append(real_sequence(self, optimization_id, request))
+        return made[-1]
+
+    factors: list = []
+
+    def scripted(dose, target, metric, gy):                # each round's normalisation as scripted, then the real one
+        if factors:
+            k = factors.pop(0)
+            return dose * k, k
+        return real_normalise(dose, target, metric, gy)
+
+    monkeypatch.setattr(ApertureService, "sequence", capture)
+    monkeypatch.setattr(autoplan, "normalise_to_goal", scripted)
+    geo = rx.build_geometry("1.2.3", hu_model="LINEAR")
+    bm = geo.photon_beams([0, 90, 180, 270], machine="test-120", jaw_opening_mm=(60.0, 60.0), beamlet_size_mm=(10.0, 10.0))
+    ps = bm.mco([ops.uniform_rms("PTV", 2.0), ops.mean_dose("OAR")], engine="analytic", max_iterations=100, plan_budget=6,
+                hard_constraints=[ops.hard("PTV", "Dmin", ">=", 1.0)])
+    normalise = {"structure": "PTV", "metric": "D95", "gy": 1.8}
+
+    factors[:] = [1.2, 1.1, 1.01]
+    plan = ps.deliverable("balance", levels=5, max_iterations=60, prescription_gy=2.0, rounds=4, normalise=normalise)
+    levels = [next(c.value_gy for c in q.hard_constraints if c.metric == "gEUD") for q in seen]
+    assert levels == [1.8, pytest.approx(1.8 * 1.2), pytest.approx(0.95 * 2.4)]       # 1.8 x 1.2 x 1.1 is past 0.95 x 2.4
+    assert [r["coverage_gy"] for r in plan.rounds] == levels and len(plan.rounds) == 3  # 1.01: within the band, stop
+    assert [r.get("kept", False) for r in plan.rounds] == [False, False, True] and plan.sequence_id == made[2].sequence_id
+
+    seen.clear(); made.clear()
+    factors[:] = [1.2, 1.3, 1.25]                          # never within the band: the nearest round is kept
+    plan = ps.deliverable("balance", levels=5, max_iterations=60, prescription_gy=2.0, rounds=3, normalise=normalise, normalise_band=0.02)
+    assert len(seen) == 3 and [r.get("kept", False) for r in plan.rounds] == [True, False, False]
+    assert plan.sequence_id == made[0].sequence_id
+
+    seen.clear()
+    factors[:] = [1.02]                                    # within the default band (0.03): one round
+    plan = ps.deliverable("balance", levels=5, max_iterations=60, prescription_gy=2.0, rounds=3, normalise=normalise, normalise_band=0.03,
+                          tolerance_gy=0.07)
+    assert len(seen) == 1 and plan.rounds[0]["kept"] is True
 
 
 def test_the_navigated_fluence_is_capped_before_sequencing():
