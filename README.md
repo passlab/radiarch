@@ -302,6 +302,8 @@ CT's own grid, typically 1 x 1 x 3 mm and about twenty times the work; the recor
 Without `--server`, `radiarch plan` and `radiarch dose` run self-contained in their process: jobs in-process, no
 database, an in-memory broker, whatever the environment says. So the image runs them standalone, with no compose
 services: `docker run --rm -v /dicom/case1:/data radiarch:<tag> radiarch dose --ct /data --plan /data/RP.dcm --export /data/rt`.
+Under another uid than root (a workflow engine's job account), where the image's artifact folder cannot be written,
+the command keeps its artifacts in a temporary folder and removes it at the end; the outputs go to `--export`.
 
 ## DICOM RT out
 

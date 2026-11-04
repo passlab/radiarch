@@ -1152,3 +1152,16 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
 - Test (`tests/test_dose_command.py`): the structure set and the plan each in its own series folder, outside the CT's,
   with the written RT Plan referencing that structure set; a folder with no plan, one with no structure set, and one
   with two plans refused.
+
+## The command line under another uid: a temporary artifact store (2026-11-03)
+
+- **Why.** A workflow engine ran the image's `radiarch dose` as its job account's uid. The image's artifact folder
+  (`/data/artifacts`) is root's, so the geometry store's first `mkdir` failed with permission denied.
+- **Change** (`sdk/client.py` `Radiarch.local`): when the configured artifact folder cannot be created or written, the
+  in-process app keeps its artifacts in a fresh temporary folder (under `TMPDIR`) and removes it when the client
+  closes; `RADIARCH_ARTIFACT_DIR` is then restored. A writable folder is used as before. Nothing else in the command
+  writes outside `TMPDIR` and `--export`: the engines' working folders are temporary already.
+- Tests: `tests/test_dose_command.py` runs the command with an artifact folder no one can create, and checks the RT
+  objects, that the store was temporary and removed, and the environment restored. The CI image job now runs
+  `radiarch dose` as uid 12345 on a read-only image with only `/tmp` and the output folder writable, the plan given
+  as a folder.

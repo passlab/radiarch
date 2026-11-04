@@ -7,6 +7,8 @@ the result, which ``GET /{service}/{id}`` returns. :meth:`Radiarch.submit` hides
 
 from __future__ import annotations
 
+import os
+import tempfile
 import time
 from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
 
@@ -27,6 +29,15 @@ JOBS = {
     "mco": ("mco_id", "/mco/{id}"),
     "mco/deliverables": ("deliverable_id", "/mco/deliverables/{id}"),
 }
+
+
+def _writable(path: str) -> bool:
+    """Whether this process can keep its artifacts in ``path``, creating it if need be."""
+    try:
+        os.makedirs(path, exist_ok=True)
+    except OSError:
+        return False
+    return os.access(path, os.W_OK | os.X_OK)
 
 
 class RadiarchError(RuntimeError):
@@ -56,30 +67,50 @@ class Radiarch:
         self.poll_interval, self.job_timeout = float(poll_interval), float(job_timeout)
         # called with (service, job status) whenever a job's state, stage or progress changes while waiting on it
         self.on_progress = on_progress
+        # a local client's temporary artifact store and the RADIARCH_ARTIFACT_DIR it replaced (see local)
+        self._scratch: Optional[tuple] = None
 
     @classmethod
     def local(cls, **kwargs) -> "Radiarch":
         """The radiarch app in this process (no server): for notebooks, scripts on the planning machine, tests, and the
         command line in a container. Self-contained: jobs run in this process, there is no database, and the broker and
         result backend are in memory, whatever RADIARCH_ENVIRONMENT, RADIARCH_DATABASE_URL and RADIARCH_BROKER_URL say
-        (a container image's defaults name its compose services, which a standalone ``docker run`` does not have)."""
-        import os
-
+        (a container image's defaults name its compose services, which a standalone ``docker run`` does not have).
+        When the artifact folder cannot be written (the image's, in a container run under a job account's uid), the
+        artifacts are kept in a temporary folder instead, removed when the client closes."""
         from fastapi.testclient import TestClient
 
         from ..config import get_settings
 
         os.environ.update({"RADIARCH_DATABASE_URL": "", "RADIARCH_BROKER_URL": "memory://", "RADIARCH_RESULT_BACKEND": "cache+memory://"})
         get_settings.cache_clear()
+        scratch = None
+        if not _writable(get_settings().artifact_dir):
+            scratch = (tempfile.TemporaryDirectory(prefix="radiarch-artifacts-"), os.environ.get("RADIARCH_ARTIFACT_DIR"))
+            os.environ["RADIARCH_ARTIFACT_DIR"] = scratch[0].name
+            get_settings.cache_clear()
         from ..app import create_app
         from ..tasks.celery_app import celery_app
 
         celery_app.conf.task_always_eager = True
         celery_app.conf.task_eager_propagates = True
-        return cls("/api/v1", http=TestClient(create_app()), **kwargs)
+        client = cls("/api/v1", http=TestClient(create_app()), **kwargs)
+        client._scratch = scratch
+        return client
 
     def close(self) -> None:
         self.http.close()
+        if self._scratch is not None:
+            folder, previous = self._scratch
+            self._scratch = None
+            folder.cleanup()
+            if previous is None:
+                os.environ.pop("RADIARCH_ARTIFACT_DIR", None)
+            else:
+                os.environ["RADIARCH_ARTIFACT_DIR"] = previous
+            from ..config import get_settings
+
+            get_settings.cache_clear()
 
     def __enter__(self) -> "Radiarch":
         return self

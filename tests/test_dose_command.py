@@ -149,6 +149,29 @@ def test_the_command_runs_in_this_process_whatever_the_server_environment_says(d
     assert get_settings().database_url == "" and get_settings().broker_url == "memory://"
 
 
+def test_an_artifact_folder_it_cannot_write_gives_a_temporary_store(dose_env, tmp_path, monkeypatch, capsys):
+    """A container run under a job account's uid cannot write the image's artifact folder: the command keeps its
+    artifacts in a temporary folder instead, removes it when it ends, and leaves RADIARCH_ARTIFACT_DIR as it was."""
+    import os
+    import tempfile
+
+    case, plan = _case(tmp_path)
+    blocked = tmp_path / "a-file"
+    blocked.write_text("")
+    unwritable = str(blocked / "artifacts")                 # under a regular file: no one can create it, root included
+    monkeypatch.setenv("RADIARCH_ARTIFACT_DIR", unwritable)
+    scratch = tmp_path / "tmp"
+    scratch.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(scratch))
+    code = main(["dose", "--ct", str(case), "--plan", str(plan), "--engine", "pb", "--export", str(tmp_path / "rt"),
+                 "--json", str(tmp_path / "dose.json"), "--poll", "0.01"])
+    assert code == 0, capsys.readouterr().out
+    assert sorted(p.name for p in (tmp_path / "rt").iterdir()) == ["RD.dcm", "RP.dcm", "RS.dcm"]
+    assert "radiarch-artifacts-" in json.loads((tmp_path / "dose.json").read_text())["dose"]["dose_grid_uri"]
+    assert list(scratch.iterdir()) == [], "the temporary store is removed"
+    assert os.environ["RADIARCH_ARTIFACT_DIR"] == unwritable
+
+
 def test_a_folder_without_its_structure_set_does_not_poison_the_cache(dose_env, tmp_path, capsys):
     """The geometry cache key carries the data folder when the series or structure set is not named: a geometry built
     from a folder that lacks the structure set is not reused for the folder that has it (a 3 mm round trip once got
