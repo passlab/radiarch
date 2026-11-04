@@ -20,12 +20,12 @@ inputs:
     doc: The CT series (and its RT Structure Set, unless one is given).
     inputBinding: {prefix: --ct}
   structures:
-    type: File?
-    doc: The RT Structure Set; the written RT Dose references it.
+    type: ["null", File, Directory]
+    doc: The RT Structure Set, or a folder with exactly one; the written RT Dose references it.
     inputBinding: {prefix: --structures}
   plan:
-    type: File
-    doc: The RT Plan or RT Ion Plan.
+    type: [File, Directory]
+    doc: The RT Plan or RT Ion Plan, or a folder with exactly one.
     inputBinding: {prefix: --plan}
   engine:
     type: string?

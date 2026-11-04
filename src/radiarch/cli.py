@@ -186,6 +186,31 @@ def _first_ct(directory: Path) -> Path:
     raise SystemExit(f"{directory}: no CT image found")
 
 
+def _the_one(path: Path, modality: str, what: str) -> Path:
+    """A file as given, or the one object of ``modality`` in a folder (a workflow engine hands a series as its folder);
+    a folder with none, or with more than one, is refused."""
+    import pydicom
+
+    if path.is_file():
+        return path
+    if not path.is_dir():
+        raise SystemExit(f"{path}: {what} file or folder not found")
+    found: Dict[str, Path] = {}
+    for p in sorted(path.rglob("*")):
+        if p.is_file():
+            try:
+                ds = pydicom.dcmread(str(p), stop_before_pixels=True, specific_tags=["Modality", "SOPInstanceUID"])
+            except Exception:
+                continue
+            if str(getattr(ds, "Modality", "")) == modality:
+                found.setdefault(str(getattr(ds, "SOPInstanceUID", p)), p)
+    if not found:
+        raise SystemExit(f"{path}: no {what} in this folder")
+    if len(found) > 1:
+        raise SystemExit(f"{path}: {len(found)} {what}s in this folder; name one file")
+    return next(iter(found.values()))
+
+
 def cmd_dose(args) -> int:
     """The dose of an RT Plan on a CT with its structures: the plan imported as a beam model with its own metersets, its
     dose recomputed by an engine, and written as an RT Dose (with the plan as radiarch re-writes it) that references the
@@ -196,16 +221,13 @@ def cmd_dose(args) -> int:
     ct_dir = Path(args.ct)
     if not ct_dir.is_dir():
         raise SystemExit(f"{ct_dir}: not a directory")
-    if not Path(args.plan).is_file():
-        raise SystemExit(f"{args.plan}: plan file not found")
+    plan_path = _the_one(Path(args.plan), "RTPLAN", "RT Plan")
     ct = _dicom_uids(_first_ct(ct_dir))
     rtstruct = None
     root = ct_dir
     staged = None
     if args.structures:
-        rs_path = Path(args.structures)
-        if not rs_path.is_file():
-            raise SystemExit(f"{rs_path}: structure set file not found")
+        rs_path = _the_one(Path(args.structures), "RTSTRUCT", "RT Structure Set")
         rtstruct = _dicom_uids(rs_path)
         if rtstruct["modality"] != "RTSTRUCT":
             raise SystemExit(f"{rs_path}: not an RT Structure Set ({rtstruct['modality'] or 'no modality'})")
@@ -221,7 +243,7 @@ def cmd_dose(args) -> int:
         with _client(args) as rx:
             geo = rx.build_geometry(ct["study"], data_root=str(root), spacing_mm=_spacing(args.spacing), ct_series_uid=ct["series"],
                                     rtstruct_uid=rtstruct["sop"] if rtstruct else None)
-            bm = geo.import_plan(args.plan, machine=args.machine, strict_frame=not args.any_frame)
+            bm = geo.import_plan(str(plan_path), machine=args.machine, strict_frame=not args.any_frame)
             dose = bm.recalculate(engine=args.engine)
             d, s = dose.result, dose.result.statistics
             print(f"dose {dose.id}: {d.engine_name} {d.engine_version}, {bm.result.modality.value}, "
@@ -350,8 +372,9 @@ def build_parser() -> argparse.ArgumentParser:
         s.set_defaults(func=func)
     s = sub.add_parser("dose", parents=[common], help="the dose of an RT Plan on a CT and its structures, recomputed by an engine")
     s.add_argument("--ct", required=True, help="a directory with the CT series (and its structure set, unless --structures)")
-    s.add_argument("--structures", help="the RT Structure Set file; the written RT objects reference it (default: the set in the CT directory)")
-    s.add_argument("--plan", required=True, help="the RT Plan or RT Ion Plan file")
+    s.add_argument("--structures", help="the RT Structure Set file, or a folder with exactly one; the written RT objects reference it "
+                                        "(default: the set in the CT directory)")
+    s.add_argument("--plan", required=True, help="the RT Plan or RT Ion Plan file, or a folder with exactly one")
     s.add_argument("--engine", default="auto", choices=["auto", "ccc", "pb", "mcsquare"],
                    help="dose engine (default auto: pb for a photon plan, mcsquare for a proton plan)")
     s.add_argument("--spacing", type=float, default=DEFAULT_SPACING_MM,

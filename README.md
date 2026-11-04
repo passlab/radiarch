@@ -290,6 +290,9 @@ radiarch dose --ct /dicom/case1 --structures /dicom/case1/RS.dcm --plan /plans/R
 #   --engine auto (pb for a photon plan, mcsquare for a proton plan), ccc, pb or mcsquare; --spacing, --machine, --any-frame, --push
 ```
 
+`--structures` and `--plan` also take a folder, as a workflow engine hands over a series: the command uses the one
+structure set or plan in it and refuses a folder with none or more than one.
+
 In Python: `bm = geo.import_plan("RP.dcm"); dose = bm.recalculate(engine="auto"); bm.export(dose=dose).download("rt")`.
 A CWL tool description wraps the command (`src/radiarch/cwl/radiarch-dose.cwl`).
 

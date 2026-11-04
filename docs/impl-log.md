@@ -1140,3 +1140,15 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   `test_r11_viewer_client`), and the Viewer job builds the image from it and runs the browser tests. Without the
   checkout those tests skip and say why; `RADIARCH_OHIF_DIR` points them at another checkout. ADR 0018 records the
   move; README, `docs/viewing.md` and `docs/demo.md` add the fetch step.
+
+## `radiarch dose`: the structure set and the plan as their series folders (2026-11-03)
+
+- **Why.** A workflow engine that hands each input over as the folder of its series passed
+  `--plan <folder>`, and the command stopped: it took only a file there.
+- **Command** (`cli.py` `_the_one`): `--structures` and `--plan` take a file as before, or a folder. In a folder the
+  command reads each file's header and takes the one RT Structure Set or the one RT Plan (an RT Ion Plan too); copies
+  of one instance count once. A folder with none, or with more than one, is refused with a message that says which.
+  The CWL tool (`cwl/radiarch-dose.cwl`) takes a File or a Directory for both.
+- Test (`tests/test_dose_command.py`): the structure set and the plan each in its own series folder, outside the CT's,
+  with the written RT Plan referencing that structure set; a folder with no plan, one with no structure set, and one
+  with two plans refused.

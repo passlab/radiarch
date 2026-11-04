@@ -96,8 +96,40 @@ def test_the_structure_set_in_the_ct_directory_and_the_errors(dose_env, tmp_path
         main(["dose", "--ct", str(empty), "--plan", str(plan), "--poll", "0.01"])
     with pytest.raises(SystemExit, match="not an RT Structure Set"):
         main(["dose", "--ct", str(case), "--structures", str(plan), "--plan", str(plan), "--poll", "0.01"])
-    with pytest.raises(SystemExit, match="plan file not found"):
+    with pytest.raises(SystemExit, match="RT Plan file or folder not found"):
         main(["dose", "--ct", str(case), "--plan", str(tmp_path / "none.dcm"), "--poll", "0.01"])
+
+
+def test_the_structures_and_the_plan_given_as_their_series_folders(dose_env, tmp_path, capsys):
+    """A workflow engine hands every input as the folder of its series: the command takes the one structure set and the
+    one plan in them, and refuses a folder with none or with more than one."""
+    import shutil
+
+    case, plan = _case(tmp_path)
+    rs_dir, plan_dir = tmp_path / "inputs" / "rs-series", tmp_path / "inputs" / "plan-series"
+    rs_dir.mkdir(parents=True)
+    plan_dir.mkdir()
+    (case / "RS.dcm").rename(rs_dir / "1.2.3.dcm")
+    shutil.copy(plan, plan_dir / "4.5.6.dcm")
+    rs_uid = str(pydicom.dcmread(str(rs_dir / "1.2.3.dcm"), stop_before_pixels=True).SOPInstanceUID)
+    code = main(["dose", "--ct", str(case), "--structures", str(rs_dir), "--plan", str(plan_dir), "--engine", "pb",
+                 "--export", str(tmp_path / "rt"), "--poll", "0.01"])
+    assert code == 0, capsys.readouterr().out
+    rp = pydicom.dcmread(str(tmp_path / "rt" / "RP.dcm"))
+    assert rp.ReferencedStructureSetSequence[0].ReferencedSOPInstanceUID == rs_uid
+    assert sorted(p.name for p in (tmp_path / "rt").iterdir()) == ["RD.dcm", "RP.dcm"]
+    with pytest.raises(SystemExit, match="no RT Plan in this folder"):
+        main(["dose", "--ct", str(case), "--plan", str(rs_dir), "--poll", "0.01"])
+    with pytest.raises(SystemExit, match="no RT Structure Set in this folder"):
+        main(["dose", "--ct", str(case), "--structures", str(plan_dir), "--plan", str(plan_dir), "--poll", "0.01"])
+    second = F.photon_rtplan([{"number": 1, "name": "AP", "cps": [{"cmw": 0.0, "gantry": 90.0, "iso": [0, 0, 0], "xj": [-50, 50],
+                                                                  "yj": [-50, 50]}, {"cmw": 1.0}]}], {1: 100.0})
+    F.save(second, plan_dir / "7.8.9.dcm")
+    with pytest.raises(SystemExit, match="2 RT Plans in this folder; name one file"):
+        main(["dose", "--ct", str(case), "--plan", str(plan_dir), "--poll", "0.01"])
+    shutil.copy(plan_dir / "4.5.6.dcm", plan_dir / "copy-of-4.5.6.dcm")             # a second copy of one instance counts once
+    with pytest.raises(SystemExit, match="2 RT Plans"):
+        main(["dose", "--ct", str(case), "--plan", str(plan_dir), "--poll", "0.01"])
 
 
 def test_the_command_runs_in_this_process_whatever_the_server_environment_says(dose_env, tmp_path, monkeypatch, capsys):
