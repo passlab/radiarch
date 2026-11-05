@@ -1,12 +1,14 @@
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from loguru import logger
 
 from .config import get_settings
 from .api.routes import info, plans, jobs, artifacts, workflows, sessions, geometry, beam_model, uploads, dose, optimization, bao, evaluation, rt, lineage, registration, four_d, replan, protocols, mco
 from .adapters import build_orthanc_adapter
-from .api.security import api_key_auth
+from .api.security import api_key_auth, user_header_untrusted
 from .core.database import init_db
 
 settings = get_settings()
@@ -29,6 +31,16 @@ def create_app() -> FastAPI:
         docs_url=f"{settings.api_prefix}/docs",
         openapi_url=f"{settings.api_prefix}/openapi.json",
     )
+
+    # A user header without the trusted proxy's secret is refused on every route, not only where the user is read.
+    # Registered before CORS, so CORS stays the outer layer and the refusal carries its headers.
+    @app.middleware("http")
+    async def refuse_untrusted_user(request: Request, call_next):
+        if user_header_untrusted(request):
+            logger.warning(f"untrusted user header refused: path={request.url.path} method={request.method}")
+            return JSONResponse(status_code=401, content={"detail": "untrusted user header"})
+        return await call_next(request)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

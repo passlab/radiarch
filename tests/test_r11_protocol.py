@@ -83,3 +83,16 @@ def test_the_command_prints_the_pareto_set(rx, tmp_path, capsys, monkeypatch):  
     code = main(["plan", "--protocol", str(path), "--study", "1.2.3", "--spacing", "0", "--poll", "0.01"])
     out = capsys.readouterr().out
     assert code == 0 and "Pareto set" in out and "navigate from state" in out and "deviation" in out
+
+
+def test_the_run_keeps_its_user_on_the_pareto_set(rx, monkeypatch):  # noqa: F811
+    from test_trusted_proxy import SECRET, USER, _trust
+
+    _trust(monkeypatch)
+    rx.http.headers.update({USER: "alice", SECRET: "s3cret"})
+    geo = rx.build_geometry("1.2.3", hu_model="LINEAR")
+    r = geo.run_protocol({**MCO, "mco": {**MCO["mco"], "plan_budget": 4}}).result
+    assert r.requested_by == "alice"
+    assert rx.get(f"/mco/{r.mco_id}")["requested_by"] == "alice"
+    assert rx.get(f"/mco/{r.mco_id}/states/{r.state_id}")["requested_by"] == "alice"
+    assert rx.get(f"/mco/deliverables/{r.deliverable_id}")["requested_by"] == "alice"

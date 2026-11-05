@@ -245,8 +245,8 @@ jobs:
 
   image:
     # The API image (the Dockerfile): built from the commit, then the radiarch command inside it lists the shipped
-    # protocols and takes the dose command's options. Catches an image that builds but cannot run the package
-    # (the runtime stage once lacked the package on its path).
+    # protocols and takes the dose command's options, and a Celery worker in it takes a job through Redis. Catches an
+    # image that builds but cannot run the package (the runtime stage once lacked the package on its path) or its jobs.
     name: Image (build and the command line)
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -273,3 +273,23 @@ jobs:
           docker run --rm --user 12345:12345 --read-only --tmpfs /tmp -v "$RUNNER_TEMP/case:/in:ro" -v "$RUNNER_TEMP/out:/out" radiarch:ci \
             radiarch dose --ct /in/case --plan /in --engine pb --export /out/rt
           test -s "$RUNNER_TEMP/out/rt/RD.dcm"
+      - name: A Celery worker in the image takes a job through Redis
+        run: |
+          # tests and the command line run jobs in-process; only a real worker shows that the image's Celery, kombu and
+          # redis-py agree (a kombu release once refused the pinned redis-py, and the worker died at start)
+          docker network create rq
+          docker run -d --name redis --network rq redis:7-alpine
+          celery_env="-e RADIARCH_ENVIRONMENT=production -e RADIARCH_BROKER_URL=redis://redis:6379/0 -e RADIARCH_RESULT_BACKEND=redis://redis:6379/1"
+          docker run -d --name worker --network rq $celery_env radiarch:ci \
+            celery -A radiarch.tasks.celery_app worker --loglevel=info --concurrency=1 -Q celery,dose,optimize,evaluate,maintenance
+          docker run --rm --network rq $celery_env radiarch:ci python -c "
+          import time
+          from radiarch.tasks.celery_app import celery_app
+          for _ in range(30):
+              if celery_app.control.ping(timeout=2.0):
+                  break
+              time.sleep(2)
+          else:
+              raise SystemExit('no worker answered the ping')
+          print(celery_app.send_task('radiarch.cleanup.dose_stores', queue='maintenance').get(timeout=120))
+          " || { docker logs worker; exit 1; }

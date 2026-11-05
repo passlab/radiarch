@@ -299,7 +299,9 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   review waiting
 - [x] R11.10 (2026-11-01) Planning behind a gateway: the user a trusted proxy names (header plus shared secret) kept
   as `requested_by` on optimizations, Pareto sets, navigation states, deliverable plans and exports, and as the
-  exported objects' Operators' Name; an export fails when its push is refused and the push is required
+  exported objects' Operators' Name; an export fails when its push is refused and the push is required.
+  2026-11-04: the user header without the secret is refused on every route, not only where the user is read, and a
+  protocol run keeps its user, on the run and on its Pareto set, navigation state and deliverable plan
 - [ ] R11.11 Navigation on the deliverable plan's apertures (option B1 of `docs/reports/mco-deliverable-options.md`):
   a second, small Pareto set over the sequenced plan's segment or arc-interval metersets, navigated again, so that
   the plan delivered keeps the navigated trade-offs; with it, the maximum's limit divided by the normalisation in the

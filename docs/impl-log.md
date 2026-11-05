@@ -1254,3 +1254,25 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   R11.9 plan row ([x]) follow; R11.11 (B1, the second navigation on the deliverable plan's apertures, with the
   maximum's limit divided by the normalisation and the rounds in the record) is added; the status table is brought
   to 2026-11-04.
+
+## A worker that starts, and the trusted proxy's check on every route (2026-11-04)
+
+Found by a gateway deployment of `4682273`: its Celery worker died at start, and a user header without the proxy's
+secret was refused on some routes only.
+
+- **Worker.** radiarch pinned celery and redis-py but not kombu, which celery allows up to 6.0. kombu 5.7.0 refuses
+  redis-py below 6.1 in its Redis transport, so any image built after its release had a worker that exited at start
+  (`VersionMismatch`). Tests and the command line run jobs in-process, so nothing had started a real worker. kombu is
+  now pinned below 5.7 (`src/pyproject.toml`). CI's Image job starts a worker from the built image beside Redis, waits
+  for its ping, and runs the store cleanup through the broker and the result backend.
+- **Every route.** The check that a request naming a user carries the proxy's secret ran only in the dependency that
+  reads the user, on six routes. It is now a middleware too (`api/security.py` `user_header_untrusted`, `app.py`),
+  registered inside CORS so the 401 carries CORS headers. Without the setting, or without the header, nothing changes.
+- **Protocol runs.** `POST /protocols/run` reads the user: the run result keeps it as `requested_by`, and an MCO
+  protocol passes it to its Pareto set, its navigation state and its deliverable plan. A cached run keeps its first
+  requester; the user is not part of the run's key.
+- Tests: `tests/test_trusted_proxy.py` (four routes that never read the user refuse the header without the secret,
+  or with a wrong one, and answer with it); `tests/test_r11_protocol.py` (a protocol run under a user keeps it on the
+  run, the Pareto set, the state and the deliverable plan). Checked by hand: a worker from the venv beside a Redis
+  container answers the ping and runs the cleanup task.
+- Docs: `README.md` (the two settings), `PRODUCTION.md` (the five queues and the worker that must consume them).

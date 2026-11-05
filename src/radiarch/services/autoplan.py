@@ -423,7 +423,7 @@ class AutoplanService:
         mco: Dict[str, Optional[str]] = {}
         if protocol.mco is not None:
             # 2'. multi-criteria: the Pareto set, automatic navigation by the goals, the navigated plan made deliverable
-            out = self._plan_mco(protocol, pgeo, arrays, goals, cover, on)
+            out = self._plan_mco(protocol, pgeo, arrays, goals, cover, on, getattr(request, "requested_by", None))
             d = out["deliverable"]
             optimization_id, sequence_id, vmat_id, deliverable, k = d.optimization_id, d.sequence_id, d.vmat_id, d.deliverable, d.normalisation
             beam_model_id, dose_id, history = d.beam_model_id, d.dose_id, out["history"]
@@ -488,6 +488,7 @@ class AutoplanService:
                                                                              scale_to_prescription=True)))
             evaluation_id = ev.evaluation_id
         result = ProtocolRunResult(
+            requested_by=getattr(request, "requested_by", None),
             run_id=str(uuid.uuid4()), protocol=protocol, geometry_id=geo.geometry_id, planning_geometry_id=pgeo.geometry_id,
             aliased=aliased,
             optimization_id=optimization_id, sequence_id=sequence_id, vmat_id=vmat_id, beam_model_id=beam_model_id,
@@ -501,10 +502,10 @@ class AutoplanService:
         return result
 
     @staticmethod
-    def _plan_mco(protocol, pgeo, arrays, goals: List[dict], cover: dict, on) -> dict:
+    def _plan_mco(protocol, pgeo, arrays, goals: List[dict], cover: dict, on, requested_by: Optional[str] = None) -> dict:
         """A protocol's ``mco`` section: the Pareto set on its beams (static fields, or the arcs' sectors), automatic
         navigation by its goals, and the navigated plan made deliverable (apertures or arcs, normalised to the main
-        target's coverage goal)."""
+        target's coverage goal). The run's user is kept on the Pareto set, the navigation state and the deliverable plan."""
         from ..models.dose import EngineSpec
         from ..models.mco import AutoNavigateRequest, DeliverableRequest, MCORunRequest, NormaliseSpec
         from ..models.optimization import SolverConfig
@@ -523,7 +524,7 @@ class AutoplanService:
             bm = sector_beam_model(pgeo, arrays, target, goals, b.arcs, protocol.beamlet_mm, protocol.jaw_margin_mm, protocol.machine)
             engine = EngineSpec(name="pb", params=dict(protocol.engine.params))
         present = [g["structure"] for g in goals if g["structure"] in arrays.structure_index]
-        mreq = MCORunRequest(geometry_id=pgeo.geometry_id, beam_model_id=bm.beam_model_id, dose_engine=engine, tradeoffs=m.tradeoffs,
+        mreq = MCORunRequest(requested_by=requested_by, geometry_id=pgeo.geometry_id, beam_model_id=bm.beam_model_id, dose_engine=engine, tradeoffs=m.tradeoffs,
                              hard_constraints=m.hard_constraints, solver=SolverConfig(method="L-BFGS-B", max_iterations=protocol.iterations),
                              plan_budget=m.plan_budget, error_tolerance=m.error_tolerance,
                              navigation_structures=list(dict.fromkeys(present + list(m.navigation_structures))))
@@ -532,10 +533,10 @@ class AutoplanService:
         on(AutoplanStage.navigating, 0.62, f"{len(res.plans)} Pareto plans; navigating by the goals' priorities")
         goal_set = navigation_goals(protocol)
         state = NavigationService(mco.store).auto_navigate(res.mco_id, AutoNavigateRequest(
-            goals=goal_set, prescription_gy=rx, fractions=fx, name=f"protocol {protocol.protocol_id}"))
+            requested_by=requested_by, goals=goal_set, prescription_gy=rx, fractions=fx, name=f"protocol {protocol.protocol_id}"))
         on(AutoplanStage.deliverable, 0.7, "the navigated plan made deliverable")
         d = DeliverableService(mco_service=mco).run(res.mco_id, DeliverableRequest(
-            state_id=state.state_id, arcs=b.arcs if b.technique == "vmat" else [], fractions=fx, levels=b.sequence_levels,
+            requested_by=requested_by, state_id=state.state_id, arcs=b.arcs if b.technique == "vmat" else [], fractions=fx, levels=b.sequence_levels,
             machine_model_id=protocol.machine, max_iterations=protocol.iterations, goals=goal_set, prescription_gy=rx,
             rounds=protocol.arc_rounds if b.technique == "vmat" else protocol.rounds,
             normalise=NormaliseSpec(structure=target, metric=cover["metric"], gy=cover["gy"] * NORMALISATION_HEADROOM)))

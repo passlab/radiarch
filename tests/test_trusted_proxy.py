@@ -3,7 +3,7 @@
 With ``trusted_user_header`` and ``trusted_proxy_secret`` set, a request that carries the user header and the proxy's
 secret records the user as ``requested_by`` on the optimization, Pareto set, navigation state, deliverable plan and
 export it makes, and the exported RT objects name the user as Operators' Name. A user header without the secret is
-refused; a ``requested_by`` sent in the body is replaced. With ``dicomweb_push_required`` an export whose push is
+refused on every route, also where the user is not read; a ``requested_by`` sent in the body is replaced. With ``dicomweb_push_required`` an export whose push is
 refused fails with 502 and keeps nothing; without it the export is kept with ``pushed`` false, as before.
 """
 
@@ -58,6 +58,16 @@ def test_the_user_header_is_read_only_from_the_trusted_proxy(rx, monkeypatch):  
 
     get_settings.cache_clear()
     assert navigate({USER: "alice"}).status_code == 401                                                  # a header without a secret set
+
+
+def test_the_user_header_without_the_secret_is_refused_on_every_route(rx, monkeypatch):  # noqa: F811
+    _trust(monkeypatch)
+    for path in ("/api/v1/info", "/api/v1/evaluate/goal-templates", "/api/v1/protocols", "/"):     # routes that never read the user
+        assert rx.http.get(path).status_code == 200
+        assert rx.http.get(path, headers={USER: "alice", SECRET: "s3cret"}).status_code == 200
+        for headers in ({USER: "alice"}, {USER: "alice", SECRET: "wrong"}):
+            r = rx.http.get(path, headers=headers)
+            assert r.status_code == 401 and r.json()["detail"] == "untrusted user header", path
 
 
 def test_the_user_is_kept_on_each_result_and_as_the_operator(rx, monkeypatch, tmp_path):  # noqa: F811

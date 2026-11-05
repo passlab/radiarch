@@ -135,6 +135,8 @@ class PlanningProtocol(BaseModel):
 
 
 class ProtocolRunRequest(BaseModel):
+    requested_by: Optional[str] = Field(default=None, max_length=64,
+                                        description="Set by the server from a trusted proxy's user header; a value sent here is replaced.")
     geometry_id: str = Field(..., max_length=36)
     protocol_id: Optional[str] = Field(default=None, description="A shipped protocol (``GET /protocols``).")
     protocol: Optional[PlanningProtocol] = Field(default=None, description="Or one given in full.")
@@ -156,6 +158,8 @@ class GoalOutcome(BaseModel):
 
 
 class ProtocolRunResult(ResearchArtifact):
+    requested_by: Optional[str] = Field(default=None, description="The user a trusted proxy named on the request that made this "
+                                                                 "(a cached result keeps its first requester).")
     run_id: str
     protocol: PlanningProtocol
     geometry_id: str = Field(..., description="The patient's geometry the run started from.")

@@ -52,9 +52,14 @@ Why this shape:
 
 - **Stateless API workers** scale horizontally. They read jobs from
   Postgres and dispatch to Celery — nothing on local disk.
-- **Two queues for Celery** (`default` and `dose`) lets you size the
-  dose pool independently (fewer workers, more memory each) without
-  starving fast geometry/beam-model jobs.
+- **Five queues for Celery**: `celery` (geometry and beam models), `dose`,
+  `optimize` (optimizations, beam angles, protocol runs, Pareto sets and
+  deliverable plans), `evaluate` and `maintenance` (the cleanup). Separate
+  queues let you size the heavy pools independently (fewer workers, more
+  memory each) without starving fast jobs. Every queue needs a worker that
+  consumes it (`-Q celery,dose,optimize,evaluate,maintenance` for one
+  worker): a job on a queue no worker reads waits forever. CI's Image job
+  starts a worker from the image and runs a job through Redis.
 - **One Celery Beat instance** runs the cleanup tasks. Multiple beat
   instances will trigger duplicate sweeps — pin it to one node.
 - **Shared filesystem** for artifacts. Object storage (S3, GCS) works

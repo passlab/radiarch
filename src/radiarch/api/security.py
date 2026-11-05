@@ -92,26 +92,35 @@ def _clean_user(value: str) -> str:
     return cleaned[:64]
 
 
+def user_header_untrusted(request: Request) -> bool:
+    """Whether the request carries the trusted user header without the trusted proxy's secret.
+
+    The app refuses such a request on every route (a middleware), not only where the user is read, so a caller that
+    reaches radiarch around the proxy gets the same 401 wherever it claims a user."""
+    settings = get_settings()
+    header = getattr(settings, "trusted_user_header", "")         # settings stubbed without it: off
+    if not header or request.headers.get(header) is None:
+        return False
+    expected = settings.trusted_proxy_secret.get_secret_value() if settings.trusted_proxy_secret else ""
+    presented = request.headers.get(settings.trusted_proxy_secret_header, "")
+    return not expected or not presented or not _constant_time_eq(presented, expected)
+
+
 async def requester(request: Request) -> Optional[str]:
     """The requesting user, when a trusted proxy names one (``trusted_user_header`` with ``trusted_proxy_secret``).
 
     Radiarch does not authenticate the user: it trusts the proxy, and the proxy proves itself with the shared
     secret. A request that carries the user header without the right secret is refused (401), so a caller that
     reaches radiarch around the proxy cannot claim a user. Without the setting, or without the header, None."""
-    settings = get_settings()
-    header = getattr(settings, "trusted_user_header", "")         # settings stubbed without it: off
-    if not header:
-        return None
-    value = request.headers.get(header)
-    if value is None:
-        return None
-    expected = settings.trusted_proxy_secret.get_secret_value() if settings.trusted_proxy_secret else ""
-    presented = request.headers.get(settings.trusted_proxy_secret_header, "")
-    if not expected or not presented or not _constant_time_eq(presented, expected):
+    if user_header_untrusted(request):
         logger.warning("requester: a user header without the trusted proxy's secret; refused")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="untrusted user header")
+    header = getattr(get_settings(), "trusted_user_header", "")
+    value = request.headers.get(header) if header else None
+    if value is None:
+        return None
     user = _clean_user(value)
     return user or None
 
 
-__all__ = ["api_key_auth", "requester"]
+__all__ = ["api_key_auth", "requester", "user_header_untrusted"]

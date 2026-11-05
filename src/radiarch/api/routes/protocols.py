@@ -21,7 +21,7 @@ from ...core.store import store
 from ...models.protocol import AutoplanJobStatus, PlanningProtocol, ProtocolRunRequest, ProtocolRunResult
 from ...services.audit import emit, make_event
 from ...services.autoplan import AutoplanError, AutoplanService, builtin_protocols, load_protocol
-from ..security import api_key_auth
+from ..security import api_key_auth, requester
 
 router = APIRouter(prefix="/protocols", tags=["protocols"])
 
@@ -76,7 +76,9 @@ async def get_protocol(protocol_id: str) -> PlanningProtocol:
              responses={200: {"description": "The same protocol ran on this geometry before: its run."},
                         202: {"description": "A job: poll /protocols/jobs/{job_id}."},
                         404: {"description": "Unknown geometry or protocol."}, 422: {"description": "An invalid protocol."}})
-async def run_protocol(request: ProtocolRunRequest, response: Response, api_key_prefix: Optional[str] = Depends(api_key_auth)):
+async def run_protocol(request: ProtocolRunRequest, response: Response, api_key_prefix: Optional[str] = Depends(api_key_auth),
+                       user: Optional[str] = Depends(requester)):
+    request = request.model_copy(update={"requested_by": user})
     try:
         key = _service().cache_key(request)
     except AutoplanError as exc:
