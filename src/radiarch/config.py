@@ -257,7 +257,7 @@ class Settings(BaseSettings):
         description="Header name carrying the API key.",
     )
 
-    # The requesting user, from a trusted proxy (D70-style deployments: radiarch reachable only through a gateway that
+    # The requesting user, from a trusted proxy (deployments where radiarch is reachable only through a gateway that
     # authenticates people). Both must be set for the user header to be read; a request carrying the user header
     # without the matching secret is refused.
     trusted_user_header: str = Field(

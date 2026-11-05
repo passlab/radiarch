@@ -993,7 +993,7 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
 - The first R11.8 image (from `b0d296b`) built but `radiarch protocols` in it found no module: the builder stage's
   editable install leaves a path file pointing at the build stage, which the runtime stage does not have, and only
   the compose services set `PYTHONPATH=/app`. The Dockerfile now sets it, so the image runs the command line on its
-  own (a Galaxy tool or `docker run` calls `radiarch dose` without compose).
+  own (a workflow system's tool or `docker run` calls `radiarch dose` without compose).
 - CI's new job "Image (build and the command line)" builds the image from the commit and runs `radiarch protocols`
   (the ITV variant listed), `radiarch dose --help` and an import in it, so an image that builds but cannot run the
   package is caught.
@@ -1035,7 +1035,7 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   receives (mimic, hot spot, goals) and the reweighting between rounds, a goal set that holds stopping at one, the
   bare request's terms; the cap. The projection's tests pass `project=True`; the SDK test checks the default makes
   a different plan with no projected column. The heavy check is the lung case in fast mode on a server, through
-  SMIS's site-run script with the working tree synced.
+  a site-run script with the working tree synced.
 - **Follow-up.** The Pareto anchors are themselves spiky (PTV maxima of 96 to 216 Gy on the navigation voxels for the
   single-objective solves under the hard constraints); a fluence smoothness regularizer in the MCO solves
   (`SolverConfig.regularization`, which the MCO request already carries) would address that upstream and is not
