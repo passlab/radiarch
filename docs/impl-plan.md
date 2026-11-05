@@ -101,7 +101,9 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] Overlapping structures (bitmask); margins, rings, booleans, density overrides, couch
 - [x] Leaf sequencing (sliding window), machine limits, segment metersets re-optimized, deliverability report
 - [ ] Direct aperture optimization refinement **(open)**
-- [ ] Leaf transmission and tongue-and-groove in segment doses **(open)**
+- [x] (2026-11-04) Leaf transmission, rounded leaf ends and tongue-and-groove in aperture doses: one aperture model
+  for the sequencing coverage, the pencil beam and CCC's delivered dose, carried by the plan from its machine
+  (`docs/reports/mlc-leaf-model.md`); the R8, R10 and R11 records' reruns with it waiting
 - [ ] Asymmetric margins **(open)**
 
 ### R5 — Evaluation

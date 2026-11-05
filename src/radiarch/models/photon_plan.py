@@ -50,6 +50,44 @@ class MLCRow(BaseModel):
         return self.x_right_mm - self.x_left_mm
 
 
+LEAF_MODEL_VERSION = "1"     # raise when the aperture fluence changes: cached sequences, arcs and deliverable plans are then not reused
+
+
+class LeafModel(BaseModel):
+    """What the leaves and jaws let through (``docs/reports/mlc-leaf-model.md``): a machine's values, carried by
+    the plans made from its apertures so that every dose path computes the same fluence.
+
+    Leaf transmission applies under the leaves inside the jaws, jaw transmission where the leaves are open outside
+    the jaws; under both, about the product of the two (3e-5), nothing. Each tip moves back by half the dosimetric
+    leaf gap (rounded leaf ends), a closed pair included. In a strip of the tongue-and-groove width centred on the
+    boundary between two adjacent pairs, the opening is the overlap of the two pairs' openings."""
+
+    leaf_transmission: float = Field(default=0.0, ge=0.0, le=0.2)
+    jaw_transmission: float = Field(default=0.0, ge=0.0, le=0.1)
+    dosimetric_leaf_gap_mm: float = Field(default=0.0, ge=0.0, le=5.0)
+    tongue_and_groove_mm: float = Field(default=0.0, ge=0.0, le=2.0)
+
+
+Rectangle = Tuple[float, float, float, float, float]     # x0, x1, y0, y1, the factor of the open fluence
+
+
+def _x_parts(a: float, b: float, xj0: float, xj1: float, inside: float, open_out: float, leaf_in: float) -> List[Tuple[float, float, float]]:
+    """A band's x pieces with their factors: the opening ``[a, b]`` (``inside`` within the jaws, ``open_out`` outside)
+    and, within the jaws, the parts under the leaves (``leaf_in``)."""
+    out = []
+    if b > a:
+        lo, hi = max(a, xj0), min(b, xj1)
+        if hi > lo:
+            out.append((lo, hi, inside))
+        out += [(a, min(b, xj0), open_out)] if a < xj0 else []
+        out += [(max(a, xj1), b, open_out)] if b > xj1 else []
+        out += [(xj0, min(a, xj1), leaf_in)] if a > xj0 else []
+        out += [(max(b, xj0), xj1, leaf_in)] if b < xj1 else []
+    else:
+        out.append((xj0, xj1, leaf_in))
+    return [(x0, x1, f) for x0, x1, f in out if x1 > x0 and f > 0.0]
+
+
 class PhotonSegment(BaseModel):
     """A control point: jaws, MLC aperture and meterset."""
 
@@ -126,25 +164,70 @@ class PhotonSegment(BaseModel):
                         out.append((x, y, bx, by))
         return np.asarray(out, dtype=float).reshape(-1, 4)
 
-    def coverage_beamlets(self) -> np.ndarray:
-        """Every beamlet cell the aperture touches, with the fraction of its area that is open: an
+    def fluence_rectangles(self, model: Optional[LeafModel] = None) -> List[Rectangle]:
+        """The segment's fluence as disjoint rectangles ``(x0, x1, y0, y1, factor)``, the one aperture model every
+        dose path uses (:class:`LeafModel`). Without a model, or for a jaws-only field, the ideal aperture: each
+        MLC row's opening within the jaws, factor 1."""
+        xj0, xj1 = self.x_jaw_mm
+        yj0, yj1 = self.y_jaw_mm
+        if model is None or not self.mlc_rows:
+            out = []
+            for row in self.aperture_rows():
+                x0, x1 = max(row.x_left_mm, xj0), min(row.x_right_mm, xj1)
+                y0, y1 = max(row.y_min_mm, yj0), min(row.y_max_mm, yj1)
+                if x1 > x0 and y1 > y0:
+                    out.append((x0, x1, y0, y1, 1.0))
+            return out
+        half_gap = 0.5 * model.dosimetric_leaf_gap_mm
+        t = 0.5 * model.tongue_and_groove_mm
+        rows = sorted(self.mlc_rows, key=lambda r: r.y_min_mm)
+        tips = [(r.x_left_mm - half_gap, r.x_right_mm + half_gap) for r in rows]
+        adjacent = [abs(a.y_max_mm - b.y_min_mm) < 1e-6 for a, b in zip(rows, rows[1:])]
+        # bands (y0, y1, a, b): each row less its tongue-and-groove strips, and the strips with the overlap of both openings
+        bands = []
+        for k, row in enumerate(rows):
+            lo = row.y_min_mm + (min(t, 0.5 * (row.y_max_mm - row.y_min_mm)) if k > 0 and adjacent[k - 1] else 0.0)
+            hi = row.y_max_mm - (min(t, 0.5 * (row.y_max_mm - row.y_min_mm)) if k < len(rows) - 1 and adjacent[k] else 0.0)
+            bands.append((lo, hi) + tips[k])
+            if k < len(rows) - 1 and adjacent[k] and t > 0.0:
+                b = row.y_max_mm
+                strip = (b - min(t, 0.5 * (row.y_max_mm - row.y_min_mm)), b + min(t, 0.5 * (rows[k + 1].y_max_mm - b)))
+                bands.append(strip + (max(tips[k][0], tips[k + 1][0]), min(tips[k][1], tips[k + 1][1])))
+        # the jaws' y range that no row covers is under closed leaves
+        covered = sorted((y0, y1) for y0, y1, _, _ in bands)
+        gaps, y = [], yj0
+        for y0, y1 in covered:
+            if y0 > y:
+                gaps.append((y, min(y0, yj1)))
+            y = max(y, y1)
+        if y < yj1:
+            gaps.append((y, yj1))
+        out: List[Rectangle] = []
+        for y0, y1, a, b in bands:
+            yi0, yi1 = max(y0, yj0), min(y1, yj1)
+            if yi1 > yi0:            # inside the jaws' y range
+                out += [(x0, x1, yi0, yi1, f) for x0, x1, f in
+                        _x_parts(a, b, xj0, xj1, 1.0, model.jaw_transmission, model.leaf_transmission)]
+            for z0, z1 in ((y0, min(y1, yj0)), (max(y0, yj1), y1)):    # outside them: the opening under a jaw
+                if z1 > z0 and b > a and model.jaw_transmission > 0.0:
+                    out.append((a, b, z0, z1, model.jaw_transmission))
+        if model.leaf_transmission > 0.0:
+            out += [(xj0, xj1, g0, g1, model.leaf_transmission) for g0, g1 in gaps if g1 > g0]
+        return [r for r in out if r[1] > r[0] and r[3] > r[2]]
+
+    def coverage_beamlets(self, model: Optional[LeafModel] = None) -> np.ndarray:
+        """Every beamlet cell the fluence touches, with the open-equivalent fraction of its area: an
         ``(n, 5)`` array of ``x_mm, y_mm, dx_mm, dy_mm, fraction``.
 
         For recomputing a delivered plan (:meth:`radiarch.services.dose_engines.ccc.CCCEngine.compute_delivered_dose`):
         :meth:`beamlets` drops leaf pairs no wider than one beamlet and cells whose centre lies outside the
         opening, which loses most of a sliding-window arc's narrow apertures. Cells lie on the same lattice
-        (edges on multiples of the spacing); the open area of a cell is the area of the leaf openings and the
-        jaws that falls inside it. The optimizer's columns stay those of :meth:`beamlets`.
+        (edges on multiples of the spacing); a cell's fraction is the area of :meth:`fluence_rectangles` inside it,
+        each times its factor. The optimizer's columns stay those of :meth:`beamlets`.
         """
         bx, by = float(self.beamlet_spacing_mm[0]), float(self.beamlet_spacing_mm[1])
-        xj0, xj1 = self.x_jaw_mm
-        yj0, yj1 = self.y_jaw_mm
         area: dict = {}
-        for row in self.aperture_rows():
-            x0, x1 = max(row.x_left_mm, xj0), min(row.x_right_mm, xj1)
-            y0, y1 = max(row.y_min_mm, yj0), min(row.y_max_mm, yj1)
-            if x1 <= x0 or y1 <= y0:
-                continue
+        for x0, x1, y0, y1, f in self.fluence_rectangles(model):
             for j in range(math.floor(y0 / by), math.ceil(y1 / by)):
                 hy = min(y1, (j + 1) * by) - max(y0, j * by)
                 if hy <= 0:
@@ -152,7 +235,7 @@ class PhotonSegment(BaseModel):
                 for i in range(math.floor(x0 / bx), math.ceil(x1 / bx)):
                     hx = min(x1, (i + 1) * bx) - max(x0, i * bx)
                     if hx > 0:
-                        area[(i, j)] = area.get((i, j), 0.0) + hx * hy
+                        area[(i, j)] = area.get((i, j), 0.0) + hx * hy * f
         cells = sorted(area.items(), key=lambda kv: (kv[0][1], kv[0][0]))
         out = [((i + 0.5) * bx, (j + 0.5) * by, bx, by, min(a / (bx * by), 1.0)) for (i, j), a in cells if a > 1e-9 * bx * by]
         return np.asarray(out, dtype=float).reshape(-1, 5)
@@ -328,6 +411,8 @@ class PhotonPlan(BaseModel):
     modality: Literal["PHOTON_IMRT"] = "PHOTON_IMRT"
     beams: List[PhotonBeam] = Field(..., min_length=1)
     dicom: Optional[DicomPlanProvenance] = Field(default=None, description="Set when the plan was read from a DICOM RT Plan.")
+    leaf_model: Optional[LeafModel] = Field(default=None, description="The machine's leaves and jaws, which the doses through "
+                                            "the apertures use; null = ideal leaves (a plan made before, or without a machine).")
 
     def beamlets(self) -> np.ndarray:
         return np.concatenate([b.beamlets() for b in self.beams], axis=0)
@@ -410,6 +495,8 @@ def open_field_segment(
 
 __all__ = [
     "MLCRow",
+    "LeafModel",
+    "LEAF_MODEL_VERSION",
     "PhotonSegment",
     "ArcControlPoint",
     "PhotonArc",

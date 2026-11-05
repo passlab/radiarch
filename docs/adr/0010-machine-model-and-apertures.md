@@ -61,6 +61,11 @@ was no way to make a PTV, a ring or a density override from the API.
   tongue-and-groove, rounded ends or small-field head scatter. A final
   engine run on the aperture plan's own beamlets is the honest check and
   is one request away (`POST /dose/compute` on the new beam model).
+  2026-11-04: leaf transmission, rounded ends and tongue-and-groove are now
+  in the coverage of every beamlet by every aperture, from the machine
+  (`docs/reports/mlc-leaf-model.md`); small-field head scatter is still
+  not. A run on the plan's own beamlets keeps ideal leaves; the dose
+  through the apertures is the pencil beam's `fluence: apertures`.
 - Direct aperture optimization, VMAT and fraction-wise delivery
   constraints stay with R8; structure operations with asymmetric margins
   and multi-layer segmentations are not modelled.

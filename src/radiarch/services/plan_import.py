@@ -29,7 +29,7 @@ from loguru import logger
 from ..dicom.rtplan import read_rtplan
 from ..models.beam_model import BeamModelResult, FluenceElementSet, Modality, PerBeamElements
 from ..models.geometry import GeometryResult
-from ..models.photon_plan import PhotonPlan
+from ..models.photon_plan import LeafModel, PhotonPlan
 from ..models.proton_plan import ProtonPlan
 from .beam_persistence import BeamModelStore
 
@@ -108,6 +108,17 @@ def plan_into_frame(plan: Union[PhotonPlan, ProtonPlan], to_geometry: np.ndarray
     return plan.model_copy(update={"beams": beams}), float(np.degrees(np.arccos(cos)))
 
 
+def photon_leaf_model(machine_model_id: str) -> Optional[LeafModel]:
+    """The leaves and jaws of the machine an imported photon plan is computed for; None (ideal leaves) when that
+    machine is not a photon machine radiarch has."""
+    from .machine_model import MachineModelError, load_photon_spec
+    try:
+        return load_photon_spec(machine_model_id).leaf_model()
+    except MachineModelError as exc:
+        logger.warning("imported plan: no photon machine {!r} ({}); its apertures are computed with ideal leaves", machine_model_id, exc)
+        return None
+
+
 def import_rtplan(source: Union[str, Path], geometry: GeometryResult, store: BeamModelStore, *,
                   machine_model_id: str = "default", beamlet_spacing_mm: Tuple[float, float] = (5.0, 5.0),
                   strict_frame_of_reference: bool = True, to_geometry: Optional[np.ndarray] = None) -> ImportedPlan:
@@ -116,6 +127,8 @@ def import_rtplan(source: Union[str, Path], geometry: GeometryResult, store: Bea
     ``to_geometry`` (R9): a plan made in another frame of reference, brought into the geometry's by a registration's
     rigid matrix (plan-frame points into the geometry's frame); its isocenters move, its angles stay."""
     plan = read_rtplan(source, beamlet_spacing_mm)
+    if isinstance(plan, PhotonPlan):
+        plan = plan.model_copy(update={"leaf_model": photon_leaf_model(machine_model_id)})
     if to_geometry is not None:
         plan, rotation = plan_into_frame(plan, to_geometry)
         if rotation > 1.0:

@@ -252,8 +252,10 @@ the audit log and storage hygiene. The pencil-beam engine uses a GPU through CuP
 
 ## 9. Known limits
 
-- No linac head model: generic 6 MV beams, no output factors from head scatter, no leaf
-  transmission or tongue-and-groove in segment doses.
+- No linac head model: generic 6 MV beams, no output factors from head scatter. Aperture doses
+  have an average leaf transmission, rounded leaf ends and tongue-and-groove from the machine
+  (`docs/reports/mlc-leaf-model.md`), not transmission that varies with leaf position, jaw
+  tracking or leaf position errors.
 - CCC's shipped scatter truncation: central dose nearly independent of field size, depth dose
   dependent on beamlet size, no dose beyond ~2 cm of the beamlets (ADR 0015).
 - The pencil beam's lateral kernel scaling in lung is fitted to two Monte Carlo slabs (2 x 2 and

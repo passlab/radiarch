@@ -124,13 +124,14 @@ def beamlet_geometry_from_plan(plan) -> BeamletGeometry:
 
 
 def delivered_beamlet_geometry(plan) -> Tuple[BeamletGeometry, np.ndarray]:
-    """The plan's coverage beamlets (:meth:`radiarch.models.photon_plan.PhotonSegment.coverage_beamlets`) and
-    their metersets, segment MU times open fraction: what recomputing a delivered plan needs, narrow
-    apertures included."""
+    """The plan's coverage beamlets (:meth:`radiarch.models.photon_plan.PhotonSegment.coverage_beamlets`, through
+    the plan's leaf model) and their metersets, segment MU times open fraction: what recomputing a delivered plan
+    needs, narrow apertures and leakage included."""
     xy, size, angles, sad, mu = [], [], [], [], []
+    model = getattr(plan, "leaf_model", None)
     for beam in plan.beams:
         for seg in beam.segments:
-            b = seg.coverage_beamlets()
+            b = seg.coverage_beamlets(model)
             if b.shape[0] == 0 or seg.mu <= 0:
                 continue
             xy.append(b[:, :2])

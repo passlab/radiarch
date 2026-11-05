@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 from .common import ResearchArtifact
 from .dose import EngineSpec
 from .optimization import ConstraintSpec, ConvergenceInfo, ObjectiveSpec, HardConstraint
-from .photon_plan import arc_step_deg
+from .photon_plan import LEAF_MODEL_VERSION, arc_step_deg
 
 
 class ArcSpec(BaseModel):
@@ -95,6 +95,7 @@ class ArcRequest(BaseModel):
             "arcs": [a.model_dump() for a in self.arcs],
             "machine_model_id": self.machine_model_id,
             "energy_mv": self.energy_mv,
+            "leaf_model": LEAF_MODEL_VERSION,
             "fractions": self.fractions,
             "engine": {"name": self.dose_engine.name, "version": self.dose_engine.key_version(), "params": self.dose_engine.params},
             "solver": self.solver_method,

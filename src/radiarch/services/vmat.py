@@ -298,7 +298,7 @@ def plan_arcs(sector_plan: PhotonPlan, weights: np.ndarray, arcs: List[ArcSpec],
                                   energy_mv=ref.energy_mv or machine.energy(energy_mv).nominal_mv,
                                   beamlet_spacing_mm=ref.segments[0].beamlet_spacing_mm)
         beams.append(beam); mu0.append(mu); issues[spec.arc_id] = iss
-    plan0 = PhotonPlan(name=name or f"{sector_plan.name}-vmat", beams=beams)
+    plan0 = PhotonPlan(name=name or f"{sector_plan.name}-vmat", beams=beams, leaf_model=machine.leaf_model())
     mu_init = np.concatenate(mu0)
     mu_min = np.concatenate([interval_timing(b, machine, energy_mv, fractions).min_mu for b in beams])
     logger.info("VMAT: {} arcs, {} control-point intervals; recomputing their doses", len(beams), mu_init.size)
@@ -311,7 +311,7 @@ def plan_arcs(sector_plan: PhotonPlan, weights: np.ndarray, arcs: List[ArcSpec],
         n = len(b.segments)
         out_beams.append(with_metersets(b, mu[offset:offset + n]))
         offset += n
-    plan = PhotonPlan(name=plan0.name, beams=out_beams)
+    plan = PhotonPlan(name=plan0.name, beams=out_beams, leaf_model=plan0.leaf_model)
     p = dict(engine_params or {}); p["fluence"] = "apertures"
     dose = engine.compute_plan_dose(density_zyx, spacing_mm, origin_mm, plan, params=p)
     reports = [arc_report(b, machine, energy_mv, issues.get(b.beam_id, ()), fractions) for b in out_beams]

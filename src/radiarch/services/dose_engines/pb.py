@@ -87,7 +87,7 @@ import scipy.sparse as sp
 from loguru import logger
 
 from ...models.dose import ScenarioSpec
-from ...models.photon_plan import PhotonPlan, PhotonSegment
+from ...models.photon_plan import LeafModel, PhotonPlan, PhotonSegment
 from .ccc_driver import iec_beam_frame
 from .pb_kernel import GRID_MM, PBKernel, load_kernel
 from .protocol import (
@@ -252,12 +252,11 @@ def plan_directions(plan: PhotonPlan, shift_mm: Optional[Sequence[float]] = None
     return out
 
 
-def _segment_extent(seg: PhotonSegment, beamlets: np.ndarray, apertures: bool) -> float:
+def _segment_extent(seg: PhotonSegment, beamlets: np.ndarray, apertures: bool, model: Optional[LeafModel] = None) -> float:
     """The largest distance from the beam axis that the segment's fluence reaches (mm, isocenter plane)."""
     if apertures:
-        xs = np.array(seg.x_jaw_mm, float)
-        ys = np.array(seg.y_jaw_mm, float)
-        return float(np.hypot(np.abs(xs).max(), np.abs(ys).max()))
+        rects = np.asarray([tuple(seg.x_jaw_mm) + tuple(seg.y_jaw_mm)] + [r[:4] for r in seg.fluence_rectangles(model)], float)
+        return float(np.hypot(np.abs(rects[:, :2]).max(), np.abs(rects[:, 2:]).max()))
     if beamlets.shape[0] == 0:
         return 0.0
     return float(np.hypot(np.abs(beamlets[:, 0]) + beamlets[:, 2] / 2, np.abs(beamlets[:, 1]) + beamlets[:, 3] / 2).max())
@@ -357,17 +356,10 @@ class _FluenceGrid:
         self.phi[j0:j1, i0:i1] += weight * np.outer(cw, cu)
 
 
-def aperture_rectangles(seg: PhotonSegment) -> List[Tuple[float, float, float, float]]:
-    """The open area of a segment as rectangles ``(x0, x1, y0, y1)``: each MLC row clipped by the jaws."""
-    xj0, xj1 = seg.x_jaw_mm
-    yj0, yj1 = seg.y_jaw_mm
-    out = []
-    for row in seg.aperture_rows():
-        x0, x1 = max(row.x_left_mm, xj0), min(row.x_right_mm, xj1)
-        y0, y1 = max(row.y_min_mm, yj0), min(row.y_max_mm, yj1)
-        if x1 > x0 and y1 > y0:
-            out.append((x0, x1, y0, y1))
-    return out
+def aperture_rectangles(seg: PhotonSegment, model: Optional[LeafModel] = None) -> List[Tuple[float, float, float, float, float]]:
+    """A segment's fluence as rectangles ``(x0, x1, y0, y1, factor)`` (:meth:`PhotonSegment.fluence_rectangles`):
+    without a leaf model, each MLC row clipped by the jaws."""
+    return seg.fluence_rectangles(model)
 
 
 # ---------------------------------------------------------------------------
@@ -824,11 +816,12 @@ class PencilBeamEngine:
         density, density_dev, cand_flat, cand_pos, shift, lat = self._prepare(r, density_zyx, spacing_mm, origin_mm, scenario)
         planes = xp.asarray(_scaled_planes(r.kernel_key, r.n, r.fwhm_mm, r.scales, r.near_mm).astype(np.float32))
         h_plane = (planes.shape[-1] - 1) // 2
+        leaf_model = getattr(plan, "leaf_model", None)          # a plan pickled before the leaf model has none
         dose = xp.zeros(int(np.prod(density.shape)), dtype=xp.float32)
         for direction in plan_directions(plan, shift):
             segs = direction.segments
             apertures = mode == "apertures"
-            reach = max((_segment_extent(s.segment, s.beamlets, apertures) for s in segs), default=0.0) + h_plane * GRID_MM * math.sqrt(2.0)
+            reach = max((_segment_extent(s.segment, s.beamlets, apertures, leaf_model) for s in segs), default=0.0) + h_plane * GRID_MM * math.sqrt(2.0)
             vox = self._direction_voxels(r, density_dev, density, spacing_mm, origin_mm, cand_flat, cand_pos, direction, reach)
             if vox is None:
                 continue
@@ -838,7 +831,7 @@ class PencilBeamEngine:
             for s in segs:
                 by_collimator.setdefault(round(float(s.segment.collimator_deg), 6), []).append(s)
             for col, group in by_collimator.items():
-                fl = self._fluence(group, apertures, None if apertures else wts)
+                fl = self._fluence(group, apertures, None if apertures else wts, model=leaf_model)
                 if fl is None:
                     continue
                 idx, acc = self._fluence_dose(r, vox, amp, planes, fl, col)
@@ -891,17 +884,18 @@ class PencilBeamEngine:
         density, density_dev, cand_flat, cand_pos, shift, lat = self._prepare(r, density_zyx, spacing_mm, origin_mm, scenario)
         planes = xp.asarray(_scaled_planes(r.kernel_key, r.n, r.fwhm_mm, r.scales, r.near_mm).astype(np.float32))
         n_seg = sum(len(b.segments) for b in plan.beams)
+        leaf_model = getattr(plan, "leaf_model", None)
         columns: List[Optional[Tuple[np.ndarray, np.ndarray]]] = [None] * n_seg
         for direction in plan_directions(plan, shift):
             segs = direction.segments
-            reach = max(_segment_extent(s.segment, s.beamlets, True) for s in segs) + r.cutoff_mm * math.sqrt(2.0)
+            reach = max(_segment_extent(s.segment, s.beamlets, True, leaf_model) for s in segs) + r.cutoff_mm * math.sqrt(2.0)
             vox = self._direction_voxels(r, density_dev, density, spacing_mm, origin_mm, cand_flat, cand_pos, direction, reach)
             if vox is None:
                 continue
             self._attach_lateral(r, vox, lat)
             amp = self._amplitudes(r, vox)
             for s in segs:
-                fl = self._fluence([s], True, None, unit=True)
+                fl = self._fluence([s], True, None, unit=True, model=leaf_model)
                 if fl is None:
                     continue
                 idx, val = self._fluence_dose(r, vox, amp, planes, fl, float(s.segment.collimator_deg))
@@ -923,12 +917,13 @@ class PencilBeamEngine:
         return sp.csc_matrix((vals.astype(np.float32), rows.astype(np.int64), indptr), shape=(n_vox, n_seg)).tocsr()
 
     @staticmethod
-    def _fluence(group: List[_SegmentColumns], apertures: bool, weights: Optional[np.ndarray], unit: bool = False) -> Optional[_FluenceGrid]:
+    def _fluence(group: List[_SegmentColumns], apertures: bool, weights: Optional[np.ndarray], unit: bool = False,
+                 model: Optional[LeafModel] = None) -> Optional[_FluenceGrid]:
         rects: List[Tuple[float, float, float, float, float]] = []
         for s in group:
             if apertures:
                 mu = 1.0 if unit else float(s.segment.mu)
-                rects += [(x0, x1, y0, y1, mu) for x0, x1, y0, y1 in aperture_rectangles(s.segment)]
+                rects += [(x0, x1, y0, y1, mu * f) for x0, x1, y0, y1, f in aperture_rectangles(s.segment, model)]
             else:
                 for k, (x, y, bx, by) in enumerate(s.beamlets):
                     wt = float(weights[s.first_column + k])

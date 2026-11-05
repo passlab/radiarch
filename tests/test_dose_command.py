@@ -262,9 +262,13 @@ def _sweep_arc(tmp_path, case, widths, name: str) -> Path:
 def test_an_arc_is_recomputed_through_its_apertures(dose_env, tmp_path, capsys):
     """A sliding-window arc's slits can be narrower than a beamlet. Recomputed through the beamlet columns they vanish
     (the fault a round trip found: a VMAT plan's RT Plan recomputed 19 % low); the recalculation goes through the
-    apertures, so half the leaf pairs at 3 mm and half at 10 mm deliver about 13/10 of what the 10 mm half alone does."""
+    apertures, so half the leaf pairs at 3 mm and half at 10 mm deliver about 13/10 of what the 10 mm half alone does,
+    times what the machine's leaves add (R4's leaf model: the slits act wider by the leaf gap, the closed pairs inside
+    the jaws leak through their tips, the leaves pass their transmission)."""
+    from radiarch.dicom.rtplan import read_rtplan
     from radiarch.models.dose import DoseComputeRequest, DoseResult, EngineSpec, WeightVector
     from radiarch.sdk import Radiarch
+    from radiarch.services.machine_model import load_photon_spec
 
     case, _ = _case(tmp_path)
     study = str(pydicom.dcmread(str(case / "CT000.dcm"), stop_before_pixels=True).StudyInstanceUID)
@@ -279,7 +283,12 @@ def test_an_arc_is_recomputed_through_its_apertures(dose_env, tmp_path, capsys):
         beamlets = rx.submit("dose", "/dose/compute", req, DoseResult)
     a = np.asarray(nib_load(apertures.result.dose_grid_uri)); b = np.asarray(nib_load(beamlets.dose_grid_uri))
     assert apertures.result.engine_name == "pb" and a.max() > 0.1
-    assert 1.15 <= a.sum() / b.sum() <= 1.5, (a.sum(), b.sum())
+    model = load_photon_spec("default").leaf_model()
+    fluence = lambda m: sum(s.mu * sum((x1 - x0) * (y1 - y0) * f for x0, x1, y0, y1, f in s.fluence_rectangles(m))  # noqa: E731
+                            for beam in read_rtplan(plan).beams for s in beam.segments)
+    leaves = fluence(model) / fluence(None)
+    assert leaves > 1.5                                                         # the gap, the tips and the transmission
+    assert 1.15 * leaves <= a.sum() / b.sum() <= 1.5 * leaves, (a.sum(), b.sum(), leaves)
     from radiarch.sdk import RadiarchError
 
     only_narrow = _sweep_arc(tmp_path, case, (3.0, 3.0), "narrow.dcm")             # every slit narrower than a beamlet

@@ -16,6 +16,8 @@ from typing import List, Optional, Tuple
 import numpy as np
 from pydantic import BaseModel, Field, model_validator
 
+from .photon_plan import LeafModel
+
 
 class PhotonEnergy(BaseModel):
     nominal_mv: float = Field(..., gt=0.0)
@@ -45,6 +47,10 @@ class MLCSpec(BaseModel):
     interdigitation: bool = Field(default=True, description="A left leaf may pass the right leaf of a neighbouring pair.")
     max_leaf_speed_mm_s: float = Field(default=25.0, gt=0.0)
     leaf_transmission: float = Field(default=0.015, ge=0.0, le=0.2)
+    dosimetric_leaf_gap_mm: float = Field(default=0.0, ge=0.0, le=5.0, description="How much wider than its nominal gap an "
+                                          "opening acts (rounded leaf ends); 0 = square tips.")
+    tongue_and_groove_mm: float = Field(default=0.0, ge=0.0, le=2.0, description="Width of the strip at each boundary between "
+                                        "leaf pairs that a closed neighbour shadows; 0 = none.")
 
     @model_validator(mode="after")
     def _ascending(self) -> "MLCSpec":
@@ -98,6 +104,11 @@ class PhotonMachineSpec(BaseModel):
     min_segment_area_mm2: float = Field(default=400.0, ge=0.0, description="Smallest aperture the sequencer keeps.")
     max_segments_per_beam: int = Field(default=40, ge=1)
     notes: str = ""
+
+    def leaf_model(self) -> LeafModel:
+        """What the leaves and jaws let through, for the plans made from this machine's apertures."""
+        return LeafModel(leaf_transmission=self.mlc.leaf_transmission, jaw_transmission=self.jaws.jaw_transmission,
+                         dosimetric_leaf_gap_mm=self.mlc.dosimetric_leaf_gap_mm, tongue_and_groove_mm=self.mlc.tongue_and_groove_mm)
 
     @property
     def default_energy(self) -> PhotonEnergy:

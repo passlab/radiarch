@@ -40,7 +40,7 @@ import scipy.sparse as sp
 from loguru import logger
 
 from ..models.machine import MLCSpec, PhotonMachineSpec
-from ..models.photon_plan import MLCRow, PhotonBeam, PhotonPlan, PhotonSegment
+from ..models.photon_plan import LeafModel, MLCRow, PhotonBeam, PhotonPlan, PhotonSegment
 
 
 # ---------------------------------------------------------------------------
@@ -201,30 +201,32 @@ def apply_machine_limits(aperture: Aperture, mlc: MLCSpec, pair_indices: Sequenc
 # Segment dose columns and segment weights
 # ---------------------------------------------------------------------------
 
-def coverage_matrix(plan: PhotonPlan, maps: List[FluenceMap], apertures: List[Aperture], mlc: MLCSpec) -> sp.csc_matrix:
-    """``(n_beamlets, n_segments)``: the fraction of every open-field beamlet inside each aperture.
+def coverage_matrix(plan: PhotonPlan, maps: List[FluenceMap], apertures: List[Aperture], mlc: MLCSpec,
+                    machine: Optional[PhotonMachineSpec] = None, model: Optional[LeafModel] = None) -> sp.csc_matrix:
+    """``(n_beamlets, n_segments)``: the share of every open-field beamlet that each aperture lets through.
 
-    A beamlet wider than a leaf pair spans several pairs; its coverage is the
-    sum over every pair it overlaps of (its share of y in that pair) × (the
-    share of its x inside that pair's leaves), so a fully open aperture
-    covers every beamlet exactly once whatever the beamlet-to-leaf ratio.
+    An aperture's fluence is its segment's (:func:`aperture_segment`), as rectangles with factors
+    (:meth:`PhotonSegment.fluence_rectangles` under ``model``; without one, the ideal leaves). A beamlet's coverage
+    is the area of those rectangles inside it, each times its factor, over its own area, so a fully open aperture
+    covers every beamlet exactly once whatever the beamlet-to-leaf ratio, and the sequenced plan's dose through
+    the apertures is the dose the segment weights were optimized for.
     """
     rows, cols, vals = [], [], []
     offsets = np.cumsum([0] + [b.n_beamlets for b in plan.beams])
-    bounds = np.asarray(mlc.leaf_boundaries_mm, dtype=float)
     for k, ap in enumerate(apertures):
         fmap = maps[[m.beam_index for m in maps].index(ap.beam_index)]
         beam = plan.beams[ap.beam_index]
         bl = beam.beamlets()
-        pair_lo = bounds[np.asarray(fmap.pair_indices)]
-        pair_hi = bounds[np.asarray(fmap.pair_indices) + 1]
-        for i in range(bl.shape[0]):
-            x, y, dx, dy = bl[i]
-            oy = np.clip(np.minimum(y + dy / 2, pair_hi) - np.maximum(y - dy / 2, pair_lo), 0.0, None) / dy
-            ox = np.clip(np.minimum(x + dx / 2, ap.right_mm) - np.maximum(x - dx / 2, ap.left_mm), 0.0, None) / dx
-            c = float(np.sum(ox * oy))
-            if c > 1e-9:
-                rows.append(offsets[ap.beam_index] + i); cols.append(k); vals.append(c)
+        seg = aperture_segment(ap, fmap, mlc, machine, 0.0, beam.segments[0].beamlet_spacing_mm, 0)
+        rects = np.asarray(seg.fluence_rectangles(model), dtype=float).reshape(-1, 5)
+        if bl.shape[0] == 0 or rects.shape[0] == 0:
+            continue
+        x, y, dx, dy = (bl[:, c:c + 1] for c in range(4))
+        ox = np.clip(np.minimum(x + dx / 2, rects[None, :, 1]) - np.maximum(x - dx / 2, rects[None, :, 0]), 0.0, None)
+        oy = np.clip(np.minimum(y + dy / 2, rects[None, :, 3]) - np.maximum(y - dy / 2, rects[None, :, 2]), 0.0, None)
+        c = (ox * oy * rects[None, :, 4]).sum(axis=1) / (bl[:, 2] * bl[:, 3])
+        nz = np.flatnonzero(c > 1e-9)
+        rows += (offsets[ap.beam_index] + nz).tolist(); cols += [k] * nz.size; vals += c[nz].tolist()
     return sp.csc_matrix((vals, (rows, cols)), shape=(int(offsets[-1]), len(apertures)), dtype=np.float64)
 
 
@@ -303,9 +305,10 @@ def _pair_heights(mlc: MLCSpec, pair_indices: Sequence[int]) -> np.ndarray:
     return np.asarray([b[p + 1] - b[p] for p in pair_indices])
 
 
-def aperture_segment(ap: Aperture, fmap: FluenceMap, mlc: MLCSpec, machine: PhotonMachineSpec, mu: float,
+def aperture_segment(ap: Aperture, fmap: FluenceMap, mlc: MLCSpec, machine: Optional[PhotonMachineSpec], mu: float,
                      beamlet_spacing_mm: Tuple[float, float], control_point_index: int) -> PhotonSegment:
-    """A :class:`PhotonSegment` for an aperture: one MLC row per leaf pair, jaws around the open area."""
+    """A :class:`PhotonSegment` for an aperture: one MLC row per leaf pair, jaws around the open area (within the
+    machine's jaw range, when a machine is given)."""
     bounds = np.asarray(mlc.leaf_boundaries_mm, dtype=float)
     rows = []
     open_rows = ap.right_mm > ap.left_mm
@@ -319,9 +322,10 @@ def aperture_segment(ap: Aperture, fmap: FluenceMap, mlc: MLCSpec, machine: Phot
     else:
         x1, x2 = float(fmap.x_edges_mm[0]), float(fmap.x_edges_mm[1])
         y1, y2 = float(bounds[fmap.pair_indices[0]]), float(bounds[fmap.pair_indices[0] + 1])
-    jx, jy = machine.jaws.x_range_mm, machine.jaws.y_range_mm
-    x1, x2 = max(x1, jx[0]), min(x2, jx[1])
-    y1, y2 = max(y1, jy[0]), min(y2, jy[1])
+    if machine is not None:
+        jx, jy = machine.jaws.x_range_mm, machine.jaws.y_range_mm
+        x1, x2 = max(x1, jx[0]), min(x2, jx[1])
+        y1, y2 = max(y1, jy[0]), min(y2, jy[1])
     if x2 <= x1:
         x2 = x1 + float(beamlet_spacing_mm[0])
     if y2 <= y1:
@@ -422,7 +426,8 @@ def sequence_plan(
     if not apertures:
         raise ValueError("no aperture survived the machine's minimum area; lower it or raise the fluence levels")
     dropped = 0
-    cov = coverage_matrix(plan, maps, apertures, mlc)
+    leaf_model = machine.leaf_model()
+    cov = coverage_matrix(plan, maps, apertures, mlc, machine, leaf_model)
     S = (dij.tocsr() @ cov.tocsc()).tocsr()
     w0 = np.asarray([ap.level_weight for ap in apertures])
     mu, conv = optimize_segment_weights(S, grid_shape, cost_terms, w0, method, max_iterations, hard_terms=hard_terms)
@@ -462,7 +467,7 @@ def sequence_plan(
                                 energy_mv=beam.energy_mv or machine.energy(energy_mv).nominal_mv, segments=segments))
     if not beams:
         raise ValueError("no beam kept a segment")
-    new_plan = PhotonPlan(name=name or f"{plan.name}-segments", beams=beams)
+    new_plan = PhotonPlan(name=name or f"{plan.name}-segments", beams=beams, leaf_model=leaf_model)
     report = deliverability(new_plan, machine, energy_mv)
     for ap in apertures:
         for issue in ap.issues:

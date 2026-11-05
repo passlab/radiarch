@@ -1276,3 +1276,33 @@ secret was refused on some routes only.
   run, the Pareto set, the state and the deliverable plan). Checked by hand: a worker from the venv beside a Redis
   container answers the ping and runs the cleanup task.
 - Docs: `README.md` (the two settings), `PRODUCTION.md` (the five queues and the worker that must consume them).
+
+## R4: leaf transmission, rounded leaf ends and tongue-and-groove in aperture doses (2026-11-04)
+
+Design: `docs/reports/mlc-leaf-model.md`, agreed with the project lead on 2026-11-04, rounded leaf ends included.
+
+- **Model.** `LeafModel` (`models/photon_plan.py`): leaf and jaw transmission, dosimetric leaf gap, tongue-and-groove
+  width. `MLCSpec` gains the gap and the width; `PhotonMachineSpec.leaf_model()` gives the four values. Both synthetic
+  machines get a 1.5 mm gap and 0.5 mm tongue-and-groove (LoSasso, Chui and Ling 1998), their transmissions as before.
+- **One aperture model.** `PhotonSegment.fluence_rectangles(model)`: the openings with each tip moved back by half the
+  gap, at full fluence inside the jaws and at the jaw transmission outside them; the leaves inside the jaws at the leaf
+  transmission; in a strip on each boundary between adjacent pairs, the overlap of the two openings. Without a model,
+  or for a jaws-only field, the ideal aperture as before.
+- **The three paths.** `sequencing.coverage_matrix` builds each aperture's segment (`aperture_segment`) and covers the
+  open field's beamlets with its rectangles; `pb.aperture_rectangles` and the pencil beam's aperture fluence (plan dose
+  and segment dose matrix) take the plan's model; `PhotonSegment.coverage_beamlets` and
+  `ccc_driver.delivered_beamlet_geometry` take it for CCC's delivered dose.
+- **Plans.** `PhotonPlan.leaf_model`: set from the machine by sequencing and VMAT, kept by a normalised plan and the
+  plan of the day, set from the import's machine on an imported photon plan. Plans pickled before it read as ideal
+  leaves (`getattr`).
+- **Caches.** `LEAF_MODEL_VERSION` in the keys of sequences, arcs, MCO deliverable plans and protocol runs.
+- Tests: `tests/test_r4_mlc_leaf_model.py` (a closed pair passes the transmission and its tips' gap; a narrow gap acts
+  wider by the gap; complementary segments dip in the tongue-and-groove strip; pairs open alike have no stripe; the
+  three paths integrate to the same fluence; a sequenced plan carries the machine's model; the pencil beam passes
+  1.5 % under closed leaves; the keys change with the version). `tests/test_dose_command.py`: an imported sweep arc
+  recomputed through its apertures now gets the default machine's leaves, so its band (13/10 of the beamlet columns'
+  dose) is scaled by the leaves' fluence gain, 1.8 on that arc (its 3 mm slits, and eight closed pairs inside 8 cm
+  jaws).
+- Docs: the design note's "As built", ADR 0010's consequences, `architecture.md` §9, the R4 plan row.
+- **Next.** The records with aperture doses are rerun on the compute server: R8 (VMAT, SBRT, CCC recomputation of
+  delivered plans), R10 (the protocol plans) and R11 (the lung case's deliverable plans).

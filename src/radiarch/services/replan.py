@@ -146,7 +146,7 @@ class ReplanService:
             day_iso = np.linalg.solve(a, iso - b)
             shifts.append(day_iso - iso)
             beams.append(beam.model_copy(update={"isocenter_mm": tuple(float(v) for v in day_iso)}))
-        day_plan = PhotonPlan(name=f"{bm.plan.name}-day", beams=beams)
+        day_plan = PhotonPlan(name=f"{bm.plan.name}-day", beams=beams, leaf_model=getattr(bm.plan, "leaf_model", None))
         day_bm = self._save_beam_model(bm, day_plan, geo.geometry_id, f"{REPLAN_PREFIX}{bm.result.beam_model_id}:{key}")
         from ..models.four_d import PhaseDoseRequest
         day_dose = self.four_d.phase_doses(PhaseDoseRequest(beam_model_id=day_bm.beam_model_id, geometry_ids=[geo.geometry_id], engine=request.engine))[0]

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from .common import ResearchArtifact
 from .optimization import ConstraintSpec, ConvergenceInfo, ObjectiveSpec, HardConstraint
+from .photon_plan import LEAF_MODEL_VERSION
 
 
 class SequenceRequest(BaseModel):
@@ -40,6 +41,7 @@ class SequenceRequest(BaseModel):
             "machine_model_id": self.machine_model_id,
             "levels": self.levels,
             "energy_mv": self.energy_mv,
+            "leaf_model": LEAF_MODEL_VERSION,
             "solver": self.solver_method,
             "max_iterations": self.max_iterations,
         }

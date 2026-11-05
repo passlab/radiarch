@@ -373,12 +373,13 @@ class AutoplanService:
         return request.protocol if request.protocol is not None else load_protocol(request.protocol_id)
 
     def cache_key(self, request) -> str:
+        from ..models.photon_plan import LEAF_MODEL_VERSION
         from .geometry import GeometryService
 
         geo = GeometryService().store.get_by_id(request.geometry_id)
         if geo is None:
             raise AutoplanError(f"geometry {request.geometry_id!r} not found")
-        return hashlib.sha256(f"autoplan|{AUTOPLAN_VERSION}|{geo.cache_key}|{self.resolve(request).digest()}".encode("utf-8")).hexdigest()
+        return hashlib.sha256(f"autoplan|{AUTOPLAN_VERSION}|leaf={LEAF_MODEL_VERSION}|{geo.cache_key}|{self.resolve(request).digest()}".encode("utf-8")).hexdigest()
 
     def run(self, request, progress_callback=None):
         from ..models.evaluation import EvaluationRequest, GoalSetSpec
@@ -567,7 +568,7 @@ class AutoplanService:
                 beams.append(with_metersets(b, np.asarray([sg.mu for sg in b.segments], float) * k))
             else:
                 beams.append(b.model_copy(update={"segments": [sg.model_copy(update={"mu": float(sg.mu) * k}) for sg in b.segments]}))
-        scaled = PhotonPlan(name=f"{plan.name}-normalised", beams=beams)
+        scaled = PhotonPlan(name=f"{plan.name}-normalised", beams=beams, leaf_model=getattr(plan, "leaf_model", None))
         bm_key = f"{SCALED_PREFIX}{beam_model_id}:{k:.6f}:{key}"
         bm_new = bms.store.lookup_by_cache_key(bm_key)
         if bm_new is None:

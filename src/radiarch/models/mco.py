@@ -21,6 +21,7 @@ from .common import ResearchArtifact
 from .dose import EngineSpec
 from .evaluation import GoalSetSpec, GoalsReport
 from .job import JobState
+from .photon_plan import LEAF_MODEL_VERSION
 from .optimization import HardConstraint, ObjectiveSpec, RobustnessSpec, SolverConfig, check_tradeoffs
 from .vmat import ArcSpec
 
@@ -325,7 +326,7 @@ class DeliverableRequest(BaseModel):
                                                     "its peaks and most of the field closes, which under-covers the target. Null = off.")
 
     def compute_cache_key(self, mco_cache_key: str, blend: List[float]) -> str:
-        payload = {"mco": mco_cache_key, "blend": [round(float(v), 9) for v in blend],
+        payload = {"mco": mco_cache_key, "blend": [round(float(v), 9) for v in blend], "leaf_model": LEAF_MODEL_VERSION,
                    **self.model_dump(mode="json", exclude={"state_id", "requested_by"})}
         return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
