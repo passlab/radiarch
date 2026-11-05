@@ -1233,3 +1233,24 @@ Design and research: `docs/reports/mco-research-and-design.md` (`268b0f0`).
   entry young enough to be spared. With the state file cut in half, nothing is evicted. With it intact, only the
   approved dose and its optimization are left.
 - Docs: `architecture.md` (the known gap removed), ADR 0013 decision 4, `PRODUCTION.md` (disk hygiene).
+
+## R11 record: the lung case's deliverable plans corrected (2026-11-04)
+
+- **Run.** `20261104-151641-8102454`: the lung case at 4 mm from a clean checkout of `8102454` (R11.9 with the
+  calibrated coverage level) on the compute server, 6.3 hours. The Pareto sets and the reweighting plan reproduce the
+  record's numbers exactly. The run of `f5597f9` (option A without the calibration, `20261104-000104`) is kept beside
+  it as the intermediate step.
+- **Result.** Every graded check passes. Normalisation 0.967 (seven fields) and 1.029 (two arcs), each after two
+  meterset rounds; 1.17 and 1.42 in the record, 1.111 and 1.108 in the intermediate run. PTV D0.03cc 69.7 and
+  74.3 Gy, from 85.8 and 149.2; PTV RMS 5.7 and 7.8 Gy, from 11.2 and 24.2. The fields plan stays near the record's
+  organ doses (heart mean 9.5 Gy, cord D0.03cc 4.9 Gy). The arcs plan's are higher within their limits: cord
+  D0.03cc 34.5 Gy, heart mean 13.6 Gy, esophagus mean 9.4 Gy, against the navigated plan's 10.6, 9.9 and 5.3. The
+  deviation tables flag 3 and 9 rows.
+- **Finding.** In the arcs' second round the meterset solve ended 3.0 Gy short of one of its two hard constraints
+  (the raised coverage level against the 72 Gy maximum), and the kept round's 1.029, inside the 3 % band, scaled the
+  maximum to 74.3 Gy. The run's results give the number of rounds but not each round's constraint values.
+- **Record.** `docs/validation/2026-10-31-r11/2026-11-04-correction-8102454/` (guide, both runs' summaries and
+  results) and a correction notice in the record's guide, as R8's of 2026-10-24. ADR 0019's consequences and the
+  R11.9 plan row ([x]) follow; R11.11 (B1, the second navigation on the deliverable plan's apertures, with the
+  maximum's limit divided by the normalisation and the rounds in the record) is added; the status table is brought
+  to 2026-11-04.

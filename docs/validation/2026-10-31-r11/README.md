@@ -15,6 +15,18 @@ with Python 3.14, `20261031-131756` (lung) on a 96-core server with Python 3.12 
 more memory than the workstation had free). No engine changed in R11; the engines' records are R8's
 (`../2026-10-23-r8/`, with its correction of 2026-10-24).
 
+## Correction, 2026-11-04
+
+The lung case's two deliverable plans (item 7 below) were not acceptable plans: they under-covered the PTV, and the
+normalisation then inflated their hot spots (PTV D0.03cc 86 and 149 Gy on 60 Gy). Their numbers in the documents
+below are superseded by [`2026-11-04-correction-8102454/`](2026-11-04-correction-8102454/README.md), a clean run of the
+lung case on commit `8102454`. There the deliverable step holds the PTV's coverage and maximum as hard constraints,
+and calibrates the coverage level until the normalisation is within 3 % of 1; an intermediate run without the
+calibration is kept beside it. Every graded check passes, and the new normalisation checks pass (0.967 with seven
+fields, 1.029 with two arcs). The PTV's hottest 0.03 cc falls to 69.7 and 74.3 Gy, and some organ doses rise within
+their limits, most with the arcs. The lung case's Pareto sets and reweighting plan, and the TG-119 and proton cases,
+are unaffected. Please review the lung case's deliverable plans from the correction.
+
 ## What to review and sign
 
 | Document | Contents | Signed by |

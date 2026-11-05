@@ -81,8 +81,12 @@ proton phantom.
   augmented Lagrangian (`docs/reports/mco-deliverable-options.md`, option A). At 4 mm these held and the plans still
   needed 1.11: a gEUD is not the coverage goal. Its level is therefore set on the plan, multiplied by each round's
   normalisation until that is within 3 % of 1 (in fast mode 0.985 and 0.971, PTV D0.03cc 71 and 70 Gy, organ doses
-  higher within their limits). The lung case is rerun at 4 mm as a dated correction of the record; keeping the
-  deliverable plan's organ doses near the navigated plan's is left to shared-aperture Pareto sets (B1).
+  higher within their limits). The record's correction of 2026-11-04
+  (`docs/validation/2026-10-31-r11/2026-11-04-correction-8102454/`) reruns the lung case at 4 mm: normalisation 0.967
+  (fields) and 1.029 (arcs), PTV D0.03cc 69.7 and 74.3 Gy, every graded check passing. The fields plan is close to the
+  navigated plan; the arcs plan's organ doses are well above it, within their limits, and its hot spot is above 72 Gy
+  because the normalisation inside the band scales the maximum too. Keeping the deliverable plan's organ doses near
+  the navigated plan's is left to shared-aperture Pareto sets (B1).
 - The algorithm tests of the report's section 5 run in CI on problems with known answers (`tests/test_r11_*.py`).
   The validation cases (`mco_front`, `mco_protocol`, `mco_robust`) run on a workstation with the public data; the
   proton phantom case also runs in the nightly harness.

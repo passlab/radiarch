@@ -1,6 +1,6 @@
 # Radiarch — implementation plan and tasks
 
-State: 2026-10-29. The design is in [`architecture.md`](architecture.md); what each item
+State: 2026-11-04. The design is in [`architecture.md`](architecture.md); what each item
 did, file by file, is in [`impl-log.md`](impl-log.md); the decisions
 are in [`adr/`](adr/); the evaluation that set this roadmap is
 [`reports/tps-evaluation-and-roadmap.md`](reports/tps-evaluation-and-roadmap.md).
@@ -31,7 +31,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
 | 16 | R13 Viewer integration | done; 3D Slicer check by the project lead waiting | fc7473d..26787db | 0018 |
-| 17 | R11 Multi-criteria optimization | in progress: R11.1–R11.7 done | 268b0f0.. | (0019) |
+| 17 | R11 Multi-criteria optimization | in progress: R11.1–R11.10 done, physicist review waiting; R11.11 (B1) next | 268b0f0..8102454 | 0019 |
 
 ## Before the roadmap (done by 2026-10-20)
 
@@ -284,7 +284,7 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
 - [x] R11.8 Record and ADR 0019: the algorithm tests of report §5 in CI; the TG-119 C-shape front, the lung demo
   (automatic navigation against the R10 protocol plan, navigated against deliverable, plans against the error bound),
   a robust proton case (`docs/validation/2026-10-31-r11/`, 2026-10-31); physicist sign-off waiting (about 0.5 ew)
-- [ ] R11.9 The photon deliverable step corrected (the record's lung plans are not acceptable; the cause was the
+- [x] R11.9 The photon deliverable step corrected (the record's lung plans are not acceptable; the cause was the
   projection onto the Pareto set before sequencing, which left a sparse, spiky fluence): the deliverable plan is made
   from the navigated blend, projection optional; goal-driven meterset rounds as in R10, a hot-spot term, a cap on a
   beam's peaks; built and checked on the lung case in fast mode 2026-11-01; the lung case rerun at 4 mm as a dated
@@ -293,15 +293,21 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   the meterset solve) built: fast-mode lung case 1.09 / 1.10, PTV D0.03cc 75 / 78 Gy. 2026-11-04: at 4 mm option A
   met its limits and still needed 1.11 / 1.11 (PTV D0.03cc 80 Gy); the coverage constraint's level is now calibrated
   on the plan over the rounds (`normalise_band`): fast-mode lung case 0.985 / 0.971, PTV D0.03cc 71 / 70 Gy, organ
-  doses higher within their limits. The 4 mm run of that commit is next, as the R11 record's correction; then B1
-  (shared-aperture Pareto sets)
+  doses higher within their limits. 2026-11-04: the 4 mm run of `8102454` passes, recorded as the R11 record's
+  correction (`docs/validation/2026-10-31-r11/2026-11-04-correction-8102454/`): normalisation 0.967 / 1.029, PTV
+  D0.03cc 69.7 / 74.3 Gy (from 86 / 149), organ doses higher within their limits, most with the arcs; physicist
+  review waiting
 - [x] R11.10 (2026-11-01) Planning behind a gateway: the user a trusted proxy names (header plus shared secret) kept
   as `requested_by` on optimizations, Pareto sets, navigation states, deliverable plans and exports, and as the
   exported objects' Operators' Name; an export fails when its push is refused and the push is required
+- [ ] R11.11 Navigation on the deliverable plan's apertures (option B1 of `docs/reports/mco-deliverable-options.md`):
+  a second, small Pareto set over the sequenced plan's segment or arc-interval metersets, navigated again, so that
+  the plan delivered keeps the navigated trade-offs; with it, the maximum's limit divided by the normalisation in the
+  calibration, and each meterset round's constraint values in the record (about 0.75 ew)
 - [x] (2026-11-02) A protocol's evaluation template follows the protocol's prescription: the template's target rows
   scaled when the prescriptions differ (`GoalSetSpec.scale_to_prescription`), organ rows unchanged
 - [x] (2026-11-01) A recomputed imported photon plan goes through its apertures: a VMAT plan's RT Plan had
   recomputed 19 % low (a sliding-window arc's slits narrower than a beamlet dropped); its re-export keeps the
   source's fractions
-- [ ] Later **(open)**: shared-aperture or shared-sweep Pareto plans so navigation shows the deliverable dose;
+- [ ] Later **(open)**: Pareto plans from one shared aperture pool, with shared sweeps for arcs (option B2);
   tail-mean (CVaR) trade-offs; Pareto sets across beam arrangements; the TROTS benchmark
