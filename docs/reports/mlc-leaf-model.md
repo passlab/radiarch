@@ -1,7 +1,7 @@
 # Leaf transmission, rounded leaf ends and tongue-and-groove in aperture doses
 
-Status: design agreed with the project lead, 2026-11-04; built 2026-11-04 (see "As built"); the records' reruns
-are next. Radiarch is not for clinical use.
+Status: design agreed with the project lead, 2026-11-04; built 2026-11-04 (see "As built"); the records rerun
+2026-11-05; checked against Monte Carlo 2026-11-06 (see "Against Monte Carlo"). Radiarch is not for clinical use.
 
 ## The problem
 
@@ -95,6 +95,74 @@ sliding-window arcs they are the largest of the three; the project lead agreed o
 
 Built as `tests/test_r4_mlc_leaf_model.py`, with a pencil-beam check that closed leaves pass 1.5 % of the open dose
 (1.52 % with the scatter of the tips' gap).
+
+## Against Monte Carlo (2026-11-06)
+
+The tests above check the model against itself. The validation case `pb_vs_mc` now also checks it against OpenGATE,
+through the Elekta Versa HD's Agility MLC that `opengate.contrib.linacs.elektaversa` models: 80 pairs of 5.1 mm at
+isocenter, rounded leaf ends, tongue-and-groove, and the Versa's leaf calibration, which puts the 50 % edge on a
+nominal leaf position, as an Elekta planning system states it. The project lead chose this before B1 on 2026-11-05.
+
+- **References** (`validation/mc_reference.py`). Four fields set leaf by leaf between Y jaws at ±50 mm and two
+  tungsten blocks standing in for X jaws at ±100 mm (the Versa has none): open; every pair closed on the axis; a
+  10 mm gap on every pair; and an irregular field with pairs closed off the axis, 5 and 10 mm gaps and steps between
+  pairs. All four share one source cone, so their doses relate directly. Also 1 × 1 and 2 × 2 cm open fields at
+  1.25 mm, since VMAT apertures are mostly smaller than the 4 × 4 cm reference.
+- **The fit, as a commissioning would do it.** The Agility's leaf transmission and dosimetric leaf gap are the values
+  that make the pencil beam give the Monte Carlo dose at 10 cm under the closed field's leaves and across the 10 mm
+  gap field, integrated over 100 mm along the leaves as a sweeping gap measures it. They are reported, not graded:
+  they describe this MLC model, not radiarch. (The first form fitted the gap's centre dose; see the results.)
+- **The check.** The pencil beam with the fitted values and the synthetic machines' 0.5 mm tongue-and-groove is
+  graded against the irregular field: gamma 3 %/2 mm at least 95 % (TG-218), the dose under the closed pairs within
+  1 % and in the gaps within 3 % of the open field's. The same field with ideal leaves is reported beside it. The
+  small fields grade the dose at 10 cm over 10 × 10 cm (3 % and 5 %) and the width at half maximum (1 mm).
+- **What it does not check.** The synthetic machines' values (1.5 % and 0.5 % transmission, 1.5 mm gap) are not the
+  Agility's; the fit tests the model's form with an MLC's own values. Tongue-and-groove is not fitted: its stripes are
+  narrower than the 2.5 mm grid.
+- **A fault found on the way.** OpenGATE 10 runs a source's `n` on every thread, so the R7 and R8 references ran 18
+  times the primaries they state (9 × 10⁸, not 5 × 10⁷; the pencil kernel 5.4 × 10⁸, not 3 × 10⁷). Their comparisons
+  are unaffected, since each relates references made with the same 18 threads. `mc_reference.py` now splits the total
+  over the threads and stores the dose per simulated primary, and the harness scales the older references to match.
+- **A second fault: one process does not scale.** One OpenGATE process stops gaining speed beyond about a dozen
+  threads: on the 48-core compute server, 81 000 primaries per second on 4 threads, 149 000 on 12, 132 000 on 80. The
+  2 × 2 cm reference took 3.4 hours that way. The others ran as 62 chunks of 2 × 10⁸ primaries, 16 processes of 5
+  threads at a time (1.6 million per second together), each chunk with its own seed, merged by `mc_reference.py
+  --merge` (the dose weighted by primaries, the uncertainties in quadrature). Primaries: 2 × 10⁹ for the open, gap
+  and irregular fields, 4 × 10⁹ for the closed field, 1.6 and 2.4 × 10⁹ for the 2 × 2 and 1 × 1 cm fields.
+
+### Results (2026-11-06)
+
+The pencil beam against the new references, from the working tree before the record's commit (CCC's informative
+field-size rows left out):
+
+| Check | Pencil beam | Monte Carlo | Tolerance | |
+|---|---|---|---|---|
+| 1 × 1 over 10 × 10, dose at 10 cm | 0.719 | 0.764 | 5 % | fails (−5.9 %) |
+| 2 × 2 over 10 × 10, dose at 10 cm | 0.844 | 0.839 | 3 % | passes |
+| Width at half maximum at 10 cm, 1 × 1 and 2 × 2 (mm) | 11.37, 22.16 | 11.52, 22.41 | 1 mm | pass |
+| Irregular field, gamma 3 %/2 mm, depth 20–200 mm | 100.0 % | | ≥ 95 % | passes |
+| Under the pairs closed at 20 mm (% of open) | 1.82 | 1.81 | 1 | passes |
+| 10 mm gap at 20 mm (% of open) | 80.06 | 81.17 | 3 | passes |
+| 5 mm gap at −30 mm (% of open) | 53.26 | 50.06 | 3 | fails (+3.2) |
+
+- **The Agility in the OpenGATE model:** leaf transmission 0.196 %, dosimetric leaf gap 1.01 mm. The closed field
+  alone, integrated over its tips' line, gives 0.96 mm. Touching rounded ends leak a line on the axis that peaks at
+  16 % of the open dose.
+- **Ideal leaves**, for comparison: gamma 99.1 %, the closed pairs 1.62 %, the gaps 77.69 % and 46.89 %. The leaf model
+  brings the low dose and the 10 mm gap to the Monte Carlo and overshoots the 5 mm gap.
+- **The fit's form changed after the first results.** Fitted to the 10 mm gap's centre dose, as first built, the leaf
+  gap came out 1.30 mm and the 5 mm gap failed by 5.2 points. The centre dose of a 10 mm gap grows by only 1.6 % of
+  the open dose per millimetre of gap, so the pencil beam's 0.3-point error there moved the fit by 0.3 mm. The
+  integral grows by the open dose times the gap's growth, as a sweeping-gap measurement does; it gives 1.01 mm,
+  which the closed field confirms. The project lead chose the integral on 2026-11-06. No tolerance changed.
+- **Two findings.**
+  1. The pencil beam is 5.9 % low on a 1 × 1 cm field, though within 0.6 % at 2 × 2 cm. The field-size references
+     shape x with the leaves, since the Versa has no X jaws; their pencil-beam plans use jaws, without the leaf model.
+  2. One leaf gap cannot serve both gap widths: the irregular field's 5 mm gap matches the Monte Carlo with 0.6 mm,
+     its 10 mm gap with about 1.6 mm.
+
+  Both are the pencil beam on openings of a centimetre and less. Planning systems with a single leaf gap share the
+  second, which is why their leaf gap is often tuned on clinical VMAT plans.
 
 ## What changes, and the reruns
 

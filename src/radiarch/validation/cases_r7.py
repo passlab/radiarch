@@ -86,6 +86,11 @@ def _mc_reference(name: str):
     from .mc_reference import load_reference_arrays
     dose, unc, spacing, origin, primaries = load_reference_arrays(npz)
     prov = json.loads(meta.read_text(encoding="utf-8")) if meta.is_file() else {}
+    if prov.get("dose_per") != "event":
+        # made before 2026-11-06: OpenGATE ran the stated primaries on each thread, and the dose is per primary per
+        # thread (mc_reference.per_thread); per simulated primary, as the newer references, it is that over the threads
+        threads = int(prov.get("threads", 1))
+        dose, primaries = dose / threads, primaries * threads
     return {"dose": dose, "uncertainty": unc, "spacing_mm": spacing, "origin_mm": origin, "primaries": primaries, "provenance": prov}
 
 
@@ -101,8 +106,12 @@ def _resample_to(dose: np.ndarray, spacing_from: Sequence[float], origin_from: S
 
 
 def _phantom_for(case: str, s: float) -> ph.Phantom:
+    if case.startswith("mlc_"):                    # the MLC fields of the leaf model's check (R4), in the water box
+        return ph.water_box(150.0, 300.0, s)
     return {"water_10x10": lambda: ph.water_box(150.0, 300.0, s), "water_4x4": lambda: ph.water_box(150.0, 300.0, s),
-            "water_20x20": lambda: ph.water_box(150.0, 300.0, s), "lung_slab": lambda: ph.lung_slab(s), "lung_slab_2x2": lambda: ph.lung_slab(s), "bone_slab": lambda: ph.bone_slab(s)}[case]()
+            "water_20x20": lambda: ph.water_box(150.0, 300.0, s), "lung_slab": lambda: ph.lung_slab(s), "lung_slab_2x2": lambda: ph.lung_slab(s), "bone_slab": lambda: ph.bone_slab(s),
+            # small fields: their references are scored over the central 100 mm; a narrower box holds the same axis dose
+            "water_2x2": lambda: ph.water_box(60.0, 300.0, s), "water_1x1": lambda: ph.water_box(60.0, 300.0, s)}[case]()
 
 
 def _cax3(dose: np.ndarray, phantom: ph.Phantom) -> np.ndarray:

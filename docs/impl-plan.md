@@ -105,6 +105,12 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
   for the sequencing coverage, the pencil beam and CCC's delivered dose, carried by the plan from its machine
   (`docs/reports/mlc-leaf-model.md`). 2026-11-05: the R8 to R11 records' aperture cases rerun with it, each
   against a baseline from the commit before; every graded check passes; physicist review waiting
+- [ ] The leaf model against Monte Carlo through the Agility MLC (`pb_vs_mc`): transmission and leaf gap fitted to a
+  closed and a 10 mm gap field, the pencil beam graded on an irregular MLC field; 1 × 1 and 2 × 2 cm fields graded;
+  `mc_reference.py` counts the primaries of every thread (the R7 and R8 references ran 18 times those they state).
+  2026-11-06: references made on the compute server; the Agility fits 0.196 % and 1.01 mm; the irregular field's
+  gamma 100 %; two checks fail, the 1 × 1 cm dose (−5.9 %) and the 5 mm gap (+3.2 points of 3). The references
+  are in the repository; the record run follows
 - [ ] Asymmetric margins **(open)**
 
 ### R5 — Evaluation
@@ -158,7 +164,9 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] SBRT templates (TG-101 limits with target goals) and RTOG 0813/0915 indices
 - [x] Cases: pencil beam against Monte Carlo and CCC, lung SBRT with one arc, lung 60/30 with two arcs, head and neck 70/56 Gy integrated boost with two arcs
 - [x] Delivered plans recomputed by CCC through coverage beamlets, so that narrow arc apertures are dosed
-- [ ] Monte Carlo field-size references (4 × 4, 20 × 20 cm) and the graded field-size check
+- [x] (2026-10-23) Monte Carlo field-size references (4 × 4, 20 × 20 cm, 5 × 10⁷ primaries each) and the graded
+  field-size check in `pb_vs_mc`: dose at 10 cm over 10 × 10, 0.906 against 0.895 and 1.064 against 1.058, within
+  2 % (R8 record). Built with the R8 harness (`c4e780f`); this row was left open by mistake until 2026-11-05
 - [x] Full-mode harness run and the R8 record for review ([`validation/2026-10-23-r8/`](validation/2026-10-23-r8/), from the clean-commit run at `52ed834`)
 - [ ] Physicist's review and signature of the R8 record **(waiting)**
 - [ ] Direct leaf optimization for VMAT (progressive sampling or sequential convex programming) **(open)**

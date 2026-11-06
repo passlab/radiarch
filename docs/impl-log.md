@@ -1329,3 +1329,33 @@ Design: `docs/reports/mlc-leaf-model.md`, agreed with the project lead on 2026-1
 - **Records.** Dated rerun folders, each with its baseline: `docs/validation/2026-10-23-r8/`, `2026-10-25-r9/`,
   `2026-10-26-r10/` and `2026-10-31-r11/`, under `2026-11-05-leaf-model-412a105/`, and a notice in each record's guide.
   `protocol_lung_vmat` now names the R8 rerun as its record. The R4 plan row is updated.
+
+## R4: the leaf model against Monte Carlo through the Agility MLC (2026-11-06)
+
+- **Scope.** The project lead chose this before B1. The 4 × 4 and 20 × 20 cm references and their graded check had
+  existed since 2026-10-23; only their plan row was open, and it is now ticked. New: 1 × 1 and 2 × 2 cm open fields at
+  1.25 mm, and four fields set leaf by leaf through the Versa's Agility MLC (open, every pair closed on the axis, a
+  10 mm gap on every pair, an irregular field), between Y jaws and two tungsten blocks standing in for X jaws.
+- **Code.** `mc_reference.py`: the small and MLC cases, `mlc_leaf_positions` (refuses interdigitating pairs, which
+  overlap in the Versa model), `set_mlc_field`, `per_thread`, the dose per simulated primary, `--merge`.
+  `cases_r7._mc_reference` scales the older references. `cases_r8`: the small fields' dose and width graded;
+  `_mlc_checks` fits the transmission and leaf gap to the closed and gap fields and grades the irregular field.
+  `pb_vs_mc.yaml`: tolerances. `tests/test_r4_mlc_monte_carlo.py` (17 tests).
+- **Two faults found in the Monte Carlo runs.**
+  - OpenGATE 10 runs a source's `n` on every thread, so the R7 and R8 references ran 18 times the primaries they
+    state. Their comparisons stand; the harness scales them.
+  - One process stops gaining speed beyond about a dozen threads, so the long references ran as 62 chunks,
+    16 processes at a time, about 2.5 hours in all, instead of the 26 hours one process would have needed.
+- **Results.** The Agility fits a leaf transmission of 0.196 % and a dosimetric leaf gap of 1.01 mm. On the
+  irregular field the pencil beam's gamma (3 %/2 mm) passes at 100 % (ideal leaves 99.1 %), and the closed pairs
+  and the 10 mm gap pass. The 2 × 2 cm checks pass.
+- **Two checks fail:** the 1 × 1 cm field's dose at 10 cm (−5.9 % of 5 %) and the irregular field's 5 mm gap (+3.2
+  points of 3). One leaf gap cannot serve the 5 and 10 mm gaps together (0.6 and about 1.6 mm). Both are the pencil
+  beam on openings of a centimetre and less.
+- **A change after the first results.** The leaf gap is fitted to the gap field's dose integrated across the gap,
+  as a sweeping gap measures it, not to its centre dose. The centre-dose fit gave 1.30 mm and failed the 5 mm gap by
+  5.2 points. The project lead chose the integral; no tolerance changed. The design note
+  (`docs/reports/mlc-leaf-model.md`, "Against Monte Carlo") has the table and the reasons.
+- **References in the repository.** The six references (about 18 MB) are in `validation/references/mc/` with the
+  project lead's approval, beside the earlier ones; the harness reads them from there.
+- **Next.** The record run of `pb_vs_mc` on the compute server from this commit.
