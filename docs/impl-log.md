@@ -1359,3 +1359,15 @@ Design: `docs/reports/mlc-leaf-model.md`, agreed with the project lead on 2026-1
 - **References in the repository.** The six references (about 18 MB) are in `validation/references/mc/` with the
   project lead's approval, beside the earlier ones; the harness reads them from there.
 - **Next.** The record run of `pb_vs_mc` on the compute server from this commit.
+
+## The reference files checked; one removed (2026-11-06)
+
+- **Scope.** The project lead asked for the reference files to be checked and those not needed removed.
+- **Kept, each read by a case or a tool:** the Monte Carlo references in `validation/references/mc/` (the water
+  fields, the slabs and the MLC fields: `pb_vs_mc` and `photon_vs_mc`);
+  `pencil_6mv.npz`, the pencil Monte Carlo that `pb_kernel --mc` turns into `engines/pb/pb_6mv_kernel.npz`; the
+  pyRadPlan doses (`photon_vs_pyradplan`); `photon_6mv.json`, `proton_water.json` and `tg119_goals.json`; the
+  Mohan spectrum.
+- **Removed:** `validation/references/tolerances.json`. No code read it; the cases state their tolerances, and
+  `docs/reports/validation-data-and-test-plan.md` cites the guidance it quoted (MPPG 5, TG-218, TG-119, TECDOC-1583,
+  TG-185 and TG-224).
