@@ -24,6 +24,16 @@ four cases on the fix: every graded check still passes, and the organ doses chan
 oesophagus and heart in the lung cases; optic structures and parotids in the head-and-neck case).
 Everything else in this record is unaffected. Please review the four cases from the correction.
 
+## Rerun with the MLC leaf model, 2026-11-05
+
+From commit `412a105` on, every dose computed from apertures uses the machine's leaf transmission, a dosimetric leaf
+gap and a tongue-and-groove (`docs/reports/mlc-leaf-model.md`). The three VMAT cases (`lung_sbrt_vmat`,
+`lung_vmat_lctsc`, `hn_sib_vmat`) plan through apertures. Their numbers in the correction are superseded by
+[`2026-11-05-leaf-model-412a105/`](2026-11-05-leaf-model-412a105/README.md), which compares them with a baseline run
+from the commit before the leaf model: every graded check still passes. The low doses around the target rise, and
+the SBRT case's R50 rises by 8 to 10 %. The engines' open fields, their Monte Carlo comparisons and the fluence-level
+plans are unaffected. Please review the three VMAT cases from the rerun.
+
 ## What to review and sign
 
 | Document | Contents | Signed by |

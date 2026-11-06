@@ -153,7 +153,7 @@ def run_protocol_reproduces(spec: dict, ctx: Context) -> CaseResult:
                 diff = abs(float(g.achieved) - float(recorded["value"]))
                 tol = max(0.01 * abs(float(recorded["value"])), 0.05)
                 res.add(f"{name}: protocol against the recorded harness run", round(float(g.achieved), 2), f"{recorded['value']} ± {tol:.2f}",
-                        diff <= tol, "the harness case's run in the R8 record's correction")
+                        diff <= tol, "the harness case's run in the record named by the case")
         res.metrics[pid] = {"run_id": run.run_id, "normalisation": run.normalisation, "seconds": run.seconds, "history": run.history,
                             "goals": [g.model_dump() for g in run.goals]}
     return res

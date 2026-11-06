@@ -101,8 +101,10 @@ Built as `tests/test_r4_mlc_leaf_model.py`, with a pencil-beam check that closed
 Every photon dose made from apertures changes: IMRT and VMAT plans, imported plans recomputed through their
 apertures, and MCO deliverable plans. Records with such doses get dated reruns on the compute server:
 - R8: the VMAT and SBRT cases, and the CCC recomputation of delivered plans;
+- R9: the 4D lung case, whose VMAT plan is recomputed on every phase (added 2026-11-05);
 - R10: the protocol plans;
-- R11: the lung case's deliverable plans, after the R11.9 correction.
+- R11: the deliverable plans, the lung case's after the R11.9 correction and the TG-119 case's static fields (added
+  2026-11-05).
 
 The open-field records do not change: R7, and R8's Monte Carlo comparisons on jaw-defined fields. The physicist then reviews the records once, with the MLC model
 in.

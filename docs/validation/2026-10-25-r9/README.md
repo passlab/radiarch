@@ -16,6 +16,17 @@ own memory budget): `20261025-114942`, `20261025-121624` and `20261025-142024`. 
 records are R8's (`../2026-10-23-r8/`, with its correction of 2026-10-24); nothing in R9 changes
 an engine.
 
+## Rerun with the MLC leaf model, 2026-11-05
+
+From commit `412a105` on, every dose computed from apertures uses the machine's leaf transmission,
+a dosimetric leaf gap and a tongue-and-groove (`docs/reports/mlc-leaf-model.md`). `lung_4d_itv`
+recomputes its arcs through their apertures on every phase. Its numbers below are superseded by
+[`2026-11-05-leaf-model-412a105/`](2026-11-05-leaf-model-412a105/README.md), which compares it
+with a baseline run from the commit before the leaf model: every graded check still passes, the
+tumour's D95 on each phase rises by up to 0.4 Gy, and the lungs' V20Gy by up to 2 percentage
+points. The registration and replanning cases are unaffected. Please review the 4D case from the
+rerun.
+
 ## What to review and sign
 
 | Document | Contents | Signed by |
