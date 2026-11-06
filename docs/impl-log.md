@@ -1393,3 +1393,15 @@ Design: `docs/reports/mlc-leaf-model.md`, agreed with the project lead on 2026-1
 - **CI.** On 2026-11-05 a runner's package mirror hung `apt-get update` for 13 minutes and the full-tests job ran out of
   time. The dicom3tools step now retries a slow mirror (three retries, 30-second timeouts) and stops at its own
   4-minute limit, so a hang fails under that step's name. The step stays required: it guards the RT objects' check.
+
+## The viewer follows a job until it ends (2026-11-06)
+
+- **Fault.** The viewer's client stopped waiting for a job after 5 minutes. A deliverable arc plan takes hours, so the
+  MCO panel showed a timeout while the job ran on and then succeeded.
+- **Fix** (radiarch-ohif `eddc99c`, `viewer.ref` moved to it). The client follows a job until it ends: polls slow from
+  0.5 s to 5 s, a gateway restart or dropped connection while polling is retried up to five times in a row, and a
+  host may still set a limit. `makeDeliverable` and `evaluateExport` report the job's status at each poll and take a
+  signal that stops the wait, not the job. The MCO panel shows the job's progress and stage, and stops waiting when it
+  closes or another dose comes on screen. Six offline tests (a fake API and a fake clock) in radiarch-ohif's CI.
+- **Open.** A second request for a deliverable whose job is still running starts another job; the API could let it
+  join the running one.
