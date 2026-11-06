@@ -1358,7 +1358,11 @@ Design: `docs/reports/mlc-leaf-model.md`, agreed with the project lead on 2026-1
   (`docs/reports/mlc-leaf-model.md`, "Against Monte Carlo") has the table and the reasons.
 - **References in the repository.** The six references (about 18 MB) are in `validation/references/mc/` with the
   project lead's approval, beside the earlier ones; the harness reads them from there.
-- **Next.** The record run of `pb_vs_mc` on the compute server from this commit.
+- **The record.** Run `20261106-163934-727654c`, from a clean checkout of `727654c` on the compute server: 50
+  checks, 33 pass, 2 fail (the two above), 15 informative, the same values as the working tree. The 34 checks of
+  R8's `pb_vs_mc` repeat R8's values. Folder `docs/validation/2026-10-23-r8/2026-11-06-mc-leaf-model-727654c/`,
+  with a notice in the R8 guide. The pencil kernel's note still states 3.0 × 10⁷ primaries; that run also used 18
+  threads (5.4 × 10⁸), which the record states. The calibration cancels its scale.
 
 ## The reference files checked; one removed (2026-11-06)
 

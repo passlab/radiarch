@@ -132,8 +132,9 @@ nominal leaf position, as an Elekta planning system states it. The project lead 
 
 ### Results (2026-11-06)
 
-The pencil beam against the new references, from the working tree before the record's commit (CCC's informative
-field-size rows left out):
+The pencil beam against the new references, in the record run `20261106-163934-727654c`
+(`docs/validation/2026-10-23-r8/2026-11-06-mc-leaf-model-727654c/`; CCC's informative field-size rows left out). The
+working tree before the commit gave the same values:
 
 | Check | Pencil beam | Monte Carlo | Tolerance | |
 |---|---|---|---|---|

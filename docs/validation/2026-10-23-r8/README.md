@@ -34,6 +34,16 @@ from the commit before the leaf model: every graded check still passes. The low 
 the SBRT case's R50 rises by 8 to 10 %. The engines' open fields, their Monte Carlo comparisons and the fluence-level
 plans are unaffected. Please review the three VMAT cases from the rerun.
 
+## Rerun of `pb_vs_mc` with small fields and the MLC, 2026-11-06
+
+Six Monte Carlo references added in commit `e875b46` (1 × 1 and 2 × 2 cm water fields; four fields through the
+Agility MLC) extend `pb_vs_mc`: the small fields' dose and width, and the leaf model's transmission and leaf gap
+fitted and graded on an irregular MLC field. [`2026-11-06-mc-leaf-model-727654c/`](2026-11-06-mc-leaf-model-727654c/README.md)
+holds the run. The 34 checks of this record's `pb_vs_mc` repeat with the same values. Of the 16 new checks 8 are graded, and two fail; they
+are kept as findings: the 1 × 1 cm field's dose (−5.9 %, tolerance 5 %) and the irregular field's 5 mm gap (+3.2 points,
+tolerance 3). The references here ran 18 times the primaries they state (OpenGATE 10 runs them on every thread);
+every comparison is a ratio, so no value changes. Please review the two failures from the rerun.
+
 ## What to review and sign
 
 | Document | Contents | Signed by |

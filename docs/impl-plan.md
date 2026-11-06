@@ -105,12 +105,12 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
   for the sequencing coverage, the pencil beam and CCC's delivered dose, carried by the plan from its machine
   (`docs/reports/mlc-leaf-model.md`). 2026-11-05: the R8 to R11 records' aperture cases rerun with it, each
   against a baseline from the commit before; every graded check passes; physicist review waiting
-- [ ] The leaf model against Monte Carlo through the Agility MLC (`pb_vs_mc`): transmission and leaf gap fitted to a
+- [x] (2026-11-06) The leaf model against Monte Carlo through the Agility MLC (`pb_vs_mc`): transmission and leaf gap fitted to a
   closed and a 10 mm gap field, the pencil beam graded on an irregular MLC field; 1 × 1 and 2 × 2 cm fields graded;
   `mc_reference.py` counts the primaries of every thread (the R7 and R8 references ran 18 times those they state).
   2026-11-06: references made on the compute server; the Agility fits 0.196 % and 1.01 mm; the irregular field's
-  gamma 100 %; two checks fail, the 1 × 1 cm dose (−5.9 %) and the 5 mm gap (+3.2 points of 3). The references
-  are in the repository; the record run follows
+  gamma 100 %; two checks fail, the 1 × 1 cm dose (−5.9 %) and the 5 mm gap (+3.2 points of 3). Recorded
+  (run `20261106-163934-727654c`, in the R8 record); physicist review waiting
 - [ ] Asymmetric margins **(open)**
 
 ### R5 — Evaluation
