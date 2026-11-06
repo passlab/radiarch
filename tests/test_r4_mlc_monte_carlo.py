@@ -75,6 +75,15 @@ class TestPrimaries:
         assert float(ref["dose"].max()) == pytest.approx(3.6e-13 / factor, rel=1e-3)
         assert ref["primaries"] == 1000 * factor
 
+    def test_the_pencil_kernel_states_the_primaries_its_reference_simulated(self):
+        from radiarch.services.dose_engines.pb_kernel import default_kernel_path, source_primaries
+        assert source_primaries(1000, {"threads": 18, "dose_per": "event"}) == {"primaries": 1000}
+        ref = json.loads((cases_r7.MC_DIR / "pencil_6mv.json").read_text(encoding="utf-8"))
+        shipped = json.loads(default_kernel_path().with_suffix(".json").read_text(encoding="utf-8"))["source"]
+        stated = source_primaries(ref["primaries"], ref)
+        assert stated["primaries"] == shipped["primaries"] == 18 * 30_000_000
+        assert stated["threads"] == shipped["threads"] and stated["dose_per"] == shipped["dose_per"]
+
     def test_runs_with_different_seeds_merge_weighted_by_their_primaries(self, tmp_path):
         for name, seed, n, value, unc in (("a", 1, 1000, 2.0e-13, 0.02), ("b", 2, 3000, 4.0e-13, 0.01)):
             d = tmp_path / name

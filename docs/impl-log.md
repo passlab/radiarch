@@ -1375,3 +1375,13 @@ Design: `docs/reports/mlc-leaf-model.md`, agreed with the project lead on 2026-1
 - **Removed:** `validation/references/tolerances.json`. No code read it; the cases state their tolerances, and
   `docs/reports/validation-data-and-test-plan.md` cites the guidance it quoted (MPPG 5, TG-218, TG-119, TECDOC-1583,
   TG-185 and TG-224).
+
+## The pencil kernel states the primaries its Monte Carlo simulated (2026-11-06)
+
+- **Scope.** The project lead asked for the kernel's metadata to state what the pencil Monte Carlo ran.
+- **Fault.** The pencil reference was made before the per-thread fix: OpenGATE ran its 3 × 10⁷ primaries on each of 18
+  threads, 5.4 × 10⁸ in all. The kernel's metadata copied the stated number, and the `pb_vs_mc` note printed it.
+- **Code.** `pb_kernel.source_primaries` scales the primaries of references made before the fix by their threads and
+  states the table's unit (the dose per primary of one thread). `engines/pb/pb_6mv_kernel.json` states 5.4 × 10⁸ and
+  18 threads. The table is unchanged, and so are its fingerprint (`f046d6a503757f17`) and every dose: the output
+  calibration removes the scale. One test in `tests/test_r4_mlc_monte_carlo.py`.

@@ -61,8 +61,9 @@ Both are the pencil beam on openings of a centimetre and less.
 
 OpenGATE 10 runs a source's `n` on every thread. The R8 references ran on 18 threads, so they simulated 18 times the
 primaries they state; the harness now scales them, and the notes read 9.0 × 10⁸ where R8's read 5 × 10⁷. Every
-comparison is a ratio of references made the same way, so no R8 value changes. The pencil kernel's note still states
-3.0 × 10⁷ primaries; that run also used 18 threads, so it simulated 5.4 × 10⁸. Its absolute scale does not enter any
+comparison is a ratio of references made the same way, so no R8 value changes. The pencil kernel's note in this run states
+3.0 × 10⁷ primaries; that run also used 18 threads, so it simulated 5.4 × 10⁸. The kernel's metadata states 5.4 × 10⁸
+from the commit after this record on. Its absolute scale does not enter any
 dose: the pencil beam is calibrated to 1 cGy per MU at d_max of a 10 × 10 cm field.
 
 The new references state what they simulated: 2 × 10⁹ primaries for the open, gap and irregular fields, 4 × 10⁹ for

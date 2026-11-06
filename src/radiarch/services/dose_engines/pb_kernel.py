@@ -319,6 +319,17 @@ def load_kernel(path: Optional[str] = None) -> PBKernel:
 # Command line: build the shipped table from the Monte Carlo
 # ---------------------------------------------------------------------------
 
+def source_primaries(mc_primaries: int, mc_meta: dict) -> dict:
+    """The primaries the pencil Monte Carlo simulated. A reference made before 2026-11-06 ran its stated primaries on
+    each of its threads (``cases_r7._mc_reference``), so its table is the dose per primary of one thread: the threads
+    times the dose per simulated primary. The output calibration removes that scale, so the table is left as built."""
+    if mc_meta.get("dose_per") == "event":
+        return {"primaries": int(mc_primaries)}
+    threads = int(mc_meta.get("threads", 1))
+    return {"primaries": int(mc_primaries) * threads, "threads": threads,
+            "dose_per": f"primary of one thread ({threads} times the dose per simulated primary; the output calibration removes the scale)"}
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Build the native photon engine's kernel table from the pencil Monte Carlo")
     ap.add_argument("--mc", type=Path, required=True, help="pencil_6mv.npz written by radiarch.validation.mc_reference --pencil")
@@ -335,7 +346,7 @@ def main(argv=None) -> int:
     meta = {
         "kernel": "6 MV pencil kernel in water, isocenter-plane radius, inverse square removed; Gy per primary photon",
         "source": {"file": args.mc.name, "sha256": hashlib.sha256(args.mc.read_bytes()).hexdigest()[:16],
-                   "primaries": int(mc["primaries"]), **{k: mc_meta.get(k) for k in ("spectrum", "physics", "opengate_version", "date") if k in mc_meta}},
+                   **source_primaries(mc["primaries"], mc_meta), **{k: mc_meta.get(k) for k in ("spectrum", "physics", "opengate_version", "date") if k in mc_meta}},
         "construction": {"grid_mm": GRID_MM, "radius_mm": RADIUS_MM, "stitch_mm": list(STITCH_MM),
                          "bins": f"{FINE_BIN_MM} mm to {FINE_TO_MM} mm, {TAIL_BIN_MM} mm to {RADIUS_MM} mm",
                          "tail": f"exponential per bin fitted over {TAIL_FIT_MM[0]:g}-{TAIL_FIT_MM[1]:g} mm, used from {TAIL_FROM_MM:g} to {TAIL_TO_MM:g} mm",
