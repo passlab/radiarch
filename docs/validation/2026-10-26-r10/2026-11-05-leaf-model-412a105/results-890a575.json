@@ -1,0 +1,530 @@
+{
+ "intended_use": "RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.",
+ "radiarch_commit": "890a575",
+ "timestamp": "20261106-034538",
+ "fast": false,
+ "cpu": "AMD EPYC 7413 24-Core Processor, 96 logical CPUs",
+ "python": "3.12.16",
+ "results": [
+  {
+   "name": "protocol_lung_vmat",
+   "kind": "protocol_reproduces",
+   "status": "pass",
+   "seconds": 2121.2,
+   "checks": [
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: prescription (Gy, fractions)",
+     "value": "[60.0, 30]",
+     "target": "[60.0, 30]",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: CTV margin (mm)",
+     "value": "5.0",
+     "target": "5.0",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: PTV margin (mm)",
+     "value": "5.0",
+     "target": "5.0",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: PTV from",
+     "value": "\"CTV\"",
+     "target": "\"CTV\"",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: far ring outer edge (mm)",
+     "value": "45.0",
+     "target": "45.0",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: near ring limit (Gy, weight)",
+     "value": "[54.0, 100.0]",
+     "target": "[54.0, 100.0]",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: far ring limit (Gy, weight)",
+     "value": "[30.0, 200.0]",
+     "target": "[30.0, 200.0]",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: coverage goal",
+     "value": "[\">=\", 60.0]",
+     "target": "[\">=\", 60.0]",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: arcs",
+     "value": "[{\"arc_id\": \"ARC1\", \"start_deg\": 181.0, \"stop_deg\": 179.0, \"direction\": \"CW\", \"sectors\": 12, \"control_point_spacing_deg\": 4.0, \"couch_deg\": 0.0, \"collimator_deg\": 15.0}, {\"arc_id\": \"ARC2\", \"start_deg\": 179.0, \"stop_deg\": 181.0, \"direction\": \"CC\", \"sectors\": 12, \"control_point_spacing_deg\": 4.0, \"couch_deg\": 0.0, \"collimator_deg\": -15.0}]",
+     "target": "[{\"arc_id\": \"ARC1\", \"start_deg\": 181.0, \"stop_deg\": 179.0, \"direction\": \"CW\", \"sectors\": 12, \"control_point_spacing_deg\": 4.0, \"couch_deg\": 0.0, \"collimator_deg\": 15.0}, {\"arc_id\": \"ARC2\", \"start_deg\": 179.0, \"stop_deg\": 181.0, \"direction\": \"CC\", \"sectors\": 12, \"control_point_spacing_deg\": 4.0, \"couch_deg\": 0.0, \"collimator_deg\": -15.0}]",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: beamlet (mm), iterations, rounds",
+     "value": "[5.0, 150, 3]",
+     "target": "[5.0, 150, 3]",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: machine, jaw margin (mm)",
+     "value": "[\"synthetic-120\", 10.0]",
+     "target": "[\"synthetic-120\", 10.0]",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: evaluation template",
+     "value": "\"rtog-0617\"",
+     "target": "\"rtog-0617\"",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: SpinalCord Dmax goal (Gy, maximum term)",
+     "value": "[45.0, true]",
+     "target": "[45.0, true]",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: Esophagus Dmean goal (Gy, maximum term)",
+     "value": "[34.0, true]",
+     "target": "[34.0, true]",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: Heart D33 goal (Gy, maximum term)",
+     "value": "[60.0, true]",
+     "target": "[60.0, true]",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: Lungs-PTV D37 goal (Gy, maximum term)",
+     "value": "[20.0, false]",
+     "target": "[20.0, false]",
+     "passed": true,
+     "note": ""
+    },
+    {
+     "name": "LCTSC-Test-S1-101: protocol run deliverable",
+     "value": true,
+     "target": "True",
+     "passed": true,
+     "note": "normalised by 1.0341"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: PTV V60Gy[%] >= 95.0 (protocol)",
+     "value": 95.6,
+     "target": ">= 95.0",
+     "passed": true,
+     "note": "rtog-0617 priority 1"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: PTV V60Gy[%] >= 95.0: protocol against the recorded harness run",
+     "value": 95.6,
+     "target": "95.6 \u00b1 0.96",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: PTV D0.03cc[Gy] <= 72.0 (protocol)",
+     "value": 65.25,
+     "target": "<= 72.0",
+     "passed": null,
+     "note": "rtog-0617 priority 2"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: PTV D0.03cc[Gy] <= 72.0: protocol against the recorded harness run",
+     "value": 65.25,
+     "target": "65.25 \u00b1 0.65",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: Lungs-GTV V20Gy[%] <= 37.0 (protocol)",
+     "value": 14.78,
+     "target": "<= 37.0",
+     "passed": true,
+     "note": "rtog-0617 priority 1"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: Lungs-GTV V20Gy[%] <= 37.0: protocol against the recorded harness run",
+     "value": 14.78,
+     "target": "14.78 \u00b1 0.15",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: Lungs-GTV Dmean[Gy] <= 20.0 (protocol)",
+     "value": 8.37,
+     "target": "<= 20.0",
+     "passed": true,
+     "note": "rtog-0617 priority 1"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: Lungs-GTV Dmean[Gy] <= 20.0: protocol against the recorded harness run",
+     "value": 8.37,
+     "target": "8.37 \u00b1 0.08",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: SpinalCord D0.03cc[Gy] <= 50.5 (protocol)",
+     "value": 14.89,
+     "target": "<= 50.5",
+     "passed": true,
+     "note": "rtog-0617 priority 1"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: SpinalCord D0.03cc[Gy] <= 50.5: protocol against the recorded harness run",
+     "value": 14.89,
+     "target": "14.89 \u00b1 0.15",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: Esophagus Dmean[Gy] <= 34.0 (protocol)",
+     "value": 3.38,
+     "target": "<= 34.0",
+     "passed": null,
+     "note": "rtog-0617 priority 2"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: Esophagus Dmean[Gy] <= 34.0: protocol against the recorded harness run",
+     "value": 3.38,
+     "target": "3.38 \u00b1 0.05",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: Heart V60Gy[%] <= 33.0 (protocol)",
+     "value": 0.0,
+     "target": "<= 33.0",
+     "passed": null,
+     "note": "rtog-0617 priority 2"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: Heart V60Gy[%] <= 33.0: protocol against the recorded harness run",
+     "value": 0.0,
+     "target": "0.0 \u00b1 0.05",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: Heart V45Gy[%] <= 66.0 (protocol)",
+     "value": 0.0,
+     "target": "<= 66.0",
+     "passed": null,
+     "note": "rtog-0617 priority 2"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: Heart V45Gy[%] <= 66.0: protocol against the recorded harness run",
+     "value": 0.0,
+     "target": "0.0 \u00b1 0.05",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: Heart V40Gy[%] <= 100.0 (protocol)",
+     "value": 0.0,
+     "target": "<= 100.0",
+     "passed": null,
+     "note": "rtog-0617 priority 3"
+    },
+    {
+     "name": "LCTSC-Test-S1-101: Heart V40Gy[%] <= 100.0: protocol against the recorded harness run",
+     "value": 0.0,
+     "target": "0.0 \u00b1 0.05",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: protocol run deliverable",
+     "value": true,
+     "target": "True",
+     "passed": true,
+     "note": "normalised by 1.0360"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: PTV V60Gy[%] >= 95.0 (protocol)",
+     "value": 95.62,
+     "target": ">= 95.0",
+     "passed": true,
+     "note": "rtog-0617 priority 1"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: PTV V60Gy[%] >= 95.0: protocol against the recorded harness run",
+     "value": 95.62,
+     "target": "95.62 \u00b1 0.96",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: PTV D0.03cc[Gy] <= 72.0 (protocol)",
+     "value": 65.25,
+     "target": "<= 72.0",
+     "passed": null,
+     "note": "rtog-0617 priority 2"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: PTV D0.03cc[Gy] <= 72.0: protocol against the recorded harness run",
+     "value": 65.25,
+     "target": "65.25 \u00b1 0.65",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: Lungs-GTV V20Gy[%] <= 37.0 (protocol)",
+     "value": 14.01,
+     "target": "<= 37.0",
+     "passed": true,
+     "note": "rtog-0617 priority 1"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: Lungs-GTV V20Gy[%] <= 37.0: protocol against the recorded harness run",
+     "value": 14.01,
+     "target": "14.01 \u00b1 0.14",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: Lungs-GTV Dmean[Gy] <= 20.0 (protocol)",
+     "value": 8.68,
+     "target": "<= 20.0",
+     "passed": true,
+     "note": "rtog-0617 priority 1"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: Lungs-GTV Dmean[Gy] <= 20.0: protocol against the recorded harness run",
+     "value": 8.68,
+     "target": "8.68 \u00b1 0.09",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: SpinalCord D0.03cc[Gy] <= 50.5 (protocol)",
+     "value": 15.65,
+     "target": "<= 50.5",
+     "passed": true,
+     "note": "rtog-0617 priority 1"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: SpinalCord D0.03cc[Gy] <= 50.5: protocol against the recorded harness run",
+     "value": 15.65,
+     "target": "15.65 \u00b1 0.16",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: Esophagus Dmean[Gy] <= 34.0 (protocol)",
+     "value": 3.24,
+     "target": "<= 34.0",
+     "passed": null,
+     "note": "rtog-0617 priority 2"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: Esophagus Dmean[Gy] <= 34.0: protocol against the recorded harness run",
+     "value": 3.24,
+     "target": "3.24 \u00b1 0.05",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: Heart V60Gy[%] <= 33.0 (protocol)",
+     "value": 0.0,
+     "target": "<= 33.0",
+     "passed": null,
+     "note": "rtog-0617 priority 2"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: Heart V60Gy[%] <= 33.0: protocol against the recorded harness run",
+     "value": 0.0,
+     "target": "0.0 \u00b1 0.05",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: Heart V45Gy[%] <= 66.0 (protocol)",
+     "value": 0.19,
+     "target": "<= 66.0",
+     "passed": null,
+     "note": "rtog-0617 priority 2"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: Heart V45Gy[%] <= 66.0: protocol against the recorded harness run",
+     "value": 0.19,
+     "target": "0.19 \u00b1 0.05",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: Heart V40Gy[%] <= 100.0 (protocol)",
+     "value": 0.42,
+     "target": "<= 100.0",
+     "passed": null,
+     "note": "rtog-0617 priority 3"
+    },
+    {
+     "name": "LCTSC-Test-S2-101: Heart V40Gy[%] <= 100.0: protocol against the recorded harness run",
+     "value": 0.42,
+     "target": "0.42 \u00b1 0.05",
+     "passed": true,
+     "note": "the harness case's run in the record named by the case"
+    }
+   ],
+   "metrics": {
+    "LCTSC-Test-S1-101": {
+     "run_id": "3f8c7669-9355-49f9-8ff9-0f705ab21b2f",
+     "normalisation": 1.0341031654581754,
+     "seconds": 954.0,
+     "history": [
+      {
+       "round": 1,
+       "normalisation": 1.0208483197173563,
+       "failed": []
+      },
+      {
+       "arc_round": 1,
+       "normalisation": 1.0341031654581754,
+       "failed": []
+      }
+     ],
+     "goals": [
+      {
+       "structure": "PTV",
+       "metric": "D95",
+       "op": ">=",
+       "gy": 60.0,
+       "achieved": 60.119998931884766,
+       "passed": true
+      },
+      {
+       "structure": "SpinalCord",
+       "metric": "Dmax",
+       "op": "<=",
+       "gy": 45.0,
+       "achieved": 15.31711483001709,
+       "passed": true
+      },
+      {
+       "structure": "Esophagus",
+       "metric": "Dmean",
+       "op": "<=",
+       "gy": 34.0,
+       "achieved": 3.378856897354126,
+       "passed": true
+      },
+      {
+       "structure": "Heart",
+       "metric": "D33",
+       "op": "<=",
+       "gy": 60.0,
+       "achieved": 3.8601794242858887,
+       "passed": true
+      },
+      {
+       "structure": "Lungs-PTV",
+       "metric": "D37",
+       "op": "<=",
+       "gy": 20.0,
+       "achieved": 4.8610758781433105,
+       "passed": true
+      }
+     ]
+    },
+    "LCTSC-Test-S2-101": {
+     "run_id": "28af159b-bc47-4371-a33c-39d23a2343b9",
+     "normalisation": 1.0360349451904083,
+     "seconds": 1142.5,
+     "history": [
+      {
+       "round": 1,
+       "normalisation": 1.014055604134696,
+       "failed": []
+      },
+      {
+       "arc_round": 1,
+       "normalisation": 1.0360349451904083,
+       "failed": []
+      }
+     ],
+     "goals": [
+      {
+       "structure": "PTV",
+       "metric": "D95",
+       "op": ">=",
+       "gy": 60.0,
+       "achieved": 60.12000274658203,
+       "passed": true
+      },
+      {
+       "structure": "SpinalCord",
+       "metric": "Dmax",
+       "op": "<=",
+       "gy": 45.0,
+       "achieved": 15.71623420715332,
+       "passed": true
+      },
+      {
+       "structure": "Esophagus",
+       "metric": "Dmean",
+       "op": "<=",
+       "gy": 34.0,
+       "achieved": 3.240020275115967,
+       "passed": true
+      },
+      {
+       "structure": "Heart",
+       "metric": "D33",
+       "op": "<=",
+       "gy": 60.0,
+       "achieved": 8.782506942749023,
+       "passed": true
+      },
+      {
+       "structure": "Lungs-PTV",
+       "metric": "D37",
+       "op": "<=",
+       "gy": 20.0,
+       "achieved": 6.069990158081055,
+       "passed": true
+      }
+     ]
+    }
+   },
+   "notes": [],
+   "error": null
+  }
+ ],
+ "runs": {
+  "one_case_per_process": [
+   "20261106-034538-890a575"
+  ],
+  "commit": "890a575",
+  "machines": {
+   "20261106-034538-890a575": {
+    "cpu": "AMD EPYC 7413 24-Core Processor, 96 logical CPUs",
+    "python": "3.12.16"
+   }
+  }
+ }
+}

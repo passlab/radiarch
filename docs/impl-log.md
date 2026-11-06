@@ -1306,3 +1306,26 @@ Design: `docs/reports/mlc-leaf-model.md`, agreed with the project lead on 2026-1
 - Docs: the design note's "As built", ADR 0010's consequences, `architecture.md` §9, the R4 plan row.
 - **Next.** The records with aperture doses are rerun on the compute server: R8 (VMAT, SBRT, CCC recomputation of
   delivered plans), R10 (the protocol plans) and R11 (the lung case's deliverable plans).
+
+## The records rerun with the MLC leaf model (2026-11-05)
+
+- **Runs.** On the compute server, one case per process, in the radiarch image built from `55ab566` with a clean
+  checkout mounted over its code: from `412a105`, R8's `lung_sbrt_vmat`, `lung_vmat_lctsc` and `hn_sib_vmat`, R9's
+  `lung_4d_itv`, R10's `protocol_batch_lctsc`, R11's `mco_front_tg119` and `mco_protocol_lung`; from `890a575`, R10's
+  `protocol_lung_vmat`, which compares itself with the R8 rerun. A release upgrade of the server cut the first runs
+  of five cases; they were rerun.
+- **Baselines.** The first comparison, against the old records, mixed the leaf model with every commit since them
+  (R9 to R11.9). So the six cases also ran from `55ab566`, the commit before the leaf model. For R11's lung case the
+  correction's run from `8102454` is the baseline: no planning code changed after it.
+- **Result.** Every graded check passes, in each baseline and with the leaf model. The low doses around the targets
+  rise through the closed leaves and the wider tips: SBRT R50 by 8 to 10 %, lung V20 by about 1 percentage point in
+  the conventional lung case and up to 2 in the 4D case, the MCO arcs plan's heart and oesophagus means by 2.6 and
+  2.4 Gy. Organ maxima move both ways, by up to 2 Gy. The second engine agrees as before. `protocol_lung_vmat`
+  reproduces the R8 rerun exactly.
+- **Finding.** R11.9 changed the TG-119 case's deliverable plan, which the R11 correction called unaffected: its core
+  D5 went from 6.16 Gy in the record to 17.65 Gy at `55ab566`, and is 22.40 Gy with the leaf model, inside the
+  institutional limit (22.44 Gy) but not TG-119's goal (10 Gy). Every meterset round misses the core's and the outer
+  target's goals. R11.11 (B1) is the follow-up, as for the lung case's arcs.
+- **Records.** Dated rerun folders, each with its baseline: `docs/validation/2026-10-23-r8/`, `2026-10-25-r9/`,
+  `2026-10-26-r10/` and `2026-10-31-r11/`, under `2026-11-05-leaf-model-412a105/`, and a notice in each record's guide.
+  `protocol_lung_vmat` now names the R8 rerun as its record. The R4 plan row is updated.

@@ -27,6 +27,17 @@ fields, 1.029 with two arcs). The PTV's hottest 0.03 cc falls to 69.7 and 74.3 G
 their limits, most with the arcs. The lung case's Pareto sets and reweighting plan, and the TG-119 and proton cases,
 are unaffected. Please review the lung case's deliverable plans from the correction.
 
+## Rerun with the MLC leaf model, 2026-11-05
+
+From commit `412a105` on, every dose computed from apertures uses the machine's leaf transmission, a dosimetric leaf
+gap and a tongue-and-groove (`docs/reports/mlc-leaf-model.md`). The TG-119 and lung cases' deliverable plans, and the
+lung case's reweighting plan, are made from apertures. Their numbers are superseded by
+[`2026-11-05-leaf-model-412a105/`](2026-11-05-leaf-model-412a105/README.md): every graded check still passes, and the
+Pareto sets and navigated plans are unchanged. The rerun also corrects the paragraph above. The TG-119 case was
+affected by R11.9: its deliverable plan's core D5 went from 6.16 Gy in the record to 17.65 Gy before the leaf model,
+and is 22.40 Gy with it, within the institutional limit of 22.44 Gy but far above TG-119's goal of 10 Gy. The proton
+case is unaffected. Please review both photon cases' deliverable plans from the rerun.
+
 ## What to review and sign
 
 | Document | Contents | Signed by |

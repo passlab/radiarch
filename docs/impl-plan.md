@@ -103,7 +103,8 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [ ] Direct aperture optimization refinement **(open)**
 - [x] (2026-11-04) Leaf transmission, rounded leaf ends and tongue-and-groove in aperture doses: one aperture model
   for the sequencing coverage, the pencil beam and CCC's delivered dose, carried by the plan from its machine
-  (`docs/reports/mlc-leaf-model.md`); the R8, R10 and R11 records' reruns with it waiting
+  (`docs/reports/mlc-leaf-model.md`). 2026-11-05: the R8 to R11 records' aperture cases rerun with it, each
+  against a baseline from the commit before; every graded check passes; physicist review waiting
 - [ ] Asymmetric margins **(open)**
 
 ### R5 — Evaluation

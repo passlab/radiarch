@@ -1,0 +1,538 @@
+{
+ "intended_use": "RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.",
+ "radiarch_commit": "55ab566",
+ "timestamp": "20261106-013131",
+ "fast": false,
+ "cpu": "AMD EPYC 7413 24-Core Processor, 96 logical CPUs",
+ "python": "3.12.16",
+ "results": [
+  {
+   "name": "mco_front_tg119",
+   "kind": "mco_front",
+   "status": "pass",
+   "seconds": 6514.4,
+   "checks": [
+    {
+     "name": "c_shape_hard: the error bound never grows as plans are added",
+     "value": "0.659 \u2192 0.653 \u2192 0.649 \u2192 0.646 \u2192 0.645 \u2192 0.644 \u2192 0.644",
+     "target": "non-increasing",
+     "passed": true,
+     "note": "9 plans; plan budget 9 reached, error bound 0.6443"
+    },
+    {
+     "name": "c_shape_hard: plans whose solve converged",
+     "value": "0 of 9",
+     "target": "informative",
+     "passed": null,
+     "note": "converged: the cost fell by at most 1e-5 of itself over the last 50 iterations (stopped falling, not proven optimal); not converged: [0, 1, 2, 3, 4, 5, 6, 7, 8]; the checks below and the error bound use the converged plans; gain still on offer per plan, over its cost at its start (a loose first-order bound, reported only): 9.0e-03, 2.5e-01, 4.7e-01, 2.3e-01, 3.2e-01, 3.4e-01, 3.3e-01, 2.8e-01, 1.7e-01"
+    },
+    {
+     "name": "c_shape_hard: plans dominated by another plan",
+     "value": 0,
+     "target": "informative",
+     "passed": null,
+     "note": ""
+    },
+    {
+     "name": "c_shape_hard: hard constraint OuterTarget Dmin >= 25.0 Gy in every plan",
+     "value": 24.983,
+     "target": ">= 25.0 (tolerance 0.1)",
+     "passed": true,
+     "note": "the worst plan, on the navigation voxels"
+    },
+    {
+     "name": "c_shape_hard: hard constraint OuterTarget Dmax <= 60.0 Gy in every plan",
+     "value": 60.099,
+     "target": "<= 60.0 (tolerance 0.1)",
+     "passed": true,
+     "note": "the worst plan, on the navigation voxels"
+    },
+    {
+     "name": "c_shape_hard: error bound with 3 plans",
+     "value": 0.6593,
+     "target": "tolerance 0.01",
+     "passed": null,
+     "note": "approximate: the converged plans are taken as optimal; 11.5 min from the start"
+    },
+    {
+     "name": "c_shape_hard: error bound with 4 plans",
+     "value": 0.6526,
+     "target": "tolerance 0.01",
+     "passed": null,
+     "note": "approximate: the converged plans are taken as optimal; 14.8 min from the start"
+    },
+    {
+     "name": "c_shape_hard: error bound with 5 plans",
+     "value": 0.6491,
+     "target": "tolerance 0.01",
+     "passed": null,
+     "note": "approximate: the converged plans are taken as optimal; 16.9 min from the start"
+    },
+    {
+     "name": "c_shape_hard: error bound with 6 plans",
+     "value": 0.6464,
+     "target": "tolerance 0.01",
+     "passed": null,
+     "note": "approximate: the converged plans are taken as optimal; 19.0 min from the start"
+    },
+    {
+     "name": "c_shape_hard: error bound with 7 plans",
+     "value": 0.6449,
+     "target": "tolerance 0.01",
+     "passed": null,
+     "note": "approximate: the converged plans are taken as optimal; 21.2 min from the start"
+    },
+    {
+     "name": "c_shape_hard: error bound with 8 plans",
+     "value": 0.6445,
+     "target": "tolerance 0.01",
+     "passed": null,
+     "note": "approximate: the converged plans are taken as optimal; 23.3 min from the start"
+    },
+    {
+     "name": "c_shape_hard: error bound with 9 plans",
+     "value": 0.6443,
+     "target": "tolerance 0.01",
+     "passed": null,
+     "note": "approximate: the converged plans are taken as optimal; 25.4 min from the start"
+    },
+    {
+     "name": "plan 0 (anchor)",
+     "value": "RMSUnder(OuterTarget) 0.00, EUDMax(Core) 16.15",
+     "target": "the front",
+     "passed": null,
+     "note": ""
+    },
+    {
+     "name": "plan 1 (anchor)",
+     "value": "RMSUnder(OuterTarget) 11.24, EUDMax(Core) 2.23",
+     "target": "the front",
+     "passed": null,
+     "note": ""
+    },
+    {
+     "name": "plan 2 (balance)",
+     "value": "RMSUnder(OuterTarget) 1.42, EUDMax(Core) 4.53",
+     "target": "the front",
+     "passed": null,
+     "note": ""
+    },
+    {
+     "name": "plan 3 (sandwich)",
+     "value": "RMSUnder(OuterTarget) 4.83, EUDMax(Core) 2.46",
+     "target": "the front",
+     "passed": null,
+     "note": ""
+    },
+    {
+     "name": "plan 4 (sandwich)",
+     "value": "RMSUnder(OuterTarget) 2.72, EUDMax(Core) 3.37",
+     "target": "the front",
+     "passed": null,
+     "note": ""
+    },
+    {
+     "name": "plan 5 (sandwich)",
+     "value": "RMSUnder(OuterTarget) 1.88, EUDMax(Core) 4.00",
+     "target": "the front",
+     "passed": null,
+     "note": ""
+    },
+    {
+     "name": "plan 6 (sandwich)",
+     "value": "RMSUnder(OuterTarget) 1.52, EUDMax(Core) 4.35",
+     "target": "the front",
+     "passed": null,
+     "note": ""
+    },
+    {
+     "name": "plan 7 (sandwich)",
+     "value": "RMSUnder(OuterTarget) 1.69, EUDMax(Core) 4.17",
+     "target": "the front",
+     "passed": null,
+     "note": ""
+    },
+    {
+     "name": "plan 8 (sandwich)",
+     "value": "RMSUnder(OuterTarget) 1.58, EUDMax(Core) 4.27",
+     "target": "the front",
+     "passed": null,
+     "note": ""
+    },
+    {
+     "name": "automatic navigation: levels",
+     "value": 2,
+     "target": "informative",
+     "passed": null,
+     "note": "priority 1: 1 of 1 met, shortfall 0.030 \u2192 0.000; priority 2: 1 of 2 met, shortfall 0.161 \u2192 0.052"
+    },
+    {
+     "name": "navigated: OuterTarget D95%[Gy] >= 50.0",
+     "value": 50.0,
+     "target": ">= 50.0",
+     "passed": null,
+     "note": "the navigated blend (not yet deliverable)"
+    },
+    {
+     "name": "navigated: OuterTarget D10%[Gy] <= 55.0",
+     "value": 57.86,
+     "target": "<= 55.0",
+     "passed": null,
+     "note": "the navigated blend (not yet deliverable)"
+    },
+    {
+     "name": "navigated: Core D5%[Gy] <= 10.0",
+     "value": 10.0,
+     "target": "<= 10.0",
+     "passed": null,
+     "note": "the navigated blend (not yet deliverable)"
+    },
+    {
+     "name": "deliverable (static fields): deliverable",
+     "value": true,
+     "target": "True",
+     "passed": true,
+     "note": "imrt; normalised by 1.0075"
+    },
+    {
+     "name": "deliverable (static fields): RMSUnder(OuterTarget) navigated \u2192 deliverable (Gy)",
+     "value": "1.00 \u2192 0.71",
+     "target": "flagged when worse by more than 1.0 Gy or 1.0 % volume",
+     "passed": null,
+     "note": "worse by -0.29"
+    },
+    {
+     "name": "deliverable (static fields): EUDMax(Core) navigated \u2192 deliverable (Gy)",
+     "value": "8.38 \u2192 14.93",
+     "target": "flagged when worse by more than 1.0 Gy or 1.0 % volume",
+     "passed": null,
+     "note": "FLAGGED: worse by 6.55"
+    },
+    {
+     "name": "deliverable (static fields): OuterTarget D95%[Gy] >= 50 navigated \u2192 deliverable (Gy)",
+     "value": "50.00 \u2192 50.10",
+     "target": "flagged when worse by more than 1.0 Gy or 1.0 % volume",
+     "passed": null,
+     "note": "worse by -0.10"
+    },
+    {
+     "name": "deliverable (static fields): OuterTarget D10%[Gy] <= 55 navigated \u2192 deliverable (Gy)",
+     "value": "57.86 \u2192 57.81",
+     "target": "flagged when worse by more than 1.0 Gy or 1.0 % volume",
+     "passed": null,
+     "note": "worse by -0.05"
+    },
+    {
+     "name": "deliverable (static fields): Core D5%[Gy] <= 10 navigated \u2192 deliverable (Gy)",
+     "value": "10.00 \u2192 17.65",
+     "target": "flagged when worse by more than 1.0 Gy or 1.0 % volume",
+     "passed": null,
+     "note": "FLAGGED: worse by 7.65"
+    },
+    {
+     "name": "deliverable (static fields): flagged rows of the deviation table",
+     "value": 2,
+     "target": "informative",
+     "passed": null,
+     "note": "a flag is a row where the deliverable plan is worse than the navigated one past its tolerance"
+    },
+    {
+     "name": "deliverable (static fields): normalisation of the deliverable plan within 15 % of 1",
+     "value": 1.0075,
+     "target": "0.85 to 1.15",
+     "passed": true,
+     "note": "the metersets as optimized cover the target nearly as navigated; a larger factor inflates the hot spots (the record of 2026-10-31 found 1.17 and 1.42 on the lung patient)"
+    },
+    {
+     "name": "deliverable (static fields): meterset rounds",
+     "value": 3,
+     "target": "informative",
+     "passed": null,
+     "note": "round 1: normalisation 1.031, failed ['OuterTarget D10', 'Core D5']; round 2: normalisation 1.0396, failed ['OuterTarget D10', 'Core D5']; round 3: normalisation 1.0075, failed ['OuterTarget D10', 'Core D5']"
+    },
+    {
+     "name": "deliverable: OuterTarget D95 (Gy)",
+     "value": 50.1,
+     "target": ">= 50.0 (or >= 49.78: institutional mean 50.11 \u00b1 2 SD)",
+     "passed": true,
+     "note": "TG-119 planning goal; institutional mean 50.11 (SD 0.165)"
+    },
+    {
+     "name": "deliverable against the recorded reweighting plan: OuterTarget D95 (Gy)",
+     "value": "50.10 vs 50.1",
+     "target": "informative",
+     "passed": null,
+     "note": "the tg119_planning case's plan in the record named by the case (fluence, four reweighting rounds)"
+    },
+    {
+     "name": "deliverable: OuterTarget D10 (Gy)",
+     "value": 57.81,
+     "target": "<= 55.0 (or <= 61.42: institutional mean 57.02 \u00b1 2 SD)",
+     "passed": true,
+     "note": "TG-119 planning goal; institutional mean 57.02 (SD 2.2)"
+    },
+    {
+     "name": "deliverable against the recorded reweighting plan: OuterTarget D10 (Gy)",
+     "value": "57.81 vs 53.86",
+     "target": "informative",
+     "passed": null,
+     "note": "the tg119_planning case's plan in the record named by the case (fluence, four reweighting rounds)"
+    },
+    {
+     "name": "deliverable: Core D5 (Gy)",
+     "value": 17.65,
+     "target": "<= 10.0 (or <= 22.44: institutional mean 16.3 \u00b1 2 SD)",
+     "passed": true,
+     "note": "TG-119 planning goal; institutional mean 16.3 (SD 3.07)"
+    },
+    {
+     "name": "deliverable against the recorded reweighting plan: Core D5 (Gy)",
+     "value": "17.65 vs 10.19",
+     "target": "informative",
+     "passed": null,
+     "note": "the tg119_planning case's plan in the record named by the case (fluence, four reweighting rounds)"
+    }
+   ],
+   "metrics": {
+    "front": {
+     "tradeoffs": [
+      "RMSUnder(OuterTarget)",
+      "EUDMax(Core)"
+     ],
+     "ideal_gy": [
+      7e-06,
+      2.226755
+     ],
+     "nadir_gy": [
+      11.244723,
+      16.147511
+     ],
+     "plans": [
+      {
+       "index": 0,
+       "kind": "anchor",
+       "weights": [
+        1.0,
+        0.001
+       ],
+       "converged": false,
+       "gain": 0.00897,
+       "values_gy": [
+        7e-06,
+        16.147511
+       ],
+       "nominal_gy": null
+      },
+      {
+       "index": 1,
+       "kind": "anchor",
+       "weights": [
+        0.001,
+        1.0
+       ],
+       "converged": false,
+       "gain": 0.247,
+       "values_gy": [
+        11.244723,
+        2.226755
+       ],
+       "nominal_gy": null
+      },
+      {
+       "index": 2,
+       "kind": "balance",
+       "weights": [
+        0.04446533100332192,
+        0.03591758924922945
+       ],
+       "converged": false,
+       "gain": 0.466,
+       "values_gy": [
+        1.415904,
+        4.532699
+       ],
+       "nominal_gy": null
+      },
+      {
+       "index": 3,
+       "kind": "sandwich",
+       "weights": [
+        0.014168255529739986,
+        0.06039054127182257
+       ],
+       "converged": false,
+       "gain": 0.228,
+       "values_gy": [
+        4.827493,
+        2.456933
+       ],
+       "nominal_gy": null
+      },
+      {
+       "index": 4,
+       "kind": "sandwich",
+       "weights": [
+        0.02930494795186544,
+        0.04816363350475323
+       ],
+       "converged": false,
+       "gain": 0.322,
+       "values_gy": [
+        2.722571,
+        3.373681
+       ],
+       "nominal_gy": null
+      },
+      {
+       "index": 5,
+       "kind": "sandwich",
+       "weights": [
+        0.037121100449896346,
+        0.041850010090758186
+       ],
+       "converged": false,
+       "gain": 0.34,
+       "values_gy": [
+        1.875893,
+        3.999921
+       ],
+       "nominal_gy": null
+      },
+      {
+       "index": 6,
+       "kind": "sandwich",
+       "weights": [
+        0.04298562415518632,
+        0.0371128463536157
+       ],
+       "converged": false,
+       "gain": 0.332,
+       "values_gy": [
+        1.519585,
+        4.350895
+       ],
+       "nominal_gy": null
+      },
+      {
+       "index": 7,
+       "kind": "sandwich",
+       "weights": [
+        0.03940574391723032,
+        0.04000455243219479
+       ],
+       "converged": false,
+       "gain": 0.281,
+       "values_gy": [
+        1.690933,
+        4.165677
+       ],
+       "nominal_gy": null
+      },
+      {
+       "index": 8,
+       "kind": "sandwich",
+       "weights": [
+        0.041454275964596374,
+        0.038349817586395926
+       ],
+       "converged": false,
+       "gain": 0.172,
+       "values_gy": [
+        1.583273,
+        4.273954
+       ],
+       "nominal_gy": null
+      }
+     ],
+     "error_history": [
+      {
+       "plans": 3,
+       "error": 0.659318,
+       "seconds": 692.0
+      },
+      {
+       "plans": 4,
+       "error": 0.652555,
+       "seconds": 886.03
+      },
+      {
+       "plans": 5,
+       "error": 0.649063,
+       "seconds": 1015.19
+      },
+      {
+       "plans": 6,
+       "error": 0.646443,
+       "seconds": 1141.37
+      },
+      {
+       "plans": 7,
+       "error": 0.644855,
+       "seconds": 1269.07
+      },
+      {
+       "plans": 8,
+       "error": 0.644453,
+       "seconds": 1398.28
+      },
+      {
+       "plans": 9,
+       "error": 0.644255,
+       "seconds": 1524.73
+      }
+     ],
+     "error_bound": 0.644255,
+     "converged": false,
+     "stop_reason": "plan budget 9 reached, error bound 0.6443",
+     "robust_gap": null,
+     "seconds": 1525.66,
+     "notes": [
+      "plan 0 did not converge: its cost was still falling at the iteration limit; it proves no supporting hyperplane, so the error bound leaves it out (more iterations help)",
+      "plan 1 did not converge: its cost was still falling at the iteration limit; it proves no supporting hyperplane, so the error bound leaves it out (more iterations help)",
+      "plan 2 did not converge: its cost was still falling at the iteration limit; it proves no supporting hyperplane, so the error bound leaves it out (more iterations help)",
+      "plan 3 did not converge: its cost was still falling at the iteration limit; it proves no supporting hyperplane, so the error bound leaves it out (more iterations help)",
+      "plan 4 did not converge: its cost was still falling at the iteration limit; it proves no supporting hyperplane, so the error bound leaves it out (more iterations help)",
+      "plan 5 did not converge: its cost was still falling at the iteration limit; it proves no supporting hyperplane, so the error bound leaves it out (more iterations help)",
+      "plan 6 did not converge: its cost was still falling at the iteration limit; it proves no supporting hyperplane, so the error bound leaves it out (more iterations help)",
+      "plan 7 did not converge: its cost was still falling at the iteration limit; it proves no supporting hyperplane, so the error bound leaves it out (more iterations help)",
+      "plan 8 did not converge: its cost was still falling at the iteration limit; it proves no supporting hyperplane, so the error bound leaves it out (more iterations help)"
+     ]
+    },
+    "case": {
+     "geometry_id": "1faa758f-9695-4e54-a849-fd1d91fe896d",
+     "beam_model_id": "3a8c264e-7d88-48dc-97f5-9d111e665913",
+     "grid_mm": 3.0,
+     "beamlet_mm": 5.0,
+     "beams": {
+      "count": 9,
+      "spacing_deg": 40.0,
+      "start_deg": 0.0
+     },
+     "engine": "ccc"
+    },
+    "deliverable": {
+     "deliverable_id": "ebf477c8-0cfc-419b-a077-cbb77c4d906a",
+     "dose_id": "15263544-60bd-4a27-b74e-c249c3f53eb0",
+     "flagged": 2,
+     "normalisation": 1.007519944360694
+    }
+   },
+   "notes": [
+    "the deliverable plan's dose is recomputed by the engine from its sequenced apertures; TG-119's institutional results are deliverable plans too"
+   ],
+   "error": null
+  }
+ ],
+ "runs": {
+  "one_case_per_process": [
+   "20261106-013131-55ab566"
+  ],
+  "commit": "55ab566",
+  "machines": {
+   "20261106-013131-55ab566": {
+    "cpu": "AMD EPYC 7413 24-Core Processor, 96 logical CPUs",
+    "python": "3.12.16"
+   }
+  }
+ }
+}

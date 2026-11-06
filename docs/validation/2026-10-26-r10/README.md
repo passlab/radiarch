@@ -11,6 +11,15 @@ one patient or a list of cases. ADR 0017 (`docs/adr/0017-sdk-and-planning-protoc
 two cases of this record ran from commit `92ce40d`, one case per process: `20261026-150400` and `20261026-152231`.
 No engine changed in R10; the engines' records are R8's (`../2026-10-23-r8/`, with its correction of 2026-10-24).
 
+## Rerun with the MLC leaf model, 2026-11-05
+
+From commit `412a105` on, every dose computed from apertures uses the machine's leaf transmission, a dosimetric leaf
+gap and a tongue-and-groove (`docs/reports/mlc-leaf-model.md`). Both protocols plan VMAT arcs. Their numbers below
+are superseded by [`2026-11-05-leaf-model-412a105/`](2026-11-05-leaf-model-412a105/README.md): every graded check
+still passes. The lung protocol still reproduces its harness case, now against the R8 record's rerun. The batch,
+compared with a baseline run from the commit before the leaf model, has lower organ maxima and higher low doses.
+Please review both cases from the rerun.
+
 ## What to review and sign
 
 | Document | Contents | Signed by |
