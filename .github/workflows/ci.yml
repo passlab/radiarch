@@ -90,7 +90,12 @@ jobs:
           pip install -e ./src[dev]
 
       - name: Install dicom3tools (dciodvfy for the RT objects radiarch writes)
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq dicom3tools
+        # A runner's package mirror once hung for 13 minutes (2026-11-05) and the job ran out of time: apt now retries
+        # a slow mirror, and the step fails on its own limit, under its own name.
+        timeout-minutes: 4
+        run: |
+          APT="-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30"
+          sudo apt-get $APT update -qq && sudo apt-get $APT install -y -qq dicom3tools
 
       - name: Wait for Orthanc's DICOMweb plugin
         run: |

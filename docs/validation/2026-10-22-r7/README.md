@@ -21,6 +21,14 @@ with CCC 1.0.0, whose gantry turned opposite to IEC 61217 (fixed in R8). Its cor
 the fix and with CCC 1.1.0, are in the R8 record's correction
 (`../2026-10-23-r8/2026-10-24-correction-d458e46/`). Nothing else in this record derives a geometry.
 
+## The Monte Carlo primaries, 2026-11-06
+
+OpenGATE 10 runs a source's primaries on every thread. The Monte Carlo references of this record ran on 18 threads, so
+each simulated 18 times the 5×10⁷ primaries it states (question 1 below): 9×10⁸. The uncertainties quoted are those of
+the runs as they were. Every comparison here normalises the Monte Carlo dose (at 10 cm, or slab over water at the same
+depth), so no value in this record changes. From 2026-11-06 on, the references state the primaries they simulate and
+the harness scales the older ones (`docs/reports/mlc-leaf-model.md`).
+
 ## What to review and sign
 
 | Document | Contents | Signed by |

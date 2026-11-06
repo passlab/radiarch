@@ -1385,3 +1385,11 @@ Design: `docs/reports/mlc-leaf-model.md`, agreed with the project lead on 2026-1
   states the table's unit (the dose per primary of one thread). `engines/pb/pb_6mv_kernel.json` states 5.4 × 10⁸ and
   18 threads. The table is unchanged, and so are its fingerprint (`f046d6a503757f17`) and every dose: the output
   calibration removes the scale. One test in `tests/test_r4_mlc_monte_carlo.py`.
+
+## The R7 guide's primaries; CI's apt step (2026-11-06)
+
+- **R7 guide.** A dated notice: the record's Monte Carlo references ran 18 times the 5×10⁷ primaries they state, and
+  every comparison normalises the Monte Carlo dose, so no value changes (as in the R8 guide).
+- **CI.** On 2026-11-05 a runner's package mirror hung `apt-get update` for 13 minutes and the full-tests job ran out of
+  time. The dicom3tools step now retries a slow mirror (three retries, 30-second timeouts) and stops at its own
+  4-minute limit, so a hang fails under that step's name. The step stays required: it guards the RT objects' check.
