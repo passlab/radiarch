@@ -28,7 +28,8 @@ from .vmat import ArcSpec
 MCO_VERSION = "2"          # 2 (R11.8): solves converge when their cost stops falling; unconverged plans prove no bound; the
                            # penalty starts matched to the objectives; robust smoothing follows the dose level
 MAX_TRADEOFFS = 8
-APERTURE_SET_VERSION = "1"  # a second set over a deliverable plan's metersets (R11.11)
+APERTURE_SET_VERSION = "2"  # a second set over a deliverable plan's metersets (R11.11); 2: its own solver budget, a blend
+                            # below the machine's minimum by rounding put back at it
 
 
 class MCORunRequest(BaseModel):
@@ -184,14 +185,16 @@ class ApertureSetRequest(BaseModel):
     Its trade-offs are the first set's. Its limits are the first set's hard constraints and, when the deliverable plan
     was made with ``hard_coverage``, the target's coverage (no worse than the deliverable plan's) and maximum; a limit no
     metersets on these apertures can meet is relaxed to what the feasibility run reaches, and a note says so. Every
-    meterset stays at or above the machine's minimum. ``plan_budget`` defaults to ``2 N + 1``."""
+    meterset stays at or above the machine's minimum. ``plan_budget`` defaults to ``2 N + 1``. The solver's budget is
+    the second set's own: its solves have one variable per meterset, so 2000 iterations cost seconds and let them
+    converge, which the first set's budget (sized for thousands of beamlets) does not."""
 
     requested_by: Optional[str] = Field(default=None, max_length=64,
                                         description="Set by the server from a trusted proxy's user header; a value sent here is replaced.")
     plan_budget: Optional[int] = Field(default=None, ge=3, le=4 * MAX_TRADEOFFS + 1)
     error_tolerance: float = Field(default=0.05, gt=0.0, le=1.0)
     anchor_epsilon: float = Field(default=1e-3, gt=0.0, le=0.1)
-    solver: SolverConfig = Field(default_factory=lambda: SolverConfig(method="L-BFGS-B", max_iterations=300))
+    solver: SolverConfig = Field(default_factory=lambda: SolverConfig(method="L-BFGS-B", max_iterations=2000))
 
     def compute_cache_key(self, deliverable_cache_key: str) -> str:
         payload = {"version": APERTURE_SET_VERSION, "mco": MCO_VERSION, "deliverable": deliverable_cache_key, "budget": self.plan_budget,

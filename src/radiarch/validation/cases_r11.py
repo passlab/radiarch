@@ -327,8 +327,7 @@ def run_mco_front(spec: dict, ctx: Context) -> CaseResult:
         from ..models.mco import ApertureSetRequest
         from ..services.mco_apertures import ApertureSetService
 
-        second = ApertureSetService(mco_service=msvc, deliverable_service=dsvc).run(d.deliverable_id, ApertureSetRequest(
-            solver=SolverConfig(method="L-BFGS-B", max_iterations=mreq.solver.max_iterations)))
+        second = ApertureSetService(mco_service=msvc, deliverable_service=dsvc).run(d.deliverable_id, ApertureSetRequest())
         state2 = NavigationService(msvc.store).auto_navigate(second.mco_id, AutoNavigateRequest(goals=goals, prescription_gy=rx, fractions=1,
                                                                                                name="TG-119 goals, on the apertures"))
         plan = dsvc.run(second.mco_id, dreq.model_copy(update={"state_id": state2.state_id}))

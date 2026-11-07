@@ -104,12 +104,18 @@ dose is then the full kernel's, as for any arc plan, so the deviation table meas
 - With `hard_coverage`, the target's gEUD (a = -10) no lower than the deliverable plan's own, and the target's maximum at
   or below `max_dose_factor` times the prescription. Both hold within 1 % of their level.
 - Every meterset at or above the machine's minimum (a segment's minimum MU, an interval's dose-rate floor). The solves
-  run on the metersets above it.
+  run on the metersets above it. A blend of plans keeps the minimum, but its weights sum to 1 only to rounding: a
+  meterset every plan holds at the minimum can come out just below it. Such a meterset is put back at the minimum
+  (`blend_metersets`); one below it by more than rounding is left for the deliverability check to flag.
 
 A feasibility run starts from the deliverable plan. Where it cannot meet a limit with the others, that limit is relaxed
 to the value the run reaches, and a note names it. The second set therefore always exists, and no plan in it is worse
 than that run on any limit. A blend keeps every convex limit, so the navigated plan keeps the coverage too, and its
 normalisation is a check near 1.
+
+**Its solver.** L-BFGS-B with 2000 iterations by default: the second set's own budget, not the first set's. Its solves
+have one variable per meterset, so they cost seconds. The first set's budget is sized for thousands of beamlets; at
+200 iterations, none of TG-119's five second-set plans converged, and the set's error bound stayed at 0.80.
 
 **In a protocol.** The `mco` section's `second_set` (default on) navigates the second set automatically by the same
 goals and makes that state the plan. The run's `mco_id`, `state_id` and `deliverable_id` are then the second set's;

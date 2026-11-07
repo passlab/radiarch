@@ -1454,3 +1454,25 @@ Design: `docs/reports/mlc-leaf-model.md`, agreed with the project lead on 2026-1
   makes its balance plan the plan; radiarch's browser test clicks the button. `viewer.ref` moves to radiarch-ohif
   `150b05a`.
 - **Open.** The 4 mm lung and TG-119 reruns on the compute server are next, with the R8–R10 cases the parking changes.
+
+## R11.11: two fixes from the rerun (2026-11-06)
+
+- **What the rerun found.** On the compute server, `mco_front_tg119` failed one new check: the plan made on the
+  second set was not deliverable. The run's work files were not kept, so the plan's notes are gone. The likely cause:
+  - a segment that every plan of the second set holds at the 2 MU minimum;
+  - a blend of plans whose weights sum to 1 only to rounding, which puts that segment just below 2 MU (weights 0.7,
+    0.2 and 0.1 give 1.9999999999999998);
+  - the static deliverability check, which has no tolerance, while the arc check has one.
+  In the same run, none of the second set's five plans converged at the case's 200 iterations, and the set's error
+  bound stayed at 0.80. Every other check passed. The plan on the second set kept the navigated dose exactly
+  (normalisation 1.002) and lowered the core's D5 from 22.40 Gy to 19.23 Gy at the same coverage.
+- **The blend's metersets.** `mco_apertures.blend_metersets` puts a meterset below the machine's minimum by rounding
+  back at the minimum, within the arc check's tolerance (1e-6 of the minimum). A meterset below it by more stays, and
+  the deliverability check flags it.
+- **The second set's own budget.** `ApertureSetRequest.solver` defaults to L-BFGS-B with 2000 iterations. `mco_front`
+  and a protocol's second set use it rather than the first set's budget. The second set's solves have one variable
+  per meterset (70 for TG-119), so the larger budget costs seconds.
+- `APERTURE_SET_VERSION` is 2, so cached second sets and the plans made on them are made again.
+- **Tests.** `tests/test_r11_apertures.py`: three plans hold a segment at a 2 MU minimum, and the blend 0.7, 0.2, 0.1
+  is flagged without the fix and deliverable with it.
+- **Open.** TG-119's rerun on the compute server.

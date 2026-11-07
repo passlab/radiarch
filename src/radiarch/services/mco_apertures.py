@@ -15,7 +15,8 @@ blend has its dose computed by the engine with the full kernel, as the VMAT step
 for the set.
 
 Every meterset stays at or above the machine's minimum (a segment's minimum MU, an interval's dose-rate floor), so the
-solves run on the metersets above it. The limits are the first set's hard constraints and, when the deliverable plan
+solves run on the metersets above it, and a blend's metersets are put back at the minimum where rounding takes them
+below it (:func:`blend_metersets`). The limits are the first set's hard constraints and, when the deliverable plan
 was made with ``hard_coverage``, the target's gEUD (a = -10) no lower than the deliverable plan's own and its maximum
 at or below ``max_dose_factor`` times the prescription. Where no metersets on these apertures meet a limit with the
 others, the feasibility run from the deliverable plan says so: the limit is relaxed to what that run reaches, and a
@@ -147,6 +148,17 @@ def element_dose(el: ApertureElements, z: np.ndarray, prob, mreq) -> np.ndarray:
     params["fluence"] = "apertures"
     dose = engine.compute_plan_dose(prob.geometry.density, prob.geometry.spacing_mm, _origin(prob.geometry), el.with_metersets(z), params=params)
     return np.asarray(dose, dtype=np.float32).reshape(prob.grid_shape)
+
+
+def blend_metersets(blend, weights: np.ndarray, lower: np.ndarray) -> np.ndarray:
+    """The metersets of a blend of a second set's plans. Every plan's metersets are at or above the machine's minimum,
+    and so are a blend's; but its weights sum to 1 only to rounding and the plans are stored in float32, so a meterset
+    held at the minimum by every plan can come out below it by rounding. Those are put back at the minimum. A meterset
+    below it by more stays, and the deliverability check flags it."""
+    z = np.asarray(blend, dtype=np.float64) @ np.asarray(weights, dtype=np.float64)
+    lower = np.asarray(lower, dtype=np.float64)
+    rounding = (z < lower) & (z >= lower * (1 - 1e-6) - 1e-9)       # the tolerance of the arc check (vmat.arc_report)
+    return np.where(rounding, lower, z)
 
 
 def _noop(*_args) -> None:
@@ -287,9 +299,9 @@ def deliver_on_apertures(dsvc, mco_id: str, result: MCOResult, request: Delivera
     if d is None:
         raise ValueError(f"the second set's deliverable plan {result.source_deliverable_id} is gone")
     lam = np.asarray(state.blend, dtype=np.float64)
-    z = lam @ dsvc.mco.store.load_weights(mco_id).astype(np.float64)
     _, mreq, prob = dsvc.mco.problem(d.mco_id)
     el = deliverable_elements(d)
+    z = blend_metersets(lam, dsvc.mco.store.load_weights(mco_id), el.lower)
     notes = [f"the metersets of state {state.state_id} on the apertures of deliverable plan {d.deliverable_id}"]
     if request.project:
         notes.append("not projected: a second set's blend is already a deliverable plan")
@@ -341,4 +353,4 @@ def deliver_on_apertures(dsvc, mco_id: str, result: MCOResult, request: Delivera
 
 
 __all__ = ["ApertureSetService", "ApertureSetRefused", "ApertureElements", "deliverable_elements", "element_matrix", "element_dose",
-           "deliver_on_apertures", "METERSETS_PREFIX"]
+           "blend_metersets", "deliver_on_apertures", "METERSETS_PREFIX"]

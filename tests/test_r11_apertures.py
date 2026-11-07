@@ -107,6 +107,28 @@ def test_the_second_set_starts_from_the_deliverable_plan(rx):
     np.testing.assert_allclose(element_dose(el, el.z0, prob, mreq), delivered, rtol=1e-4, atol=1e-5)
 
 
+def test_a_blend_of_plans_at_the_minimum_is_deliverable(rx):
+    """Three plans hold a segment at a 2 MU minimum; weights 0.7, 0.2 and 0.1 blend it to 1.9999999999999998 MU, which
+    the static check flags. The blend's metersets are put back at the minimum; a meterset below it by more than
+    rounding stays below."""
+    import dataclasses
+
+    from radiarch.services.mco_apertures import blend_metersets, deliverable_elements
+    from radiarch.services.mco_deliverable import DeliverableService
+
+    ps, plan = _first(rx)
+    el = deliverable_elements(DeliverableService().store.get_by_id(plan.id))
+    floor = dataclasses.replace(el, machine=el.machine.model_copy(update={"min_mu_per_segment": 2.0}), lower=np.full(el.z0.size, 2.0))
+    W = np.stack([np.maximum(el.z0, 2.0) * f for f in (1.0, 1.1, 1.2)]).astype(np.float32)
+    W[:, 0] = 2.0
+    lam = [0.7, 0.2, 0.1]
+    raw = np.asarray(lam) @ W.astype(np.float64)
+    assert raw[0] < 2.0 and any("MU" in i for i in floor.issues(floor.with_metersets(raw)))
+    z = blend_metersets(lam, W, floor.lower)
+    assert z[0] == 2.0 and np.array_equal(z[1:], raw[1:]) and floor.issues(floor.with_metersets(z)) == []
+    assert blend_metersets([0.5, 0.5], np.asarray([[2.0], [1.9]]), np.asarray([2.0]))[0] == pytest.approx(1.95)
+
+
 def test_a_limit_the_apertures_cannot_meet_is_relaxed_with_a_note(rx, monkeypatch):
     import radiarch.services.mco_apertures as mod
 

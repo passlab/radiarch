@@ -554,8 +554,8 @@ class AutoplanService:
             from .mco_apertures import ApertureSetService
 
             on(AutoplanStage.pareto, 0.8, "a second set on the deliverable plan's apertures")
-            second = ApertureSetService(mco_service=mco, deliverable_service=dsvc).run(d.deliverable_id, ApertureSetRequest(
-                requested_by=requested_by, solver=SolverConfig(method="L-BFGS-B", max_iterations=protocol.iterations)))
+            second = ApertureSetService(mco_service=mco, deliverable_service=dsvc).run(d.deliverable_id,
+                                                                                       ApertureSetRequest(requested_by=requested_by))
             on(AutoplanStage.navigating, 0.85, f"{len(second.plans)} plans on the apertures; navigating by the goals' priorities")
             state2 = NavigationService(mco.store).auto_navigate(second.mco_id, AutoNavigateRequest(
                 requested_by=requested_by, goals=goal_set, prescription_gy=rx, fractions=fx, name=f"protocol {protocol.protocol_id}, on its apertures"))

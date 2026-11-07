@@ -319,7 +319,9 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   calibration, and each meterset round's constraint values in the record (about 0.75 ew). 2026-11-06: built
   (`POST /mco/deliverables/{id}/pareto`, `MCOPlan.pareto()`, a protocol's `mco.second_set`, the rounds' limits and
   values; design note "B1 as built"; the viewer panel's "Navigate again on its apertures"), with closed leaf pairs
-  parked under an X jaw; the 4 mm lung and TG-119 reruns on the compute server follow
+  parked under an X jaw; the 4 mm lung and TG-119 reruns on the compute server follow. 2026-11-06: the rerun's
+  TG-119 plan on the second set was not deliverable (a blend's metersets below the minimum by rounding), and the
+  second set had not converged at the first set's budget; both fixed, TG-119's rerun next
 - [x] (2026-11-02) A protocol's evaluation template follows the protocol's prescription: the template's target rows
   scaled when the prescriptions differ (`GoalSetSpec.scale_to_prescription`), organ rows unchanged
 - [x] (2026-11-01) A recomputed imported photon plan goes through its apertures: a VMAT plan's RT Plan had
