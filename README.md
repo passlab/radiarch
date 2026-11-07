@@ -592,6 +592,14 @@ by mimicking its dose: apertures for static fields, arcs when given, the spots t
 the metersets are also driven by the goals and a hot-spot term in reweighting rounds. A deviation table compares
 the deliverable plan with the navigated one and flags what got worse. Design: `docs/reports/mco-research-and-design.md`.
 
+**A second set on the deliverable plan's apertures** (R11.11): a small Pareto set over a deliverable photon plan's
+segment or arc-interval metersets, with the first set's trade-offs. Every plan in it keeps the plan's apertures, so a
+state navigated on it is a plan a machine can deliver, and making it deliverable changes only the metersets (static
+fields: the plan's dose is the navigated dose exactly; arcs: the full kernel's dose of what navigation showed with the
+pencil beam's interval doses). Its limits are the first set's hard constraints, the target's coverage no worse than the
+deliverable plan's and its maximum at `max_dose_factor` times the prescription; one the apertures cannot meet is
+relaxed to what the feasibility run reaches, with a note. Metersets stay at or above the machine's minimum.
+
 **Robust MCO** (`robustness`: scenarios, as in robust optimization): each plan minimizes the worst scenario of its
 weighted sum, hard constraints hold in every scenario, and every trade-off value is its worst case over the scenarios,
 with its nominal value beside it (`nominal_gy`). Goals are graded on the nominal dose with their worst case
@@ -610,6 +618,7 @@ it. A robust set is made deliverable for protons only (422 for photons).
 | `POST /api/v1/mco/{mco_id}/deliverable` | A state made deliverable (200 cached / 202 job): apertures or `arcs` mimicking its dose (`project` first, optional), goal-driven `rounds`, optional `normalise`, the deviation table. |
 | `GET /api/v1/mco/deliverables/{id}` | The deliverable plan (beam model, dose, technique) and its deviation table; `/deliverables/jobs/{job_id}` its job. |
 | `GET /api/v1/mco/deliverables?dose_id=` | The deliverable plans that made a dose (or `beam_model_id`), newest first: how the viewer finds a plan's Pareto set. |
+| `POST /api/v1/mco/deliverables/{id}/pareto` | A second set over the plan's metersets (200 cached / 202 job, polled at `/mco/jobs/{job_id}`; 422 for a proton plan or a plan of a second set); navigated, and made the plan, by the routes above. |
 
 ```python
 from radiarch.sdk import Radiarch, ops
@@ -624,7 +633,10 @@ auto = ps.auto_navigate("rtog-0617", prescription_gy=60, fractions=30)
 [(lv.priority, lv.passed, lv.goals) for lv in auto.levels]
 plan = ps.deliverable(auto, goals="rtog-0617", prescription_gy=60, normalise={"structure": "PTV", "metric": "D95", "gy": 60})
 plan.deviation_table()          # navigated, projected and deliverable value of every trade-off and goal, flagged ones
-plan.export(label="MCO", prescription={"dose_gy": 60, "fractions": 30})
+second = plan.pareto()          # R11.11: a second set on the plan's apertures
+final = second.deliverable(second.auto_navigate("rtog-0617", prescription_gy=60), goals="rtog-0617", prescription_gy=60,
+                           normalise={"structure": "PTV", "metric": "D95", "gy": 60})
+final.export(label="MCO", prescription={"dose_gy": 60, "fractions": 30})
 
 robust = proton_beam_model.mco([ops.uniform_rms("CTV", 60), ops.mean_dose("Parotid_L")], hard_constraints=[ops.hard("CTV", "Dmin", ">=", 57)],
                                robustness={"enabled": True, "scenarios": [{"name": "range+3%", "range_scale": 1.03},
@@ -635,8 +647,10 @@ robust.table()                  # worst-case values, and "<name> nominal" column
 **In a protocol** (an `mco` section): `radiarch plan` computes the Pareto set of the section's trade-offs on the
 protocol's beams, navigates it automatically by the protocol's goals (the main target's at priority 1, the others at 2,
 or the section's `navigation_goals`), and makes the navigated state deliverable, normalised to the coverage goal, in
-place of the reweighting rounds. The run keeps `mco_id`, `state_id` and `deliverable_id`; the command prints the set,
-the state to navigate from, and any flagged deviation; `run.pareto_set()` in the SDK.
+place of the reweighting rounds. With the section's `second_set` (the default) that plan is navigated again on its own
+apertures by the same goals, and that state is the plan. The run keeps `mco_id`, `state_id` and `deliverable_id` (the
+second set's, whose `source_deliverable_id` leads back to the first); the command prints both sets, the state to
+navigate from, and any flagged deviation; `run.pareto_set()` in the SDK.
 
 ```json
 "mco": {"tradeoffs": [{"type": "UniformRMS", "structure_name": "PTV", "dose_gy": 60, "weight": 1},
@@ -649,7 +663,8 @@ the state to navigate from, and any flagged deviation; `run.pareto_set()` in the
 **In the viewer:** the plan review mode's MCO panel finds the Pareto set behind the dose on screen. Each trade-off has a
 slider and a value field over its range, and a lock. A move shows the new state's values, goals and DVHs. Automatic
 navigation works by a goal template. "Make deliverable" shows the deviation table, and "Export and open" writes the plan
-beside the one on screen and sends it to the image server.
+beside the one on screen and sends it to the image server. "Navigate again on its apertures" moves the panel to the
+second set on that plan's apertures.
 
 ## BAO Service (`/api/v1/bao`)
 

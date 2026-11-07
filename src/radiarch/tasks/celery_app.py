@@ -88,6 +88,12 @@ celery_app.conf.task_annotations = {
         "time_limit": settings.optimization_hard_time_limit_s,
         "rate_limit": settings.optimize_rate_limit,
     },
+    "radiarch.mco.apertures": {
+        # A second set: arcs recompute their interval doses once, then up to 4 N + 1 small solves: the optimization budget.
+        "soft_time_limit": settings.optimization_soft_time_limit_s,
+        "time_limit": settings.optimization_hard_time_limit_s,
+        "rate_limit": settings.optimize_rate_limit,
+    },
     "radiarch.mco.run": {
         # A Pareto set is up to 4 N + 1 optimizations on one dose matrix: the beam-angle budget.
         "soft_time_limit": settings.bao_soft_time_limit_s,

@@ -174,13 +174,14 @@ def rx(env, monkeypatch):  # noqa: F811
     from radiarch.api.routes import mco as routes
     from radiarch.sdk import Radiarch
 
-    routes._service.cache_clear()
-    routes._navigation.cache_clear()
+    caches = (routes._service, routes._navigation, routes._deliverables, routes._apertures)
+    for c in caches:
+        c.cache_clear()
     monkeypatch.setattr(radiarch_app, "init_db", lambda: None)
     with Radiarch.local(poll_interval=0.01) as client:
         yield client
-    routes._service.cache_clear()
-    routes._navigation.cache_clear()
+    for c in caches:
+        c.cache_clear()
 
 
 def test_navigation_through_the_sdk(rx):

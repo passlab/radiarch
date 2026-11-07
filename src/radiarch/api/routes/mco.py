@@ -12,6 +12,8 @@ Endpoints
 ``POST /api/v1/mco/{mco_id}/deliverable``         — a state made deliverable: the cached plan (200) or a job (202).
 ``GET  /api/v1/mco/deliverables/jobs/{job_id}``   — its progress.
 ``GET  /api/v1/mco/deliverables/{deliverable_id}`` — the deliverable plan and its deviation table.
+``POST /api/v1/mco/deliverables/{deliverable_id}/pareto`` — a second Pareto set over its metersets (R11.11): the cached
+set (200) or a job (202, polled at ``/mco/jobs/{job_id}``); navigated and made deliverable by the routes above.
 """
 
 from __future__ import annotations
@@ -23,9 +25,11 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
 from ...core.store import store
-from ...models.mco import AutoNavigateRequest, DeliverableJobStatus, DeliverableRequest, MCODeliverable, MCOJobStatus, MCORunRequest, MCOResult, NavigateRequest, NavigationState
+from ...models.mco import (ApertureSetRequest, AutoNavigateRequest, DeliverableJobStatus, DeliverableRequest, MCODeliverable, MCOJobStatus,
+                           MCORunRequest, MCOResult, NavigateRequest, NavigationState)
 from ...services.audit import emit, make_event
 from ...services.mco import MCOService
+from ...services.mco_apertures import ApertureSetRefused, ApertureSetService
 from ...services.mco_deliverable import DeliverableRefused, DeliverableService
 from ...services.navigation import NavigationError, NavigationService
 from ..security import api_key_auth, requester
@@ -46,6 +50,11 @@ def _navigation() -> NavigationService:
 @lru_cache(maxsize=1)
 def _deliverables() -> DeliverableService:
     return DeliverableService(mco_service=_service())
+
+
+@lru_cache(maxsize=1)
+def _apertures() -> ApertureSetService:
+    return ApertureSetService(mco_service=_service(), deliverable_service=_deliverables())
 
 
 def _known(mco_id: str) -> None:
@@ -112,6 +121,36 @@ async def get_deliverable(deliverable_id: str) -> MCODeliverable:
     if result is None:
         raise HTTPException(status_code=404, detail=f"Deliverable plan not found: {deliverable_id}")
     return result
+
+
+@router.post("/deliverables/{deliverable_id}/pareto", summary="A second Pareto set over a deliverable plan's metersets (R11.11).",
+             responses={200: {"description": "Made before: the stored set."}, 202: {"description": "A job: poll /mco/jobs/{job_id}."},
+                        404: {"description": "Unknown deliverable plan."},
+                        422: {"description": "A proton plan (its spots are its plan), or a plan of a second set."}})
+async def aperture_set(deliverable_id: str, request: ApertureSetRequest, response: Response,
+                       api_key_prefix: Optional[str] = Depends(api_key_auth), user: Optional[str] = Depends(requester)):
+    """Every plan of the second set keeps the deliverable plan's apertures, so a blend of them, navigated with
+    ``/mco/{mco_id}/navigate`` or ``/auto-navigate``, is deliverable as shown; ``/mco/{mco_id}/deliverable`` makes it
+    the plan (its metersets, dose, normalisation and deviation table)."""
+    request = request.model_copy(update={"requested_by": user})
+    try:
+        key = _apertures().cache_key(deliverable_id, request)
+    except KeyError:
+        raise HTTPException(status_code=404, detail=f"Deliverable plan not found: {deliverable_id}")
+    except ApertureSetRefused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    cached = _service().store.lookup_by_cache_key(key)
+    if cached is not None:
+        response.status_code = status.HTTP_200_OK
+        return cached
+    job = store.create_mco_job(key)
+    from ...tasks.mco_tasks import run_aperture_set_job
+
+    run_aperture_set_job.delay(job.id, deliverable_id, request.model_dump(mode="json"))
+    response.status_code = status.HTTP_202_ACCEPTED
+    emit(make_event("mco.apertures", state="dispatched", cache_key=key, api_key_prefix=api_key_prefix,
+                    extra={"job_id": job.id, "deliverable_id": deliverable_id}))
+    return MCORunResponse(job_id=job.id, cache_key=key)
 
 
 @router.get("/jobs/{job_id}", response_model=MCOJobStatus, summary="An MCO run's progress.")

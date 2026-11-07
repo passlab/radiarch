@@ -83,3 +83,46 @@ A first. It is small, it makes the deliverable plans acceptable, and it gives th
 reuses A's constrained meterset solve as the second stage. B2 only if the deviation tables after A and B1 still show
 gaps that matter. Each step is checked on the lung case at 4 mm before it is called done, and the R11 record gets its
 dated correction once a run passes.
+
+## B1 as built (R11.11, 2026-11-06)
+
+Option A was built first (R11.9) and corrected the lung case's normalisation. B1 follows, as recommended.
+
+**The second set.** `POST /mco/deliverables/{id}/pareto` builds a small Pareto set over a deliverable photon plan's
+metersets: the segment MU of static fields, or the interval MU of arcs (`services/mco_apertures.py`). Its trade-offs
+are the first set's, and it is stored like any Pareto set, so navigation, automatic navigation and
+`POST /mco/{id}/deliverable` work on it unchanged. Every plan keeps the deliverable plan's apertures, so a blend of
+plans is a meterset vector on those apertures. Making a navigated state the plan changes only the metersets.
+
+**Its dose.** Static fields: the open-field dose matrix times each segment's coverage of the beamlets, the
+sequencer's own computation. The plan's dose is therefore the navigated dose exactly (a test holds it to 1e-3 Gy).
+Arcs: the pencil beam's dose per MU of each control-point interval, which the VMAT meterset solve also uses. The plan's
+dose is then the full kernel's, as for any arc plan, so the deviation table measures the difference.
+
+**Its limits.**
+- The first set's hard constraints.
+- With `hard_coverage`, the target's gEUD (a = -10) no lower than the deliverable plan's own, and the target's maximum at
+  or below `max_dose_factor` times the prescription. Both hold within 1 % of their level.
+- Every meterset at or above the machine's minimum (a segment's minimum MU, an interval's dose-rate floor). The solves
+  run on the metersets above it.
+
+A feasibility run starts from the deliverable plan. Where it cannot meet a limit with the others, that limit is relaxed
+to the value the run reaches, and a note names it. The second set therefore always exists, and no plan in it is worse
+than that run on any limit. A blend keeps every convex limit, so the navigated plan keeps the coverage too, and its
+normalisation is a check near 1.
+
+**In a protocol.** The `mco` section's `second_set` (default on) navigates the second set automatically by the same
+goals and makes that state the plan. The run's `mco_id`, `state_id` and `deliverable_id` are then the second set's;
+its `source_deliverable_id` leads back to the first.
+
+**With it, the two follow-ups of the R11 correction:**
+- *The maximum's limit divided by the normalisation.* A meterset round within the normalisation band whose target
+  maximum, once normalised, passes its limit is no longer accepted. The next round keeps the coverage level and takes
+  the maximum's limit divided by that normalisation. The kept round prefers one whose normalised maximum holds.
+- *Each round's constraint values in the record.* Every round keeps its coverage and maximum limits, the gEUD and
+  maximum reached, the maximum once normalised, and each constraint's excess.
+
+**Closed leaf pairs.** These now wait 10 mm behind an X jaw, under the jaw's 0.2 % transmission. Before, they waited at
+the edge of the field (static fields) or at its centre (arc pairs that never open). Touching rounded tips leak a line of
+up to 16 % of the open dose (`docs/reports/mlc-leaf-model.md`). An arc pair that opens in some sectors still waits
+where its sweep leaves it. A machine without interdigitation keeps its closed pairs where the sequencer closed them.

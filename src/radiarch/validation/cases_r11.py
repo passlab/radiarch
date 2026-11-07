@@ -8,6 +8,10 @@ bound followed as plans are added; the set is navigated automatically by TG-119'
 reweighting rounds of the protocol it extends, compared goal by goal; the navigated plan against its deliverable plans
 (static fields and two arcs); plans and minutes against the error bound.
 
+In both, the deliverable plan is then navigated again on its own apertures (R11.11, :func:`_second_set_checks`): a
+second set over its metersets, checked like any set, its state made the plan, and each trade-off and goal followed
+from the first navigation to that plan.
+
 ``mco_robust``: a proton phantom (a target, an organ behind it, a bone slab over half the anterior field) as a
 robust Pareto set on MCsquare: worst-case and nominal values, the hard constraint in every scenario, robust plans
 against the nominal set's plans in the scenarios, navigation and the deliverable spots.
@@ -159,8 +163,54 @@ def _deviation_checks(res: CaseResult, label: str, d) -> None:
                 0.85 <= d.normalisation <= 1.15,
                 "the metersets as optimized cover the target nearly as navigated; a larger factor inflates the hot spots "
                 "(the record of 2026-10-31 found 1.17 and 1.42 on the lung patient)")
-        res.add(f"{label}: meterset rounds", len(d.rounds), "informative", None,
-                "; ".join(f"round {r['round']}: normalisation {r['normalisation']}, failed {r['failed'] or 'none'}" for r in d.rounds))
+        if d.rounds:
+            res.add(f"{label}: meterset rounds", len(d.rounds), "informative", None, "; ".join(_round_text(r) for r in d.rounds))
+
+
+def _round_text(r: dict) -> str:
+    """One meterset round: its normalisation and failed goals; with the coverage limits, the limits and what was reached."""
+    text = f"round {r['round']}: normalisation {r['normalisation']}, failed {r['failed'] or 'none'}"
+    if "coverage_gy" in r:
+        over = {k: v for k, v in (r.get("hard_constraints") or {}).items() if v}
+        text += (f", limits gEUD >= {r['coverage_gy']} and Dmax <= {r['max_gy']} Gy, reached gEUD {r['geud_gy']} and Dmax {r['dmax_gy']} "
+                 f"({r['dmax_normalised_gy']} normalised)" + (f", short by {over}" if over else ""))
+    return text + (" (kept)" if r.get("kept") else "")
+
+
+def _worse(row, a: float, b: float) -> float:
+    """How much worse ``b`` is than ``a`` for a deviation row: a trade-off or an upper goal is worse higher, a lower goal
+    (``>=``) worse lower."""
+    return (a - b) if row.kind == "goal" and (" >= " in row.name or " > " in row.name) else (b - a)
+
+
+def _second_set_checks(res: CaseResult, label: str, first_plan, second, plan, store) -> dict:
+    """R11.11: the second set on the first deliverable plan's apertures, its navigated state made the plan, and each
+    trade-off and goal from the first navigation to the plan."""
+    front = _set_checks(res, f"{label}: second set", second, store)
+    res.add(f"{label}: second set", f"{len(second.plans)} plans on {len(np.load(second.weights_uri)[0])} {second.elements}",
+            "informative", None, "; ".join(second.notes))
+    _deviation_checks(res, f"{label}: plan on the second set", plan)
+    rows = {r.name: r for r in plan.deviation}
+    for r in first_plan.deviation:
+        s = rows.get(r.name)
+        if s is None or None in (r.navigated, r.deliverable, s.navigated, s.deliverable):
+            continue
+        res.add(f"{label}: {r.name} navigated → deliverable → second navigation → plan ({r.unit})",
+                f"{r.navigated:.2f} → {r.deliverable:.2f} → {s.navigated:.2f} → {s.deliverable:.2f}", "informative", None,
+                f"the plan against the first navigation: worse by {_worse(r, r.navigated, s.deliverable):.2f} "
+                f"(the first deliverable plan: {_worse(r, r.navigated, r.deliverable):.2f})")
+    return {"front": front, "deliverable_id": plan.deliverable_id, "dose_id": plan.dose_id, "flagged": plan.flagged,
+            "normalisation": plan.normalisation, "seconds": second.compute_time_s + plan.seconds}
+
+
+def _stages(dsvc, msvc, deliverable_id: str):
+    """``(first set, first deliverable plan, second set or None, plan)`` from a run's deliverable plan."""
+    plan = dsvc.store.get_by_id(deliverable_id)
+    second = msvc.store.get_by_id(plan.mco_id)
+    if second is None or not second.source_deliverable_id:
+        return second, plan, None, plan
+    first_plan = dsvc.store.get_by_id(second.source_deliverable_id)
+    return msvc.store.get_by_id(first_plan.mco_id), first_plan, second, plan
 
 
 # ---------------------------------------------------------------------------
@@ -230,41 +280,60 @@ def run_mco_front(spec: dict, ctx: Context) -> CaseResult:
         res.add(f"navigated: {g.structure} {g.metric} {g.op} {g.value}", round(float(g.achieved), 2) if g.achieved is not None else None,
                 f"{g.op} {g.value}", None, "the navigated blend (not yet deliverable)")
     cover = next(g for g in case["goals"] if g["op"].startswith(">"))
-    d = DeliverableService(mco_service=msvc).run(mco.mco_id, DeliverableRequest(
+    dsvc = DeliverableService(mco_service=msvc)
+    dreq = DeliverableRequest(
         state_id=state.state_id, fractions=1, levels=int(spec.get("sequence_levels", 10)), machine_model_id=spec.get("machine", "synthetic-120"),
         max_iterations=int(spec.get("iterations", 200)), goals=goals, prescription_gy=rx,
-        normalise=NormaliseSpec(structure=cover["structure"], metric=cover["metric"], gy=cover["gy"] * NORMALISATION_HEADROOM)))
+        normalise=NormaliseSpec(structure=cover["structure"], metric=cover["metric"], gy=cover["gy"] * NORMALISATION_HEADROOM))
+    d = dsvc.run(mco.mco_id, dreq)
     _deviation_checks(res, "deliverable (static fields)", d)
-    res.metrics["deliverable"] = {"deliverable_id": d.deliverable_id, "dose_id": d.dose_id, "flagged": d.flagged, "normalisation": d.normalisation}
+    res.metrics["deliverable"] = {"deliverable_id": d.deliverable_id, "dose_id": d.dose_id, "flagged": d.flagged, "normalisation": d.normalisation,
+                                  "rounds": d.rounds}
 
     # the deliverable plan against TG-119's goals and the institutions' results (as tg119_planning grades them)
     from ..services.dose import DoseService
     from .cases_r7 import _read_volume
-    dose = _read_volume(DoseService().dose_store.get_by_id(d.dose_id).dose_grid_uri)
     pub = ref.get("published", {}).get(spec["case"], {})
     recorded = {}
     if spec.get("record") and (RADIARCH_ROOT / spec["record"]).is_file():
         import json
         prior_run = json.loads((RADIARCH_ROOT / spec["record"]).read_text(encoding="utf-8"))
         recorded = {c["name"]: c for r in prior_run["results"] if r["kind"] == "tg119_planning" for c in r["checks"]}
-    for g in case["goals"]:
-        st = g["structure"]
-        value = _goal_value(dose[arrays.mask_zyx(arrays.structure_index[st])], g["metric"])
-        op, limit = g["op"], float(g["gy"])
-        met = value >= limit - 1e-6 if op.startswith(">") else value <= limit + 1e-6
-        passed, target_text, note = met, f"{op} {limit}", "TG-119 planning goal"
-        if f"{st} {g['metric']}" in pub:
-            mean, sd = pub[f"{st} {g['metric']}"]
-            bound = max(limit, mean + 2 * sd) if not op.startswith(">") else min(limit, mean - 2 * sd)
-            passed = met or (value <= bound + 1e-6 if not op.startswith(">") else value >= bound - 1e-6)
-            if bound != limit:
-                target_text = f"{op} {limit} (or {op} {bound:.2f}: institutional mean {mean} ± 2 SD)"
-            note += f"; institutional mean {mean} (SD {sd})"
-        res.add(f"deliverable: {st} {g['metric']} (Gy)", round(value, 2), target_text, passed, note)
-        prior = recorded.get(f"{spec['case']}: {st} {g['metric']} (Gy)")
-        if prior is not None:
-            res.add(f"deliverable against the recorded reweighting plan: {st} {g['metric']} (Gy)", f"{value:.2f} vs {prior['value']}", "informative", None,
-                    "the tg119_planning case's plan in the record named by the case (fluence, four reweighting rounds)")
+
+    def grade(dose_id: str, label: str) -> None:
+        dose = _read_volume(DoseService().dose_store.get_by_id(dose_id).dose_grid_uri)
+        for g in case["goals"]:
+            st = g["structure"]
+            value = _goal_value(dose[arrays.mask_zyx(arrays.structure_index[st])], g["metric"])
+            op, limit = g["op"], float(g["gy"])
+            met = value >= limit - 1e-6 if op.startswith(">") else value <= limit + 1e-6
+            passed, target_text, note = met, f"{op} {limit}", "TG-119 planning goal"
+            if f"{st} {g['metric']}" in pub:
+                mean, sd = pub[f"{st} {g['metric']}"]
+                bound = max(limit, mean + 2 * sd) if not op.startswith(">") else min(limit, mean - 2 * sd)
+                passed = met or (value <= bound + 1e-6 if not op.startswith(">") else value >= bound - 1e-6)
+                if bound != limit:
+                    target_text = f"{op} {limit} (or {op} {bound:.2f}: institutional mean {mean} ± 2 SD)"
+                note += f"; institutional mean {mean} (SD {sd})"
+            res.add(f"{label}: {st} {g['metric']} (Gy)", round(value, 2), target_text, passed, note)
+            prior = recorded.get(f"{spec['case']}: {st} {g['metric']} (Gy)")
+            if prior is not None:
+                res.add(f"{label} against the recorded reweighting plan: {st} {g['metric']} (Gy)", f"{value:.2f} vs {prior['value']}", "informative",
+                        None, "the tg119_planning case's plan in the record named by the case (fluence, four reweighting rounds)")
+
+    grade(d.dose_id, "deliverable")
+    if spec.get("second_set", True):
+        # R11.11: a second set on the deliverable plan's apertures, navigated by the same goals; that state is the plan
+        from ..models.mco import ApertureSetRequest
+        from ..services.mco_apertures import ApertureSetService
+
+        second = ApertureSetService(mco_service=msvc, deliverable_service=dsvc).run(d.deliverable_id, ApertureSetRequest(
+            solver=SolverConfig(method="L-BFGS-B", max_iterations=mreq.solver.max_iterations)))
+        state2 = NavigationService(msvc.store).auto_navigate(second.mco_id, AutoNavigateRequest(goals=goals, prescription_gy=rx, fractions=1,
+                                                                                               name="TG-119 goals, on the apertures"))
+        plan = dsvc.run(second.mco_id, dreq.model_copy(update={"state_id": state2.state_id}))
+        res.metrics["second_set"] = _second_set_checks(res, "static fields", d, second, plan, msvc.store)
+        grade(plan.dose_id, "plan on the second set")
     res.notes.append("the deliverable plan's dose is recomputed by the engine from its sequenced apertures; TG-119's institutional "
                      "results are deliverable plans too")
     return res
@@ -330,14 +399,16 @@ def run_mco_protocol(spec: dict, ctx: Context) -> CaseResult:
                     ("MCO no worse" if better else "MCO worse") + f"; reweighting plan {'meets' if b.passed else 'misses'} it")
     m = runs["mco"]
     msvc = MCOService()
-    mco = msvc.store.get_by_id(m.mco_id)
+    dsvc = DeliverableService(mco_service=msvc)
+    # the run's plan is the second set's (R11.11) when the protocol asks for one: the first set and plan lie behind it
+    mco, d_imrt, second, plan = _stages(dsvc, msvc, m.deliverable_id)
     res.metrics["front"] = _set_checks(res, "Pareto set", mco, msvc.store)
     res.metrics["runs"] = {k: {"run_id": r.run_id, "seconds": r.seconds, "normalisation": r.normalisation, "history": r.history,
                                "goals": [g.model_dump() for g in r.goals]} for k, r in runs.items()}
     res.metrics["goals"] = {"reweighting": {k: v.model_dump() for k, v in ev_b.items()}, "mco": {k: v.model_dump() for k, v in ev_m.items()}}
-    dsvc = DeliverableService(mco_service=msvc)
-    d_imrt = dsvc.store.get_by_id(m.deliverable_id)
     _deviation_checks(res, "deliverable (seven static fields)", d_imrt)
+    if second is not None:
+        res.metrics["second_set_imrt"] = _second_set_checks(res, "seven static fields", d_imrt, second, plan, msvc.store)
     if spec.get("arcs"):
         # arcs need a Pareto set on the arcs' sectors (a static-field set cannot be swept into arcs): the same protocol
         # with the arcs as its beams, its own set, navigation and deliverable plan
@@ -349,18 +420,20 @@ def run_mco_protocol(spec: dict, ctx: Context) -> CaseResult:
             rv = AutoplanService().run(ProtocolRunRequest(geometry_id=geo.geometry_id, protocol=vmat))
             res.add(f"{vmat.protocol_id}: deliverable", rv.deliverable, "True", rv.deliverable,
                     f"normalised by {rv.normalisation:.4f}; {rv.seconds / 60:.1f} min")
-            mv = msvc.store.get_by_id(rv.mco_id)
+            mv, d_vmat, second_v, plan_v = _stages(dsvc, msvc, rv.deliverable_id)
             res.metrics["front_arcs"] = _set_checks(res, "Pareto set on the arcs' sectors", mv, msvc.store)
-            d_vmat = dsvc.store.get_by_id(rv.deliverable_id)
             _deviation_checks(res, "deliverable (two arcs)", d_vmat)
+            if second_v is not None:
+                res.metrics["second_set_vmat"] = _second_set_checks(res, "two arcs", d_vmat, second_v, plan_v, msvc.store)
             for name, g in _template_goals(rv.evaluation_id).items():
                 res.add(f"{name}: MCO plan (two arcs)", round(float(g.achieved), 2), f"{g.op} {g.value}",
                         bool(g.passed) if int(g.priority) == 1 else None, f"{protocol.evaluation_template} priority {g.priority}")
             res.metrics["deliverable_vmat"] = {"run_id": rv.run_id, "deliverable_id": d_vmat.deliverable_id, "seconds": rv.seconds,
-                                               "flagged": d_vmat.flagged}
+                                               "flagged": d_vmat.flagged, "rounds": d_vmat.rounds}
         except Exception as exc:  # noqa: BLE001  (the static-field results above stay in the record)
             res.add("the arcs' Pareto set and deliverable plan", f"{type(exc).__name__}: {exc}"[:300], "made", False)
-    res.metrics["deliverable_imrt"] = {"deliverable_id": d_imrt.deliverable_id, "seconds": d_imrt.seconds, "flagged": d_imrt.flagged}
+    res.metrics["deliverable_imrt"] = {"deliverable_id": d_imrt.deliverable_id, "seconds": d_imrt.seconds, "flagged": d_imrt.flagged,
+                                       "rounds": d_imrt.rounds}
     return res
 
 

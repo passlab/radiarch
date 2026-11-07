@@ -1405,3 +1405,52 @@ Design: `docs/reports/mlc-leaf-model.md`, agreed with the project lead on 2026-1
   closes or another dose comes on screen. Six offline tests (a fake API and a fake clock) in radiarch-ohif's CI.
 - **Open.** A second request for a deliverable whose job is still running starts another job; the API could let it
   join the running one.
+
+## R11.11: a second Pareto set on the deliverable plan's apertures; closed leaf pairs under an X jaw (2026-11-06)
+
+- **Scope.** The project lead started R11.11 (option B1 of `docs/reports/mco-deliverable-options.md`) together with
+  parking closed leaf pairs under an X jaw, so that one rerun round covers both.
+- **The second set** (`services/mco_apertures.py`, design note "B1 as built"). `POST /mco/deliverables/{id}/pareto`
+  (200 cached, 202 job on the MCO job table, task `radiarch.mco.apertures`) builds a small Pareto set over a
+  deliverable photon plan's metersets: the segment MU of static fields or the interval MU of arcs, with the first
+  set's trade-offs and a budget of 2N + 1.
+  - It is stored as a Pareto set, with `source_deliverable_id` and `elements`. Navigation, automatic navigation and
+    `POST /mco/{id}/deliverable` work on it unchanged.
+  - Making a state the plan changes only the metersets. For static fields its dose is the navigated dose exactly;
+    for arcs the full kernel's, against the pencil beam's interval doses that navigation used.
+  - Limits: the first set's hard constraints; with `hard_coverage`, the target's gEUD no lower than the deliverable
+    plan's and its maximum at `max_dose_factor` times the prescription, each within 1 % of its level; every meterset
+    at or above the machine's minimum. A limit the feasibility run cannot meet is relaxed to what it reaches, with a
+    note.
+  - A proton plan, and a plan of a second set, get 422.
+- **Shared code.** `MCOService.run` is split into the problem's assembly and `generate`, which the second set reuses;
+  the first set's cache keys and results are unchanged. The sequencer's coverage of a segment is
+  `sequencing.segment_coverage` and a whole plan's `plan_coverage`. Lineage reads the second set's beam models
+  (`metersets:`).
+- **SDK, command line, protocols.** `MCOPlan.pareto()` returns the second set as a `ParetoSet`. A protocol's `mco`
+  section has `second_set` (default on): the second set is navigated automatically by the same goals and that state
+  is the plan. The run's `mco_id`, `state_id` and `deliverable_id` are the second set's; `radiarch plan` prints both
+  sets. The digest of an `mco` protocol changes; a protocol without the section keeps its digest.
+- **The R11 correction's two follow-ups.**
+  - A meterset round within the normalisation band whose target maximum, once normalised, passes its limit is not
+    accepted. The next round keeps the coverage level and divides the maximum's limit by the normalisation; the
+    kept round prefers one whose normalised maximum holds.
+  - Each round records its coverage and maximum limits, the gEUD and maximum reached, the maximum once normalised, and
+    each constraint's excess. The R11 cases print them.
+- **Closed leaf pairs.** `sequencing.park_position`: 10 mm behind the X1 jaw, behind X2 when the leaves cannot reach
+  X1, else the deeper of the two. Static segments park every closed pair there; an arc parks a pair that no control
+  point opens, for the whole arc. A pair open in some sectors still waits where its sweep leaves it. A machine without
+  interdigitation keeps its closed pairs where the sequencer closed them. `LEAF_MODEL_VERSION` is 2, so cached
+  sequences, arcs, deliverable plans and protocol runs are made again.
+- **Validation cases.** `mco_front` and `mco_protocol` follow each plan back to its first set and deliverable plan,
+  keep those checks under their names, and add the second set's checks, the plan on it (graded against TG-119's goals
+  in `mco_front`), and a row per trade-off and goal from the first navigation to the plan.
+- **Tests.** `tests/test_r11_apertures.py` (new); parking in `test_r4_sequencing.py` and `test_r8_vmat.py`; the
+  second set on arcs in `test_r11_deliverable_vmat.py`; the limit divided by the normalisation in
+  `test_r11_deliverable.py`; the protocol's second set in `test_r11_protocol.py`.
+- **Viewer** (radiarch-ohif). The client's `apertureSet` builds the second set and follows its job. The MCO panel's
+  "Navigate again on its apertures" moves the panel to it after a plan is made, and the panel names a second set as
+  such. One offline job test, and the live client test (`tests/test_r11_viewer_client.py`) builds a second set and
+  makes its balance plan the plan; radiarch's browser test clicks the button. `viewer.ref` moves to radiarch-ohif
+  `150b05a`.
+- **Open.** The 4 mm lung and TG-119 reruns on the compute server are next, with the R8–R10 cases the parking changes.

@@ -93,7 +93,13 @@ def _print_mco(rx, run, out=None) -> None:
     out = out or sys.stdout
     r = run.result
     ps = rx.get(f"/mco/{r.mco_id}")
-    print(f"Pareto set {r.mco_id}: {len(ps['plans'])} plans, error bound {ps['error_bound']:.3f}", file=out)
+    if ps.get("source_deliverable_id"):
+        first = rx.get(f"/mco/deliverables/{ps['source_deliverable_id']}")
+        print(f"Pareto set {first['mco_id']}: navigated, made deliverable as plan {first['deliverable_id']} "
+              f"({first['flagged']} of {len(first['deviation'])} deviation rows flagged)", file=out)
+        print(f"second Pareto set {r.mco_id} on its {ps['elements']}: {len(ps['plans'])} plans, error bound {ps['error_bound']:.3f}", file=out)
+    else:
+        print(f"Pareto set {r.mco_id}: {len(ps['plans'])} plans, error bound {ps['error_bound']:.3f}", file=out)
     print(f"  navigate from state {r.state_id} (POST /mco/{r.mco_id}/navigate, or the viewer's MCO panel)", file=out)
     plan = rx.get(f"/mco/deliverables/{r.deliverable_id}")
     print(f"  deliverable plan {r.deliverable_id}: {plan['flagged']} of {len(plan['deviation'])} deviation rows flagged", file=out)

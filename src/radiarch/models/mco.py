@@ -28,6 +28,7 @@ from .vmat import ArcSpec
 MCO_VERSION = "2"          # 2 (R11.8): solves converge when their cost stops falling; unconverged plans prove no bound; the
                            # penalty starts matched to the objectives; robust smoothing follows the dose level
 MAX_TRADEOFFS = 8
+APERTURE_SET_VERSION = "1"  # a second set over a deliverable plan's metersets (R11.11)
 
 
 class MCORunRequest(BaseModel):
@@ -167,8 +168,36 @@ class MCOResult(ResearchArtifact):
     robust_gap: Optional[float] = Field(
         default=None, description="Robust: the largest gap, normalized, between a plan's weighted worst cases and the worst "
                                   "scenario of its weighted sum. It is part of the error bound, and more plans do not remove it.")
+    source_deliverable_id: Optional[str] = Field(
+        default=None, description="A second set (R11.11): the deliverable plan whose apertures every plan of this set keeps. Its "
+                                  "plans differ only in their metersets, so any blend of them is itself deliverable.")
+    elements: Optional[str] = Field(default=None, description="What a plan's weights are: null for beamlets or spots; "
+                                                              "'segments' or 'arc intervals' (metersets, MU) for a second set.")
     compute_time_s: float = 0.0
     created_at: Optional[datetime] = None
+
+
+class ApertureSetRequest(BaseModel):
+    """``POST /mco/deliverables/{deliverable_id}/pareto``: a second, small Pareto set over a deliverable photon plan's
+    segment or arc-interval metersets (R11.11, option B1 of ``docs/reports/mco-deliverable-options.md``).
+
+    Its trade-offs are the first set's. Its limits are the first set's hard constraints and, when the deliverable plan
+    was made with ``hard_coverage``, the target's coverage (no worse than the deliverable plan's) and maximum; a limit no
+    metersets on these apertures can meet is relaxed to what the feasibility run reaches, and a note says so. Every
+    meterset stays at or above the machine's minimum. ``plan_budget`` defaults to ``2 N + 1``."""
+
+    requested_by: Optional[str] = Field(default=None, max_length=64,
+                                        description="Set by the server from a trusted proxy's user header; a value sent here is replaced.")
+    plan_budget: Optional[int] = Field(default=None, ge=3, le=4 * MAX_TRADEOFFS + 1)
+    error_tolerance: float = Field(default=0.05, gt=0.0, le=1.0)
+    anchor_epsilon: float = Field(default=1e-3, gt=0.0, le=0.1)
+    solver: SolverConfig = Field(default_factory=lambda: SolverConfig(method="L-BFGS-B", max_iterations=300))
+
+    def compute_cache_key(self, deliverable_cache_key: str) -> str:
+        payload = {"version": APERTURE_SET_VERSION, "mco": MCO_VERSION, "deliverable": deliverable_cache_key, "budget": self.plan_budget,
+                   "error_tolerance": round(self.error_tolerance, 9), "anchor_epsilon": round(self.anchor_epsilon, 12),
+                   "solver": self.solver.hash()}
+        return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
 class NavigateRequest(BaseModel):
@@ -303,8 +332,9 @@ class DeliverableRequest(BaseModel):
                         description="Goal-driven rounds on the deliverable metersets (photons), as the reweighting planner's: the "
                                     "plan is normalised, its goals judged, a failed goal's weight tripled and an organ limit lowered "
                                     "5 %, and the metersets optimized again; stops when every goal holds and, with hard_coverage, the "
-                                    "normalisation is within normalise_band of 1. The round whose goals hold with the normalisation "
-                                    "nearest 1 is kept.")
+                                    "normalisation is within normalise_band of 1 and the target's maximum, once normalised, within its "
+                                    "limit. The round kept is one whose goals hold, then one whose normalised maximum holds, then the "
+                                    "one whose normalisation is nearest 1.")
     hard_coverage: bool = Field(default=True,
                                 description="Photons, with normalise: the metersets meet the target's coverage and hot-spot limits as hard "
                                             "constraints (the target's gEUD with a = -10 at or above normalise.gy, its maximum at or below "
@@ -313,7 +343,9 @@ class DeliverableRequest(BaseModel):
     normalise_band: float = Field(default=0.03, ge=0.0, le=0.5,
                                   description="With hard_coverage: while a round's normalisation is further than this from 1, the next "
                                               "round's coverage constraint takes its level times that normalisation (a gEUD is not the "
-                                              "coverage goal, so its level is found on the plan), at most 0.95 times the maximum's limit.")
+                                              "coverage goal, so its level is found on the plan), at most 0.95 times the maximum's limit. "
+                                              "Within it, a round whose maximum passes its limit once normalised gives the next round the "
+                                              "limit divided by the normalisation (R11.11).")
     max_dose_factor: float = Field(default=1.2, gt=1.0, le=2.0,
                                    description="The target's maximum dose limit as a multiple of the prescription (1.2: RTOG 0617's).")
     hot_spot_gy: Optional[float] = Field(default=None, gt=0.0,
@@ -346,6 +378,7 @@ class DeliverableStage(str, Enum):
     queued = "queued"
     projecting = "projecting"
     mimicking = "mimicking"
+    metersets = "metersets"            # a second set's blend: its metersets on the first plan's apertures (R11.11)
     normalising = "normalising"
     comparing = "comparing"
     done = "done"
@@ -373,7 +406,9 @@ class MCODeliverable(ResearchArtifact):
     flagged: int = 0
     request: Optional[DeliverableRequest] = Field(default=None, description="What it was made with (a viewer makes another state "
                                                                        "deliverable the same way).")
-    rounds: List[Dict[str, Any]] = Field(default_factory=list, description="Each meterset round's normalisation and the goals it failed (photons).")
+    rounds: List[Dict[str, Any]] = Field(default_factory=list, description="Each meterset round's normalisation and the goals it failed "
+                                         "(photons); with hard_coverage, its coverage and maximum limits (coverage_gy, max_gy), what the "
+                                         "metersets reached (geud_gy, dmax_gy, dmax_normalised_gy) and each constraint's excess.")
     notes: List[str] = Field(default_factory=list)
     seconds: float = 0.0
     created_at: Optional[datetime] = None
@@ -405,6 +440,7 @@ class MCOJobStatus(BaseModel):
     created_at: Optional[datetime] = None
 
 
-__all__ = ["MCO_VERSION", "MAX_TRADEOFFS", "MCORunRequest", "ParetoPlan", "ErrorPoint", "MCOStage", "MCOResult", "NavigateRequest",
+__all__ = ["MCO_VERSION", "MAX_TRADEOFFS", "APERTURE_SET_VERSION", "MCORunRequest", "ParetoPlan", "ErrorPoint", "MCOStage", "MCOResult",
+           "ApertureSetRequest", "NavigateRequest",
            "AutoNavigateRequest", "AutoLevel", "DVHCurve", "NavigationState", "NormaliseSpec", "DeliverableRequest", "DeviationRow",
            "DeliverableStage", "MCODeliverable", "DeliverableJobStatus", "MCOJobStatus"]

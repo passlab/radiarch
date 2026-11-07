@@ -506,7 +506,9 @@ class AutoplanService:
     def _plan_mco(protocol, pgeo, arrays, goals: List[dict], cover: dict, on, requested_by: Optional[str] = None) -> dict:
         """A protocol's ``mco`` section: the Pareto set on its beams (static fields, or the arcs' sectors), automatic
         navigation by its goals, and the navigated plan made deliverable (apertures or arcs, normalised to the main
-        target's coverage goal). The run's user is kept on the Pareto set, the navigation state and the deliverable plan."""
+        target's coverage goal); with ``second_set`` (R11.11), a second set over that plan's metersets navigated by the
+        same goals, whose state is the plan. The run's user is kept on the Pareto sets, the navigation states and the
+        deliverable plans."""
         from ..models.dose import EngineSpec
         from ..models.mco import AutoNavigateRequest, DeliverableRequest, MCORunRequest, NormaliseSpec
         from ..models.optimization import SolverConfig
@@ -536,14 +538,33 @@ class AutoplanService:
         state = NavigationService(mco.store).auto_navigate(res.mco_id, AutoNavigateRequest(
             requested_by=requested_by, goals=goal_set, prescription_gy=rx, fractions=fx, name=f"protocol {protocol.protocol_id}"))
         on(AutoplanStage.deliverable, 0.7, "the navigated plan made deliverable")
-        d = DeliverableService(mco_service=mco).run(res.mco_id, DeliverableRequest(
+        dsvc = DeliverableService(mco_service=mco)
+        dreq = DeliverableRequest(
             requested_by=requested_by, state_id=state.state_id, arcs=b.arcs if b.technique == "vmat" else [], fractions=fx, levels=b.sequence_levels,
             machine_model_id=protocol.machine, max_iterations=protocol.iterations, goals=goal_set, prescription_gy=rx,
             rounds=protocol.arc_rounds if b.technique == "vmat" else protocol.rounds,
-            normalise=NormaliseSpec(structure=target, metric=cover["metric"], gy=cover["gy"] * NORMALISATION_HEADROOM)))
+            normalise=NormaliseSpec(structure=target, metric=cover["metric"], gy=cover["gy"] * NORMALISATION_HEADROOM))
+        d = dsvc.run(res.mco_id, dreq)
         history = [{"mco_id": res.mco_id, "plans": len(res.plans), "error_bound": res.error_bound, "stop_reason": res.stop_reason},
                    {"state_id": state.state_id, "levels": [lv.model_dump() for lv in state.levels]},
-                   {"deliverable_id": d.deliverable_id, "flagged": d.flagged, "normalisation": d.normalisation}]
+                   {"deliverable_id": d.deliverable_id, "flagged": d.flagged, "normalisation": d.normalisation, "rounds": d.rounds}]
+        if m.second_set:
+            # R11.11: navigated again on the deliverable plan's apertures, by the same goals; that state is the plan
+            from ..models.mco import ApertureSetRequest
+            from .mco_apertures import ApertureSetService
+
+            on(AutoplanStage.pareto, 0.8, "a second set on the deliverable plan's apertures")
+            second = ApertureSetService(mco_service=mco, deliverable_service=dsvc).run(d.deliverable_id, ApertureSetRequest(
+                requested_by=requested_by, solver=SolverConfig(method="L-BFGS-B", max_iterations=protocol.iterations)))
+            on(AutoplanStage.navigating, 0.85, f"{len(second.plans)} plans on the apertures; navigating by the goals' priorities")
+            state2 = NavigationService(mco.store).auto_navigate(second.mco_id, AutoNavigateRequest(
+                requested_by=requested_by, goals=goal_set, prescription_gy=rx, fractions=fx, name=f"protocol {protocol.protocol_id}, on its apertures"))
+            on(AutoplanStage.deliverable, 0.88, "the state on the apertures made the plan")
+            d = dsvc.run(second.mco_id, dreq.model_copy(update={"state_id": state2.state_id}))
+            history += [{"mco_id": second.mco_id, "source_deliverable_id": second.source_deliverable_id, "elements": second.elements,
+                         "plans": len(second.plans), "error_bound": second.error_bound, "stop_reason": second.stop_reason, "notes": second.notes},
+                        {"state_id": state2.state_id, "levels": [lv.model_dump() for lv in state2.levels]},
+                        {"deliverable_id": d.deliverable_id, "flagged": d.flagged, "normalisation": d.normalisation}]
         return {"deliverable": d, "history": history}
 
     @staticmethod

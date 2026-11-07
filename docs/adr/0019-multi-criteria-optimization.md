@@ -87,6 +87,12 @@ proton phantom.
   navigated plan; the arcs plan's organ doses are well above it, within their limits, and its hot spot is above 72 Gy
   because the normalisation inside the band scales the maximum too. Keeping the deliverable plan's organ doses near
   the navigated plan's is left to shared-aperture Pareto sets (B1).
+- R11.11 (2026-11-06) builds B1 (`docs/reports/mco-deliverable-options.md`, "B1 as built"). A second, small Pareto set
+  over the deliverable plan's segment or arc-interval metersets is navigated again; every plan in it keeps the
+  apertures, so the state navigated is the plan delivered (static fields exactly, arcs up to the pencil beam's interval
+  doses). A protocol does this by default (`mco.second_set`). The meterset rounds now divide the maximum's limit by the
+  normalisation once the coverage level is calibrated, and record each round's limits and values. Shared apertures
+  across the first set's plans (B2) stay open.
 - The algorithm tests of the report's section 5 run in CI on problems with known answers (`tests/test_r11_*.py`).
   The validation cases (`mco_front`, `mco_protocol`, `mco_robust`) run on a workstation with the public data; the
   proton phantom case also runs in the nightly harness.

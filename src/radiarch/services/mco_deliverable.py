@@ -37,6 +37,7 @@ from ..models.optimization import ConvergenceInfo, ObjectiveSpec, OptimizationRe
 from .clinical_goals import parse_metric
 from .mco import MCOService
 from .navigation import NavigationService
+from .objectives import _geud
 
 DeliverableProgressCallback = Callable[[DeliverableStage, float, str], None]
 TARGET_TYPES = ("EUDMin", "RMSUnder", "UniformRMS")
@@ -197,6 +198,12 @@ class DeliverableService:
             return cached
         t0 = time.time()
         state = self.navigation.get_state(mco_id, request.state_id)
+        second = self.mco.store.get_by_id(mco_id)
+        if second is not None and second.source_deliverable_id:
+            # a second set (R11.11): its blend is metersets on a deliverable plan's apertures, made into that plan
+            from .mco_apertures import deliver_on_apertures
+
+            return deliver_on_apertures(self, mco_id, second, request, state, key, on, t0)
         result, mreq, prob = self.mco.problem(mco_id)
         osvc = self.mco.optimization
         ops = self.mco.ops(prob, mreq)
@@ -272,14 +279,16 @@ class DeliverableService:
             masks = {g["structure"]: arrays.mask_zyx(arrays.structure_index[g["structure"]]) for g in goal_rows}
             coverage_targets = {g["structure"] for g in goal_rows if g["op"].startswith(">")}
             hard: List[HardConstraint] = []
+            cover_mask = limit_gy = None
             if request.hard_coverage and request.normalise is not None:
                 # the record's lung plans: apertures that under-cover, a normalisation that scales the hot spots up with the
                 # coverage (1.27 to 1.37). Coverage and the hot spot as limits of the meterset solve itself (R11.9, option A)
                 cover_target, rx_max = request.normalise.structure, (rx or request.normalise.gy)
+                limit_gy = round(request.max_dose_factor * rx_max, 3)          # the target's maximum once normalised
+                cover_mask = osvc._resolve_mask(prob.geometry, cover_target, prob.grid_shape) > 0
                 hard = [HardConstraint(structure_name=cover_target, metric="gEUD", op=">=", value_gy=float(request.normalise.gy), eud_a=-10.0,
                                        tolerance_gy=0.5),
-                        HardConstraint(structure_name=cover_target, metric="Dmax", op="<=", value_gy=round(request.max_dose_factor * rx_max, 3),
-                                       tolerance_gy=0.5)]
+                        HardConstraint(structure_name=cover_target, metric="Dmax", op="<=", value_gy=limit_gy, tolerance_gy=0.5)]
             scale: Dict[int, float] = {}
             level: Dict[int, float] = {}
             best = None
@@ -307,25 +316,39 @@ class DeliverableService:
                     judged, k_r = normalise_to_goal(raw, raw[mask], request.normalise.metric, request.normalise.gy)
                 failed = [i for i, g in enumerate(goal_rows) if not goal_met(judged[masks[g["structure"]]], g)]
                 conv_r = (vm if request.arcs else seq).convergence
-                rounds_log.append({"round": r + 1, "normalisation": round(float(k_r), 4),
-                                   "failed": [f"{goal_rows[i]['structure']} {goal_rows[i]['metric']}" for i in failed],
-                                   **({"hard_constraints": dict(getattr(conv_r, "constraint_violations", {}) or {}),
-                                       "coverage_gy": hard[0].value_gy} if hard else {})})
-                # the plan kept: a round whose goals hold before one that fails, then the normalisation nearest 1
-                rank = (bool(failed), abs(float(np.log(k_r))) if k_r > 0 else float("inf"))
+                entry: Dict[str, Any] = {"round": r + 1, "normalisation": round(float(k_r), 4),
+                                         "failed": [f"{goal_rows[i]['structure']} {goal_rows[i]['metric']}" for i in failed]}
+                in_band = hot_ok = True
+                if hard and cover_mask is not None and cover_mask.shape == raw.shape and cover_mask.any():
+                    # each round's limits and what the metersets reached against them, before and after normalisation
+                    dmax = float(raw[cover_mask].max())
+                    geud = float(_geud(np.asarray(raw, np.float64), cover_mask.astype(np.float64), float(cover_mask.sum()), -10.0)[0])
+                    in_band = abs(float(k_r) - 1.0) <= request.normalise_band
+                    hot_ok = float(k_r) * dmax <= limit_gy + hard[1].tolerance_gy
+                    entry.update({"coverage_gy": hard[0].value_gy, "max_gy": hard[1].value_gy, "geud_gy": round(geud, 3), "dmax_gy": round(dmax, 3),
+                                  "dmax_normalised_gy": round(float(k_r) * dmax, 3),
+                                  "hard_constraints": dict(getattr(conv_r, "constraint_violations", {}) or {})})
+                rounds_log.append(entry)
+                # the plan kept: a round whose goals hold before one that fails, then one whose maximum holds once normalised,
+                # then the normalisation nearest 1
+                rank = (bool(failed), not hot_ok, abs(float(np.log(k_r))) if k_r > 0 else float("inf"))
                 if best is None or rank < best[0]:
                     best = (rank, r, technique, sequence_id, vmat_id, beam_model_id, dose_id, deliverable)
-                calibrated = not hard or abs(float(k_r) - 1.0) <= request.normalise_band
+                calibrated = in_band and hot_ok
                 if not failed and calibrated:
                     break
                 for i in failed:
                     scale[i] = scale.get(i, 1.0) * 3.0
                     if goal_rows[i]["structure"] not in coverage_targets:
                         level[i] = level.get(i, 1.0) * 0.95
-                if not calibrated:
+                if not in_band:
                     # the gEUD is not the coverage goal (the 4 mm lung case met gEUD >= 60 Gy and still needed 1.11 for its
                     # D95): its level moves to where this round's normalisation puts the goal, below the maximum's limit
                     hard = [hard[0].model_copy(update={"value_gy": round(min(hard[0].value_gy * float(k_r), 0.95 * hard[1].value_gy), 3)})] + hard[1:]
+                elif not hot_ok:
+                    # the coverage level is calibrated, but the normalisation scales the maximum past its limit (the 4 mm lung
+                    # arcs: 1.029 took it to 74.3 Gy): the next round's limit is the limit divided by the normalisation
+                    hard = hard[:1] + [hard[1].model_copy(update={"value_gy": round(min(hard[1].value_gy, limit_gy / float(k_r)), 3)})]
             _, kept, technique, sequence_id, vmat_id, beam_model_id, dose_id, deliverable = best
             rounds_log[kept]["kept"] = True
         else:

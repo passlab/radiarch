@@ -223,8 +223,10 @@ class LineageService:
             ck = str(g("cache_key") or "")
             if ck.startswith(APERTURE_PREFIX):
                 add("sequence", ck[len(APERTURE_PREFIX):])
-            if ck.startswith(("replan:", "scaled:")):           # the plan moved onto a later image (R9); normalised by auto-planning (R10)
-                add("beam_model", ck.split(":")[1])
+            if ck.startswith(("replan:", "scaled:", "metersets:")):   # the plan moved onto a later image (R9); normalised by auto-planning
+                add("beam_model", ck.split(":")[1])                   # (R10); a second set's metersets on its apertures (R11.11)
+            if ck.startswith("metersets:"):
+                add("mco", ck.split(":")[2])
             attr.machine_model_id = g("machine_model_id")
             attr.modality = _enum_value(g("modality"))
             imported = g("imported_plan")

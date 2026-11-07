@@ -203,7 +203,8 @@ demonstration, not a site protocol: the dose engine and machine are radiarch's r
 
 `PROTOCOL=demo-lung-imrt-mco ./scripts/demo-lung.sh` makes the same plan by multi-criteria optimization: a Pareto set
 of five trade-offs (PTV homogeneity, lungs, heart and oesophagus mean dose, a cord EUD), navigated automatically by
-the protocol's goals and made deliverable. The viewer's MCO panel then moves along the set from the plan on screen
+the protocol's goals and made deliverable, then navigated again by the same goals on a second set over that plan's
+apertures (R11.11). The viewer's MCO panel then moves along the second set from the plan on screen
 (`docs/viewing.md`). Validation record R11 compares the two plans on this patient.
 
 NSCLC-Radiomics is distributed under CC BY-NC 3.0 (non-commercial use) with TCIA's data usage policy. Work that uses

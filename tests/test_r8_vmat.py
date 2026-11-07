@@ -104,6 +104,20 @@ class TestArcBuild:
         assert r3.fractions == 3 and r3.total_mu == pytest.approx(rep.total_mu) and r3.delivery_time_s == pytest.approx(rep.delivery_time_s)
         assert not r3.issues
 
+    def test_a_pair_no_control_point_opens_waits_under_an_x_jaw(self):
+        machine = load_photon_spec("synthetic-120")
+        spec = ArcSpec(arc_id="A", start_deg=330, stop_deg=30, sectors=2, control_point_spacing_deg=4.0)
+        # row 1 has fluence in neither sector; row 2 in the second only
+        maps = [_map(np.array([[0, 1, 2, 1], [0, 0, 0, 0], [0, 0, 0, 0]], float)), _map(np.array([[1, 2, 2, 0], [0, 0, 0, 0], [0, 1, 1, 0]], float))]
+        beam, _, issues = build_arc(spec, maps, machine.mlc, machine, isocenter_mm=(0, 0, 0), sad_mm=1000.0, energy_mv=6.0,
+                                    beamlet_spacing_mm=(5.0, 5.0))
+        cps = beam.arc.control_points
+        x1 = cps[0].x_jaw_mm[0]
+        assert not issues and all(cp.mlc_rows[1].x_left_mm == cp.mlc_rows[1].x_right_mm == x1 - 10.0 for cp in cps)
+        k = spec.intervals_per_sector
+        assert all(cp.mlc_rows[2].x_left_mm == cp.mlc_rows[2].x_right_mm == -10.0 for cp in cps[:k])  # closed in sector 1: the centre
+        assert interval_timing(beam, machine).leaf_travel_mm.max() <= 40.0      # the parked pair never moves
+
     def test_interval_metersets_respect_their_floor(self):
         import scipy.sparse as sp
         S = sp.csr_matrix(np.array([[1.0, 0.0, 0.5], [0.0, 1.0, 0.5]]))

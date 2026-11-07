@@ -248,6 +248,41 @@ def test_the_coverage_constraint_is_calibrated_until_the_normalisation_is_near_1
     assert len(seen) == 1 and plan.rounds[0]["kept"] is True
 
 
+def test_a_maximum_past_its_limit_once_normalised_divides_the_limit_by_the_normalisation(rx, monkeypatch):
+    """R11.11: the 4 mm lung arcs' kept round was within the band (1.029), and its normalisation took the PTV's maximum
+    to 74.3 Gy against 72. A round within the band whose maximum, once normalised, passes the limit is not calibrated:
+    the next round keeps the coverage level and takes the limit divided by the normalisation. Every round records its
+    limits and what the metersets reached."""
+    import radiarch.services.autoplan as autoplan
+    from radiarch.services.apertures import ApertureService
+    from radiarch.sdk import ops
+
+    seen = []
+    real_sequence = ApertureService.sequence
+
+    def capture(self, optimization_id, request):
+        seen.append(request)
+        return real_sequence(self, optimization_id, request)
+
+    monkeypatch.setattr(ApertureService, "sequence", capture)
+    monkeypatch.setattr(autoplan, "normalise_to_goal", lambda dose, target, metric, gy: (dose * 1.02, 1.02))   # within the band
+    geo = rx.build_geometry("1.2.3", hu_model="LINEAR")
+    bm = geo.photon_beams([0, 90, 180, 270], machine="test-120", jaw_opening_mm=(60.0, 60.0), beamlet_size_mm=(10.0, 10.0))
+    ps = bm.mco([ops.uniform_rms("PTV", 2.0), ops.mean_dose("OAR")], engine="analytic", max_iterations=100, plan_budget=6,
+                hard_constraints=[ops.hard("PTV", "Dmin", ">=", 1.0)])
+    # a 1.01 Gy limit (1.01 x 1.0) under a 1.8 Gy coverage level: the maximum cannot hold once normalised
+    plan = ps.deliverable("balance", levels=5, max_iterations=60, prescription_gy=1.0, max_dose_factor=1.01, rounds=2,
+                          normalise={"structure": "PTV", "metric": "D95", "gy": 1.8})
+    assert len(seen) == 2 and len(plan.rounds) == 2, plan.rounds
+    limits = [{c.metric: c.value_gy for c in q.hard_constraints} for q in seen]
+    assert limits[0] == {"gEUD": 1.8, "Dmax": 1.01}
+    assert limits[1] == {"gEUD": 1.8, "Dmax": pytest.approx(round(1.01 / 1.02, 3))}                      # coverage kept, limit / k
+    for r, lim in zip(plan.rounds, limits):
+        assert r["coverage_gy"] == lim["gEUD"] and r["max_gy"] == pytest.approx(lim["Dmax"])
+        assert r["dmax_normalised_gy"] == pytest.approx(1.02 * r["dmax_gy"], abs=2e-3) and r["dmax_normalised_gy"] > 1.01 + 0.5
+        assert r["geud_gy"] > 0 and set(r["hard_constraints"]) and r["normalisation"] == 1.02
+
+
 def test_the_navigated_fluence_is_capped_before_sequencing():
     """A few high beamlets would close most of a beam's field at the sequencer's fluence steps; each beam's peaks are
     capped at peak_ratio times its median nonzero weight, and a note says how much fluence that was."""

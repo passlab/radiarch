@@ -91,6 +91,35 @@ class TestApertures:
         assert np.allclose(w, [2.0, 2.0], atol=1e-4) and conv.success
 
 
+class TestParking:
+    """Closed pairs wait under an X jaw: touching rounded tips leak a line of up to 16 % of the open dose."""
+
+    def test_park_position(self):
+        mlc = load_photon_spec("synthetic-120").mlc                         # reach 150 mm, leaf gap 1.5 mm
+        assert S.park_position((-20.0, 30.0), mlc) == -20.0 - S.PARK_BEHIND_JAW_MM          # behind X1
+        assert S.park_position((-145.0, 30.0), mlc) == -150.0                              # as far behind X1 as the leaves reach
+        assert S.park_position((-149.5, 30.0), mlc) == 30.0 + S.PARK_BEHIND_JAW_MM          # the gap not wholly under X1: behind X2
+        assert S.park_position((-149.5, 149.6), mlc) == -150.0                             # neither fits whole: the deeper
+        assert S.park_position((-20.0, 30.0), mlc.model_copy(update={"interdigitation": False})) is None
+
+    def test_a_closed_pair_lets_through_only_leaf_transmission(self):
+        machine = load_photon_spec("synthetic-120")
+        model = machine.leaf_model()
+        fmap = S.FluenceMap(0, "B", [29, 30, 31], np.array([-20.0, -10.0, 0.0, 10.0, 20.0]), np.ones((3, 4)), {})
+        ap = S.Aperture(0, np.array([-20.0, 0.0, -10.0]), np.array([10.0, 0.0, 20.0]), 1.0)      # the middle pair closed at 0
+        seg = S.aperture_segment(ap, fmap, machine.mlc, machine, 1.0, (5.0, 5.0), 0)
+        assert seg.x_jaw_mm == (-20.0, 20.0)
+        middle = seg.mlc_rows[1]
+        assert middle.x_left_mm == middle.x_right_mm == -30.0
+        y0, y1 = middle.y_min_mm + model.tongue_and_groove_mm, middle.y_max_mm - model.tongue_and_groove_mm
+        inside = [r for r in seg.fluence_rectangles(model) if r[2] < y1 and r[3] > y0 and r[1] > -20.0 and r[0] < 20.0]
+        assert inside and all(r[4] == model.leaf_transmission for r in inside)
+        # without parking the same pair would leak its rounded tips' gap at full fluence inside the jaws
+        unparked = seg.model_copy(update={"mlc_rows": [seg.mlc_rows[0], middle.model_copy(update={"x_left_mm": 0.0, "x_right_mm": 0.0}),
+                                                       seg.mlc_rows[2]]})
+        assert any(r[4] == 1.0 and r[2] < y1 and r[3] > y0 for r in unparked.fluence_rectangles(model))
+
+
 class TestSequencePlan:
     @staticmethod
     def _problem():
@@ -146,7 +175,8 @@ class TestSequencePlan:
         for b in res.plan.beams:
             for seg in b.segments:
                 for r in seg.mlc_rows:
-                    assert -30.0 - 1e-6 <= r.x_left_mm <= r.x_right_mm <= 30.0 + 1e-6
+                    if r.x_right_mm > r.x_left_mm:
+                        assert -30.0 - 1e-6 <= r.x_left_mm <= r.x_right_mm <= 30.0 + 1e-6
         # the re-optimized segment weights do at least as well as the uniform level weights
         assert res.convergence.final_cost <= terms(np.asarray(dij @ (res.coverage @ np.full(res.coverage.shape[1], w.max() / 4))).reshape(grid))[0] + 1e-6
 

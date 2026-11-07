@@ -5,8 +5,9 @@ deliverable and exported, as an MCO protocol's plan would be. radiarch's app is 
 the client's Node tests (test/mco.test.js) then:
 - find the Pareto set behind the exported dose;
 - move a slider, lock a trade-off, navigate automatically;
-- make the new state deliverable through the job, then from the cache, and export it.
-The deliverable plan the client got is checked against radiarch's own store.
+- make the new state deliverable through the job, then from the cache, and export it;
+- build the second set on that plan's apertures (R11.11) and make its balance plan the plan.
+The deliverable plans and the second set the client got are checked against radiarch's own store.
 """
 
 from __future__ import annotations
@@ -75,3 +76,9 @@ def test_the_viewer_client_on_a_pareto_set(api, tmp_path):  # noqa: F811
     mine = DeliverableService().store.get_by_id(got["deliverable"]["deliverable_id"])
     assert mine is not None and mine.mco_id == res.mco_id and mine.dose_id == got["deliverable"]["dose_id"]
     assert got["export_id"]
+    # the second set on that plan's apertures (R11.11), and its balance plan made the plan
+    from radiarch.services.mco import MCOService
+
+    second = MCOService().store.get_by_id(got["second"]["mco_id"])
+    assert second is not None and second.source_deliverable_id == mine.deliverable_id
+    assert DeliverableService().store.get_by_id(got["second"]["deliverable_id"]).mco_id == second.mco_id

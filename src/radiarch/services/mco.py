@@ -161,6 +161,7 @@ class MCOOps:
     structures: Dict[str, np.ndarray]       # structure → boolean over the navigation voxels
     scenarios: List[str]                    # robust: the scenario names, nominal first; else empty
     smoothing_gy: float = SMOOTHING_GY      # robust: the log-sum-exp width per unit weight (:func:`smoothing_width`)
+    on_voxels: bool = False                 # forward gives the dose on the navigation voxels only (a second set, R11.11)
 
     @property
     def robust(self) -> bool:
@@ -168,7 +169,9 @@ class MCOOps:
 
     def navigation(self, dose: np.ndarray) -> np.ndarray:
         """A dose of :attr:`forward` on the navigation voxels, scenarios x voxels (one row when nominal)."""
-        return np.asarray(dose) if self.robust else np.asarray(dose).ravel()[self.index][None, :]
+        if self.robust:
+            return np.asarray(dose)
+        return np.asarray(dose).ravel()[None, :] if self.on_voxels else np.asarray(dose).ravel()[self.index][None, :]
 
     def values(self, dose: np.ndarray) -> np.ndarray:
         return np.array([o.value(dose, m) for o, m in zip(self.objectives, self.masks)])
@@ -204,21 +207,29 @@ class MCOService:
             on(MCOStage.done, 1.0, "cache hit")
             return cached
         t0 = time.time()
-        n = len(request.tradeoffs)
         on(MCOStage.loading, 0.02, "loading the geometry, beam model and dose matrix")
-        osvc = self.optimization
-        prob = osvc._assemble_problem(self._base(request))
+        prob = self.optimization._assemble_problem(self._base(request))
         ops = self.ops(prob, request)
-        solver = get_solver(request.solver.method)
-        tol = request.solver.convergence_tol or 1e-10
-        max_iter = request.solver.max_iterations
         notes: List[str] = []
         if ops.robust:
             notes.append(f"robust over {len(ops.scenarios)} scenarios: each plan minimizes the worst scenario of its weighted sum; "
                          f"the values are each trade-off's worst case over the scenarios, and the error bound includes the "
                          f"gap between the two")
+        fields = dict(geometry_id=request.geometry_id, beam_model_id=request.beam_model_id, engine_name=prob.engine.name,
+                      engine_version=prob.engine.version, rbe_factor=prob.rbe, dose_units=dose_units_for(prob.rbe),
+                      voxel_cc=float(np.prod(prob.geometry.spacing_mm)) / 1000.0, modality=prob.beam_model.result.modality.value)
+        return self.generate(request, ops, np.asarray(prob.w0, dtype=np.float64), key, fields, notes, on, t0)
 
-        start = np.asarray(prob.w0, dtype=np.float64)
+    def generate(self, request: MCORunRequest, ops: MCOOps, start: np.ndarray, key: str, fields: dict, notes: List[str],
+                 on: MCOProgressCallback, t0: float, stored: Optional[Callable[[np.ndarray], np.ndarray]] = None) -> MCOResult:
+        """The Pareto set of ``request``'s trade-offs on assembled operators: the feasibility run, the sandwich from
+        ``start``, the plans stored. ``fields`` are the result's own (geometry, beam model, engine, modality, voxel size);
+        ``stored`` maps a solve's variables to the weights kept (a second set's metersets, R11.11)."""
+        n = len(request.tradeoffs)
+        stored = stored or (lambda x: x)
+        solver = get_solver(request.solver.method)
+        tol = request.solver.convergence_tol or 1e-10
+        max_iter = request.solver.max_iterations
         if ops.terms:
             on(MCOStage.feasibility, 0.05, f"feasibility of {len(request.hard_constraints)} hard constraint(s)"
                                            + (f" in {len(ops.scenarios)} scenarios" if ops.robust else ""))
@@ -276,7 +287,7 @@ class MCOService:
             notes.append(f"{o.type}({o.structure_name}) is the same in every anchor plan "
                          f"({res.ideal[i]:.3g} Gy): it trades nothing on these beams")
         notes += [f"plan {k} did not converge: its cost was still falling at the iteration limit; it proves no supporting hyperplane, so the error bound leaves it out (more iterations help)" for k, p in enumerate(res.plans) if not p.solved.ok]
-        empty = [k for k, p in enumerate(res.plans) if float(np.sum(p.solved.x)) <= 0.0]
+        empty = [k for k, p in enumerate(res.plans) if float(np.sum(stored(p.solved.x))) <= 0.0]
         if empty:
             notes.append(f"plan(s) {', '.join(map(str, empty))} deliver no dose: without a hard constraint on target coverage "
                          f"(e.g. PTV Dmin >=) an organ's anchor, and even the balance plan, can switch every beamlet off")
@@ -291,7 +302,7 @@ class MCOService:
         on(MCOStage.persisting, 0.92, "storing the plans and their doses on the navigation voxels")
         nav = np.stack([ops.navigation(ops.forward(p.solved.x)) for p in res.plans]).astype(np.float32)     # plans x scenarios x voxels
         nominal = [ops.nominal_values(ops.forward(p.solved.x)) for p in res.plans] if ops.robust else None
-        weights = np.stack([p.solved.x for p in res.plans]).astype(np.float32)
+        weights = np.stack([stored(p.solved.x) for p in res.plans]).astype(np.float32)
         mco_id = str(uuid.uuid4())
         self.store.save_arrays(mco_id, weights, ops.index, np.ascontiguousarray(nav[:, 0]), ops.structures,
                                np.ascontiguousarray(nav.transpose(1, 0, 2)) if ops.robust else None)
@@ -301,8 +312,7 @@ class MCOService:
         norm = res.normalized()
         root = self.store.dir(mco_id)
         result = MCOResult(
-            requested_by=request.requested_by, mco_id=mco_id, cache_key=key, geometry_id=request.geometry_id, beam_model_id=request.beam_model_id,
-            engine_name=prob.engine.name, engine_version=prob.engine.version, rbe_factor=prob.rbe, dose_units=dose_units_for(prob.rbe),
+            requested_by=request.requested_by, mco_id=mco_id, cache_key=key, **fields,
             tradeoffs=request.tradeoffs, hard_constraints=request.hard_constraints,
             ideal_gy=[round(float(v), 6) for v in res.ideal], nadir_gy=[round(float(v), 6) for v in res.nadir],
             plans=[ParetoPlan(index=k, kind=p.kind, weights=[float(w) for w in p.raw_weights],
@@ -314,9 +324,8 @@ class MCOService:
             error_history=[ErrorPoint(plans=c, error=round(e, 6), seconds=round(elapsed.get(c, 0.0), 2)) for c, e in res.history], error_bound=round(res.error, 6),
             converged=res.error <= request.error_tolerance, stop_reason=res.stop_reason, notes=notes,
             navigation_structures=names, navigation_voxels=int(index.size),
-            voxel_cc=float(np.prod(prob.geometry.spacing_mm)) / 1000.0,
             weights_uri=str(root / "weights.npy"), navigation_dose_uri=str(root / "navigation_dose.npy"),
-            scenarios=list(ops.scenarios), robust_gap=None if gap is None else round(gap, 6), modality=prob.beam_model.result.modality.value,
+            scenarios=list(ops.scenarios), robust_gap=None if gap is None else round(gap, 6),
             compute_time_s=round(time.time() - t0, 2), created_at=datetime.now(timezone.utc))
         self.store.save(result)
         on(MCOStage.done, 1.0, f"mco {mco_id}: {len(res.plans)} plans, error bound {res.error:.3f}")
@@ -336,6 +345,9 @@ class MCOService:
         req_path = self.store.dir(mco_id) / "request.json"
         if result is None or not req_path.is_file():
             raise ValueError(f"Pareto set {mco_id} has no stored request")
+        if result.source_deliverable_id:
+            raise ValueError(f"Pareto set {mco_id} is a second set over the metersets of deliverable plan {result.source_deliverable_id}: "
+                             f"it has no fluence problem")
         request = MCORunRequest.model_validate_json(req_path.read_text(encoding="utf-8"))
         return result, request, self.optimization._assemble_problem(self._base(request))
 

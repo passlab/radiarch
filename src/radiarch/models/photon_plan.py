@@ -50,7 +50,8 @@ class MLCRow(BaseModel):
         return self.x_right_mm - self.x_left_mm
 
 
-LEAF_MODEL_VERSION = "1"     # raise when the aperture fluence changes: cached sequences, arcs and deliverable plans are then not reused
+LEAF_MODEL_VERSION = "2"     # raise when the aperture fluence changes: cached sequences, arcs and deliverable plans are then not reused
+                             # (2: closed pairs parked under an X jaw)
 
 
 class LeafModel(BaseModel):

@@ -48,7 +48,7 @@ from ..config import get_settings
 from ..models.machine import MLCSpec, PhotonMachineSpec
 from ..models.photon_plan import ArcControlPoint, MLCRow, PhotonArc, PhotonBeam, PhotonPlan, arc_step_deg
 from ..models.vmat import ArcDeliverabilityReport, ArcRequest, ArcResult, ArcSpec
-from .sequencing import Aperture, FluenceMap, apply_machine_limits, fluence_maps, hard_constraint_terms, sequence_row
+from .sequencing import Aperture, FluenceMap, apply_machine_limits, fluence_maps, hard_constraint_terms, park_position, sequence_row
 
 CostTerms = Callable[[np.ndarray], Tuple[float, np.ndarray]]
 
@@ -75,8 +75,9 @@ def sweep(fmap: FluenceMap, n: int, reverse: bool = False) -> Tuple[np.ndarray, 
 
     The map is quantized to as many levels as fit in ``n`` apertures; segment ``i`` of a row opens from its
     ``i``-th rising to its ``i``-th falling edge (in sweep order), a row that has finished stays closed where it
-    ended, a row without fluence stays closed at the field's centre. When the decomposition has fewer apertures
-    than ``n``, each is held over consecutive control points and its meterset shared among them."""
+    ended, a row without fluence stays closed at the field's centre (:func:`build_arc` parks a pair closed for the
+    whole arc under an X jaw). When the decomposition has fewer apertures than ``n``, each is held over consecutive
+    control points and its meterset shared among them."""
     values = np.asarray(fmap.values, float)
     x = np.asarray(fmap.x_edges_mm, float)
     rows = values.shape[0]
@@ -147,6 +148,13 @@ def build_arc(spec: ArcSpec, maps: List[FluenceMap], mlc: MLCSpec, machine: Phot
     jx, jy = machine.jaws.x_range_mm, machine.jaws.y_range_mm
     x_jaw = (max(min(xs), jx[0]), min(max(xs), jx[1]))
     y_jaw = (max(min(ys), jy[0]), min(max(ys), jy[1]))
+    # a pair no control point opens waits under an X jaw for the whole arc (no leaf moves for it); a pair closed in
+    # some sectors only stays where its sweep leaves it
+    park = park_position(x_jaw, mlc)
+    never = ~np.any([o for _, o in opened], axis=0)
+    if park is not None and never.any():
+        for st in states:
+            st[never] = park
     angles = spec.control_point_angles_deg()
     cum = np.concatenate([[0.0], np.cumsum(mus)])
     cps = [ArcControlPoint(gantry_deg=angles[j], cumulative_mu=float(cum[j]), x_jaw_mm=x_jaw, y_jaw_mm=y_jaw,

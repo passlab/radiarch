@@ -31,7 +31,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
 | 16 | R13 Viewer integration | done; 3D Slicer check by the project lead waiting | fc7473d..26787db | 0018 |
-| 17 | R11 Multi-criteria optimization | in progress: R11.1–R11.10 done, physicist review waiting; R11.11 (B1) next | 268b0f0..8102454 | 0019 |
+| 17 | R11 Multi-criteria optimization | in progress: R11.1–R11.10 done, physicist review waiting; R11.11 (B1) built 2026-11-06, its rerun next | 268b0f0..8102454 | 0019 |
 
 ## Before the roadmap (done by 2026-10-20)
 
@@ -316,7 +316,10 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
 - [ ] R11.11 Navigation on the deliverable plan's apertures (option B1 of `docs/reports/mco-deliverable-options.md`):
   a second, small Pareto set over the sequenced plan's segment or arc-interval metersets, navigated again, so that
   the plan delivered keeps the navigated trade-offs; with it, the maximum's limit divided by the normalisation in the
-  calibration, and each meterset round's constraint values in the record (about 0.75 ew)
+  calibration, and each meterset round's constraint values in the record (about 0.75 ew). 2026-11-06: built
+  (`POST /mco/deliverables/{id}/pareto`, `MCOPlan.pareto()`, a protocol's `mco.second_set`, the rounds' limits and
+  values; design note "B1 as built"; the viewer panel's "Navigate again on its apertures"), with closed leaf pairs
+  parked under an X jaw; the 4 mm lung and TG-119 reruns on the compute server follow
 - [x] (2026-11-02) A protocol's evaluation template follows the protocol's prescription: the template's target rows
   scaled when the prescriptions differ (`GoalSetSpec.scale_to_prescription`), organ rows unchanged
 - [x] (2026-11-01) A recomputed imported photon plan goes through its apertures: a VMAT plan's RT Plan had

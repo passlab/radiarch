@@ -3,7 +3,9 @@
 The protocol plans by multi-criteria optimization instead of the reweighting rounds: the Pareto set of its trade-offs
 on its beams, automatic navigation by its goals (the main target's at priority 1), and the navigated plan made
 deliverable and normalised to the coverage goal. The run keeps the Pareto set, its state and the deviation table, and
-the command prints them. A protocol without the section keeps its digest, so earlier runs stay cached.
+the command prints them. A protocol without the section keeps its digest, so earlier runs stay cached. With the
+section's ``second_set`` (R11.11, the default) the deliverable plan is navigated again on its own apertures, by the same
+goals, and that state is the plan.
 """
 
 from __future__ import annotations
@@ -55,17 +57,27 @@ def test_an_mco_protocol_plans_a_patient(rx, tmp_path):
     run = geo.run_protocol(MCO)
     r = run.result
     assert r.mco_id and r.state_id and r.deliverable_id and r.sequence_id and r.vmat_id is None and r.normalisation > 0
+    # the plan is the second set's (R11.11): its state on the first deliverable plan's apertures, by the same goals
     ps = rx.get(f"/mco/{r.mco_id}")
-    assert ps["navigation_structures"][:2] == ["PTV", "Cord"] and len(ps["plans"]) <= 5
+    assert ps["navigation_structures"][:2] == ["PTV", "Cord"] and ps["elements"] == "segments" and len(ps["plans"]) <= 5
     state = rx.get(f"/mco/{r.mco_id}/states/{r.state_id}")
-    assert state["name"] == "protocol test-static-mco" and [lv["priority"] for lv in state["levels"]] == [1, 2]
+    assert state["name"] == "protocol test-static-mco, on its apertures" and [lv["priority"] for lv in state["levels"]] == [1, 2]
     plan = rx.get(f"/mco/deliverables/{r.deliverable_id}")
     assert plan["beam_model_id"] == r.beam_model_id and plan["dose_id"] == r.dose_id and plan["technique"] == "imrt"
+    first_plan = rx.get(f"/mco/deliverables/{ps['source_deliverable_id']}")
+    first = rx.get(f"/mco/{first_plan['mco_id']}")
+    assert first["source_deliverable_id"] is None and first_plan["sequence_id"] == r.sequence_id == plan["sequence_id"]
+    assert rx.get(f"/mco/{first['mco_id']}/states/{first_plan['state_id']}")["name"] == "protocol test-static-mco"
     goals = {g["structure"]: g for g in run.goals_table()}
     assert goals["PTV"]["achieved"] == pytest.approx(2.0 * 1.002, rel=1e-3) and goals["PTV"]["passed"]     # normalised
     assert goals["Liver"]["passed"] is None
-    assert [list(h)[0] for h in r.history] == ["mco_id", "state_id", "deliverable_id"]
+    assert [list(h)[0] for h in r.history] == ["mco_id", "state_id", "deliverable_id"] * 2
+    assert r.history[3]["source_deliverable_id"] == first_plan["deliverable_id"]
     assert geo.run_protocol(MCO).id == run.id                                                               # cached
+    # without the second set: the first deliverable plan is the plan
+    one = geo.run_protocol({**MCO, "mco": {**MCO["mco"], "second_set": False}}).result
+    assert one.run_id != run.id and [list(h)[0] for h in one.history] == ["mco_id", "state_id", "deliverable_id"]
+    assert rx.get(f"/mco/{one.mco_id}")["source_deliverable_id"] is None
     # a planner navigates from the protocol's state
     st = rx.post(f"/mco/{r.mco_id}/navigate", {"from_state": r.state_id, "locks": ["UniformRMS(PTV)"]})
     assert st["from_state"] == r.state_id

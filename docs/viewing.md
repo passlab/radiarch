@@ -105,6 +105,8 @@ interpreted as avoidance or control. On the right are four panels:
 - the radiarch plan: summary, a goal template, Evaluate;
 - the Pareto set of an MCO plan (R11.7): a slider, a value field and a lock per trade-off, automatic navigation by a
   goal template, the state's goals and DVHs; "Make deliverable" (with the deviation table) and "Export and open";
+  "Navigate again on its apertures" (R11.11), which moves the panel to a second set on the deliverable plan's
+  apertures, whose states are deliverable as shown;
 - the structures, each of which can be shown or hidden.
 
 ### Browsers
@@ -173,6 +175,8 @@ Headless Chromium then opens the plan review mode and checks:
 
 `tests/test_r11_viewer_browser.py` opens an MCO plan the same way: the MCO panel finds its Pareto set, a typed value
 navigates to a new state, "Make deliverable" shows the deviation table, and "Export and open" writes the plan.
+"Navigate again on its apertures" then moves the panel to the second set, and "Make deliverable" makes its state the
+plan.
 
 On failure it keeps screenshots, the page and the console.
 

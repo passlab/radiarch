@@ -397,6 +397,14 @@ class MCOPlan(_Object):
     def deviation_table(self) -> List[Dict[str, Any]]:
         return [r.model_dump() for r in self.result.deviation]
 
+    def pareto(self, **request) -> "ParetoSet":
+        """A second, small Pareto set over this plan's segment or arc-interval metersets (R11.11): every plan in it
+        keeps these apertures, so a state navigated on it is deliverable as shown; ``deliverable(state)`` makes it the
+        plan. Photon plans only."""
+        from ..models.mco import ApertureSetRequest, MCOResult
+
+        return ParetoSet(self.client, self.client.submit("mco", f"/mco/deliverables/{self.id}/pareto", ApertureSetRequest(**request), MCOResult))
+
     def export(self, **request) -> "Export":
         if self.result.technique == "proton":
             return _export(self.client, optimization_id=self.result.optimization_id, **request)

@@ -66,7 +66,8 @@ class BeamArrangement(BaseModel):
 class MCOSection(BaseModel):
     """A protocol's multi-criteria plan (R11.7): the trade-offs, the limits every Pareto plan meets, the generation's
     budget, and the goals automatic navigation works by. Without ``navigation_goals`` they are the protocol's goals:
-    the main target's at priority 1, the others at priority 2."""
+    the main target's at priority 1, the others at priority 2. With ``second_set`` (R11.11) the deliverable plan is
+    navigated again on its own apertures."""
 
     tradeoffs: List[ObjectiveSpec] = Field(..., min_length=2, max_length=8)
     hard_constraints: List[HardConstraint] = Field(default_factory=list, max_length=64)
@@ -74,6 +75,10 @@ class MCOSection(BaseModel):
     error_tolerance: float = Field(default=0.05, gt=0.0, le=1.0)
     navigation_goals: Optional[GoalSetSpec] = None
     navigation_structures: List[str] = Field(default_factory=list, max_length=64)
+    second_set: bool = Field(default=True, description="Navigate again on the deliverable plan's apertures (R11.11): a second Pareto "
+                                                       "set over its metersets, automatic navigation by the same goals, and that state "
+                                                       "made the plan, so the plan keeps the navigated trade-offs as far as its "
+                                                       "apertures allow.")
 
     @model_validator(mode="after")
     def _check(self) -> "MCOSection":
@@ -167,7 +172,9 @@ class ProtocolRunResult(ResearchArtifact):
     aliased: Dict[str, str] = Field(default_factory=dict,
                                     description="Protocol structure name -> the patient's structure it was copied from (by structure_aliases).")
     optimization_id: str
-    mco_id: Optional[str] = Field(default=None, description="The Pareto set (an mco protocol): navigate from state_id.")
+    mco_id: Optional[str] = Field(default=None, description="The Pareto set (an mco protocol): navigate from state_id. With the "
+                                                             "section's second_set, the second set on the first deliverable plan's "
+                                                             "apertures (its source_deliverable_id leads back to the first).")
     state_id: Optional[str] = Field(default=None, description="The automatically navigated state the plan was made from.")
     deliverable_id: Optional[str] = Field(default=None, description="Its deliverable plan, with the deviation table.")
     sequence_id: Optional[str] = None

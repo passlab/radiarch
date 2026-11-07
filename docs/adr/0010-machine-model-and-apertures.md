@@ -41,7 +41,9 @@ was no way to make a PTV, a ring or a density override from the API.
    the Bortfeld–Boyer decomposition into equal-weight segments (the i-th
    segment of a row opens at its i-th rising and closes at its i-th
    falling edge, so any profile decomposes exactly), leaf tips clipped to
-   the travel limits, closed pairs parked, jaws around the open area,
+   the travel limits, jaws around the open area, closed pairs parked 10 mm
+   behind an X jaw (from 2026-11-06; before, at the map's left edge, where
+   touching rounded tips leaked into the field),
    apertures under the minimum area dropped, interdigitation and tip
    differences reported. The segment metersets are then re-optimized
    against the plan's objectives with the segment dose columns `Dij · A`

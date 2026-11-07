@@ -14,9 +14,10 @@ deliver:
    not, decomposes exactly into equal-weight segments. Segment i of every row
    is delivered together as one aperture.
 3. **Machine limits.** Leaf tips are clipped to the retraction and
-   overtravel limits, closed pairs are parked, the jaws are set around the
-   open area, apertures smaller than the machine's minimum area are dropped,
-   and interdigitation is reported when the machine forbids it.
+   overtravel limits, the jaws are set around the open area, closed pairs are
+   parked under an X jaw (:func:`park_position`), apertures smaller than the
+   machine's minimum area are dropped, and interdigitation is reported when
+   the machine forbids it.
 4. **Segment weights.** Each aperture's dose is the beamlet doses it covers
    (fractional coverage of every beamlet, from the Dij of the open-field
    plan), so the segment metersets are re-optimized against the same
@@ -26,8 +27,9 @@ deliver:
    travel between consecutive segments and the beam-on and leaf-travel time
    per beam at the machine's dose-rate and leaf-speed limits.
 
-Not modelled: leaf transmission, tongue-and-groove, rounded leaf ends, head
-scatter of small apertures; the aperture dose is the sum of beamlet doses.
+Leaf transmission, rounded leaf ends and tongue-and-groove are the machine's
+leaf model (:class:`~radiarch.models.photon_plan.LeafModel`). Not modelled:
+head scatter of small apertures; the aperture dose is the sum of beamlet doses.
 """
 
 from __future__ import annotations
@@ -216,18 +218,45 @@ def coverage_matrix(plan: PhotonPlan, maps: List[FluenceMap], apertures: List[Ap
     for k, ap in enumerate(apertures):
         fmap = maps[[m.beam_index for m in maps].index(ap.beam_index)]
         beam = plan.beams[ap.beam_index]
-        bl = beam.beamlets()
         seg = aperture_segment(ap, fmap, mlc, machine, 0.0, beam.segments[0].beamlet_spacing_mm, 0)
-        rects = np.asarray(seg.fluence_rectangles(model), dtype=float).reshape(-1, 5)
-        if bl.shape[0] == 0 or rects.shape[0] == 0:
-            continue
-        x, y, dx, dy = (bl[:, c:c + 1] for c in range(4))
-        ox = np.clip(np.minimum(x + dx / 2, rects[None, :, 1]) - np.maximum(x - dx / 2, rects[None, :, 0]), 0.0, None)
-        oy = np.clip(np.minimum(y + dy / 2, rects[None, :, 3]) - np.maximum(y - dy / 2, rects[None, :, 2]), 0.0, None)
-        c = (ox * oy * rects[None, :, 4]).sum(axis=1) / (bl[:, 2] * bl[:, 3])
+        c = segment_coverage(beam.beamlets(), seg, model)
         nz = np.flatnonzero(c > 1e-9)
         rows += (offsets[ap.beam_index] + nz).tolist(); cols += [k] * nz.size; vals += c[nz].tolist()
     return sp.csc_matrix((vals, (rows, cols)), shape=(int(offsets[-1]), len(apertures)), dtype=np.float64)
+
+
+def segment_coverage(beamlets: np.ndarray, segment: PhotonSegment, model: Optional[LeafModel]) -> np.ndarray:
+    """The share of each beamlet (``(n, 4)``: x, y, dx, dy) that a segment's fluence lets through: the area of its
+    :meth:`PhotonSegment.fluence_rectangles` inside the beamlet, each times its factor, over the beamlet's area."""
+    bl = np.asarray(beamlets, dtype=float).reshape(-1, 4)
+    rects = np.asarray(segment.fluence_rectangles(model), dtype=float).reshape(-1, 5)
+    if bl.shape[0] == 0 or rects.shape[0] == 0:
+        return np.zeros(bl.shape[0])
+    x, y, dx, dy = (bl[:, c:c + 1] for c in range(4))
+    ox = np.clip(np.minimum(x + dx / 2, rects[None, :, 1]) - np.maximum(x - dx / 2, rects[None, :, 0]), 0.0, None)
+    oy = np.clip(np.minimum(y + dy / 2, rects[None, :, 3]) - np.maximum(y - dy / 2, rects[None, :, 2]), 0.0, None)
+    return (ox * oy * rects[None, :, 4]).sum(axis=1) / (bl[:, 2] * bl[:, 3])
+
+
+def plan_coverage(source: PhotonPlan, apertures: PhotonPlan) -> sp.csc_matrix:
+    """``(source beamlets, segments)``: each static segment of ``apertures`` (beam by beam, in order) as a column of
+    beamlet shares of the open-field plan ``source`` it was sequenced from, the beams matched by id, under the
+    aperture plan's leaf model. The aperture plan's dose is the open-field dose matrix times this times its metersets,
+    as :func:`sequence_plan` computed it (R11.11's second set)."""
+    offsets = dict(zip([b.beam_id for b in source.beams], np.cumsum([0] + [b.n_beamlets for b in source.beams])[:-1]))
+    by_id = {b.beam_id: b for b in source.beams}
+    rows, cols, vals = [], [], []
+    k = 0
+    for beam in apertures.beams:
+        if beam.beam_id not in by_id:
+            raise ValueError(f"beam {beam.beam_id} of the aperture plan is not a beam of the open-field plan")
+        bl = by_id[beam.beam_id].beamlets()
+        for seg in beam.segments:
+            c = segment_coverage(bl, seg, apertures.leaf_model)
+            nz = np.flatnonzero(c > 1e-9)
+            rows += (offsets[beam.beam_id] + nz).tolist(); cols += [k] * nz.size; vals += c[nz].tolist()
+            k += 1
+    return sp.csc_matrix((vals, (rows, cols)), shape=(int(source.n_beamlets), k), dtype=np.float64)
 
 
 def hard_constraint_terms(optimization_service, specs: Sequence, geometry, grid_shape: Tuple[int, int, int]) -> List:
@@ -305,16 +334,34 @@ def _pair_heights(mlc: MLCSpec, pair_indices: Sequence[int]) -> np.ndarray:
     return np.asarray([b[p + 1] - b[p] for p in pair_indices])
 
 
+PARK_BEHIND_JAW_MM = 10.0      # how far behind an X jaw a closed pair waits
+
+
+def park_position(x_jaw_mm: Tuple[float, float], mlc: MLCSpec) -> Optional[float]:
+    """Where a closed pair waits: ``PARK_BEHIND_JAW_MM`` behind the X1 jaw, or behind X2 when the leaves cannot reach
+    that far left; when neither fits whole, the deeper of the two. Touching rounded tips leak a line of up to 16 % of
+    the open dose (the Monte Carlo of ``docs/reports/mlc-leaf-model.md``); under a jaw it is cut to the jaw's
+    transmission. None when the MLC forbids interdigitation: a closed pair then has to close between its neighbours'
+    tips, and stays where the sequencer closed it."""
+    if not mlc.interdigitation:
+        return None
+    reach = min(float(mlc.max_leaf_position_mm), float(mlc.max_overtravel_mm))   # both tips of a closed pair at one x
+    half_gap = 0.5 * float(mlc.dosimetric_leaf_gap_mm)
+    x1, x2 = float(x_jaw_mm[0]), float(x_jaw_mm[1])
+    left, right = max(x1 - PARK_BEHIND_JAW_MM, -reach), min(x2 + PARK_BEHIND_JAW_MM, reach)
+    if left + half_gap <= x1:
+        return left
+    if right - half_gap >= x2:
+        return right
+    return left if x1 - left >= right - x2 else right
+
+
 def aperture_segment(ap: Aperture, fmap: FluenceMap, mlc: MLCSpec, machine: Optional[PhotonMachineSpec], mu: float,
                      beamlet_spacing_mm: Tuple[float, float], control_point_index: int) -> PhotonSegment:
     """A :class:`PhotonSegment` for an aperture: one MLC row per leaf pair, jaws around the open area (within the
-    machine's jaw range, when a machine is given)."""
+    machine's jaw range, when a machine is given), closed pairs parked under an X jaw (:func:`park_position`)."""
     bounds = np.asarray(mlc.leaf_boundaries_mm, dtype=float)
-    rows = []
     open_rows = ap.right_mm > ap.left_mm
-    for r, pair in enumerate(fmap.pair_indices):
-        rows.append(MLCRow(y_min_mm=float(bounds[pair]), y_max_mm=float(bounds[pair + 1]),
-                           x_left_mm=float(ap.left_mm[r]), x_right_mm=float(max(ap.right_mm[r], ap.left_mm[r]))))
     if open_rows.any():
         x1 = float(np.min(ap.left_mm[open_rows])); x2 = float(np.max(ap.right_mm[open_rows]))
         y1 = float(min(bounds[fmap.pair_indices[r]] for r in np.flatnonzero(open_rows)))
@@ -330,6 +377,13 @@ def aperture_segment(ap: Aperture, fmap: FluenceMap, mlc: MLCSpec, machine: Opti
         x2 = x1 + float(beamlet_spacing_mm[0])
     if y2 <= y1:
         y2 = y1 + float(beamlet_spacing_mm[1])
+    park = park_position((x1, x2), mlc)
+    rows = []
+    for r, pair in enumerate(fmap.pair_indices):
+        left, right = float(ap.left_mm[r]), float(max(ap.right_mm[r], ap.left_mm[r]))
+        if not open_rows[r] and park is not None:
+            left = right = park
+        rows.append(MLCRow(y_min_mm=float(bounds[pair]), y_max_mm=float(bounds[pair + 1]), x_left_mm=left, x_right_mm=right))
     return PhotonSegment(control_point_index=control_point_index, mu=float(mu), x_jaw_mm=(x1, x2), y_jaw_mm=(y1, y2),
                          mlc_rows=rows, beamlet_spacing_mm=beamlet_spacing_mm)
 
@@ -476,5 +530,5 @@ def sequence_plan(
 
 
 __all__ = ["FluenceMap", "Aperture", "fluence_maps", "sequence_row", "sequence_map", "apply_machine_limits",
-           "coverage_matrix", "optimize_segment_weights", "aperture_segment", "BeamDeliverability", "deliverability",
+           "coverage_matrix", "segment_coverage", "plan_coverage", "optimize_segment_weights", "PARK_BEHIND_JAW_MM", "park_position", "aperture_segment", "BeamDeliverability", "deliverability",
            "SequencingResult", "sequence_plan"]

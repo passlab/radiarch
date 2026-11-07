@@ -6,7 +6,9 @@ fixtures). Headless Chromium opens the study in the plan review mode, opens the 
 - the panel finds the Pareto set behind the dose and shows a slider per trade-off;
 - a value typed for a trade-off navigates: a new state, the trade-off at most that value;
 - "Make deliverable" makes the state a plan and shows its deviation table;
-- "Export and open" writes it.
+- "Export and open" writes it;
+- "Navigate again on its apertures" (R11.11) switches to the second set on that plan's apertures, whose state is made
+  the plan in turn.
 Needs what the R13 browser test needs (CI's Viewer job).
 """
 
@@ -74,6 +76,15 @@ def test_the_mco_panel_navigates_and_makes_a_plan_deliverable(env, viewer, tmp_p
             page.get_by_role("button", name="Export and open").click()
             expect(page.get_by_text(re.compile(r"Open the deliverable plan|Sent to the image server|Exported \("))).to_be_visible(timeout=120000)
             page.screenshot(path=str(artifacts / "viewer-mco-deliverable.png"))
+
+            # R11.11: navigated again on that plan's apertures, and the state there made the plan
+            page.get_by_role("button", name="Navigate again on its apertures").click()
+            expect(page.locator('[data-cy="radiarch-mco-set"]')).to_have_text("Second set, on the deliverable plan's apertures", timeout=180000)
+            expect(page.get_by_text(re.compile(r"plans on its segments, error bound"))).to_be_visible()
+            page.get_by_role("button", name="Make deliverable").click()
+            expect(page.locator('[data-cy="radiarch-mco-deviation"]')).to_be_visible(timeout=180000)
+            expect(page.get_by_role("button", name="Navigate again on its apertures")).to_have_count(0)
+            page.screenshot(path=str(artifacts / "viewer-mco-second-set.png"))
         except Exception:
             page.screenshot(path=str(artifacts / "viewer-mco-failure.png"))
             (artifacts / "viewer-mco-failure.html").write_text(page.content())
