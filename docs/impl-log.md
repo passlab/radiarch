@@ -1649,3 +1649,18 @@ ADR 0020 built; decision 6 was built first (8d0bffc).
   - ADR 0020: built, with the additions above.
   - The viewer's README: the hook and the test.
 - **Release.** It stays 0.2.0, because no object radiarch writes changes.
+
+## Release 0.3.0 (2026-11-08)
+
+- Release 0.2.0 was stamped at 09c3ebf (2026-10-27). Several features since then changed output, but the release
+  was not raised. Among them:
+  - the export's marked copies (737d2c5);
+  - R11's Pareto sets and deliverable plans;
+  - the user as Operators' Name (6a8c717);
+  - imported photon plans recomputed through their apertures (72b16a1);
+  - the leaf model in aperture doses (412a105);
+  - R11.11's second set.
+- The project lead decided to raise it now, to 0.3.0: a minor raise, because these are features (`docs/PRODUCTION.md`).
+- Objects written by the commits between 09c3ebf and this one state 0.2.0. Their git commit in Software Versions
+  tells them apart from 0.2.0's own objects.
+- No code changes, only `src/pyproject.toml`. `radiarch.build.release()` reads the installed package's version.
