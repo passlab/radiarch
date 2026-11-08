@@ -321,7 +321,9 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   values; design note "B1 as built"; the viewer panel's "Navigate again on its apertures"), with closed leaf pairs
   parked under an X jaw; the 4 mm lung and TG-119 reruns on the compute server follow. 2026-11-06: the rerun's
   TG-119 plan on the second set was not deliverable (a blend's metersets below the minimum by rounding), and the
-  second set had not converged at the first set's budget; both fixed, TG-119's rerun next
+  second set had not converged at the first set's budget; both fixed, TG-119's rerun next. 2026-11-07: TG-119
+  passes; the 4 mm lung case's second sets failed the best-of-set check (plans at different depths inside the
+  coverage limit's tolerance); each plan of a second set is now scaled to its lower limits, the two reruns next
 - [x] (2026-11-02) A protocol's evaluation template follows the protocol's prescription: the template's target rows
   scaled when the prescriptions differ (`GoalSetSpec.scale_to_prescription`), organ rows unchanged
 - [x] (2026-11-01) A recomputed imported photon plan goes through its apertures: a VMAT plan's RT Plan had

@@ -20,7 +20,8 @@ below it (:func:`blend_metersets`). The limits are the first set's hard constrai
 was made with ``hard_coverage``, the target's gEUD (a = -10) no lower than the deliverable plan's own and its maximum
 at or below ``max_dose_factor`` times the prescription. Where no metersets on these apertures meet a limit with the
 others, the feasibility run from the deliverable plan says so: the limit is relaxed to what that run reaches, and a
-note names it. The second set therefore always exists.
+note names it. The second set therefore always exists. Each solved plan is scaled up until it meets the lower limits
+exactly (:func:`at_lower_limits`), so every plan is compared at the same coverage.
 """
 
 from __future__ import annotations
@@ -161,6 +162,38 @@ def blend_metersets(blend, weights: np.ndarray, lower: np.ndarray) -> np.ndarray
     return np.where(rounding, lower, z)
 
 
+def at_lower_limits(terms: List[HardConstraintTerm], forward: Callable[[np.ndarray], np.ndarray],
+                    lower: np.ndarray) -> Callable[[np.ndarray], np.ndarray]:
+    """A second set's plan scaled up until it meets every lower limit (Dmin, gEUD >=) exactly, as far as every upper
+    limit stays within its tolerance. A solve may stop anywhere inside a lower limit's tolerance; a plan deeper inside
+    gives less dose and so scores better on every objective at once. A second set's spans are narrow, so that alone
+    would let one plan beat another in the other's own weighted sum. The dose is linear in the metersets ``z`` and every
+    limit's value scales with the dose, so the scaled plan meets its lower limits exactly; scaling up keeps every
+    meterset above the machine's minimum. ``forward`` and the returned map take the metersets above it."""
+    lower = np.asarray(lower, dtype=np.float64)
+
+    def finish(y: np.ndarray) -> np.ndarray:
+        y = np.asarray(y, dtype=np.float64)
+        dose = forward(y)
+        up, down = [], []
+        for t in terms:
+            c, _ = t.residuals(dose)                       # c <= 0 is met: value - achieved (>=), achieved - value (<=)
+            if not c.size:
+                continue
+            if t.spec.op == ">=":
+                achieved = t.spec.value_gy - float(c.max())
+                if achieved > 0.0:
+                    down.append(t.spec.value_gy / achieved)
+            else:
+                achieved = t.spec.value_gy + float(c.max())
+                if achieved > 0.0:
+                    up.append((t.spec.value_gy + t.spec.tolerance_gy) / achieved)
+        scale = min([max(down, default=1.0)] + up)
+        return scale * (lower + y) - lower if scale > 1.0 else y
+
+    return finish
+
+
 def _noop(*_args) -> None:
     pass
 
@@ -278,7 +311,11 @@ class ApertureSetService:
         fields = dict(geometry_id=d.geometry_id, beam_model_id=d.beam_model_id, engine_name=first.engine_name, engine_version=first.engine_version,
                       rbe_factor=first.rbe_factor, dose_units=first.dose_units, voxel_cc=first.voxel_cc, modality=first.modality,
                       source_deliverable_id=d.deliverable_id, elements=el.kind)
-        result = self.mco.generate(mreq2, ops, y0, key, fields, notes, on, t0, stored=lambda y: lower + np.asarray(y, dtype=np.float64))
+        if any(c.op == ">=" for c in limits):
+            notes.append("every plan scaled up until it meets the lower limits exactly (as far as the upper limits allow): "
+                         "a plan inside a lower limit's tolerance gives less dose and scores better on every objective")
+        result = self.mco.generate(mreq2, ops, y0, key, fields, notes, on, t0, stored=lambda y: lower + np.asarray(y, dtype=np.float64),
+                                   finish=at_lower_limits(terms, forward, lower) if terms else None)
         logger.info("Second set {} on deliverable plan {}: {} {}, {} plans, error bound {:.4f}", result.mco_id, d.deliverable_id, el.z0.size,
                     el.kind, len(result.plans), result.error_bound)
         return result
@@ -353,4 +390,4 @@ def deliver_on_apertures(dsvc, mco_id: str, result: MCOResult, request: Delivera
 
 
 __all__ = ["ApertureSetService", "ApertureSetRefused", "ApertureElements", "deliverable_elements", "element_matrix", "element_dose",
-           "blend_metersets", "deliver_on_apertures", "METERSETS_PREFIX"]
+           "blend_metersets", "at_lower_limits", "deliver_on_apertures", "METERSETS_PREFIX"]

@@ -28,8 +28,8 @@ from .vmat import ArcSpec
 MCO_VERSION = "2"          # 2 (R11.8): solves converge when their cost stops falling; unconverged plans prove no bound; the
                            # penalty starts matched to the objectives; robust smoothing follows the dose level
 MAX_TRADEOFFS = 8
-APERTURE_SET_VERSION = "2"  # a second set over a deliverable plan's metersets (R11.11); 2: its own solver budget, a blend
-                            # below the machine's minimum by rounding put back at it
+APERTURE_SET_VERSION = "3"  # a second set over a deliverable plan's metersets (R11.11); 2: its own solver budget, a blend
+                            # below the machine's minimum by rounding put back at it; 3: each plan at its lower limits
 
 
 class MCORunRequest(BaseModel):

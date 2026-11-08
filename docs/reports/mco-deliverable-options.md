@@ -117,6 +117,19 @@ normalisation is a check near 1.
 have one variable per meterset, so they cost seconds. The first set's budget is sized for thousands of beamlets; at
 200 iterations, none of TG-119's five second-set plans converged, and the set's error bound stayed at 0.80.
 
+**Its plans at the lower limits.** A solve meets a limit once it is within the limit's tolerance, and it may stop
+anywhere inside it. Inside a lower limit (the coverage's gEUD, a Dmin), a plan gives less dose, and less dose scores
+better on every objective at once. The second set's spans are narrow, so that difference alone lets one plan beat
+another in the other's own weighted sum. In the 4 mm lung case's static second set, the anchor for UniformRMS used
+13 % of the coverage limit's tolerance and the balance plan 91 %. The balance plan beat the anchor on all five
+objectives, and the check "each converged plan is the best of the set in its own weighted sum" read 0.054 (arcs:
+0.203; limit 0.01). Each solved plan is therefore scaled up until it meets every lower limit exactly
+(`at_lower_limits`). The dose is linear in the metersets and every limit's value scales with the dose, so the scaling
+is exact. It never lowers a meterset, so every meterset stays above the machine's minimum. It stops where an upper
+limit (the target's maximum) reaches its tolerance. On that run's plans, the scaling was at most 0.9 %, and both
+checks read 0.0. A stricter stall rule, variables scaled by their dose per MU, and a re-solve of a beaten plan from
+the plan that beats it did not pass the check (best 0.017).
+
 **In a protocol.** The `mco` section's `second_set` (default on) navigates the second set automatically by the same
 goals and makes that state the plan. The run's `mco_id`, `state_id` and `deliverable_id` are then the second set's;
 its `source_deliverable_id` leads back to the first.

@@ -221,10 +221,12 @@ class MCOService:
         return self.generate(request, ops, np.asarray(prob.w0, dtype=np.float64), key, fields, notes, on, t0)
 
     def generate(self, request: MCORunRequest, ops: MCOOps, start: np.ndarray, key: str, fields: dict, notes: List[str],
-                 on: MCOProgressCallback, t0: float, stored: Optional[Callable[[np.ndarray], np.ndarray]] = None) -> MCOResult:
+                 on: MCOProgressCallback, t0: float, stored: Optional[Callable[[np.ndarray], np.ndarray]] = None,
+                 finish: Optional[Callable[[np.ndarray], np.ndarray]] = None) -> MCOResult:
         """The Pareto set of ``request``'s trade-offs on assembled operators: the feasibility run, the sandwich from
         ``start``, the plans stored. ``fields`` are the result's own (geometry, beam model, engine, modality, voxel size);
-        ``stored`` maps a solve's variables to the weights kept (a second set's metersets, R11.11)."""
+        ``stored`` maps a solve's variables to the weights kept (a second set's metersets, R11.11); ``finish`` maps a
+        solve's variables to the plan's, before its values are taken (a second set's plans put at their lower limits)."""
         n = len(request.tradeoffs)
         stored = stored or (lambda x: x)
         solver = get_solver(request.solver.method)
@@ -267,6 +269,9 @@ class MCOService:
                 if gain is None:
                     gain = gain_on_offer(cost_and_grad(x)[1], x, max(float(np.max(x)), float(np.max(w0))))
                 ok, dose = conv.success, ops.forward(x)
+            if finish is not None:
+                x = finish(x)
+                dose = ops.forward(x)
             plans_x.append(x)
             rel = None if gain is None or cost0 <= 0.0 else float(gain / cost0)
             return Solved(x=x, values=ops.values(dose), ok=ok, bound=None if bound is None else bound(dose), gain=rel)

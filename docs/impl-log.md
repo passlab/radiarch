@@ -1476,3 +1476,37 @@ Design: `docs/reports/mlc-leaf-model.md`, agreed with the project lead on 2026-1
 - **Tests.** `tests/test_r11_apertures.py`: three plans hold a segment at a 2 MU minimum, and the blend 0.7, 0.2, 0.1
   is flagged without the fix and deliverable with it.
 - **Open.** TG-119's rerun on the compute server.
+
+## R11.11: a second set's plans at their lower limits (2026-11-07)
+
+- **What the reruns found.** From `e03cd6d`, `mco_front_tg119` passes all 18 checks: its second set converged (5 of
+  5, error bound 0.031), and the plan made on it is deliverable. `mco_protocol_lung` (4 mm) fails one check in each
+  second set, as it did from `b11713b`: "each converged plan is the best of the set in its own weighted sum" reads
+  0.0538 for the seven static fields and 0.2033 for the two arcs (limit 0.01). In the static set, the anchor for
+  UniformRMS(PTV) is beaten by the balance plan on all five objectives. Every other graded check passes.
+- **The diagnosis.** The case was run again from `e03cd6d` on the compute server with its work files kept. The run
+  reproduced both values exactly. Each second set was then rebuilt from the kept files and generated again:
+  - a stricter stall rule (1e-7, 1e-10), the metersets scaled by their dose per MU, and a re-solve of each beaten plan
+    from the plan that beats it: the static check reads 0.017 at best;
+  - each plan's use of each hard constraint's tolerance: only the target's coverage limit, gEUD (a = -10) at least
+    the deliverable plan's 64.36 Gy within 1 % (0.64 Gy), is used much. The UniformRMS anchor uses 13 % of it, the
+    balance plan 91 %.
+- **The cause.** A solve may stop anywhere inside a limit's tolerance. Inside a lower limit, a plan gives less dose,
+  and less dose scores better on every objective. The second set's spans are narrow (static UniformRMS 1.33 Gy, arcs
+  0.16 Gy), so a plan deeper in the coverage limit's tolerance beats the others in their own weighted sums.
+- **The fix.** `mco_apertures.at_lower_limits` scales each solved plan's metersets up until every lower limit (Dmin,
+  gEUD >=) is met exactly. The scaling stops where an upper limit reaches its tolerance. The dose is linear in the
+  metersets, and every limit's value scales with it, so the scaling is exact. It never lowers a meterset, so every
+  meterset stays above the machine's minimum. `MCOService.generate` takes it as `finish`, applied to each solve
+  before its values are taken; only the second set passes one, so the first sets are unchanged. On the kept run's
+  plans, the scaling was at most 0.9 %, the target's maximum used at most 0.95 of its tolerance, and both checks
+  read 0.0. Cutting every tolerance to a tenth also passed the static set (0.0, 189 s instead of 230 s), but it
+  changes the tolerances, so it was not taken.
+- `APERTURE_SET_VERSION` is 3, so cached second sets and the plans made on them are made again.
+- **Tests.** `tests/test_r11_apertures.py`:
+  - a plan 0.5 % below its gEUD limit is scaled to it exactly, a plan that meets it is kept, and an upper limit caps
+    the scale at its tolerance;
+  - on the stub patient, every plan of the second set meets its lower limits exactly (or has an upper limit at its
+    tolerance), and those are the metersets stored. Without the fix, one of its five plans is 0.22 % below the
+    coverage limit and the test fails. The stub's set passes the best-of-set check with or without the fix.
+- **Open.** The reruns of `mco_front_tg119` and `mco_protocol_lung` on the compute server.

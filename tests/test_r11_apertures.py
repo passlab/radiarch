@@ -2,8 +2,9 @@
 
 On the stub patient through the SDK: static fields made deliverable from a navigated state, a second set over the
 plan's segment metersets, a state navigated on it and made the plan. Every plan of the second set keeps the apertures,
-so the plan made from a state is the state's dose exactly (static fields). The limits a deliverable plan cannot meet
-on its apertures are relaxed with a note; a proton plan and a plan of a second set have no second set.
+so the plan made from a state is the state's dose exactly (static fields). Every plan of the second set is scaled to
+its lower limits. The limits a deliverable plan cannot meet on its apertures are relaxed with a note; a proton plan and
+a plan of a second set have no second set.
 """
 
 from __future__ import annotations
@@ -127,6 +128,80 @@ def test_a_blend_of_plans_at_the_minimum_is_deliverable(rx):
     z = blend_metersets(lam, W, floor.lower)
     assert z[0] == 2.0 and np.array_equal(z[1:], raw[1:]) and floor.issues(floor.with_metersets(z)) == []
     assert blend_metersets([0.5, 0.5], np.asarray([[2.0], [1.9]]), np.asarray([2.0]))[0] == pytest.approx(1.95)
+
+
+def test_a_plan_inside_a_lower_limit_is_scaled_to_it():
+    """A plan whose gEUD is 0.5 % below its limit, within the limit's 1 % tolerance, is scaled up to the limit exactly;
+    a plan that meets it is kept; an upper limit caps the scale at its own tolerance."""
+    from radiarch.models.optimization import HardConstraint
+    from radiarch.services.hard_constraints import HardConstraintTerm
+    from radiarch.services.mco_apertures import at_lower_limits
+    from radiarch.services.objectives import _geud
+
+    S = np.random.default_rng(7).uniform(0.5, 1.5, size=(12, 4))
+    lower, mask = np.full(4, 0.5), np.r_[np.ones(8), np.zeros(4)]
+
+    def forward(y):
+        return S @ (lower + np.asarray(y, dtype=np.float64))
+
+    def geud(d):
+        return float(_geud(d, mask, 8.0, -10.0)[0])
+
+    def limits(g, top, top_tol):
+        return [HardConstraintTerm(HardConstraint(structure_name="PTV", metric="gEUD", op=">=", value_gy=g, eud_a=-10.0,
+                                                  tolerance_gy=0.01 * g), mask),
+                HardConstraintTerm(HardConstraint(structure_name="PTV", metric="Dmax", op="<=", value_gy=top, tolerance_gy=top_tol), mask)]
+
+    y = np.array([1.0, 2.0, 0.0, 1.5])
+    d = forward(y)
+    g, dmax = geud(d) / 0.995, float(d[:8].max())
+    terms = limits(g, 2.0 * dmax, 0.1)
+    assert 0.0 < terms[0].violation(d) < terms[0].spec.tolerance_gy                                    # met, within tolerance
+    out = at_lower_limits(terms, forward, lower)(y)
+    np.testing.assert_allclose(lower + out, (lower + y) / 0.995, rtol=1e-12)
+    assert geud(forward(out)) == pytest.approx(g, rel=1e-12) and np.all(out >= y)
+
+    kept = at_lower_limits(limits(0.99 * geud(d), 2.0 * dmax, 0.1), forward, lower)(y)
+    assert np.array_equal(kept, y)
+
+    capped = limits(g, 1.002 * dmax, 0.001 * dmax)                                                     # room for 1.003 only
+    out = at_lower_limits(capped, forward, lower)(y)
+    np.testing.assert_allclose(lower + out, 1.003 * (lower + y), rtol=1e-12)
+    assert capped[1].violation(forward(out)) == pytest.approx(0.001 * dmax, rel=1e-9)
+    assert 0.0 < capped[0].violation(forward(out)) < capped[0].violation(d)
+
+
+def test_every_plan_of_the_second_set_meets_its_lower_limits(rx, monkeypatch):
+    """Each solved plan of the second set leaves at_lower_limits meeting every lower limit exactly, or with an upper
+    limit at its tolerance, and those are the metersets stored. With every plan at the same coverage, each converged
+    plan is the best of the set in its own weighted sum."""
+    import radiarch.services.mco_apertures as mod
+
+    real, seen = mod.at_lower_limits, []
+
+    def spy(terms, forward, lower):
+        finish = real(terms, forward, lower)
+
+        def wrapped(y):
+            out = finish(y)
+            seen.append((terms, forward(out), lower + out))
+            return out
+        return wrapped
+
+    monkeypatch.setattr(mod, "at_lower_limits", spy)
+    ps, plan = _first(rx)
+    res = plan.pareto(plan_budget=5).result
+    assert len(seen) == len(res.plans) and any("meets the lower limits exactly" in n for n in res.notes)
+    for terms, dose, _ in seen:
+        low = max(t.violation(dose) / t.spec.value_gy for t in terms if t.spec.op == ">=")
+        assert low <= 1e-9 or any(t.violation(dose) >= 0.999 * t.spec.tolerance_gy for t in terms if t.spec.op == "<=")
+    np.testing.assert_allclose(np.load(res.weights_uri), np.stack([z for *_, z in seen]), rtol=1e-6)
+
+    W, V = np.array([p.weights for p in res.plans]), np.array([p.values_gy for p in res.plans])
+    span = np.array(res.nadir_gy) - np.array(res.ideal_gy)
+    span = np.where(span > 1e-9, span, 1.0)
+    s = W @ V.T
+    assert max((s[k, k] - s[k].min()) / (W[k] @ span) for k, p in enumerate(res.plans) if p.converged) <= 0.01
 
 
 def test_a_limit_the_apertures_cannot_meet_is_relaxed_with_a_note(rx, monkeypatch):
