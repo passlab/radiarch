@@ -201,6 +201,8 @@ All settings use `RADIARCH_` prefix. Place them in `.env` or export as env vars.
 | `RADIARCH_TRUSTED_USER_HEADER` | `""` | Behind a gateway that authenticates people: the header it names the user in (e.g. `X-Forwarded-User`). The user is kept as `requested_by` on optimizations, protocol runs, Pareto sets, navigation states, deliverable plans and exports, and is the exported objects' Operators' Name. Empty = no user recorded |
 | `RADIARCH_TRUSTED_PROXY_SECRET` | unset | The gateway's shared secret, sent in `RADIARCH_TRUSTED_PROXY_SECRET_HEADER` (`X-Proxy-Secret`); a user header without it is refused (401) on every route. Radiarch trusts the gateway, so it must be reachable only through it |
 | `RADIARCH_DICOMWEB_PUSH_REQUIRED` | `false` | `true`: an export whose push to `RADIARCH_DICOMWEB_URL` is refused fails (502) and its objects are removed, so the archive's copy is the record; `false`: kept with `pushed: false` and the error |
+| `RADIARCH_UPLOAD_TOKEN_HEADER` | `X-Upload-Authorization` | The header a push request carries the host's upload token in (ADR 0020); radiarch sends it to the archive as the push's `Authorization` and keeps no trace of it (`docs/PRODUCTION.md`) |
+| `RADIARCH_UPLOAD_TOKEN_REQUIRED` | `false` | `true`: a push without an upload token is refused (422) before anything is written; a plan job then pushes nothing |
 | `RADIARCH_ALLOW_TEST_ENGINES` | unset | Permit the test-only `analytic` engine (wrong physics by design). Unset = only when `RADIARCH_ENVIRONMENT=dev` |
 | `RADIARCH_DATA_ROOT` | `""` | DICOM (CT + RTSTRUCT) directory read when no upload or PACS study is given; empty = the bundled `tests/data/SimpleFantomWithStruct` |
 | `RADIARCH_MCSQUARE_DIR`, `RADIARCH_CCC_ENGINE_DIR` | `engines/…` | Engine asset directories |

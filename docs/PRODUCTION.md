@@ -119,6 +119,25 @@ Radiarch's own credential (the username and password, or the client-credentials 
 `RADIARCH_DICOMWEB_URL`. A push request that names another `url` carries only the username and password
 the request gives, or nothing.
 
+**An upload token per push** (ADR 0020). When the archive sits behind a write gateway that authorizes each upload by
+user and study, the host issues a short-lived token for one upload. The viewer gets it through its `getUploadToken`
+hook (`viewing.md`) and sends it with the push in a header:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `RADIARCH_UPLOAD_TOKEN_HEADER` | `X-Upload-Authorization` | The header a push request carries its upload token in, on `POST /rt/export` with `push`, `POST /rt/exports/{id}/push` and `POST /rt/exports/{id}/records` with `push`. The viewer's `uploadTokenHeader` must name the same header. |
+| `RADIARCH_UPLOAD_TOKEN_REQUIRED` | `false` | `true`: a push without an upload token is refused (422) before anything is written. An export without `push` still works. A plan job (`/plans`), which holds no token, then pushes nothing. |
+
+- Radiarch sends the value, as given, as the `Authorization` header of that one STOW-RS request (for example
+  `Bearer eyJ…`). It does not read, check or refresh it, and it uses no credential of its own with it.
+- A token with a request's `username` is refused (422).
+- The token is never kept: not in the export, its stored request, a response, a log line or an error. The push's log
+  line says `upload token auth`, and an archive's refusal that quotes the token keeps `[upload token]` in its place.
+- A refused token comes back as any refused push: `push_error`, or `http_status` and `response` on the push route,
+  and 502 with `RADIARCH_DICOMWEB_PUSH_REQUIRED`. A stored export pushed again needs a new token.
+- The token passes through the proxy and radiarch: use TLS on every hop. Allow the header through the proxy in front of
+  radiarch, and through CORS if the browser calls radiarch directly (radiarch's own CORS allows every header).
+
 Give `kinds` to push only what the endpoint accepts (for example `["RTSTRUCT", "RTPLAN", "RTDOSE"]`).
 When the server refuses the push, the result carries `http_status` and `response` (the body, parsed
 when it is JSON), so its findings say why. The export's `label` (default `RESEARCH`) becomes the RT

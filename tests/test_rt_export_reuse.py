@@ -29,7 +29,7 @@ def test_the_same_plan_and_settings_are_the_same_export(env, monkeypatch):
     _, _, _, seq = _photon_pipeline()
     svc = RTExportService()
     pushed = []
-    monkeypatch.setattr(svc, "_push", lambda paths: pushed.append(list(paths)) or (True, None))
+    monkeypatch.setattr(svc, "_push", lambda paths, upload_token=None: pushed.append(list(paths)) or (True, None))
 
     first = svc.export(_request(seq))
     again = svc.export(_request(seq, push=True))

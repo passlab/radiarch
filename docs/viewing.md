@@ -142,6 +142,28 @@ curl -H "X-API-Key: $KEY" -X POST $API/rt/exports/<export id>/push
 #  "viewer_url": "http://localhost:3000/viewer?StudyInstanceUIDs=1.2.826...."}
 ```
 
+## A host's upload token (R13.4)
+
+An archive behind a write gateway can decide each upload by user and study, if the host issues a token for that one
+upload (ADR 0020). The viewer gets it from the host through a function in its configuration:
+
+```js
+radiarch: {
+  apiUrl: '/radiarch/api/v1',
+  getUploadToken: async ({ studyInstanceUID, objects }) => /* the host's token, or null */ null,
+  uploadTokenHeader: 'X-Upload-Authorization',       // the default; must match RADIARCH_UPLOAD_TOKEN_HEADER
+}
+```
+
+The MCO panel calls the function when the user chooses "Export and open". It passes the study and the object kinds
+the export writes (`rtplan`, `rtdose`, …), whose UIDs do not exist yet. Then:
+- a token: the client sends it in the header, and radiarch sends it to the archive as the push's `Authorization`;
+- `null`: the plan is written but not sent, and the panel says "not sent: the host gave no upload token";
+- an error: the panel shows it, and nothing is exported.
+
+Without the function, the export is pushed with radiarch's own credential, as before. The standalone viewer sets no
+function. Radiarch's side, including `RADIARCH_UPLOAD_TOKEN_REQUIRED`, is in `PRODUCTION.md`, "Pushing RT objects".
+
 ## Tests
 
 `tests/test_r13_viewer.py`:

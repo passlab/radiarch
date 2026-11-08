@@ -37,6 +37,8 @@ Writing the viewer twice would split the effort and the tests.
    - *Embedded:* a platform adds the packages to its own OHIF build of the same release.
    The extension takes two things from its host: the radiarch API base URL (configuration), and the
    request headers from OHIF's user authentication service. It contains nothing about any host.
+   *Added, 2026-11-08:* a host may also give a function that issues an upload token for an export's push
+   (ADR 0020); without it nothing changes.
 4. **The viewer finds radiarch's results through DICOM UIDs.** `GET /api/v1/rt/exports` with
    `study_instance_uid`, `series_instance_uid` or `sop_instance_uid` returns the exports that wrote
    those objects, newest first. An export names the geometry, plan, dose and lineage it came from.

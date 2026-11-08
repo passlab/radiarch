@@ -1594,3 +1594,58 @@ measured on the four arcs of the 4 mm lung run (two plans, two arcs each; machin
   and never kept; a setting that requires it, off by default; the viewer's `getUploadToken` hook. The project lead
   decided its three open points. Only decision 6, this fix, is built; the rest is R13.4.
 - **Documents.** `docs/PRODUCTION.md` states the rule in the push section.
+
+## R13.4: an upload token per export (2026-11-08)
+
+ADR 0020 built; decision 6 was built first (8d0bffc).
+
+- **Radiarch.**
+  - Two settings: `RADIARCH_UPLOAD_TOKEN_HEADER` (default `X-Upload-Authorization`) and
+    `RADIARCH_UPLOAD_TOKEN_REQUIRED` (default off).
+  - The RT routes read the header, never the body. They pass the token to `RTExportService.export`, `records` and
+    `push`, and those pass it to `DICOMwebNotifier(upload_token=…)`.
+  - The notifier sends the value, as given, as the STOW-RS `Authorization` header. It uses no credential of its own
+    with it, and its log line says `upload token auth`.
+  - A token with a username or password is refused (422). So is a value a header cannot carry: a line break, NUL or
+    leading space. The HTTP library would otherwise quote it in its error.
+  - An archive's refusal that quotes the token keeps `[upload token]` in its place. The original error is not
+    chained.
+  - With the token required, a push without one is refused (422) before anything is written. This covers the export
+    (new or stored), the push route and records with `push`. An export without `push` works as before.
+  - A plan job (`/plans`) holds no token, so with the token required it pushes nothing and logs why.
+- **Beyond the ADR, recorded in it.** Records with `push` take the token too, and the plan job's push follows
+  decision 5. The hook's `objects` are the object kinds the export writes, because it is asked before their UIDs
+  exist.
+- **Viewer (passlab/radiarch-ohif).**
+  - `createClient` takes `uploadTokenHeader`. `exportPlan` and the new `pushExport` take `{ uploadToken }`, and send
+    the header only with a token.
+  - `exportAndPush` holds the panel's rule:
+    - no hook: pushed as before;
+    - a token: pushed with it;
+    - `null`: written, not sent, with `notSent` saying why;
+    - an error: nothing exported.
+  - The planning extension's configuration takes `getUploadToken` and `uploadTokenHeader`. The MCO panel's "Export
+    and open" uses them.
+  - `viewer.ref` moves to that commit, 8666cd4.
+- **Tests.**
+  - `tests/test_upload_token.py`:
+    - the archive gets the token as `Authorization`, and radiarch's own token is not fetched;
+    - an export and a stored export pushed again, the push route to another URL, and records each push with their
+      token;
+    - no file under the artifact directory, no response and no log line holds the token;
+    - a token with a username is refused;
+    - a refused token is reported as any refused push;
+    - with the token required, pushes without one are refused and nothing is written or sent, while an export
+      without `push` and records without `push` work;
+    - a plan job pushes nothing when the token is required.
+  - The fake archive of `tests/test_dicomweb_push_auth.py` can quote the header in a refusal.
+  - radiarch-ohif: `libs/radiarch-client/test/upload.test.js`, six tests, in that repository's CI.
+  - The browser tests set no hook and are unchanged.
+- **Documents.**
+  - `docs/PRODUCTION.md`, push section: the header, the two settings and the rules.
+  - `docs/viewing.md`: the hook.
+  - README: the settings table. `.env.example` also lists the settings.
+  - ADR 0018: a pointer.
+  - ADR 0020: built, with the additions above.
+  - The viewer's README: the hook and the test.
+- **Release.** It stays 0.2.0, because no object radiarch writes changes.

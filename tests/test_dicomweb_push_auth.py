@@ -24,6 +24,7 @@ class _Server:
         self.tokens_issued = 0
         self.auth_headers = []
         self.refuse = False
+        self.echo = False               # refuse every push, quoting its Authorization header (a careless gateway)
         self.expires_in = 300
         state = self
 
@@ -41,6 +42,8 @@ class _Server:
                     return self._send(200, {"access_token": f"tok{state.tokens_issued}", "expires_in": state.expires_in, "token_type": "Bearer"})
                 state.auth_headers.append(self.headers.get("Authorization"))
                 auth = self.headers.get("Authorization") or ""
+                if state.echo:
+                    return self._send(403, {"message": f"{auth} is not valid for this study"})
                 if not (auth.startswith("Bearer tok") or auth == "Basic dTpw"):          # a token, or HTTP basic u:p
                     return self._send(401, {"message": "missing or bad token"})
                 if state.refuse:

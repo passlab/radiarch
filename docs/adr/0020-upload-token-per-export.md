@@ -1,7 +1,7 @@
 # ADR 0020 — An upload token per export, and the viewer's hook for it
 
-Date: 2026-11-08. Status: accepted; decision 6 built, the rest not yet. Roadmap R13 ("Viewer integration"); builds on
-R6's push and on R11.10 (planning behind a gateway).
+Date: 2026-11-08. Status: accepted and built (2026-11-08; decision 6 first, in 8d0bffc). Roadmap R13 ("Viewer
+integration"), R13.4; builds on R6's push and on R11.10 (planning behind a gateway).
 
 ## Context
 
@@ -25,17 +25,20 @@ for the archive, and radiarch does not forward it.
 
 1. **The token travels in a request header**, `X-Upload-Authorization` by default
    (`RADIARCH_UPLOAD_TOKEN_HEADER`), on `POST /rt/export` with `push` and on `POST /rt/exports/{id}/push`. It is not
-   a body field: an export keeps its request, and a validation error echoes the body.
+   a body field: an export keeps its request, and a validation error echoes the body. Built: treatment records
+   pushed with `POST /rt/exports/{id}/records` take it too, so that decision 5 does not shut them out. A value an
+   HTTP header cannot carry (a line break, NUL) is refused (422) without being quoted.
 2. **Radiarch passes the value through unread.** It becomes the `Authorization` header of that one STOW-RS request,
    as given (for example `Bearer eyJ…`). Radiarch does not parse, check or refresh it.
 3. **The token is never kept.** It is not written to the export record, the job table, a log line or an error
-   message. The push's log line names its kind of authentication ("upload token"), not its value. Export and push
-   run inside the request, as they do now, so the token never enters the job queue. If a push ever moves into a
-   job, this needs a new design.
+   message. The push's log line names its kind of authentication ("upload token"), not its value. An archive's
+   refusal that quotes the token is kept with `[upload token]` in its place. Export and push run inside the request,
+   as they do now, so the token never enters the job queue. If a push ever moves into a job, this needs a new design.
 4. **A token comes first.** With a token, radiarch uses neither its own credential nor a request's username and
    password. A request that gives a token and a username is refused (422).
 5. **A server can require a token** (`RADIARCH_UPLOAD_TOKEN_REQUIRED`, off by default). When it is on, a push
-   without a token is refused (422) before anything is written. An export without `push` is not affected.
+   without a token is refused (422) before anything is written. An export without `push` is not affected. Built:
+   a plan job (the `/plans` route), which can hold no token, then pushes nothing and logs why.
 6. **Radiarch's own credential goes only to its configured URL** (`RADIARCH_DICOMWEB_URL`). A push to a request's
    `url` uses the request's token, or its username and password, or nothing. Built on 2026-11-08, ahead of the rest
    (`DICOMwebNotifier`; `tests/test_dicomweb_push_auth.py`).
@@ -49,11 +52,15 @@ for the archive, and radiarch does not forward it.
    ```
 
    The MCO panel calls it when the user exports with push, and the client sends what it returns in the header.
+   `objects` lists the object kinds the export writes (`rtplan`, `rtdose`, …): the hook is asked before the export,
+   so their UIDs do not exist yet. The header's name is the extension's `uploadTokenHeader` (default
+   `X-Upload-Authorization`), which must match the server's.
    - No hook: the export works as today.
    - `null`: the objects are written but not sent, and the panel says "not sent: the host gave no upload token".
    - An error: the panel shows it and exports nothing.
 
-   `radiarch-client`'s export and push calls take an optional `uploadToken`.
+   `radiarch-client`'s export and push calls take an optional `uploadToken`; `exportAndPush` holds the panel's
+   rule above.
 9. **Nothing in radiarch knows who issues the token or what it holds.** The host issues it and the archive's gateway
    checks it. Radiarch and its viewer only carry it.
 
@@ -63,28 +70,30 @@ for the archive, and radiarch does not forward it.
   radiarch's own write credential, or keep it for pushes outside the viewer.
 - Radiarch does not check the token. A wrong or expired token is a refused push, reported as one.
 - The token passes through the proxy and radiarch's memory. Every hop must use TLS, as for any credential.
-- The API gains two optional settings and one optional header, a minor release. The viewer gains one optional
-  configuration function. Nothing changes for a deployment that sets neither.
+- The API gains two optional settings and one optional header. No object radiarch writes changes, so the release
+  stays as it is (`PRODUCTION.md`: the release follows output). The viewer gains one optional configuration function.
+  Nothing changes for a deployment that sets neither.
 - Not covered: per-user image reads, and per-user scoping of stored results. Results are shared between users
   today, so these need their own note.
 
-## Tests, when built
+## Tests
 
-radiarch (with the fake STOW-RS server of `tests/test_dicomweb_push_auth.py`):
+radiarch (`tests/test_upload_token.py`, with the fake STOW-RS server of `tests/test_dicomweb_push_auth.py`):
 - the archive receives the token as `Authorization`, and the export record, the stored request and the captured log
   hold no trace of it;
 - with `RADIARCH_UPLOAD_TOKEN_REQUIRED`, a push without a token is refused and nothing is written; an export without
   `push` still works;
 - a push to a request's `url` without a token carries no credential of the server's;
-- a token and a username together are refused.
+- a token and a username together are refused;
+- a refusal that quotes the token is kept without it; a plan job pushes nothing where a token is required.
 
-radiarch-ohif:
+radiarch-ohif (`libs/radiarch-client/test/upload.test.js`):
 - the client sends the header only when it is given a token;
 - the panel calls the hook with the study and the objects; `null` gives "not sent" with the reason; an error exports
   nothing;
 - the browser test, which sets no hook, passes unchanged.
 
-## Documents, when built
+## Documents
 
 `docs/PRODUCTION.md` (the push section: the header, the two settings, the rule of decision 6), `docs/viewing.md`
 (the hook), ADR 0018 (a pointer to this one), `docs/impl-plan.md` and `docs/impl-log.md`.

@@ -18,6 +18,7 @@ from ..models.job import JobState
 from ..core.planner import RadiarchPlanner, PlannerError
 from ..adapters import build_orthanc_adapter
 from ..adapters.dicomweb import get_dicomweb_notifier
+from ..config import get_settings
 
 planner = RadiarchPlanner(adapter=build_orthanc_adapter())
 
@@ -112,9 +113,11 @@ def run_plan_job(job_id: str, plan_id: str):
 
         store.set_plan_summary(plan_id, result.qa_summary)
 
-        # Stage 5: DICOMweb STOW-RS push (non-fatal)
+        # Stage 5: DICOMweb STOW-RS push (non-fatal); none where every push needs an upload token, which a job never holds
         notifier = get_dicomweb_notifier()
-        if notifier.enabled and rtdose_path:
+        if notifier.enabled and rtdose_path and get_settings().upload_token_required:
+            logger.info("Plan {}: not pushed: this server requires an upload token for a push", plan_id)
+        elif notifier.enabled and rtdose_path:
             store.update_job(
                 job_id, state=JobState.running, progress=0.92,
                 message="Pushing to PACS via STOW-RS", stage="pushing",

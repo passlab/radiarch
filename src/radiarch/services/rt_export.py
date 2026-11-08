@@ -21,7 +21,10 @@ its predecessor (an archive keeps both; nothing is deleted).
 
 Treatment records are written against an export: ``RT_F{n}.dcm`` per
 session and ``RTS.dcm`` for the summary. ``push`` sends the files with
-STOW-RS through the DICOMweb notifier.
+STOW-RS through the DICOMweb notifier. A push may carry the caller's upload
+token (ADR 0020): it is the push's credential and is never stored; with
+``upload_token_required`` a push without one is refused before anything is
+written.
 
 Geometries built before R6 carry no CT slice UIDs; the structure set then
 needs the CT directory (``RADIARCH_DATA_ROOT``), from which the slices are
@@ -61,6 +64,10 @@ MANIFEST = "manifest.json"
 
 class RTExportError(ValueError):
     """The export cannot be made from what the stores hold."""
+
+
+class UploadTokenError(ValueError):
+    """A push request whose upload token is missing where one is required, or comes with a username (HTTP 422)."""
 
 
 class RTPushRefused(RuntimeError):
@@ -159,11 +166,14 @@ class RTExportService:
     # Export
     # ------------------------------------------------------------------
 
-    def export(self, request: RTExportRequest) -> RTExportResult:
+    def export(self, request: RTExportRequest, upload_token: Optional[str] = None) -> RTExportResult:
+        """Write the objects, or return the stored export of this plan and settings; ``upload_token`` is the push's
+        credential when ``request.push`` is set (ADR 0020), never stored."""
+        _check_upload_token(request.push, upload_token)
         cache_key = request.compute_cache_key()
         earlier = self.exports_of(cache_key)
         if earlier and not request.new_export:
-            return self._reuse(earlier[-1], request)
+            return self._reuse(earlier[-1], request, upload_token)
         copy_number, copy_of = 1, None
         if earlier:            # a copy asked for: marked, and its plan follows the latest one
             last = earlier[-1]
@@ -264,7 +274,7 @@ class RTExportService:
             cache_key=cache_key, copy_number=copy_number, copy_of=copy_of,
         )
         if request.push:
-            ok, err = self._push([o.path for o in objects])
+            ok, err = self._push([o.path for o in objects], upload_token=upload_token)
             result.pushed, result.push_error = ok, err
             result.viewer_url = viewer_link(result.study_instance_uid) if ok else None
             if not ok and get_settings().dicomweb_push_required:
@@ -276,10 +286,10 @@ class RTExportService:
         logger.info("RT export {}: {} objects in {}", export_id, len(objects), out)
         return result
 
-    def _reuse(self, result: RTExportResult, request: RTExportRequest) -> RTExportResult:
+    def _reuse(self, result: RTExportResult, request: RTExportRequest, upload_token: Optional[str] = None) -> RTExportResult:
         """The stored export of this plan and settings, pushed again when asked: the same UIDs, so the archive keeps one copy."""
         if request.push:
-            ok, err = self._push([o.path for o in result.objects])
+            ok, err = self._push([o.path for o in result.objects], upload_token=upload_token)
             result.pushed, result.push_error = ok, err
             result.viewer_url = viewer_link(result.study_instance_uid) if ok else None
             self._save(result)
@@ -292,7 +302,8 @@ class RTExportService:
     # Treatment records
     # ------------------------------------------------------------------
 
-    def records(self, export_id: str, request: RTRecordRequest) -> RTRecordResult:
+    def records(self, export_id: str, request: RTRecordRequest, upload_token: Optional[str] = None) -> RTRecordResult:
+        _check_upload_token(request.push, upload_token)
         result = self.get(export_id)
         if result is None:
             raise RTExportError(f"export {export_id!r} not found")
@@ -337,7 +348,7 @@ class RTExportService:
             result.objects.append(new_objects[-1])
         pushed, err = False, None
         if request.push:
-            pushed, err = self._push([o.path for o in new_objects])
+            pushed, err = self._push([o.path for o in new_objects], upload_token=upload_token)
         self._save(result)
         return RTRecordResult(export_id=export_id, objects=new_objects, fractions_delivered=len(delivered_fractions),
                               fractions_planned=planned, status=status, pushed=pushed, push_error=err)
@@ -364,13 +375,14 @@ class RTExportService:
     # ------------------------------------------------------------------
 
     def push(self, export_id: str, *, url: Optional[str] = None, username: Optional[str] = None, password: Optional[str] = None,
-             kinds: Optional[Sequence[str]] = None) -> RTPushResult:
+             kinds: Optional[Sequence[str]] = None, upload_token: Optional[str] = None) -> RTPushResult:
+        _check_upload_token(True, upload_token, username or password)
         result = self.get(export_id)
         if result is None:
             raise RTExportError(f"export {export_id!r} not found")
         from ..adapters.dicomweb import DICOMwebNotifier, DICOMwebPushError
 
-        notifier = DICOMwebNotifier(url=url, username=username, password=password)
+        notifier = DICOMwebNotifier(url=url, username=username, password=password, upload_token=upload_token)
         paths = [o.path for o in result.objects if kinds is None or o.kind.lower() in {k.lower() for k in kinds}]
         try:
             notifier.store_instances(paths, raise_errors=True)
@@ -384,11 +396,12 @@ class RTExportService:
         self._save(result)
         return RTPushResult(export_id=export_id, pushed=len(paths), url=notifier._url or "", viewer_url=result.viewer_url)
 
-    def _push(self, paths: Sequence[str]) -> Tuple[bool, Optional[str]]:
-        from ..adapters.dicomweb import get_dicomweb_notifier
+    def _push(self, paths: Sequence[str], upload_token: Optional[str] = None) -> Tuple[bool, Optional[str]]:
+        from ..adapters.dicomweb import DICOMwebNotifier, get_dicomweb_notifier
 
         try:
-            get_dicomweb_notifier().store_instances(list(paths), raise_errors=True)
+            notifier = DICOMwebNotifier(upload_token=upload_token) if upload_token else get_dicomweb_notifier()
+            notifier.store_instances(list(paths), raise_errors=True)
             return True, None
         except Exception as exc:
             logger.warning("STOW-RS push failed: {}", exc)
@@ -621,6 +634,18 @@ class RTExportService:
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _check_upload_token(pushing: bool, upload_token: Optional[str], credentials=None) -> None:
+    """ADR 0020: an upload token is the push's only credential, and a server may require one for every push."""
+    from ..adapters.dicomweb import header_safe
+
+    if upload_token and credentials:
+        raise UploadTokenError("give an upload token or a username and password, not both")
+    if upload_token and not header_safe(upload_token):
+        raise UploadTokenError("the upload token holds characters an HTTP header cannot carry")
+    if pushing and not upload_token and get_settings().upload_token_required:
+        raise UploadTokenError(f"this server requires an upload token for a push (the {get_settings().upload_token_header} header)")
+
+
 def viewer_link(study_instance_uid: str) -> Optional[str]:
     """A link that opens the study in the configured DICOMweb viewer (OHIF: ``RADIARCH_VIEWER_ROUTE``, ``viewer`` or
     radiarch's ``plan-review`` mode); None without one."""
@@ -661,4 +686,4 @@ def _beam_name(beam, number: int) -> str:
     return beam.name or beam.beam_id or f"B{number}"
 
 
-__all__ = ["RTExportService", "RTExportError", "MANIFEST", "RTPushRefused"]
+__all__ = ["RTExportService", "RTExportError", "MANIFEST", "RTPushRefused", "UploadTokenError"]

@@ -276,6 +276,13 @@ class Settings(BaseSettings):
         default=False,
         description="Fail an export (HTTP 502, the written objects removed) when its push to RADIARCH_DICOMWEB_URL is refused.",
     )
+    # An upload token per push (ADR 0020): the host issues it for one user's upload, the viewer sends it in this header,
+    # and radiarch passes it to the archive as the push's Authorization. It is never kept.
+    upload_token_header: str = Field(default="X-Upload-Authorization", description="Header carrying a push request's upload token.")
+    upload_token_required: bool = Field(
+        default=False,
+        description="Refuse a push without an upload token (HTTP 422, before anything is written); a plan job then pushes nothing.",
+    )
 
     # Test-only dose engines (the analytic engine: right shape, wrong physics)
     allow_test_engines: Optional[bool] = Field(

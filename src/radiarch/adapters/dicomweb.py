@@ -11,6 +11,10 @@ write gateway. Tokens are fetched when needed and refreshed before they expire; 
 secret and the token are never logged. Both go only to ``RADIARCH_DICOMWEB_URL``: a push
 to another URL carries only the credential its caller gives.
 
+An upload token (ADR 0020) is a caller's credential for one push: its value becomes the
+``Authorization`` header as given, and radiarch's own credential is not used. It is never
+logged, and an error that would quote it says ``[upload token]`` instead.
+
 A refused push raises :class:`DICOMwebPushError` with the HTTP status and the response
 body, so a caller can say why (a gateway answers with JSON findings).
 """
@@ -88,11 +92,17 @@ class DICOMwebNotifier:
         username: Optional[str] = None,
         password: Optional[str] = None,
         token: Optional[ClientCredentialsToken] = None,
+        upload_token: Optional[str] = None,
     ):
         settings = get_settings()
         self._url = url or settings.dicomweb_url
-        # radiarch's own credential only for its configured URL: a request may name another one
-        own = bool(settings.dicomweb_url) and _same_url(self._url, settings.dicomweb_url)
+        self._upload_token = upload_token or None
+        if self._upload_token and (username or password or token is not None):
+            raise ValueError("an upload token or a username and password, not both")
+        if self._upload_token and not header_safe(self._upload_token):
+            raise ValueError("the upload token holds characters an HTTP header cannot carry")
+        # radiarch's own credential only for its configured URL: a request may name another one; never with an upload token
+        own = not self._upload_token and bool(settings.dicomweb_url) and _same_url(self._url, settings.dicomweb_url)
         self._username = username or (settings.dicomweb_username if own else None)
         self._password = password or (settings.dicomweb_password if own else None)
         self._token = token
@@ -107,7 +117,9 @@ class DICOMwebNotifier:
 
     @property
     def auth(self) -> str:
-        """``bearer``, ``basic`` or ``none``."""
+        """``upload token``, ``bearer``, ``basic`` or ``none``."""
+        if self._upload_token:
+            return "upload token"
         return "bearer" if self._token is not None else ("basic" if self._username else "none")
 
     def _get_client(self):
@@ -117,6 +129,8 @@ class DICOMwebNotifier:
             logger.warning("dicomweb-client not installed; DICOMweb push disabled")
             return None
 
+        if self._upload_token:
+            return DICOMwebClient(url=self._url, headers={"Authorization": self._upload_token})
         if self._token is not None:
             # a client per push: the token in its headers may have been refreshed since the last one
             return DICOMwebClient(url=self._url, headers={"Authorization": f"Bearer {self._token.get()}"})
@@ -158,6 +172,10 @@ class DICOMwebNotifier:
             return True
         except Exception as exc:
             err = _refusal(exc, self._url)
+            if self._upload_token and self._upload_token in str(err):
+                err = _without(err, self._upload_token, self._url)
+                if raise_errors:
+                    raise err from None              # the original names the token
             if raise_errors:
                 raise err from exc
             logger.error("STOW-RS push failed (non-fatal): {}", err)
@@ -176,6 +194,19 @@ def _refusal(exc: Exception, url: str) -> Exception:
     except Exception:  # pragma: no cover
         body = ""
     return DICOMwebPushError(getattr(resp, "status_code", None), body, url)
+
+
+def header_safe(value: str) -> bool:
+    """Whether a value goes into an HTTP header as it is: no line break or NUL, no leading space. The HTTP library
+    refuses any other value with an error that quotes it."""
+    return value == value.lstrip() and not any(c in value for c in "\r\n\0")
+
+
+def _without(err: Exception, secret: str, url: str) -> Exception:
+    """The error with ``secret`` replaced by ``[upload token]``, as the same kind of error where it can be."""
+    if isinstance(err, DICOMwebPushError):
+        return DICOMwebPushError(err.status, err.body.replace(secret, "[upload token]"), url)
+    return RuntimeError(str(err).replace(secret, "[upload token]"))
 
 
 def _same_url(a: str, b: str) -> bool:
