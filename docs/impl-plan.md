@@ -326,8 +326,12 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   coverage limit's tolerance); each plan of a second set is now scaled to its lower limits, the two reruns next.
   2026-11-08: both pass from `a36fc4f` (records `docs/validation/2026-10-31-r11/2026-11-08-second-set-a36fc4f/`; the
   R8-R10 cases' rerun with the parked leaf pairs, `2026-11-07-parked-leaf-pairs-b11713b/`)
-- [ ] The arcs' second set converges: 1 of its 11 solves converged in the 4 mm lung record (error bound 0.91); in the
-  diagnosis, metersets scaled by their dose per MU converged 11 of 11 before the scaling to the lower limits
+- [ ] The arcs' second set converges: 1 of its 11 solves converged in the 4 mm lung record (error bound 0.91). In the
+  diagnosis, metersets scaled by their dose per MU converge 11 of 11 with the scaling to the lower limits (error bound
+  0.40), but the best-of-set check then reads 0.017 over all 11 plans. The arcs' limits cannot all be met exactly: no
+  metersets bring PTV Dmax within 0.25 Gy of 72 Gy (tolerance 0.72 Gy) while the gEUD limit holds, so the plans'
+  trade-offs lie inside that tolerance, at different depths. Solving to a tenth of each tolerance fails. Kept open
+  (2026-11-08)
 - [x] (2026-11-02) A protocol's evaluation template follows the protocol's prescription: the template's target rows
   scaled when the prescriptions differ (`GoalSetSpec.scale_to_prescription`), organ rows unchanged
 - [x] (2026-11-01) A recomputed imported photon plan goes through its apertures: a VMAT plan's RT Plan had

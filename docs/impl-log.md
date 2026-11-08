@@ -1531,3 +1531,28 @@ Design: `docs/reports/mlc-leaf-model.md`, agreed with the project lead on 2026-1
   metersets scaled by their dose per MU converged 11 of 11 (error bound 0.285, against 0.845). The two together have
   not been run. Two TG-119 checks share the name "OuterTarget Dmax <= 60.0 Gy in every plan" (the first set's limit
   and the second set's maximum, both 60 Gy there).
+
+## R11.11: the arcs' second set, a diagnosis (2026-11-08)
+
+The diagnosis ran on the work directory kept from the 4 mm lung run, with the code at `a36fc4f`. Its scripts are not
+in the repository. No code changed.
+
+- **The two fixes together.** The metersets were scaled by their dose per MU, and each plan was scaled to its lower
+  limits. The arcs' set then converges 11 of 11 (error bound 0.403, against 0.910) in 15 minutes (against 34). Every
+  plan meets its lower limits exactly, and no plan is dominated. But over all 11 plans the best-of-set check reads
+  0.0168, above its 0.01 limit: the oesophagus anchor beats the balance plan in the balance plan's own weighted sum.
+  The seven-field set is unchanged (11 of 11, error bound 0.336, check 0.0).
+- **Why.** The plans use different shares of the PTV Dmax tolerance (72 Gy, tolerance 0.72 Gy): from 0.55 to 0.93.
+  The anchor that beats the balance plan uses 0.93; the balance plan uses 0.61. Re-solving the balance plan from the
+  anchor, or with three times the budget, leaves it beaten.
+- **Solving to a tenth of each tolerance.** Each plan's solve stopped only when every violation was within a tenth
+  of its tolerance; the penalty's start, the limits and the checks stayed as they are. On the arcs, no solve reached
+  it. In every solve, and in both feasibility runs, the worst violation fell to 0.25 Gy and no lower; the stored
+  plans put it on PTV Dmax, with the gEUD limit met exactly. Every solve ran all 12 rounds, the penalty rose to between 1e5 and 1e8, and the 11 plans came out nearly the same:
+  4 dominated, the check at 0.676, the balance plan's weighted sum 31.9 Gy worse, 58 minutes. The seven-field set
+  passed (11 of 11, error bound 0.345, check 0.0, 205 s).
+- **What it means.** On the arcs' apertures, with every meterset at or above the machine's minimum, no plan meets
+  PTV Dmax within 0.25 Gy while the gEUD limit holds. Every plan uses at least a third of the Dmax tolerance, and the
+  set's trade-offs lie inside the rest of it. How deep each plan sits there is what fails the check.
+- **Decision.** The project lead kept the arcs' convergence open (`impl-plan.md`). The lung record from `a36fc4f`
+  stands as graded.
