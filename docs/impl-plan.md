@@ -31,7 +31,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
 | 16 | R13 Viewer integration | done; 3D Slicer check by the project lead waiting | fc7473d..26787db | 0018 |
-| 17 | R11 Multi-criteria optimization | in progress: R11.1–R11.10 done, physicist review waiting; R11.11 (B1) built 2026-11-06, its rerun next | 268b0f0..8102454 | 0019 |
+| 17 | R11 Multi-criteria optimization | in progress: R11.1–R11.10 done, physicist review waiting; R11.11 (B1) done 2026-11-08; the arcs' second set's convergence open | 268b0f0..a36fc4f | 0019 |
 
 ## Before the roadmap (done by 2026-10-20)
 
@@ -313,7 +313,7 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   exported objects' Operators' Name; an export fails when its push is refused and the push is required.
   2026-11-04: the user header without the secret is refused on every route, not only where the user is read, and a
   protocol run keeps its user, on the run and on its Pareto set, navigation state and deliverable plan
-- [ ] R11.11 Navigation on the deliverable plan's apertures (option B1 of `docs/reports/mco-deliverable-options.md`):
+- [x] R11.11 (2026-11-08) Navigation on the deliverable plan's apertures (option B1 of `docs/reports/mco-deliverable-options.md`):
   a second, small Pareto set over the sequenced plan's segment or arc-interval metersets, navigated again, so that
   the plan delivered keeps the navigated trade-offs; with it, the maximum's limit divided by the normalisation in the
   calibration, and each meterset round's constraint values in the record (about 0.75 ew). 2026-11-06: built
@@ -323,7 +323,11 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   TG-119 plan on the second set was not deliverable (a blend's metersets below the minimum by rounding), and the
   second set had not converged at the first set's budget; both fixed, TG-119's rerun next. 2026-11-07: TG-119
   passes; the 4 mm lung case's second sets failed the best-of-set check (plans at different depths inside the
-  coverage limit's tolerance); each plan of a second set is now scaled to its lower limits, the two reruns next
+  coverage limit's tolerance); each plan of a second set is now scaled to its lower limits, the two reruns next.
+  2026-11-08: both pass from `a36fc4f` (records `docs/validation/2026-10-31-r11/2026-11-08-second-set-a36fc4f/`; the
+  R8-R10 cases' rerun with the parked leaf pairs, `2026-11-07-parked-leaf-pairs-b11713b/`)
+- [ ] The arcs' second set converges: 1 of its 11 solves converged in the 4 mm lung record (error bound 0.91); in the
+  diagnosis, metersets scaled by their dose per MU converged 11 of 11 before the scaling to the lower limits
 - [x] (2026-11-02) A protocol's evaluation template follows the protocol's prescription: the template's target rows
   scaled when the prescriptions differ (`GoalSetSpec.scale_to_prescription`), organ rows unchanged
 - [x] (2026-11-01) A recomputed imported photon plan goes through its apertures: a VMAT plan's RT Plan had

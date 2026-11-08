@@ -27,6 +27,12 @@ tumour's D95 on each phase rises by up to 0.4 Gy, and the lungs' V20Gy by up to 
 points. The registration and replanning cases are unaffected. Please review the 4D case from the
 rerun.
 
+## Rerun with closed leaf pairs parked, 2026-11-07
+
+From commit `b11713b` on, the sequencer parks closed leaf pairs under an X jaw. `lung_4d_itv` ran again from that
+commit in [`2026-11-07-parked-leaf-pairs-b11713b/`](2026-11-07-parked-leaf-pairs-b11713b/README.md): every value
+equals the rerun of 2026-11-05, which stands.
+
 ## What to review and sign
 
 | Document | Contents | Signed by |

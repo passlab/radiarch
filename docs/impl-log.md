@@ -1510,3 +1510,24 @@ Design: `docs/reports/mlc-leaf-model.md`, agreed with the project lead on 2026-1
     tolerance), and those are the metersets stored. Without the fix, one of its five plans is 0.22 % below the
     coverage limit and the test fails. The stub's set passes the best-of-set check with or without the fix.
 - **Open.** The reruns of `mco_front_tg119` and `mco_protocol_lung` on the compute server.
+
+## R11.11 done: the records of the rerun round (2026-11-08)
+
+- **R11.** From `a36fc4f` on the compute server, `mco_front_tg119` passes all 19 graded checks and
+  `mco_protocol_lung` all 38. Both second sets' best-of-set checks read 0.0. Record:
+  `docs/validation/2026-10-31-r11/2026-11-08-second-set-a36fc4f/`, with the failed rounds from `b11713b` and
+  `e03cd6d` kept beside it.
+  - TG-119: the second set converged (5 of 5, error bound 0.031). On it, the core's D5 is 19.32 Gy, against 22.40 Gy
+    on the deliverable plan, at OuterTarget D95 50.1 Gy. The scaling to the lower limits stopped at the target's
+    maximum (60.1 Gy), with the gEUD inside its tolerance.
+  - Lung, seven fields: 11 of 11 converged (error bound 0.337). Every plan meets the coverage limit exactly. The plan
+    on the second set lowers the cord's maximum (5.56 → 4.56 Gy) and the oesophagus mean (1.59 → 1.14 Gy).
+  - Lung, two arcs: 1 of 11 converged (error bound 0.910). The plan on the second set lowers the cord's maximum from
+    32.3 to 27.2 Gy and the oesophagus mean from 11.8 to 10.7 Gy at the same coverage.
+- **R8–R10.** The cases the parked leaf pairs touch ran from `b11713b`. Every graded check passes. Only
+  `lung_vmat_lctsc` and `protocol_lung_vmat` move, on one patient, by at most 0.19. Records:
+  `2026-11-07-parked-leaf-pairs-b11713b/` under R8, R9 and R10.
+- **Open.** The arcs' second set converges poorly. In the diagnosis, from `e03cd6d` and before the scaling, its
+  metersets scaled by their dose per MU converged 11 of 11 (error bound 0.285, against 0.845). The two together have
+  not been run. Two TG-119 checks share the name "OuterTarget Dmax <= 60.0 Gy in every plan" (the first set's limit
+  and the second set's maximum, both 60 Gy there).

@@ -44,6 +44,14 @@ are kept as findings: the 1 × 1 cm field's dose (−5.9 %, tolerance 5 %) and t
 tolerance 3). The references here ran 18 times the primaries they state (OpenGATE 10 runs them on every thread);
 every comparison is a ratio, so no value changes. Please review the two failures from the rerun.
 
+## Rerun with closed leaf pairs parked, 2026-11-07
+
+From commit `b11713b` on, the sequencer parks closed leaf pairs 10 mm behind an X jaw: every closed pair of a static
+segment, and an arc's pair that no control point opens. The three VMAT cases are rerun in
+[`2026-11-07-parked-leaf-pairs-b11713b/`](2026-11-07-parked-leaf-pairs-b11713b/README.md): every graded check still
+passes. `lung_sbrt_vmat` and `hn_sib_vmat` are unchanged, and only one patient of `lung_vmat_lctsc` moves, by at most
+0.19 (PTV V60Gy 95.62 → 95.43 %). Please review the three VMAT cases from this rerun.
+
 ## What to review and sign
 
 | Document | Contents | Signed by |

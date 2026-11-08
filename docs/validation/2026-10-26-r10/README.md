@@ -20,6 +20,13 @@ still passes. The lung protocol still reproduces its harness case, now against t
 compared with a baseline run from the commit before the leaf model, has lower organ maxima and higher low doses.
 Please review both cases from the rerun.
 
+## Rerun with closed leaf pairs parked, 2026-11-07
+
+From commit `b11713b` on, the sequencer parks closed leaf pairs under an X jaw. Both cases are rerun in
+[`2026-11-07-parked-leaf-pairs-b11713b/`](2026-11-07-parked-leaf-pairs-b11713b/README.md): every graded check still
+passes. The batch is unchanged. The lung protocol still equals its harness case, whose second patient moves by at
+most 0.19. Please review both cases from this rerun.
+
 ## What to review and sign
 
 | Document | Contents | Signed by |

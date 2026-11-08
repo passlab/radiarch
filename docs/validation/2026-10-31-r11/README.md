@@ -38,6 +38,18 @@ affected by R11.9: its deliverable plan's core D5 went from 6.16 Gy in the recor
 and is 22.40 Gy with it, within the institutional limit of 22.44 Gy but far above TG-119's goal of 10 Gy. The proton
 case is unaffected. Please review both photon cases' deliverable plans from the rerun.
 
+## Rerun with a second Pareto set on the apertures, 2026-11-08
+
+R11.11 adds a second Pareto set over a deliverable plan's metersets, so that the navigated plan on it is
+deliverable. Both photon cases now navigate it and grade the plan made on it, in
+[`2026-11-08-second-set-a36fc4f/`](2026-11-08-second-set-a36fc4f/README.md): every graded check passes (19 and 38).
+The first sets and their deliverable plans are unchanged. On the second set, TG-119's core D5 falls from 22.40 to
+19.32 Gy at the same coverage, and the lung arcs' spinal cord maximum from 32.3 to 27.2 Gy. Two earlier rounds
+failed: TG-119 from `b11713b`, and the lung case from `b11713b` and from `e03cd6d`. They are kept beside it, with the
+cause and the fix. The arcs'
+second set converges poorly (1 of 11 plans), which is open. Please review both photon cases' plans on the second set
+from this rerun.
+
 ## What to review and sign
 
 | Document | Contents | Signed by |
