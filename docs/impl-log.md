@@ -1556,3 +1556,24 @@ in the repository. No code changed.
   set's trade-offs lie inside the rest of it. How deep each plan sits there is what fails the check.
 - **Decision.** The project lead kept the arcs' convergence open (`impl-plan.md`). The lung record from `a36fc4f`
   stands as graded.
+
+## Arcs: leaf pairs closed for part of an arc, measured (2026-11-08)
+
+Since R11.11, an arc parks a leaf pair under an X jaw only when no control point opens it. A pair closed in some
+sectors waits inside the field: at the field's centre where it has no fluence, or where its sweep ended. This was
+measured on the four arcs of the 4 mm lung run (two plans, two arcs each; machine `synthetic-120`, leaf gap 1.5 mm,
+25 mm/s). The script is not in the repository. No code changed.
+
+- **How much.** Closed pairs sit inside the field for 20 to 35 % of the pair metersets: 4 to 8 of the 22 pairs in
+  each interval, meterset-weighted. Their tips pass 2.2 to 5.8 % of the arc's open fluence, a geometric estimate
+  (each leaking pair's 1.5 mm gap against the whole open area). The leaf model includes it in the dose, so the
+  metersets are optimized with it.
+- **Parking that lengthens no interval.** An interval's aperture is the mean of its two control points, so a closed
+  run keeps its end points. Each inner point moves toward the jaw as far as the leaf speed allows in the intervals'
+  present times. This removes about a quarter of the leak (2.2 to 1.6 %, 3.9 to 3.0 %, 5.0 to 4.2 %, 5.8 to 4.5 %).
+  Most runs are too short for a 90 mm trip to the jaw and back.
+- **Parking every run of three or more points.** This removes about half the leak, since the runs' ends still leak.
+  Delivery lengthens from about 220 to 375 s per arc, and 20 to 34 intervals per arc fall below the new minimum
+  meterset.
+- **Decision.** The project lead chose to record the measurement and leave the pairs as they are. The parking that
+  lengthens no interval is to be built with the next change that reruns the arcs (`impl-plan.md`, R8).

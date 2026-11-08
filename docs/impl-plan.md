@@ -170,6 +170,11 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] Full-mode harness run and the R8 record for review ([`validation/2026-10-23-r8/`](validation/2026-10-23-r8/), from the clean-commit run at `52ed834`)
 - [ ] Physicist's review and signature of the R8 record **(waiting)**
 - [ ] Direct leaf optimization for VMAT (progressive sampling or sequential convex programming) **(open)**
+- [ ] Arcs: leaf pairs closed for part of an arc parked under an X jaw **(open)**. Measured 2026-11-08 on the 4 mm
+  lung case's arcs: closed pairs sit inside the field for 20 to 35 % of the pair metersets, and their tips pass about
+  2 to 6 % of the arc's open fluence (the leaf model includes it in the dose). Parking that lengthens no interval
+  removes about a quarter of it. Parking every closed run of three or more control points removes about half, but
+  lengthens delivery from 223 to 374 s per arc. The first is to be built with the next change that reruns the arcs
 - [x] Lateral kernel scaling for lung (`pb` 1.1.0; fitted to the 2 × 2 and 10 × 10 cm Monte Carlo lung slabs)
 - [x] Monte Carlo 2 × 2 cm lung-slab reference and the narrow-field lung check
 
