@@ -1577,3 +1577,20 @@ measured on the four arcs of the 4 mm lung run (two plans, two arcs each; machin
   meterset.
 - **Decision.** The project lead chose to record the measurement and leave the pairs as they are. The parking that
   lengthens no interval is to be built with the next change that reruns the arcs (`impl-plan.md`, R8).
+
+## The push's own credential only to its configured URL; ADR 0020 (2026-11-08)
+
+- **Fix.** `POST /rt/exports/{id}/push` takes a `url`. A request that named one without a username was pushed with
+  radiarch's own credential: its client-credentials token, or its HTTP-basic username and password. Any caller of
+  the route could have that credential sent to a server of its choosing. Now `DICOMwebNotifier` uses radiarch's
+  credential only when the target is `RADIARCH_DICOMWEB_URL` (scheme and host compared without case, the path
+  without a final slash). Another URL gets only the username and password the request gives, or nothing.
+- **Tests.** `tests/test_dicomweb_push_auth.py`: another URL receives no `Authorization` header and no token is
+  fetched, directly and through the export service's push; a credential the request gives does reach it; the
+  configured URL, named again with a final slash, still gets radiarch's credential; `_same_url` on hosts, ports,
+  schemes and paths. The two tests that pushed with the settings' token to an unconfigured URL now configure it.
+  The new test fails on the code before the fix.
+- **ADR 0020** (accepted): an upload token per export, carried unchanged in `X-Upload-Authorization` for one push
+  and never kept; a setting that requires it, off by default; the viewer's `getUploadToken` hook. The project lead
+  decided its three open points. Only decision 6, this fix, is built; the rest is R13.4.
+- **Documents.** `docs/PRODUCTION.md` states the rule in the push section.

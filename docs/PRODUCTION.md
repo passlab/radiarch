@@ -115,6 +115,10 @@ the `url` of the request. Two kinds of authentication:
 | `RADIARCH_DICOMWEB_USERNAME`, `RADIARCH_DICOMWEB_PASSWORD` | HTTP basic, for a plain PACS; a request's `username` and `password` override them |
 | `RADIARCH_DICOMWEB_TOKEN_URL`, `RADIARCH_DICOMWEB_CLIENT_ID`, `RADIARCH_DICOMWEB_CLIENT_SECRET` (and optionally `RADIARCH_DICOMWEB_TOKEN_SCOPE`) | An OAuth2 client-credentials bearer token, for an endpoint that wants one (a research write gateway). Used when the token URL and client id are set and the request gives no username. The token is fetched on first use and refreshed before it expires; the secret and the token are never logged. Keep the secret in your orchestrator's secret store. |
 
+Radiarch's own credential (the username and password, or the client-credentials token) goes only to
+`RADIARCH_DICOMWEB_URL`. A push request that names another `url` carries only the username and password
+the request gives, or nothing.
+
 Give `kinds` to push only what the endpoint accepts (for example `["RTSTRUCT", "RTPLAN", "RTDOSE"]`).
 When the server refuses the push, the result carries `http_status` and `response` (the body, parsed
 when it is JSON), so its findings say why. The export's `label` (default `RESEARCH`) becomes the RT

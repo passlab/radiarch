@@ -8,7 +8,8 @@ Authentication: HTTP basic (``RADIARCH_DICOMWEB_USERNAME`` / ``_PASSWORD``) for 
 PACS, or an OAuth2 client-credentials bearer token (``RADIARCH_DICOMWEB_TOKEN_URL``,
 ``_CLIENT_ID``, ``_CLIENT_SECRET``) for an endpoint that wants one, such as a research
 write gateway. Tokens are fetched when needed and refreshed before they expire; the
-secret and the token are never logged.
+secret and the token are never logged. Both go only to ``RADIARCH_DICOMWEB_URL``: a push
+to another URL carries only the credential its caller gives.
 
 A refused push raises :class:`DICOMwebPushError` with the HTTP status and the response
 body, so a caller can say why (a gateway answers with JSON findings).
@@ -90,10 +91,12 @@ class DICOMwebNotifier:
     ):
         settings = get_settings()
         self._url = url or settings.dicomweb_url
-        self._username = username or settings.dicomweb_username
-        self._password = password or settings.dicomweb_password
+        # radiarch's own credential only for its configured URL: a request may name another one
+        own = bool(settings.dicomweb_url) and _same_url(self._url, settings.dicomweb_url)
+        self._username = username or (settings.dicomweb_username if own else None)
+        self._password = password or (settings.dicomweb_password if own else None)
         self._token = token
-        if self._token is None and not username and settings.dicomweb_token_url and settings.dicomweb_client_id:
+        if self._token is None and not username and own and settings.dicomweb_token_url and settings.dicomweb_client_id:
             secret = settings.dicomweb_client_secret.get_secret_value() if settings.dicomweb_client_secret else ""
             self._token = _shared_token(settings.dicomweb_token_url, settings.dicomweb_client_id, secret, settings.dicomweb_token_scope)
         self._client = None
@@ -173,6 +176,15 @@ def _refusal(exc: Exception, url: str) -> Exception:
     except Exception:  # pragma: no cover
         body = ""
     return DICOMwebPushError(getattr(resp, "status_code", None), body, url)
+
+
+def _same_url(a: str, b: str) -> bool:
+    """Whether two URLs name the same endpoint: scheme and host compared without case, the path without a final slash."""
+    from urllib.parse import urlsplit
+
+    pa, pb = urlsplit(a.strip()), urlsplit(b.strip())
+    return ((pa.scheme.lower(), pa.netloc.lower(), pa.path.rstrip("/"), pa.query)
+            == (pb.scheme.lower(), pb.netloc.lower(), pb.path.rstrip("/"), pb.query))
 
 
 _tokens: dict = {}

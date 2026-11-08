@@ -266,6 +266,10 @@ OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH
   fixes; closes R6's hand check in OHIF
 - [ ] The objects read by 3D Slicer with SlicerRT (structures, dose, beams, DRRs; Slicer's DVHs against the DVHs
   radiarch wrote), steps and an empty results table in the record **(waiting: the project lead)**
+- [ ] R13.4 An upload token per export, and the viewer's hook for it (ADR 0020, accepted 2026-11-08): a host-issued
+  token carried unchanged in `X-Upload-Authorization` to the archive for one push, never kept; a setting that
+  requires it (off by default); `getUploadToken` in the planning extension's configuration. Done 2026-11-08 ahead of
+  the rest: radiarch's own push credential goes only to `RADIARCH_DICOMWEB_URL`, not to a push request's `url`
 
 ### R11 — Multi-criteria optimization (in progress)
 A set of Pareto-optimal plans computed up front, navigated by sliders or automatically by goal priority, and made

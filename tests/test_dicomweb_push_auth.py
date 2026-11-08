@@ -97,6 +97,7 @@ def test_bearer_token_is_fetched_reused_and_refreshed(server, monkeypatch):
 def test_settings_turn_on_the_bearer_token_and_keep_the_secret_out_of_repr(server, monkeypatch):
     from radiarch.config import get_settings
 
+    monkeypatch.setenv("RADIARCH_DICOMWEB_URL", server.url)
     monkeypatch.setenv("RADIARCH_DICOMWEB_TOKEN_URL", f"{server.url}/token")
     monkeypatch.setenv("RADIARCH_DICOMWEB_CLIENT_ID", "radiarch")
     monkeypatch.setenv("RADIARCH_DICOMWEB_CLIENT_SECRET", "s3cret")
@@ -105,7 +106,8 @@ def test_settings_turn_on_the_bearer_token_and_keep_the_secret_out_of_repr(serve
     try:
         s = get_settings()
         assert "s3cret" not in repr(s) and "s3cret" not in str(s.model_dump())
-        assert DICOMwebNotifier(url=server.url).auth == "bearer"
+        assert DICOMwebNotifier().auth == "bearer"
+        assert DICOMwebNotifier(url=server.url).auth == "bearer"                                 # the configured URL named again
         assert DICOMwebNotifier(url=server.url, username="u", password="p").auth == "basic"   # an explicit username wins
         assert DICOMwebNotifier(url=server.url).store_instances([_instance()], raise_errors=True)
     finally:
@@ -149,6 +151,7 @@ def test_push_result_reports_the_refusal(server, monkeypatch, tmp_path):
     fake = RTExportResult.model_construct(export_id="e1", objects=[RTObjectRef.model_construct(kind="RTPLAN", path=path)])
     monkeypatch.setattr(svc, "get", lambda export_id: fake, raising=False)
     monkeypatch.setattr(dw, "_shared_token", lambda *a: ClientCredentialsToken(f"{server.url}/token", "radiarch", "s3cret"))
+    monkeypatch.setenv("RADIARCH_DICOMWEB_URL", server.url)
     monkeypatch.setenv("RADIARCH_DICOMWEB_TOKEN_URL", f"{server.url}/token")
     monkeypatch.setenv("RADIARCH_DICOMWEB_CLIENT_ID", "radiarch")
     from radiarch.config import get_settings
@@ -159,3 +162,55 @@ def test_push_result_reports_the_refusal(server, monkeypatch, tmp_path):
         get_settings.cache_clear()
     assert res.pushed == 0 and res.http_status == 409
     assert res.response["findings"][0]["code"] == "W031" and "W031" in res.error
+
+
+def test_radiarch_s_own_credential_goes_only_to_its_configured_url(server, monkeypatch, tmp_path):
+    """A push request may name another URL. Radiarch's own credential (its client-credentials token, or its username
+    and password) is not sent there: that URL gets only the credential the request gives."""
+    from radiarch.config import get_settings
+    from radiarch.models.rt_export import RTExportResult, RTObjectRef
+    from radiarch.services import rt_export as rx
+
+    other = _Server()
+    try:
+        monkeypatch.setenv("RADIARCH_DICOMWEB_URL", server.url)
+        monkeypatch.setenv("RADIARCH_DICOMWEB_TOKEN_URL", f"{server.url}/token")
+        monkeypatch.setenv("RADIARCH_DICOMWEB_CLIENT_ID", "radiarch")
+        monkeypatch.setenv("RADIARCH_DICOMWEB_CLIENT_SECRET", "s3cret")
+        monkeypatch.setattr(dw, "_tokens", {})
+        get_settings.cache_clear()
+        assert DICOMwebNotifier(url=other.url).auth == "none"
+        with pytest.raises(DICOMwebPushError) as ei:
+            DICOMwebNotifier(url=other.url).store_instances([_instance()], raise_errors=True)
+        assert ei.value.status == 401 and other.auth_headers == [None] and server.tokens_issued == 0
+        # through the export service, as POST /rt/exports/{id}/push with a url
+        svc = rx.RTExportService.__new__(rx.RTExportService)
+        path = str(tmp_path / "RP.dcm")
+        _instance().save_as(path, enforce_file_format=True)
+        fake = RTExportResult.model_construct(export_id="e1", objects=[RTObjectRef.model_construct(kind="RTPLAN", path=path)])
+        monkeypatch.setattr(svc, "get", lambda export_id: fake, raising=False)
+        res = svc.push("e1", url=other.url)
+        assert res.pushed == 0 and res.http_status == 401 and other.auth_headers == [None, None]
+        # a credential the request gives does go there
+        assert DICOMwebNotifier(url=other.url, username="u", password="p").store_instances([_instance()], raise_errors=True)
+        assert other.auth_headers[-1] == "Basic dTpw"
+        # radiarch's own username and password stay home too
+        monkeypatch.delenv("RADIARCH_DICOMWEB_TOKEN_URL")
+        monkeypatch.setenv("RADIARCH_DICOMWEB_USERNAME", "u")
+        monkeypatch.setenv("RADIARCH_DICOMWEB_PASSWORD", "p")
+        get_settings.cache_clear()
+        assert DICOMwebNotifier(url=other.url).auth == "none"
+        assert DICOMwebNotifier(url=server.url + "/").auth == "basic"
+        assert DICOMwebNotifier().store_instances([_instance()], raise_errors=True) and server.auth_headers[-1] == "Basic dTpw"
+        assert server.tokens_issued == 0
+    finally:
+        get_settings.cache_clear()
+        other.httpd.shutdown()
+
+
+def test_same_url():
+    assert dw._same_url("http://Host:8042/dicom-web/", "HTTP://host:8042/dicom-web")
+    assert not dw._same_url("http://host:8042/dicom-web", "http://host:8043/dicom-web")
+    assert not dw._same_url("http://host/dicom-web", "https://host/dicom-web")
+    assert not dw._same_url("http://host/dicom-web", "http://host.evil/dicom-web")
+    assert not dw._same_url("http://host/dicom-web", "http://host/dicom-web/../other")
