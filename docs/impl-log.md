@@ -1744,3 +1744,13 @@ lengthens no interval.
   structure is aliased and recorded; two are refused with their names; an exact name wins; the suffix is two digits.
 - **Documents.** README (DICOM RT out); the protocol model's field description.
 - **Release.** No object changes for inputs that planned before. Both changes ship in 0.3.1.
+
+## ADR 0021 proposed: stored results scoped by study (2026-11-10)
+
+- Every caller with the API key can read every stored result, and the listing routes and the lineage graph hand
+  out ids. ADR 0020 left per-user scoping of results to its own note. This is that note.
+- It proposes scoping by study, not by creator. A read is allowed when the host says the user may see every study
+  the result traces to. The cache and the job join stay shared, since a result holds nothing its inputs do not
+  determine.
+- Three points are open for the project lead: how the host answers (an endpoint or a header), what a request
+  without a user means, and who sees `requested_by`. No code changed. The plan has an open row in R12.
