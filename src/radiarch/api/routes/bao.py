@@ -17,6 +17,7 @@ from functools import lru_cache
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from ._inflight import in_flight
 from ._lineage_guard import assert_deletable
 from pydantic import BaseModel
 
@@ -74,6 +75,13 @@ async def run_bao(
                 extra={"bao_id": cached.bao_id},
             ))
             return cached
+
+        active = in_flight("bao", cache_key, "radiarch.bao.run")
+        if active is not None:
+            response.status_code = status.HTTP_202_ACCEPTED
+            emit(make_event("bao.run", state="joined", cache_key=cache_key, geometry_id=request.geometry_id,
+                            engine_name=request.dose_engine.name, api_key_prefix=api_key_prefix, extra={"job_id": active.id}))
+            return BAORunResponse(job_id=active.id, cache_key=cache_key, state=active.state.value)
 
         job = store.create_bao_job(cache_key)
         from ...tasks.bao_tasks import run_bao_job

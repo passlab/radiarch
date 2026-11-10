@@ -31,6 +31,7 @@ from functools import lru_cache
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Response, status
+from ._inflight import in_flight
 from ._lineage_guard import assert_deletable
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -95,6 +96,11 @@ async def build_geometry(request: GeometryBuildRequest, response: Response):
             # Fast path: no job, no Celery round-trip. Return 200 + full result.
             response.status_code = status.HTTP_200_OK
             return cached
+
+        active = in_flight("geometry", cache_key, "radiarch.geometry.build")
+        if active is not None:
+            response.status_code = status.HTTP_202_ACCEPTED
+            return GeometryBuildResponse(job_id=active.id, cache_key=cache_key, state=active.state.value)
 
         # Cache miss → create job row and dispatch to Celery.
         job = store.create_geometry_job(cache_key)

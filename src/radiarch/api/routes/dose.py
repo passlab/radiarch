@@ -32,6 +32,7 @@ from functools import lru_cache
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from ._inflight import in_flight
 from ._lineage_guard import assert_deletable
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -182,6 +183,14 @@ async def compute_dose(
             ))
             return cached
 
+        active = in_flight("dose", cache_key, "radiarch.dose.compute")
+        if active is not None:
+            response.status_code = status.HTTP_202_ACCEPTED
+            emit(make_event("dose.compute", state="joined", cache_key=cache_key, geometry_id=request.geometry_id,
+                            beam_model_id=request.beam_model_id, engine_name=request.engine.name,
+                            engine_version=request.engine.version, api_key_prefix=api_key_prefix, extra={"job_id": active.id}))
+            return DoseBuildResponse(job_id=active.id, cache_key=cache_key, kind="dose", state=active.state.value)
+
         job = store.create_dose_job(cache_key, kind="dose")
         from ...tasks.dose_tasks import build_dose_job
         build_dose_job.delay(job.id, request.model_dump(mode="json"))
@@ -310,6 +319,14 @@ async def build_influence(
                 api_key_prefix=api_key_prefix,
             ))
             return cached
+
+        active = in_flight("influence", cache_key, "radiarch.dose.influence")
+        if active is not None:
+            response.status_code = status.HTTP_202_ACCEPTED
+            emit(make_event("dose.influence", state="joined", cache_key=cache_key, geometry_id=request.geometry_id,
+                            beam_model_id=request.beam_model_id, engine_name=request.engine.name,
+                            api_key_prefix=api_key_prefix, extra={"job_id": active.id}))
+            return DoseBuildResponse(job_id=active.id, cache_key=cache_key, kind="influence", state=active.state.value)
 
         job = store.create_dose_job(cache_key, kind="influence")
         from ...tasks.dose_tasks import build_influence_job

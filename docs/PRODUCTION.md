@@ -153,7 +153,12 @@ analytic engine. Clinical MCsquare runs need more:
 - **Soft time limit** = the time after which Celery raises
   `SoftTimeLimitExceeded` in your task. Lets the worker clean up
   partial files, write a `failed` job state, emit the audit event.
-- **Hard time limit** = `SIGKILL`. Set ≥ soft + 60 s headroom.
+- **Hard time limit** = `SIGKILL`. Set ≥ soft + 60 s headroom. It also
+  bounds how long a repeated request joins a job for the same inputs:
+  a queued or running job older than its task's hard limit is taken
+  for lost, and the request starts a new one. A job lost earlier (a
+  Redis restart without persistence drops its queued tasks) keeps
+  repeated requests waiting until then; run Redis with persistence.
 - **Memory per worker** = `worker_max_memory_per_child`. Worker
   finishes its current task, then exits cleanly. Replacement is
   automatic.

@@ -17,6 +17,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
+from ._inflight import in_flight
 from ...core.store import store
 from ...models.protocol import AutoplanJobStatus, PlanningProtocol, ProtocolRunRequest, ProtocolRunResult
 from ...services.audit import emit, make_event
@@ -89,6 +90,12 @@ async def run_protocol(request: ProtocolRunRequest, response: Response, api_key_
         emit(make_event("autoplan.run", state="cache_hit", cache_key=key, geometry_id=request.geometry_id,
                         api_key_prefix=api_key_prefix, extra={"run_id": cached.run_id}))
         return cached
+    active = in_flight("autoplan", key, "radiarch.autoplan.run")
+    if active is not None:
+        response.status_code = status.HTTP_202_ACCEPTED
+        emit(make_event("autoplan.run", state="joined", cache_key=key, geometry_id=request.geometry_id, api_key_prefix=api_key_prefix,
+                        extra={"job_id": active.id}))
+        return ProtocolRunResponse(job_id=active.id, cache_key=key, state=active.state.value)
     job = store.create_autoplan_job(key)
     from ...tasks.autoplan_tasks import run_autoplan_job
 

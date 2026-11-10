@@ -108,6 +108,11 @@ Job records live in the job store: Postgres through SQLAlchemy and Alembic when
 `RADIARCH_DATABASE_URL` is set, in memory otherwise (tests, local runs). Sequencing,
 arcs and RT export run synchronously in the API process.
 
+A job route answers in one of three ways: the stored result for the same inputs (`200`), the
+job already queued or running for them (`202`, its `job_id`; audit state `joined`), or a new
+job (`202`). A job past its task's hard time limit is taken for lost, and the request starts
+a new one (`api/routes/_inflight.py`, `find_active_job` in the job store).
+
 ### 4.3 Services
 
 Each service has one public entry point, a content-addressed store under the artifact

@@ -26,6 +26,7 @@ import os
 from functools import lru_cache
 
 from fastapi import APIRouter, HTTPException, Response, status
+from ._inflight import in_flight
 from ._lineage_guard import assert_deletable
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -132,6 +133,11 @@ async def build_beam_model(request: BeamModelBuildRequest, response: Response):
         if cached is not None:
             response.status_code = status.HTTP_200_OK
             return cached
+
+        active = in_flight("beam_model", cache_key, "radiarch.beam_model.build")
+        if active is not None:
+            response.status_code = status.HTTP_202_ACCEPTED
+            return BeamModelBuildResponse(job_id=active.id, cache_key=cache_key, state=active.state.value)
 
         job = store.create_beam_model_job(cache_key)
         # Lazy task import: this module imports cleanly even if Celery

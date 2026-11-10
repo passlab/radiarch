@@ -137,6 +137,8 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] Dataset-manifest derivation record; capability declaration
 - [x] (2026-11-04) Store cleanup that respects the locks: an approved version and everything it derives from are never
   evicted; a state file that cannot be read stops the sweep
+- [x] (2026-11-10) A repeated request joins the job already queued or running for the same inputs, on every job route;
+  a job past its task's hard time limit is taken for lost
 - [ ] Engine binary digest in the attribution **(open)**
 - [ ] Lineage across radiarch instances; an immutable audit trail **(open)**
 

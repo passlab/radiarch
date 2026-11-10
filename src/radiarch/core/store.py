@@ -28,6 +28,26 @@ def _utcnow():
     return datetime.now(timezone.utc)
 
 
+# The kinds of async job a request for the same inputs can join while it is queued or running (find_active_job).
+ACTIVE_JOB_KINDS = ("geometry", "beam_model", "dose", "influence", "optimization", "bao", "evaluation", "autoplan", "mco", "deliverable")
+
+
+def _ts(dt: Optional[datetime]) -> float:
+    """Seconds since the epoch; a naive datetime (SQLite returns them) is UTC."""
+    if dt is None:
+        return 0.0
+    return (dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)).timestamp()
+
+
+def _newest_active(jobs, cache_key: str, max_age_s: float):
+    """The newest of ``jobs`` for ``cache_key`` that is queued or running and started (or, queued, was created) within
+    ``max_age_s`` seconds; ``None`` if there is none."""
+    cutoff = _utcnow().timestamp() - max_age_s
+    live = [j for j in jobs if j.cache_key == cache_key and j.state in (JobState.queued, JobState.running)
+            and _ts(j.started_at or j.created_at) >= cutoff]
+    return max(live, key=lambda j: _ts(j.created_at), default=None)
+
+
 # ---------------------------------------------------------------------------
 # Abstract base
 # ---------------------------------------------------------------------------
@@ -289,6 +309,16 @@ class StoreBase(abc.ABC):
         stage: Optional[DeliverableStage] = None,
         deliverable_id: Optional[str] = None,
     ) -> Optional[DeliverableJobStatus]: ...
+
+    # ---- A job for the same inputs still in flight ------------------------------
+
+    @abc.abstractmethod
+    def find_active_job(self, kind: str, cache_key: str, max_age_s: float):
+        """The newest queued or running job of ``kind`` (one of ``ACTIVE_JOB_KINDS``) for ``cache_key``, or ``None``.
+
+        A second request for the same inputs joins it instead of dispatching a duplicate. A job that started (or, still
+        queued, was created) more than ``max_age_s`` seconds ago is taken for lost: its task's hard time limit has
+        passed without the job recording an end."""
 
 
 # ---------------------------------------------------------------------------
@@ -858,6 +888,16 @@ class InMemoryStore(StoreBase):
         updated = DeliverableJobStatus(**data)
         self._deliverable_jobs[job_id] = updated
         return updated
+
+    def find_active_job(self, kind: str, cache_key: str, max_age_s: float):
+        tables = {"geometry": self._geometry_jobs, "beam_model": self._beam_model_jobs, "dose": self._dose_jobs,
+                  "influence": self._dose_jobs, "optimization": self._optimization_jobs, "bao": self._bao_jobs,
+                  "evaluation": self._evaluation_jobs, "autoplan": self._autoplan_jobs, "mco": self._mco_jobs,
+                  "deliverable": self._deliverable_jobs}
+        if kind not in tables:
+            raise ValueError(f"no job kind {kind!r}; one of {', '.join(ACTIVE_JOB_KINDS)}")
+        jobs = [j for j in tables[kind].values() if kind not in ("dose", "influence") or j.kind == kind]
+        return _newest_active(jobs, cache_key, max_age_s)
 
 
 # ---------------------------------------------------------------------------
@@ -1809,6 +1849,30 @@ class SQLStore(StoreBase):
                 row.deliverable_id = deliverable_id
             session.commit()
             return self._deliverable_job_row_to_status(row)
+        finally:
+            session.close()
+
+    def find_active_job(self, kind: str, cache_key: str, max_age_s: float):
+        from . import db_models
+
+        tables = {"geometry": ("GeometryJobRow", self._geometry_job_row_to_status),
+                  "beam_model": ("BeamModelJobRow", self._beam_model_job_row_to_status),
+                  "dose": ("DoseJobRow", self._dose_job_row_to_status), "influence": ("DoseJobRow", self._dose_job_row_to_status),
+                  "optimization": ("OptimizationJobRow", self._optimization_job_row_to_status),
+                  "bao": ("BAOJobRow", self._bao_job_row_to_status), "evaluation": ("EvaluationJobRow", self._evaluation_job_row_to_status),
+                  "autoplan": ("AutoplanJobRow", self._autoplan_job_row_to_status), "mco": ("MCOJobRow", self._mco_job_row_to_status),
+                  "deliverable": ("DeliverableJobRow", self._deliverable_job_row_to_status)}
+        if kind not in tables:
+            raise ValueError(f"no job kind {kind!r}; one of {', '.join(ACTIVE_JOB_KINDS)}")
+        name, to_status = tables[kind]
+        row_type = getattr(db_models, name)
+        session = self._session()
+        try:
+            query = session.query(row_type).filter(row_type.cache_key == cache_key,
+                                                   row_type.state.in_([JobState.queued.value, JobState.running.value]))
+            if kind in ("dose", "influence"):
+                query = query.filter(row_type.kind == kind)
+            return _newest_active([to_status(r) for r in query.all()], cache_key, max_age_s)
         finally:
             session.close()
 

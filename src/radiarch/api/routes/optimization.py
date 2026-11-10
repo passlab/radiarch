@@ -21,6 +21,7 @@ from functools import lru_cache
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from ._inflight import in_flight
 from ._lineage_guard import assert_deletable
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -98,6 +99,15 @@ async def run_optimization(
                 extra={"optimization_id": cached.optimization_id},
             ))
             return cached
+
+        active = in_flight("optimization", cache_key, "radiarch.optimize.run")
+        if active is not None:
+            response.status_code = status.HTTP_202_ACCEPTED
+            emit(make_event("optimize.run", state="joined", cache_key=cache_key, geometry_id=request.geometry_id,
+                            beam_model_id=request.beam_model_id, engine_name=request.dose_engine.name,
+                            engine_version=request.dose_engine.version, api_key_prefix=api_key_prefix,
+                            extra={"job_id": active.id}))
+            return OptimizationRunResponse(job_id=active.id, cache_key=cache_key, state=active.state.value)
 
         job = store.create_optimization_job(cache_key)
         from ...tasks.optimization_tasks import run_optimization_job

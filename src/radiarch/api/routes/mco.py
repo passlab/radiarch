@@ -24,6 +24,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel
 
+from ._inflight import in_flight
 from ...core.store import store
 from ...models.mco import (ApertureSetRequest, AutoNavigateRequest, DeliverableJobStatus, DeliverableRequest, MCODeliverable, MCOJobStatus,
                            MCORunRequest, MCOResult, NavigateRequest, NavigationState)
@@ -82,6 +83,12 @@ async def run_mco(request: MCORunRequest, response: Response, api_key_prefix: Op
         emit(make_event("mco.run", state="cache_hit", cache_key=key, geometry_id=request.geometry_id, beam_model_id=request.beam_model_id,
                         api_key_prefix=api_key_prefix, extra={"mco_id": cached.mco_id}))
         return cached
+    active = in_flight("mco", key, "radiarch.mco.run")
+    if active is not None:
+        response.status_code = status.HTTP_202_ACCEPTED
+        emit(make_event("mco.run", state="joined", cache_key=key, geometry_id=request.geometry_id, beam_model_id=request.beam_model_id,
+                        api_key_prefix=api_key_prefix, extra={"job_id": active.id}))
+        return MCORunResponse(job_id=active.id, cache_key=key, state=active.state.value)
     job = store.create_mco_job(key)
     from ...tasks.mco_tasks import run_mco_job
 
@@ -143,6 +150,12 @@ async def aperture_set(deliverable_id: str, request: ApertureSetRequest, respons
     if cached is not None:
         response.status_code = status.HTTP_200_OK
         return cached
+    active = in_flight("mco", key, "radiarch.mco.apertures")
+    if active is not None:
+        response.status_code = status.HTTP_202_ACCEPTED
+        emit(make_event("mco.apertures", state="joined", cache_key=key, api_key_prefix=api_key_prefix,
+                        extra={"job_id": active.id, "deliverable_id": deliverable_id}))
+        return MCORunResponse(job_id=active.id, cache_key=key, state=active.state.value)
     job = store.create_mco_job(key)
     from ...tasks.mco_tasks import run_aperture_set_job
 
@@ -230,6 +243,12 @@ async def make_deliverable(mco_id: str, request: DeliverableRequest, response: R
     if cached is not None:
         response.status_code = status.HTTP_200_OK
         return cached
+    active = in_flight("deliverable", key, "radiarch.mco.deliverable")
+    if active is not None:
+        response.status_code = status.HTTP_202_ACCEPTED
+        emit(make_event("mco.deliverable", state="joined", cache_key=key, api_key_prefix=api_key_prefix,
+                        extra={"job_id": active.id, "mco_id": mco_id, "state_id": request.state_id}))
+        return DeliverableResponse(job_id=active.id, cache_key=key, state=active.state.value)
     job = store.create_deliverable_job(key)
     from ...tasks.mco_tasks import run_deliverable_job
 

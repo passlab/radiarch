@@ -1664,3 +1664,35 @@ ADR 0020 built; decision 6 was built first (8d0bffc).
 - Objects written by the commits between 09c3ebf and this one state 0.2.0. Their git commit in Software Versions
   tells them apart from 0.2.0's own objects.
 - No code changes, only `src/pyproject.toml`. `radiarch.build.release()` reads the installed package's version.
+
+## A repeated request joins the job in flight (2026-11-10)
+
+- **The gap.** Every job route returned the stored result for the same inputs (200) or started a job (202). A second
+  request while the first job was still queued or running started the same computation again. It showed on
+  `POST /mco/{mco_id}/deliverable`: a viewer reloaded during a deliverable plan started a second one. The same held for
+  the geometry, beam-model, dose, influence, optimization, beam-angle, evaluation, protocol, Pareto-set and second-set
+  routes.
+- **The change.**
+  - The job store has `find_active_job(kind, cache_key, max_age_s)`, in memory and in SQL. It returns the newest
+    queued or running job of that kind for that cache key. Dose and influence jobs share a table and are told apart by
+    their kind. The query uses the indexed `cache_key` column, so the schema does not change.
+  - `api/routes/_inflight.py`: `in_flight(kind, cache_key, task)` asks the store, with the task's hard time limit from
+    the Celery annotations (the default limit for a task without one) as the maximum age.
+  - All ten job routes ask it after the cache and before they create a job. A joined job is answered with `202`, its
+    `job_id` and its state. The routes that write audit events write one with state `joined`.
+- **Lost jobs.** A job older than its task's hard time limit cannot still be running, so a request starts a new one.
+  A job lost sooner (a Redis restart without persistence drops queued tasks) keeps repeated requests waiting until
+  that limit. `docs/PRODUCTION.md` says so and asks for Redis with persistence. A worker that dies mid-task needs
+  nothing: the task is acknowledged late and rejected on a lost worker, so Redis delivers it again under the same job.
+- **Not covered.** Two identical requests that reach two API processes within the same moment can still both start a
+  job, because the check and the creation are two store calls. Within one API process they cannot: the routes are
+  async and do not await between the check and the creation.
+- **Tests.** `tests/test_inflight_jobs.py`, 35 tests:
+  - on both stores, for every kind: a queued or running job is found, an ended one is not, and another key is not;
+  - a job past the maximum age is not found; the newer of two jobs is; dose and influence jobs are told apart;
+  - the deliverable route: a repeat joins the running job and dispatches nothing; another state dispatches; a repeat
+    after a failure dispatches a new job;
+  - every route module has as many `in_flight` checks as it has job creations.
+- **Documents.** `docs/architecture.md` §4.2 (the three answers) and `docs/PRODUCTION.md` (the hard limit bounds a
+  join).
+- **Release.** It stays 0.3.0, because no object radiarch writes changes.

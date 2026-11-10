@@ -17,6 +17,7 @@ from functools import lru_cache
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from ._inflight import in_flight
 from ._lineage_guard import assert_deletable
 from pydantic import BaseModel
 
@@ -144,6 +145,13 @@ async def run_evaluation(
                 extra={"evaluation_id": cached.evaluation_id},
             ))
             return cached
+
+        active = in_flight("evaluation", cache_key, "radiarch.evaluate.run")
+        if active is not None:
+            response.status_code = status.HTTP_202_ACCEPTED
+            emit(make_event("evaluate.run", state="joined", cache_key=cache_key, geometry_id=request.geometry_id,
+                            dose_id=request.dose_id, api_key_prefix=api_key_prefix, extra={"job_id": active.id}))
+            return EvaluationRunResponse(job_id=active.id, cache_key=cache_key, state=active.state.value)
 
         job = store.create_evaluation_job(cache_key)
         from ...tasks.evaluation_tasks import run_evaluation_job

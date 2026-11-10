@@ -53,7 +53,7 @@ class AuditEvent:
     event_id: str
     timestamp: str
     event_type: str  # "dose.compute", "dose.influence", "dose.delete", ...
-    state: str  # "started", "succeeded", "failed", "cache_hit"
+    state: str  # "started", "succeeded", "failed", "cache_hit", "dispatched", "joined" (a job for the same inputs in flight)
     cache_key: Optional[str] = None
     geometry_id: Optional[str] = None
     beam_model_id: Optional[str] = None
