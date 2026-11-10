@@ -4,6 +4,7 @@
     radiarch protocol lung-60gy-30fx-vmat                one in full (JSON)
     radiarch plan --protocol lung-60gy-30fx-vmat --study 1.2.3 --data /dicom/case1 --export rt --json run.json
     radiarch plan --protocol demo-phantom-imrt --study <uid> --push    the RT objects to the server's DICOMweb, and a viewer link
+    radiarch plan ... --export rt --objects rtstruct,rtplan,rtdose    without the DRRs (RT Image)
     radiarch plan --protocol demo-phantom-imrt --study <uid> --push --new-export    a marked copy ("copy 2") of an earlier export
     radiarch batch --protocol lung-60gy-30fx-vmat --cases cases.csv --out results
     radiarch fetch-tcia --collection NSCLC-Radiomics --patient LUNG1-002 --cache tcia --push    a public case into the PACS
@@ -28,6 +29,19 @@ from typing import Any, Dict, List, Optional
 
 INTENDED_USE = "RESEARCH USE ONLY. NOT FOR CLINICAL USE."
 DEFAULT_SPACING_MM = 3.0     # the dose grid the records plan on; a CT's own grid (about 1 x 1 x 3 mm) is twenty times the work
+
+
+def _objects(text: str) -> List[str]:
+    """``--objects``: the RT objects to write, comma-separated, in the export's order."""
+    from .models.rt_export import OBJECT_KINDS
+
+    chosen = [o.strip().lower() for o in text.split(",") if o.strip()]
+    bad = [o for o in chosen if o not in OBJECT_KINDS]
+    if bad or not chosen:
+        raise argparse.ArgumentTypeError(f"choose from {', '.join(OBJECT_KINDS)}" + (f", not {', '.join(bad)}" if bad else ""))
+    if "rtplan" in chosen and "rtstruct" not in chosen:
+        raise argparse.ArgumentTypeError("an RT Plan references the structure set written with it: add rtstruct")
+    return [o for o in OBJECT_KINDS if o in chosen]
 
 
 def _spacing(value: Optional[float]) -> Optional[float]:
@@ -131,7 +145,8 @@ def cmd_plan(args) -> int:
         if run.result.mco_id:
             _print_mco(rx, run)
         if args.export or args.push:
-            exp = run.export(label=args.label, push=bool(args.push), new_export=bool(args.new_export))
+            exp = run.export(label=args.label, push=bool(args.push), new_export=bool(args.new_export),
+                             **({"objects": args.objects} if args.objects else {}))
             r = exp.result
             if r.reused:
                 print(f"export {r.export_id}: the stored export of this plan, the same objects and UIDs "
@@ -323,7 +338,7 @@ def cmd_batch(args) -> int:
                     row[label] = None if g["achieved"] is None else round(g["achieved"], 2)
                 runs.write(run.result.model_dump_json() + "\n")
                 if args.export:
-                    run.export(label=args.label).download(out / case["case_id"])
+                    run.export(label=args.label, **({"objects": args.objects} if args.objects else {})).download(out / case["case_id"])
             except Exception as exc:        # a failed case is recorded and the batch goes on
                 errors += 1
                 row.update({"error": f"{type(exc).__name__}: {exc}"[:500], "seconds": round(time.time() - t0, 1)})
@@ -362,6 +377,8 @@ def build_parser() -> argparse.ArgumentParser:
         s.add_argument("--spacing", type=float, default=DEFAULT_SPACING_MM,
                        help=f"dose grid spacing (mm); default {DEFAULT_SPACING_MM:g}, 0 = the CT's own grid (slow: tens of millions of voxels)")
         s.add_argument("--label", default="RESEARCH", help="RT Plan and structure set label (default RESEARCH)")
+        s.add_argument("--objects", type=_objects,
+                       help="the RT objects to write, comma-separated: rtstruct, rtplan, rtdose, rtimage (default all four)")
         if name == "plan":
             s.add_argument("--study", required=True, help="the DICOM study instance UID")
             s.add_argument("--data", help="a directory with the CT series and its structure set")

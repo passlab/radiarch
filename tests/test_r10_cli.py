@@ -53,6 +53,26 @@ def test_plan_one_patient(cli_env, tmp_path, capsys):
     assert rp.RTPlanLabel == "RESEARCH" and int(rp.FractionGroupSequence[0].NumberOfFractionsPlanned) == 2
 
 
+def test_plan_writes_only_the_objects_asked_for(cli_env, tmp_path, capsys):
+    every, chosen = tmp_path / "every", tmp_path / "chosen"
+    args = ["plan", "--protocol", str(cli_env), "--study", "1.2.3", "--spacing", "0", "--poll", "0.01"]
+    assert main(args + ["--export", str(every)]) == 0
+    assert any(f.name.startswith("RI") for f in every.iterdir())
+    assert main(args + ["--export", str(chosen), "--objects", "rtdose, RTSTRUCT,rtplan"]) == 0
+    assert sorted(f.name for f in chosen.iterdir()) == ["RD.dcm", "RP.dcm", "RS.dcm"]
+    rd, rp = pydicom.dcmread(chosen / "RD.dcm"), pydicom.dcmread(chosen / "RP.dcm")
+    assert rd.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID == rp.SOPInstanceUID
+
+
+@pytest.mark.parametrize("objects, message", [("rtdose,rtfoo", "not rtfoo"), ("rtplan,rtdose", "add rtstruct"), (",", "choose from")])
+def test_objects_outside_the_export_are_refused(objects, message, capsys):
+    with pytest.raises(SystemExit) as exc:
+        build_parser().parse_args(["plan", "--protocol", "p", "--study", "1", "--objects", objects])
+    assert exc.value.code == 2 and message in capsys.readouterr().err
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["batch", "--protocol", "p", "--cases", "c.csv", "--out", "o", "--objects", objects])
+
+
 def test_plan_and_push_prints_the_viewer_link(cli_env, tmp_path, capsys, monkeypatch):
     from radiarch.adapters import dicomweb
     from radiarch.config import get_settings

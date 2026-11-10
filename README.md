@@ -330,6 +330,10 @@ curl -H "X-API-Key: $KEY" -H 'Content-Type: application/json' \
 curl -H "X-API-Key: $KEY" -o RP.dcm $API/rt/exports/<export id>/files/RP.dcm
 ```
 
+`radiarch plan --export` and `radiarch batch --export` write all four kinds; `--objects` chooses among them
+(`--objects rtstruct,rtplan,rtdose` leaves out the DRRs). An RT Plan names the structure set written with it, so
+`rtplan` needs `rtstruct`.
+
 ### Exporting a plan again
 
 An export is identified by its plan and by every setting that shapes the objects, among them the label, description,

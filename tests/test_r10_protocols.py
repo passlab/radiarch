@@ -130,3 +130,26 @@ def test_planning_reports_each_round(rx):
     assert rounds == ["imrt planning, round 1 of up to 2", "imrt planning, round 2 of up to 2"]
     fractions = [f for s, f, m in seen]
     assert fractions == sorted(fractions) and seen[-1][0] == "done"
+
+
+def test_an_alias_matches_one_breathing_phase_and_refuses_several(rx):
+    """A 4D CT's structures carry their phase (``SpinalCord_c30``): an alias takes it when one phase's structure is
+    there, and the run's alias map names it; with several phases' structures the run is refused, not guessed."""
+    from radiarch.services.autoplan import _one_phase
+
+    geo = rx.build_geometry("1.2.3", hu_model="LINEAR")
+    protocol = {**PROTOCOL, "protocol_id": "test-phase", "structure_aliases": {"Cord": ["SpinalCord"]}}
+    one = geo.derive({"op": "union", "name": "SpinalCord_c30", "sources": ["OAR"]})
+    run = one.run_protocol(protocol)
+    assert run.result.aliased == {"Cord": "SpinalCord_c30"} and "Cord" in run.geometry().structures
+    two = one.derive({"op": "union", "name": "SPINALCORD_C40", "sources": ["OAR"]})
+    with pytest.raises(RadiarchError) as e:
+        two.run_protocol({**protocol, "protocol_id": "test-phases"})
+    assert "several breathing phases" in str(e.value.detail) and {"SpinalCord_c30", "SPINALCORD_C40"} <= set(str(e.value.detail).replace(",", " ").replace("(", " ").replace(")", " ").split())
+    # an exact name wins over the phases; the protocol's own name counts as a candidate; the suffix is two digits
+    exact = two.derive({"op": "union", "name": "SpinalCord", "sources": ["OAR"]})
+    assert exact.run_protocol({**protocol, "protocol_id": "test-exact"}).result.aliased == {"Cord": "SpinalCord"}
+    lower = {n.lower(): n for n in ["SpinalCord", "SpinalCord_c30", "Cord_c10", "PTV_c3"]}
+    assert _one_phase("Cord", ["SpinalCordX"], lower) == "Cord_c10"
+    assert _one_phase("PTV", [], lower) is None
+    assert _one_phase("Liver", ["Liver_c"], lower) is None

@@ -34,6 +34,10 @@ inputs:
     type: string?
     doc: RT Plan and structure set label (default RESEARCH).
     inputBinding: {prefix: --label}
+  objects:
+    type: string?
+    doc: The RT objects to write, comma-separated (rtstruct, rtplan, rtdose, rtimage; default all four).
+    inputBinding: {prefix: --objects}
   server:
     type: string?
     doc: A radiarch API base URL; without it the planning runs inside the tool's process.
@@ -41,7 +45,7 @@ inputs:
 outputs:
   rt_objects:
     type: Directory
-    doc: RT Structure Set, RT Plan and RT Dose.
+    doc: The RT objects (by default the structure set, the plan, the dose and the beams' DRRs).
     outputBinding: {glob: rt}
   run:
     type: File

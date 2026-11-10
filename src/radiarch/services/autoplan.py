@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timezone
@@ -28,7 +29,8 @@ from loguru import logger
 
 OAR_WEIGHT = 200.0                 # an OAR goal term against the target's uniform term at weight 100
 NORMALISATION_HEADROOM = 1.002     # plans are normalised 0.2 % above the coverage goal, so percentile rounding cannot fail it
-AUTOPLAN_VERSION = "1"
+AUTOPLAN_VERSION = "2"             # raise when a run's result changes for the same inputs (2: aliases match one 4D phase's structure)
+PHASE_SUFFIX = re.compile(r"^(?P<base>.+)_c(?P<phase>\d{2})$")   # a 4D CT's structure of one breathing phase: Tumor_c30
 SCALED_PREFIX = "scaled:"          # a normalised plan's beam model: scaled:{source beam model}:{factor}:{key} (lineage reads it)
 
 
@@ -295,6 +297,20 @@ class AutoplanError(ValueError):
     pass
 
 
+def _one_phase(name: str, aliases: Sequence[str], lower: Dict[str, str]) -> Optional[str]:
+    """The structure of one breathing phase (``Tumor_c30``) for ``name`` or an alias when no name matches exactly; None
+    if there is none. Several phases' structures for the same name are refused: planning on one of them silently (a
+    30 % phase's tumour as the plan's GTV) would hide which phase the plan is for."""
+    for candidate in [name, *aliases]:
+        phased = sorted(orig for low, orig in lower.items() if (m := PHASE_SUFFIX.match(low)) and m["base"] == candidate.lower())
+        if len(phased) > 1:
+            raise AutoplanError(f"{name!r}: the structures of several breathing phases match {candidate!r} ({', '.join(phased)}); "
+                                f"name the one to plan on in structure_aliases, or plan on a geometry with one phase")
+        if phased:
+            return phased[0]
+    return None
+
+
 def builtin_protocols() -> List[str]:
     return sorted(p.stem for p in PROTOCOLS_DIR.glob("*.json")) if PROTOCOLS_DIR.is_dir() else []
 
@@ -409,7 +425,7 @@ class AutoplanService:
         for name, aliases in protocol.structure_aliases.items():
             if name.lower() in lower:
                 continue
-            found = next((lower[a.lower()] for a in aliases if a.lower() in lower), None)
+            found = next((lower[a.lower()] for a in aliases if a.lower() in lower), None) or _one_phase(name, aliases, lower)
             if found is not None:
                 ops.append(StructureOperation(op="union", name=name, sources=[found]))
                 aliased[name] = found

@@ -1724,3 +1724,23 @@ lengthens no interval.
     differ per interval.
 - **Release 0.3.1.** The arcs' control points change, so the patch number rises (`docs/PRODUCTION.md`); the project
   lead agreed.
+
+## `radiarch plan --objects`; protocol aliases on a 4D CT's phase structures (2026-11-10)
+
+- **`--objects`** on `radiarch plan` and `radiarch batch`. It chooses which RT objects the export writes,
+  comma-separated: `rtstruct`, `rtplan`, `rtdose`, `rtimage`. The default is still all four. The command refuses
+  an unknown kind, an empty list, and `rtplan` without `rtstruct` (the plan names the structure set written with it),
+  before it plans. The CWL tools for both commands take it as an optional input. A host that declares a plan's
+  outputs (structure set, plan and dose, no DRRs) can ask for exactly those.
+- **Aliases on phase structures.** A 4D CT's structures carry their breathing phase (`Tumor_c30`, the naming of the
+  4D lung data). A protocol's aliases matched only whole names, so such a structure was not found.
+  - Now, when neither the protocol's name nor any alias matches exactly, a structure named `<name>_c<NN>` (two digits,
+    any case) for the name or one of its aliases is taken. The run's alias map records it.
+  - When several phases' structures match, the run is refused with their names. A 30 % phase's tumour must not
+    become the plan's GTV without anyone saying so. Naming the structure in `structure_aliases` chooses one.
+  - `AUTOPLAN_VERSION` is 2, so stored runs are not reused for a geometry the new rule reads differently.
+- **Tests.** `tests/test_r10_cli.py`: a plan exported with `--objects rtdose,rtstruct,rtplan` writes RS, RP and RD
+  only, and its dose references its plan; the refusals, on both commands. `tests/test_r10_protocols.py`: one phase's
+  structure is aliased and recorded; two are refused with their names; an exact name wins; the suffix is two digits.
+- **Documents.** README (DICOM RT out); the protocol model's field description.
+- **Release.** No object changes for inputs that planned before. Both changes ship in 0.3.1.

@@ -110,7 +110,8 @@ class PlanningProtocol(BaseModel):
     source: str = Field(default="", max_length=500, description="Where the goals come from (a trial protocol, a guideline).")
     prescription: Prescription
     structure_aliases: Dict[str, List[str]] = Field(default_factory=dict,
-                                                    description="Protocol name → names a patient's structure set may use; the first found is copied to the protocol name.")
+                                                    description="Protocol name → names a patient's structure set may use; the first found is copied to the protocol name. "
+                                                                "Without an exact match, one breathing phase's structure (<name>_c<NN>) is taken; several are refused.")
     structures: List[StructureOperation] = Field(default_factory=list, max_length=64, description="Derivations, in order, after the aliases.")
     goals: List[PlanningGoal] = Field(..., min_length=1, max_length=64)
     extra_objectives: List[ObjectiveSpec] = Field(default_factory=list, max_length=64, description="Beyond the goals' own (rings, for instance).")

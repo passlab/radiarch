@@ -32,6 +32,10 @@ inputs:
     type: float?
     doc: Dose grid spacing in mm for cases without their own.
     inputBinding: {prefix: --spacing}
+  objects:
+    type: string?
+    doc: The RT objects to write, comma-separated (rtstruct, rtplan, rtdose, rtimage; default all four).
+    inputBinding: {prefix: --objects}
   server:
     type: string?
     doc: A radiarch API base URL; without it the planning runs inside the tool's process.

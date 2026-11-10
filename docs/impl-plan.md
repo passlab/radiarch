@@ -221,6 +221,8 @@ them in batches and from workflow engines.
 - [x] R10.8 (2026-11-01) The commands plan on a 3 mm dose grid by default (`--spacing 0`: the CT's own grid; a
   round trip on the CT's own grid took 5 h 40 min); a geometry's cache key carries the data folder when the series
   or structure set is not named; the command line runs self-contained in the image.
+- [x] R10.9 (2026-11-10) `radiarch plan` and `batch` take `--objects` (which RT objects to write); a protocol's
+  aliases take one breathing phase's structure (`<name>_c<NN>`) when no name matches exactly, and refuse several
 
 ### R13 — Viewer integration (done; 3D Slicer check waiting)
 Viewing stays outside radiarch: the RT objects go to a DICOMweb server that OHIF reads, and a radiarch
