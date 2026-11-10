@@ -12,7 +12,8 @@ from radiarch.models.vmat import ArcRequest, ArcSpec, sector_beams
 from radiarch.services.dose_engines.pb_kernel import default_kernel_path
 from radiarch.services.machine_model import load_photon_spec
 from radiarch.services.sequencing import FluenceMap
-from radiarch.services.vmat import arc_report, build_arc, interval_timing, optimize_interval_mu, sweep, with_metersets
+from radiarch.services import vmat
+from radiarch.services.vmat import arc_report, build_arc, interval_timing, optimize_interval_mu, park_closed_runs, sweep, with_metersets
 
 needs_kernel = pytest.mark.skipif(not default_kernel_path().is_file(), reason="engines/pb kernel table missing")
 
@@ -104,19 +105,47 @@ class TestArcBuild:
         assert r3.fractions == 3 and r3.total_mu == pytest.approx(rep.total_mu) and r3.delivery_time_s == pytest.approx(rep.delivery_time_s)
         assert not r3.issues
 
-    def test_a_pair_no_control_point_opens_waits_under_an_x_jaw(self):
+    def test_a_pair_no_control_point_opens_waits_under_an_x_jaw(self, monkeypatch):
         machine = load_photon_spec("synthetic-120")
         spec = ArcSpec(arc_id="A", start_deg=330, stop_deg=30, sectors=2, control_point_spacing_deg=4.0)
         # row 1 has fluence in neither sector; row 2 in the second only
         maps = [_map(np.array([[0, 1, 2, 1], [0, 0, 0, 0], [0, 0, 0, 0]], float)), _map(np.array([[1, 2, 2, 0], [0, 0, 0, 0], [0, 1, 1, 0]], float))]
-        beam, _, issues = build_arc(spec, maps, machine.mlc, machine, isocenter_mm=(0, 0, 0), sad_mm=1000.0, energy_mv=6.0,
-                                    beamlet_spacing_mm=(5.0, 5.0))
+        kw = dict(isocenter_mm=(0, 0, 0), sad_mm=1000.0, energy_mv=6.0, beamlet_spacing_mm=(5.0, 5.0))
+        beam, _, issues = build_arc(spec, maps, machine.mlc, machine, **kw)
         cps = beam.arc.control_points
-        x1 = cps[0].x_jaw_mm[0]
-        assert not issues and all(cp.mlc_rows[1].x_left_mm == cp.mlc_rows[1].x_right_mm == x1 - 10.0 for cp in cps)
+        park = cps[0].x_jaw_mm[0] - 10.0
+        assert not issues and all(cp.mlc_rows[1].x_left_mm == cp.mlc_rows[1].x_right_mm == park for cp in cps)
+        # row 2, closed in sector 1, waits under the jaw too; it leaves in time to be at the centre, where its sweep
+        # closed it, at the control point before the sweep opens it, and goes back once the sweep has closed it again
         k = spec.intervals_per_sector
-        assert all(cp.mlc_rows[2].x_left_mm == cp.mlc_rows[2].x_right_mm == -10.0 for cp in cps[:k])  # closed in sector 1: the centre
-        assert interval_timing(beam, machine).leaf_travel_mm.max() <= 40.0      # the parked pair never moves
+        row2 = [(cp.mlc_rows[2].x_left_mm, cp.mlc_rows[2].x_right_mm) for cp in cps]
+        assert all(l == r for l, r in row2[:k]) and row2[k - 1] == (-10.0, -10.0) and row2[k][1] > row2[k][0]
+        assert all(l == park for l, _ in row2[:k - 2]) and park < row2[k - 2][0] < -10.0
+        assert row2[-1] == (park, park)
+        # no interval takes longer than without the move
+        monkeypatch.setattr(vmat, "park_closed_runs", lambda *args: 0)
+        unmoved, _, _ = build_arc(spec, maps, machine.mlc, machine, **kw)
+        assert unmoved.arc.control_points[0].mlc_rows[2].x_left_mm == -10.0
+        assert np.allclose(interval_timing(beam, machine).min_time_s, interval_timing(unmoved, machine).min_time_s)
+
+    def test_a_closed_run_moves_toward_the_park_position_within_its_reach(self):
+        def states(xs_left, xs_right):
+            return [np.array([[l, r]], float) for l, r in zip(xs_left, xs_right)]
+
+        # closed at control points 1..5 between open ones: the ends stay, the inside goes as far as the reach allows
+        st = states([0, 5, 5, 5, 5, 5, 0], [10, 5, 5, 5, 5, 5, 10])
+        assert park_closed_runs(st, -20.0, np.full(6, 10.0)) == 3
+        assert [float(s[0, 0]) for s in st] == [0, 5, -5, -15, -5, 5, 0]
+        assert all(s[0, 0] == s[0, 1] for s in st[1:6])
+        # a run of two control points between open ones has no inside; a zero reach moves nothing
+        st = states([0, 5, 5, 0], [10, 5, 5, 10])
+        assert park_closed_runs(st, -20.0, np.full(3, 10.0)) == 0
+        st = states([5, 5, 5, 0], [5, 5, 5, 10])
+        assert park_closed_runs(st, -20.0, np.zeros(3)) == 0
+        # a run at the arc's start has a free end there; the reach differs per interval
+        st = states([5, 5, 5, 0], [5, 5, 5, 10])
+        assert park_closed_runs(st, -20.0, np.array([30.0, 4.0, 1.0])) == 2
+        assert [float(s[0, 0]) for s in st] == [-20, 1, 5, 0]      # 4 mm from the fixed end, then 21 of the 30 mm
 
     def test_interval_metersets_respect_their_floor(self):
         import scipy.sparse as sp

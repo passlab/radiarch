@@ -1696,3 +1696,31 @@ ADR 0020 built; decision 6 was built first (8d0bffc).
 - **Documents.** `docs/architecture.md` §4.2 (the three answers) and `docs/PRODUCTION.md` (the hard limit bounds a
   join).
 - **Release.** It stays 0.3.0, because no object radiarch writes changes.
+
+## Arcs: leaf pairs closed for part of an arc move toward the jaw (2026-11-10)
+
+The parking measured on 2026-11-08 ("Arcs: leaf pairs closed for part of an arc, measured"), the variant that
+lengthens no interval.
+
+- **The change.** `services/vmat.py`, `park_closed_runs`, called by `build_arc` after the pairs no control point opens
+  are parked:
+  - In each run of control points at which a pair is closed, an end next to an open control point stays. An
+    interval's aperture is the mean of its two control points, so that end shapes the open interval beside it. An
+    end at the arc's first or last control point moves too.
+  - Every other point of the run goes as near the park position (`park_position`, 10 mm behind an X jaw) as the
+    reach from the fixed ends allows.
+  - The reach of an interval is how far a leaf moves in the time the interval takes anyway: its gantry time at the
+    top gantry speed, or its largest leaf move as it stands, whichever is longer. So no interval's minimum time
+    changes, and no interval's minimum meterset does either.
+  - A pair closed for the whole arc still waits under the jaw, unchanged. Without interdigitation there is no park
+    position, and nothing moves.
+- **Version.** `LEAF_MODEL_VERSION` is 3. Cached arcs, sequences, deliverable plans and protocol runs are made again.
+- **Tests.** `tests/test_r8_vmat.py`:
+  - The arc test now expects the pair closed in sector 1 under the jaw. It is back where its sweep closed it at the
+    control point before the sweep opens it, and it returns to the jaw after its sweep. Every interval's minimum time
+    equals the arc built without the move.
+  - `park_closed_runs` on its own: the ends stay and the inside goes as far as the reach allows; a two-point run
+    between open points and a zero reach move nothing; a run at the arc's start moves its free end; the reach can
+    differ per interval.
+- **Release 0.3.1.** The arcs' control points change, so the patch number rises (`docs/PRODUCTION.md`); the project
+  lead agreed.

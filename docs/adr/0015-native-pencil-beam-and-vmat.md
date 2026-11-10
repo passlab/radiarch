@@ -73,7 +73,10 @@ TG-101; the results it names are lung VMAT and SBRT plans, a head-and-neck
    the arc's couch and collimator); each sector's map becomes as many leaf
    states as the sector has control-point intervals (2–4°), the leaves sweeping
    left to right and right to left in turn so one sweep ends where the next
-   begins; the jaws stay fixed for the arc. Each interval takes the longest of
+   begins; the jaws stay fixed for the arc. A leaf pair no control point opens
+   waits under an X jaw for the whole arc; from 2026-11-10, one closed for
+   part of the arc moves toward the jaw while closed, as far as the leaf
+   speed allows in the time each interval takes anyway. Each interval takes the longest of
    its gantry, leaf and beam-on times; the machine cannot lower the dose rate
    below its minimum, so an interval's meterset has a floor. The interval
    doses are recomputed by `pb` at their mid-angles with the mean leaves

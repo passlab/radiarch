@@ -172,7 +172,8 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] Full-mode harness run and the R8 record for review ([`validation/2026-10-23-r8/`](validation/2026-10-23-r8/), from the clean-commit run at `52ed834`)
 - [ ] Physicist's review and signature of the R8 record **(waiting)**
 - [ ] Direct leaf optimization for VMAT (progressive sampling or sequential convex programming) **(open)**
-- [ ] Arcs: leaf pairs closed for part of an arc parked under an X jaw **(open)**. Measured 2026-11-08 on the 4 mm
+- [x] (2026-11-10) Arcs: leaf pairs closed for part of an arc move toward an X jaw while closed, lengthening no interval
+  (`park_closed_runs`; the records with arcs to be rerun). Measured 2026-11-08 on the 4 mm
   lung case's arcs: closed pairs sit inside the field for 20 to 35 % of the pair metersets, and their tips pass about
   2 to 6 % of the arc's open fluence (the leaf model includes it in the dose). Parking that lengthens no interval
   removes about a quarter of it. Parking every closed run of three or more control points removes about half, but

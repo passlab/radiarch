@@ -11,7 +11,9 @@ sliding-window decomposition R4 already uses (Bortfeld, Boyer et al. 1994):
    field once per sector, left to right in even sectors and right to left in
    odd ones, so one sweep ends where the next begins. The apertures are the
    control points' leaf positions; the jaws stay fixed for the arc around
-   everything a control point opens.
+   everything a control point opens. A pair closed for the whole arc waits
+   under an X jaw; one closed for part of it moves toward the jaw while it is
+   closed, without lengthening an interval (:func:`park_closed_runs`).
 3. **Limits.** An interval takes the longest of its gantry time (its angle at
    the machine's top gantry speed), its leaf time (the largest leaf move at
    the top leaf speed) and its beam-on time (its meterset at the top dose
@@ -76,8 +78,9 @@ def sweep(fmap: FluenceMap, n: int, reverse: bool = False) -> Tuple[np.ndarray, 
     The map is quantized to as many levels as fit in ``n`` apertures; segment ``i`` of a row opens from its
     ``i``-th rising to its ``i``-th falling edge (in sweep order), a row that has finished stays closed where it
     ended, a row without fluence stays closed at the field's centre (:func:`build_arc` parks a pair closed for the
-    whole arc under an X jaw). When the decomposition has fewer apertures than ``n``, each is held over consecutive
-    control points and its meterset shared among them."""
+    whole arc under an X jaw, and moves one closed for part of it toward the jaw, :func:`park_closed_runs`). When the
+    decomposition has fewer apertures than ``n``, each is held over consecutive control points and its meterset shared
+    among them."""
     values = np.asarray(fmap.values, float)
     x = np.asarray(fmap.x_edges_mm, float)
     rows = values.shape[0]
@@ -111,6 +114,45 @@ def sweep(fmap: FluenceMap, n: int, reverse: bool = False) -> Tuple[np.ndarray, 
 # ---------------------------------------------------------------------------
 # Arcs from sector maps
 # ---------------------------------------------------------------------------
+
+def park_closed_runs(states: List[np.ndarray], park: float, reach_mm: np.ndarray) -> int:
+    """Move each leaf pair toward ``park`` (under an X jaw) while it is closed, in place; the number of positions moved.
+
+    ``states`` are the control points' tips (``(pairs, 2)`` each); ``reach_mm`` is, per interval, how far a leaf can
+    move in the time the interval takes anyway (its gantry time, or its largest leaf move), so no interval lengthens.
+    In a run of control points at which a pair is closed, an end next to an open control point stays where it is,
+    since it shapes that interval's mean aperture; an end at the arc's first or last control point moves too. Each
+    other point goes as near ``park`` as the reach from the fixed ends allows. A pair closed inside the field leaks a
+    leaf gap wide strip (``docs/reports/mlc-leaf-model.md``); parked, the jaw blocks it."""
+    n = len(states)
+    pos = np.stack([st[:, 0] for st in states])                 # (control points, pairs); closed tips share one x
+    closed = np.stack([st[:, 1] <= st[:, 0] for st in states])
+    cum = np.concatenate([[0.0], np.cumsum(reach_mm)])          # the reach from control point 0 to each control point
+    moved = 0
+    for r in range(pos.shape[1]):
+        j = 0
+        while j < n:
+            if not closed[j, r]:
+                j += 1
+                continue
+            a = j
+            while j + 1 < n and closed[j + 1, r]:
+                j += 1
+            b, j = j, j + 1
+            ks = np.arange(a, b + 1)
+            lo, hi = np.full(ks.size, -np.inf), np.full(ks.size, np.inf)
+            if a > 0:
+                d = cum[ks] - cum[a]
+                lo, hi = np.maximum(lo, pos[a, r] - d), np.minimum(hi, pos[a, r] + d)
+            if b < n - 1:
+                d = cum[b] - cum[ks]
+                lo, hi = np.maximum(lo, pos[b, r] - d), np.minimum(hi, pos[b, r] + d)
+            for k, x in zip(ks, np.minimum(np.maximum(park, lo), hi)):
+                if abs(x - pos[k, r]) > 1e-9:
+                    states[k][r] = (x, x)
+                    moved += 1
+    return moved
+
 
 def _rows(state: np.ndarray, pairs: Sequence[int], bounds: np.ndarray) -> List[MLCRow]:
     return [MLCRow(y_min_mm=float(bounds[p]), y_max_mm=float(bounds[p + 1]), x_left_mm=float(state[r, 0]),
@@ -149,13 +191,17 @@ def build_arc(spec: ArcSpec, maps: List[FluenceMap], mlc: MLCSpec, machine: Phot
     x_jaw = (max(min(xs), jx[0]), min(max(xs), jx[1]))
     y_jaw = (max(min(ys), jy[0]), min(max(ys), jy[1]))
     # a pair no control point opens waits under an X jaw for the whole arc (no leaf moves for it); a pair closed in
-    # some sectors only stays where its sweep leaves it
+    # some sectors moves toward it while closed, as far as it can without lengthening an interval
     park = park_position(x_jaw, mlc)
     never = ~np.any([o for _, o in opened], axis=0)
     if park is not None and never.any():
         for st in states:
             st[never] = park
     angles = spec.control_point_angles_deg()
+    if park is not None:
+        turn = np.asarray([abs(arc_step_deg(a, b, spec.direction)) for a, b in zip(angles, angles[1:])])
+        travel = np.asarray([float(np.max(np.abs(b - a))) for a, b in zip(states, states[1:])])
+        park_closed_runs(states, park, np.maximum(mlc.max_leaf_speed_mm_s * turn / machine.max_gantry_speed_deg_s, travel))
     cum = np.concatenate([[0.0], np.cumsum(mus)])
     cps = [ArcControlPoint(gantry_deg=angles[j], cumulative_mu=float(cum[j]), x_jaw_mm=x_jaw, y_jaw_mm=y_jaw,
                            mlc_rows=_rows(states[j], pairs, bounds)) for j in range(len(states))]
