@@ -74,7 +74,7 @@ for the archive, and radiarch does not forward it.
   stays as it is (`PRODUCTION.md`: the release follows output). The viewer gains one optional configuration function.
   Nothing changes for a deployment that sets neither.
 - Not covered: per-user image reads, and per-user scoping of stored results. Results are shared between users
-  today, so these need their own note.
+  today, so these need their own note. ADR 0021 (2026-11-11) scopes stored results by study.
 
 ## Tests
 

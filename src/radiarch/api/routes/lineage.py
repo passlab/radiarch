@@ -14,10 +14,11 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from ...models.lineage import KINDS, Attribution, DerivationRecord, LineageGraph, LineageNode, StateRecord, VersionRef, VersionStatus
 from ...services.lineage import LineageError, LineageService
+from ..access import keep_visible
 
 router = APIRouter(prefix="/lineage", tags=["lineage"])
 
@@ -47,11 +48,13 @@ async def get_lineage(kind: str, version_id: str, max_depth: int = Query(default
 
 
 @router.get("/{kind}/{version_id}/descendants", response_model=List[LineageNode], summary="Every version derived from this one.")
-async def get_descendants(kind: str, version_id: str) -> List[LineageNode]:
+async def get_descendants(request: Request, kind: str, version_id: str) -> List[LineageNode]:
+    """Only those the user may see (ADR 0021): what derives from a version may join other patients' studies."""
     try:
-        return _service().descendants(_ref(kind, version_id))
+        found = _service().descendants(_ref(kind, version_id))
     except LineageError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return await keep_visible(request, found, lambda n: n.ref.kind, lambda n: n.ref.id)
 
 
 @router.get("/{kind}/{version_id}/attribution", response_model=Attribution, summary="Who produced the version, with what, from what.")

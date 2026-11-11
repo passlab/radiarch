@@ -30,8 +30,9 @@ import os
 from functools import lru_cache
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from ._inflight import in_flight
+from ..access import require_visible
 from ._lineage_guard import assert_deletable
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -87,13 +88,14 @@ class GeometryBuildResponse(BaseModel):
         422: {"description": "Request validation error."},
     },
 )
-async def build_geometry(request: GeometryBuildRequest, response: Response):
+async def build_geometry(request: GeometryBuildRequest, response: Response, http: Request):
     try:
         cache_key = request.compute_cache_key()
         service = _service()
         cached = service.store.lookup_by_cache_key(cache_key)
         if cached is not None:
-            # Fast path: no job, no Celery round-trip. Return 200 + full result.
+            # Fast path: no job, no Celery round-trip. Return 200 + full result (one the user may see, ADR 0021).
+            await require_visible(http, "geometry", cached.geometry_id)
             response.status_code = status.HTTP_200_OK
             return cached
 

@@ -200,7 +200,7 @@ class EvaluationService:
                 distance_mm=request.gamma.distance_mm,
                 threshold_pct=request.gamma.threshold_pct,
                 local=request.gamma.local,
-            )
+            ).model_copy(update={"reference_dose_id": request.gamma.reference_dose_id})
 
         # --- persist -------------------------------------------------
         on_progress(EvaluationStage.persisting, 0.92, "Writing report")

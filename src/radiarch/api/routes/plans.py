@@ -1,5 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from ._lineage_guard import assert_deletable
+from ..access import keep_visible
 from fastapi.responses import Response
 
 from ...core.store import store
@@ -11,8 +12,8 @@ router = APIRouter(prefix="/plans", tags=["plans"])
 
 
 @router.get("", response_model=list[PlanSummary])
-async def list_plans():
-    return store.list_plans()
+async def list_plans(request: Request):
+    return await keep_visible(request, store.list_plans(), "plan", "id")
 
 
 @router.post("", response_model=PlanDetail, status_code=201)

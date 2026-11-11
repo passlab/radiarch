@@ -59,7 +59,10 @@ async def create_session(file: UploadFile = File(...)):
     sdir = _session_dir(session_id)
     os.makedirs(sdir, exist_ok=True)
 
-    filename = file.filename or "upload.dcm"
+    # the file's own name only: a client's "../x" must not write outside the session's folder
+    filename = os.path.basename((file.filename or "").replace("\\", "/"))
+    if filename in ("", ".", ".."):
+        filename = "upload.dcm"
     dest = os.path.join(sdir, filename)
     with open(dest, "wb") as f:
         content = await file.read()

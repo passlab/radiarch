@@ -75,6 +75,15 @@ class _LoadedCT:
     contours: list      # Flattened list of contours across all structure sets
 
 
+def _refuse_data_root_while_access_is_checked() -> None:
+    """The data root is read by series UID, whatever study a request names: with results scoped by study (ADR 0021),
+    only the PACS, which ties a series to its study, or an upload is read."""
+    from .access import enabled
+
+    if enabled():
+        raise ValueError("the PACS cannot be read, and the data root is not read while access is checked by user")
+
+
 class GeometryService:
     """Stateless service (one instance can serve many requests).
 
@@ -196,6 +205,7 @@ class GeometryService:
             logger.warning(
                 "Failed to build Orthanc adapter, falling back to disk: {}", exc
             )
+            _refuse_data_root_while_access_is_checked()
             return self._load_from_disk(None, request.patient_ref)
 
         from .dicom_fetcher import DicomFetcher  # lazy
@@ -206,6 +216,7 @@ class GeometryService:
                 "Orthanc adapter is metadata-only (mock mode); "
                 "falling back to the data root."
             )
+            _refuse_data_root_while_access_is_checked()
             return self._load_from_disk(None, request.patient_ref)
 
         return self._load_from_pacs(fetcher, request)

@@ -151,6 +151,13 @@ class LineageService:
             logger.warning("lineage: {} {} unreadable: {}", ref.kind, ref.id, exc)
             return None
 
+    def parents(self, ref: VersionRef) -> Optional[Tuple[Any, List[VersionRef]]]:
+        """The stored version and the versions it derives from directly; None if it is not stored."""
+        obj = self.get(ref)
+        if obj is None:
+            return None
+        return obj, self._describe(ref, obj)[0]
+
     def _all_refs(self) -> List[VersionRef]:
         out = []
         for kind, (_, lister) in self._stores().items():

@@ -8,6 +8,7 @@ from loguru import logger
 from .config import get_settings
 from .api.routes import info, plans, jobs, artifacts, workflows, sessions, geometry, beam_model, uploads, dose, optimization, bao, evaluation, rt, lineage, registration, four_d, replan, protocols, mco
 from .adapters import build_orthanc_adapter
+from .api.access import access_guard
 from .api.security import api_key_auth, user_header_untrusted
 from .core.database import init_db
 
@@ -50,9 +51,12 @@ def create_app() -> FastAPI:
     )
 
     # /info stays open: service identity and the intended-use statement.
-    # Everything else needs the API key once RADIARCH_API_KEY is set.
+    # Everything else needs the API key once RADIARCH_API_KEY is set, and, once RADIARCH_ACCESS_URL is set, a user the
+    # host lets see every study the request's results trace to (ADR 0021).
     app.include_router(info.router, prefix=settings.api_prefix)
-    protected = [Depends(api_key_auth)]
+    if settings.access_url and not (settings.trusted_user_header and settings.trusted_proxy_secret):
+        logger.warning("RADIARCH_ACCESS_URL is set without the trusted proxy's user header and secret: every request is refused")
+    protected = [Depends(api_key_auth), Depends(access_guard)]
     for router in (
         workflows.router,
         plans.router,

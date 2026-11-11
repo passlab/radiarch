@@ -21,7 +21,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from ._inflight import in_flight
@@ -33,6 +33,7 @@ from ...services.mco import MCOService
 from ...services.mco_apertures import ApertureSetRefused, ApertureSetService
 from ...services.mco_deliverable import DeliverableRefused, DeliverableService
 from ...services.navigation import NavigationError, NavigationService
+from ..access import keep_visible
 from ..security import api_key_auth, requester
 
 router = APIRouter(prefix="/mco", tags=["mco"])
@@ -115,11 +116,12 @@ async def get_deliverable_job(job_id: str) -> DeliverableJobStatus:
 
 
 @router.get("/deliverables", response_model=List[MCODeliverable], summary="Deliverable plans by their dose or beam model (R11.7).")
-async def find_deliverables(dose_id: Optional[str] = None, beam_model_id: Optional[str] = None, limit: int = 20) -> List[MCODeliverable]:
+async def find_deliverables(request: Request, dose_id: Optional[str] = None, beam_model_id: Optional[str] = None,
+                            limit: int = 20) -> List[MCODeliverable]:
     """The deliverable plans that made a dose or a beam model, newest first: how a viewer finds the Pareto set behind the
-    dose on screen. With neither filter, the newest plans."""
+    dose on screen. With neither filter, the newest plans. Only those the user may see (ADR 0021)."""
     found = _deliverables().store.find(dose_id=dose_id, beam_model_id=beam_model_id)
-    return found[: max(1, min(int(limit), 200))]
+    return (await keep_visible(request, found, "deliverable", "deliverable_id"))[: max(1, min(int(limit), 200))]
 
 
 @router.get("/deliverables/{deliverable_id}", response_model=MCODeliverable, summary="A deliverable plan and its deviation table.")

@@ -1829,3 +1829,88 @@ it named one structure, and only after the run had started deriving.
 - **The rule.** `docs/PRODUCTION.md` now says the release is also raised before a deployment takes a change that
   changes no output. It is a patch raise, because the change fixes how a refusal is reported.
 - No code changes, only `src/pyproject.toml`.
+
+## Stored results scoped by the studies a user may see (ADR 0021, 2026-11-11)
+
+The project lead decided ADR 0021's three open points as recommended:
+- A: the host serves an access endpoint;
+- B: a request without a user is refused;
+- C: `requested_by` is shown to every user who may see the study.
+
+The ADR is built.
+
+- **The check** (`api/access.py`). It is one dependency on every protected router, so a new route is checked by
+  default. Only routes listed in `OPEN_ROUTES` stay open: machines, protocols, goal templates, models, engines,
+  workflow templates, the capability statement and job status. With `RADIARCH_ACCESS_URL` set, a request to any
+  other route:
+  - must name a user (otherwise `401`);
+  - may name, in its path or JSON body, only results and studies the host lets that user see. A refused id and an
+    unknown one both answer `404 not found`;
+  - may name no file on the server (otherwise `422`).
+- **A result's studies** (`services/access.py`). The walk follows the lineage graph's parents up to the geometries,
+  and takes each geometry's CT study. Arcs, deliverable plans, protocol runs, replanning assessments, uploads and
+  legacy artifacts are mapped to their sources by hand. An upload's studies are those its DICOM files name.
+  - A result that traces to no study, or to a version that is gone, is read by nobody.
+  - Studies are kept once found, since results never change.
+- **The host** is asked `GET {url}?user=&study=` with the proxy's secret.
+  - Each answer is kept for `RADIARCH_ACCESS_CACHE_S` (60 s).
+  - `403` or `404` means no.
+  - Any other answer, or none, refuses the request with `503`.
+- **Listings** drop what the user may not see: exports by UID, deliverable plans by dose or beam model, legacy plans,
+  and the list of what derives from a version. A version's lineage graph holds only what it derives from, whose
+  studies are among its own.
+- **Unchanged.** The cache and the job join stay shared, and `requested_by` is a record that grants nothing. Without
+  the setting, every route behaves as before. No output changes, so the release is not raised now. A deployment
+  that takes the change gets a release first (`docs/PRODUCTION.md`).
+- **Tests** (`tests/test_access_scope.py`):
+  - reads by id, refused and unknown alike;
+  - a result that joins two studies;
+  - the listings;
+  - writes on a refused result or study;
+  - the shared cache;
+  - no user, a server path, and the open routes;
+  - one host call per user and study, and a host that does not answer;
+  - every route and request field covered. A new id field must be listed, or the test fails.
+- **An independent review** of the first build found ways round it, each reproduced by a test. All are closed:
+  - **A body sent without a JSON content type was not checked.** FastAPI parses it as JSON anyway. The check now
+    reads the body of every route that takes one, as JSON, whatever the content type says.
+  - **Ids were not checked to be ids.** A stored id is joined onto a store's folder, so `../uploads/<id>/g` could
+    name a forged record. An id that is not a plain token now names nothing. A state name in a body is held to the
+    same rule.
+  - **File fields ending in `_uri` were not refused** (a dose, a gamma reference, weights). Every field ending in
+    `_uri` or `_path` is now refused. The data root, read by series UID whatever the study, is not read while access
+    is checked.
+  - **Two kinds of result joined a second study unseen.** An imported RT Plan now adds the study it was written in.
+    A gamma comparison now adds its reference dose, which `GammaResult.reference_dose_id` records from now on. An
+    evaluation whose dose or gamma reference came from a file, or one made before the reference was recorded, is
+    read by nobody.
+  - **The host was asked about the user's name cleaned for DICOM**, so `al=ice` had alice's access. It is now asked
+    about the header exactly, up to 256 characters.
+  - **An outage told known ids from unknown ones.** A host that failed is now taken as down for the cache time, and
+    every checked request answers 503.
+  - **A body nested 1,500 deep raised a server error.** The body walk is now iterative and stops at 64 levels, and
+    the lineage walk fails closed.
+  - **The open `POST /sessions` wrote a client's `../` file name outside its folder.** This bug predates the change.
+    Sessions now need a user, and the file name is kept to its last part.
+  - Smaller fixes: a cycle in the lineage fails closed, the export listing checks every match rather than the
+    newest 500, and the host's HTTP client is reused.
+- **A second independent review**, of the fixed build, found two more ways round and smaller gaps. All are closed:
+  - **An arc plan and its dose traced to their geometry only.** An optimization may use another study's beam
+    model, and the arcs' outputs did not trace back to the arcs. Their studies now include the arcs' sources.
+  - **One malformed study UID took the check down for every user.** The host answered 400, and that counted as an
+    outage for a minute. A study UID that is not one is now refused without asking the host. A host's `4xx`, other
+    than `401`, `407`, `408` and `429`, now refuses only the request that asked.
+  - **A geometry build's cache hit was returned without a check.** Its study comes from the CT it read, and a build
+    from before the check could hold another study's CT. A cache hit is now checked like a read.
+  - **Engine and machine names could be paths.** `mcsquare_dir` is now refused, and `bdl`, `scanner` and machine,
+    model, template, protocol and workflow ids must be plain names.
+  - **Known limits, recorded in the ADR:**
+    - an id's existence shows to a caller who already holds it, at a host's first failure or by timing;
+    - lineage states name other versions;
+    - deletes check only their target;
+    - an import's registration is not recorded as a parent;
+    - malformed JSON gets `422` before `401`.
+- **Tests:** three more in `tests/test_access_scope.py`, for the ways round, the joins and the second review. The coverage test also
+  checks query parameters and fields that look like files, URIs or URLs.
+- **Docs:** ADR 0021 (decided, as built, with the review), ADR 0020's pointer, README settings, `docs/PRODUCTION.md`
+  (section and checklist).

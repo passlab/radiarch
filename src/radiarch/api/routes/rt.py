@@ -24,6 +24,7 @@ from fastapi.responses import FileResponse
 from ...models.rt_export import RTExportRequest, RTExportResult, RTPushRequest, RTPushResult, RTRecordRequest, RTRecordResult
 from ...config import get_settings
 from ...services.rt_export import RTExportError, RTExportService, RTPushRefused, UploadTokenError
+from ..access import keep_visible
 from ..security import requester
 
 router = APIRouter(prefix="/rt", tags=["rt-objects"])
@@ -61,12 +62,13 @@ async def export_rt_objects(request: RTExportRequest, user: Optional[str] = Depe
 
 @router.get("/exports", response_model=List[RTExportResult], summary="Exports by DICOM UID, newest first.",
             description="A viewer that shows a study, series or instance finds the export radiarch wrote it in; every filter given must match.")
-async def find_exports(study_instance_uid: Optional[str] = Query(default=None, max_length=64),
+async def find_exports(request: Request, study_instance_uid: Optional[str] = Query(default=None, max_length=64),
                        series_instance_uid: Optional[str] = Query(default=None, max_length=64),
                        sop_instance_uid: Optional[str] = Query(default=None, max_length=64),
                        limit: int = Query(default=50, ge=1, le=500)) -> List[RTExportResult]:
-    return _service().find(study_instance_uid=study_instance_uid, series_instance_uid=series_instance_uid,
-                           sop_instance_uid=sop_instance_uid, limit=limit)
+    found = _service().find(study_instance_uid=study_instance_uid, series_instance_uid=series_instance_uid,
+                            sop_instance_uid=sop_instance_uid, limit=1_000_000)       # every match: a user may see only older ones
+    return (await keep_visible(request, found, "rt_export", "export_id"))[:limit]
 
 
 @router.get("/exports/{export_id}", response_model=RTExportResult, summary="The manifest of an export.")

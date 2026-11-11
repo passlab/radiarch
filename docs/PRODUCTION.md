@@ -278,6 +278,32 @@ can correlate requests with rotated keys.
 Future: swap to JWT/OAuth by replacing `api_key_auth` in
 `src/radiarch/api/security.py`. Route decorators don't change.
 
+### Results scoped by study (ADR 0021)
+
+Behind a host that serves several users, set three things: the trusted proxy (`RADIARCH_TRUSTED_USER_HEADER`,
+`RADIARCH_TRUSTED_PROXY_SECRET`) and `RADIARCH_ACCESS_URL`, the host's access endpoint.
+
+- **The host's endpoint.** It answers `GET {url}?user=<user>&study=<Study Instance UID>`, with the proxy's secret in
+  `RADIARCH_TRUSTED_PROXY_SECRET_HEADER`. It returns `200` when the user may see the study and `403` or `404` when
+  not. Any other answer, or none, refuses the request with `503`.
+- **Caching.** Radiarch keeps each answer for `RADIARCH_ACCESS_CACHE_S` (60 s). A permission the host withdraws takes
+  that long to apply. Restarting the API applies it at once.
+- **What a user reaches.** A user reads, lists and builds on a result only when the host lets them see every study
+  the result traces to. A refused id answers `404 not found`, as an unknown one does.
+- **Requests without a user** are refused with `401`, except on the open routes. These are machines, protocols, goal
+  templates, NTCP/TCP models, engines, workflow templates, the capability statement and job status. A host's batch
+  jobs name a service user, and the host is asked about the user exactly as the header names them.
+- **Server paths.** A request that names a file on the server is refused (`422`), since it names no study. This
+  covers an NRRD CT, a data folder, an import's path, an engine's assets folder, and any field ending in `_uri` or
+  `_path`. Engine files, machines, models, templates and protocols are named by plain names. The data root is not
+  read either: only the PACS or an upload is.
+- **An outage.** A network error, a `5xx`, `401`, `407`, `408` or `429` from the host is an outage. The host is then
+  taken as down for `RADIARCH_ACCESS_CACHE_S`, and every checked request answers `503` meanwhile. Any other `4xx`
+  refuses only the request that asked. A study UID that is not one is refused without asking.
+
+Shared results stay shared. A second user who asks for the same inputs gets the stored result, or joins its job,
+and it shows who asked first.
+
 ## Audit logging (D7.3)
 
 One JSONL line per dose-relevant event. Configure
@@ -347,6 +373,8 @@ monitoring (alert when `available: false`).
 - [ ] Celery worker pool sized to your peak dose-job concurrency
 - [ ] Celery Beat running on exactly **one** node
 - [ ] Reverse proxy terminates TLS and forwards `X-API-Key`
+- [ ] Several users through one host: the trusted proxy and `RADIARCH_ACCESS_URL` set, the host's endpoint
+      answering (ADR 0021)
 - [ ] CORS origins narrowed from `*`
 - [ ] `/api/v1/dose/engines/mcsquare` returns `available: true`
 - [ ] Smoke test (`scripts/smoke_test.sh`) green against the prod URL

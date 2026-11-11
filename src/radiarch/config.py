@@ -269,6 +269,13 @@ class Settings(BaseSettings):
         description="The secret the trusted proxy sends in trusted_proxy_secret_header with every request it forwards.",
     )
     trusted_proxy_secret_header: str = Field(default="X-Proxy-Secret", description="Header carrying the trusted proxy's secret.")
+    # Stored results scoped by the studies a user may see (ADR 0021): the host answers GET {access_url}?user=&study=
+    # (200 = yes), radiarch asks on every read, listing and write of a patient result. Needs the trusted proxy above.
+    access_url: str = Field(
+        default="",
+        description="The host's access endpoint; set, every patient result is read only by a user the host lets see all its studies. Empty = off.",
+    )
+    access_cache_s: float = Field(default=60.0, ge=0.0, description="How long a host's answer for one user and study is kept.")
 
     # An export whose DICOMweb push is refused fails (the archive's copy is the record), instead of being kept with
     # pushed=false and the error.

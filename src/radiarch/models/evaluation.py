@@ -401,6 +401,8 @@ class GammaResult(BaseModel):
     pass_rate_pct: float
     mean_gamma: float
     evaluated_voxels: int
+    reference_dose_id: Optional[str] = Field(default=None, description="The stored dose compared against; null for a reference read "
+                                                                        "from a file (or an evaluation made before 2026-11-11).")
 
 
 class EvaluationResult(ResearchArtifact):

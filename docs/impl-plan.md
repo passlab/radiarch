@@ -141,7 +141,10 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
   a job past its task's hard time limit is taken for lost
 - [ ] Engine binary digest in the attribution **(open)**
 - [ ] Lineage across radiarch instances; an immutable audit trail **(open)**
-- [ ] Stored results scoped by the studies a user may see (ADR 0021, proposed 2026-11-10; about 3 days) **(open)**
+- [x] (2026-11-11) Stored results scoped by the studies a user may see (ADR 0021; the project lead decided its open
+  points). With `RADIARCH_ACCESS_URL` set, the host is asked whether a user may see a study, and every read,
+  listing and write reaches only results whose studies the user may see. A refused id answers as an unknown one, and
+  a request without a user is refused
 
 ## Block two
 
