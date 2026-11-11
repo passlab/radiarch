@@ -1,6 +1,6 @@
 # Radiarch — implementation plan and tasks
 
-State: 2026-11-10. The design is in [`architecture.md`](architecture.md); what each item
+State: 2026-11-11. The design is in [`architecture.md`](architecture.md); what each item
 did, file by file, is in [`impl-log.md`](impl-log.md); the decisions
 are in [`adr/`](adr/); the evaluation that set this roadmap is
 [`reports/tps-evaluation-and-roadmap.md`](reports/tps-evaluation-and-roadmap.md).
@@ -79,7 +79,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] RT Plan and RT Ion Plan readers into the internal plans
 - [x] RT Dose and spatial registration readers
 - [x] `POST /beam-model/import`, `POST /dose/recalculate`
-- [ ] Recalculate across frames of reference → **R9** (needs registration)
+- [x] Recalculate across frames of reference — done in R9 (R9.6)
 
 ### R15 — Own core, OpenTPS removed
 - [x] Own CT, RT Structure Set and case loaders
@@ -94,7 +94,8 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] DVH bands and worst-case indices over the scenario doses
 - [x] Per-beam isocenters and target slabs; the craniospinal template (research and clinical presets)
 - [ ] Probabilistic robust objectives **(open)**
-- [ ] 4D robust scenarios → **R9**
+- [x] 4D robust scenarios — done in R9 (R9.7: the phases as scenarios, graded worst-case)
+- [ ] Robust optimization over the breathing phases **(open; moved from R9.7)**
 
 ### R4 — Machine model and apertures
 - [x] Photon machines as data (two synthetic linacs); proton machine from its beam data library
@@ -153,7 +154,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] CCC with the scatter truncation as run-time parameters
 - [x] Cases: CCC against Monte Carlo, pyRadPlan cross-check, Dij consistency for every engine, proton Bragg peak, TG-119 planning, lung end to end
 - [x] One document per engine version; the record for review in [`validation/2026-10-22-r7/`](validation/2026-10-22-r7/)
-- [ ] Physicist's review and signature **(waiting)**
+- [ ] Physicist's review and signature **(waiting)**; R7 to R11 and the goal templates, from [`validation/README.md`](validation/README.md)
 - [ ] Full linac head Monte Carlo reference **(open)**
 - [ ] matRad cross-check **(open; needs MATLAB)**
 - [ ] New CCC kernels **(open; R8's pencil beam addresses the same errors)**

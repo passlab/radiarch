@@ -1914,3 +1914,21 @@ The ADR is built.
   checks query parameters and fields that look like files, URIs or URLs.
 - **Docs:** ADR 0021 (decided, as built, with the review), ADR 0020's pointer, README settings, `docs/PRODUCTION.md`
   (section and checklist).
+
+## The reviewing physicist's way in; the plan's stale rows (2026-11-11)
+
+- **`docs/validation/README.md`**, a new page for the physicist who reviews R7 to R11. It gives:
+  - an order of reading;
+  - per record, the documents to sign at their commit, and the later run that holds each superseded case's current
+    numbers;
+  - every graded check that fails in those runs, with its reading and where it is explained;
+  - the limitations the records state;
+  - a table for checking the eight goal templates against their sources;
+  - the answers that would change the next work most;
+  - how a signature names each run it covers.
+- **`docs/impl-plan.md`:**
+  - Two rows R9 did were still open: "Recalculate across frames of reference" (R9.6) and "4D robust scenarios"
+    (R9.7). They are now ticked.
+  - R9.7 moved robust optimization over the breathing phases to a later item, which had no row. It now has an open
+    row under R3.
+  - The R7 review row points to the new page.
