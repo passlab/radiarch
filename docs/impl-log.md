@@ -1781,3 +1781,16 @@ that plans arcs runs again from that commit, one case per process on the 96-core
 - **R11 closed.** The arcs' second set's convergence is recorded as a known limitation (the diagnosis of 2026-11-08
   gives the cause). Every plan of the set meets its limits, none is dominated, the plan made on it is deliverable, and
   the error bound is reported with every set. A second set that converges stays in R11's "Later" row.
+
+## The lung protocol's rerun; R9's 4D case from `f3a83c7` (2026-11-10)
+
+- **The lung protocol.** `protocol_lung_vmat` ran again from `48c0cc4`, whose case names the R8 record's rerun from
+  `f3a83c7` as its record. It passes all 44 graded checks. All 18 comparisons with the harness case read a
+  difference of 0, and every other value equals the run from `f3a83c7`. The R10 folder
+  `2026-11-10-arc-pairs-toward-jaw-f3a83c7/` holds it with the batch, and keeps the first round beside them
+  (`results-f3a83c7.json`, `run-summary-f3a83c7.md`).
+- **R9's 4D case.** `lung_4d_itv` ran from `f3a83c7` in 8107.6 s, and all 22 graded checks pass. The tumour's D95
+  moves by at most 0.07 Gy on any phase, and its accumulated D95 stays above 60.9 Gy. As in the R8 lung case, the
+  lungs' V20Gy falls by up to 0.3 percentage points and the cord maximum rises by up to 0.5 Gy. The R9 folder
+  `2026-11-10-arc-pairs-toward-jaw-f3a83c7/` holds it, and the R9 README points to it.
+- Every record with arcs now has a run from 0.3.1.

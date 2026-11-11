@@ -1,0 +1,304 @@
+{
+ "intended_use": "RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.",
+ "radiarch_commit": "f3a83c7",
+ "timestamp": "20261111-035627",
+ "fast": false,
+ "cpu": "AMD EPYC 7413 24-Core Processor, 96 logical CPUs",
+ "python": "3.12.16",
+ "results": [
+  {
+   "name": "lung_4d_itv",
+   "kind": "lung_4d",
+   "status": "pass",
+   "seconds": 8107.6,
+   "checks": [
+    {
+     "name": "101_HM10395: ITV over 10 phases / reference tumour (volume)",
+     "value": 1.49,
+     "target": "informative",
+     "passed": null,
+     "note": "ITV 47.5 cc; PTV = ITV + 5.0 mm; planned on the average CT"
+    },
+    {
+     "name": "101_HM10395: planned PTV D95 (Gy)",
+     "value": 60.12,
+     "target": "informative",
+     "passed": null,
+     "note": "normalised by 1.035; arcs deliverable: True"
+    },
+    {
+     "name": "101_HM10395: phase 0 %: its tumour D95 (Gy)",
+     "value": 60.5,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "101_HM10395: phase 10 %: its tumour D95 (Gy)",
+     "value": 60.61,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "101_HM10395: phase 20 %: its tumour D95 (Gy)",
+     "value": 60.51,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "101_HM10395: phase 30 %: its tumour D95 (Gy)",
+     "value": 60.53,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "101_HM10395: phase 40 %: its tumour D95 (Gy)",
+     "value": 60.49,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "101_HM10395: phase 50 %: its tumour D95 (Gy)",
+     "value": 60.49,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "101_HM10395: phase 60 %: its tumour D95 (Gy)",
+     "value": 60.37,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "101_HM10395: phase 70 %: its tumour D95 (Gy)",
+     "value": 60.26,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "101_HM10395: phase 80 %: its tumour D95 (Gy)",
+     "value": 60.29,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "101_HM10395: phase 90 %: its tumour D95 (Gy)",
+     "value": 60.31,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "101_HM10395: accumulated over 10 phases: reference tumour D95 (Gy)",
+     "value": 60.93,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "Demons to phase 50 %, equal shares; planned on the average CT 60.53 Gy, worst single phase 60.26 Gy"
+    },
+    {
+     "name": "101_HM10395: Lungs V20Gy (%), accumulated / planned",
+     "value": 11.19,
+     "target": "informative",
+     "passed": null,
+     "note": "planned on the average CT 11.84"
+    },
+    {
+     "name": "101_HM10395: SpinalCord Dmax (Gy), accumulated / planned",
+     "value": 25.14,
+     "target": "informative",
+     "passed": null,
+     "note": "planned on the average CT 25.63"
+    },
+    {
+     "name": "103_HM10395: ITV over 10 phases / reference tumour (volume)",
+     "value": 1.47,
+     "target": "informative",
+     "passed": null,
+     "note": "ITV 95.3 cc; PTV = ITV + 5.0 mm; planned on the average CT"
+    },
+    {
+     "name": "103_HM10395: planned PTV D95 (Gy)",
+     "value": 60.12,
+     "target": "informative",
+     "passed": null,
+     "note": "normalised by 1.051; arcs deliverable: True"
+    },
+    {
+     "name": "103_HM10395: phase 0 %: its tumour D95 (Gy)",
+     "value": 61.45,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "103_HM10395: phase 10 %: its tumour D95 (Gy)",
+     "value": 61.43,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "103_HM10395: phase 20 %: its tumour D95 (Gy)",
+     "value": 61.13,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "103_HM10395: phase 30 %: its tumour D95 (Gy)",
+     "value": 60.83,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "103_HM10395: phase 40 %: its tumour D95 (Gy)",
+     "value": 60.64,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "103_HM10395: phase 50 %: its tumour D95 (Gy)",
+     "value": 60.55,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "103_HM10395: phase 60 %: its tumour D95 (Gy)",
+     "value": 60.37,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "103_HM10395: phase 70 %: its tumour D95 (Gy)",
+     "value": 60.51,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "103_HM10395: phase 80 %: its tumour D95 (Gy)",
+     "value": 61.1,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "103_HM10395: phase 90 %: its tumour D95 (Gy)",
+     "value": 61.42,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "the plan recomputed on this phase's CT (pb, apertures)"
+    },
+    {
+     "name": "103_HM10395: accumulated over 10 phases: reference tumour D95 (Gy)",
+     "value": 61.47,
+     "target": ">= 57.0",
+     "passed": true,
+     "note": "Demons to phase 50 %, equal shares; planned on the average CT 60.87 Gy, worst single phase 60.37 Gy"
+    },
+    {
+     "name": "103_HM10395: Lungs V20Gy (%), accumulated / planned",
+     "value": 19.22,
+     "target": "informative",
+     "passed": null,
+     "note": "planned on the average CT 20.32"
+    },
+    {
+     "name": "103_HM10395: SpinalCord Dmax (Gy), accumulated / planned",
+     "value": 37.98,
+     "target": "informative",
+     "passed": null,
+     "note": "planned on the average CT 37.93"
+    }
+   ],
+   "metrics": {
+    "101_HM10395": {
+     "phases": [
+      0,
+      10,
+      20,
+      30,
+      40,
+      50,
+      60,
+      70,
+      80,
+      90
+     ],
+     "itv_cc": 47.493,
+     "k": 1.0349749282811458,
+     "vmat_id": "20d1970c-3f5a-4e78-b6b2-32abba6f3fba",
+     "accumulated_dose_id": "3df47fa4-8c5f-4f60-a924-3ed7990f3b9b",
+     "history": [
+      {
+       "round": 1,
+       "normalisation": 1.0087076844617988,
+       "failed": []
+      },
+      {
+       "arc_round": 1,
+       "normalisation": 1.0349749282811458,
+       "failed": []
+      }
+     ]
+    },
+    "103_HM10395": {
+     "phases": [
+      0,
+      10,
+      20,
+      30,
+      40,
+      50,
+      60,
+      70,
+      80,
+      90
+     ],
+     "itv_cc": 95.256,
+     "k": 1.0508770221422956,
+     "vmat_id": "d0d496b6-2e52-4ee2-8018-8acb12dcdc73",
+     "accumulated_dose_id": "21c92738-3d18-4adb-b2cf-ae9ecaadb17a",
+     "history": [
+      {
+       "round": 1,
+       "normalisation": 1.0090378940689617,
+       "failed": []
+      },
+      {
+       "arc_round": 1,
+       "normalisation": 1.0508770221422956,
+       "failed": []
+      }
+     ]
+    }
+   },
+   "notes": [],
+   "error": null
+  }
+ ],
+ "runs": {
+  "one_case_per_process": [
+   "20261111-035627-f3a83c7"
+  ],
+  "commit": "f3a83c7",
+  "machines": {
+   "20261111-035627-f3a83c7": {
+    "cpu": "AMD EPYC 7413 24-Core Processor, 96 logical CPUs",
+    "python": "3.12.16"
+   }
+  }
+ }
+}

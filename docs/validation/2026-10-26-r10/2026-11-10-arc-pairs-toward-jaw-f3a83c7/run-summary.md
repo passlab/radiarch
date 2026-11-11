@@ -1,13 +1,13 @@
-# Radiarch validation run 20261110-191147-f3a83c7 + 20261110-191603-f3a83c7
+# Radiarch validation run 20261110-191147-f3a83c7 + 20261111-023616-48c0cc4
 
 RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.
 
-The cases ran one per process from commit f3a83c7: `protocol_batch_lctsc` (20261110-191147), `protocol_lung_vmat` (20261110-191603).
+The cases ran one per process: `protocol_batch_lctsc` (20261110-191147, commit f3a83c7), `protocol_lung_vmat` (20261111-023616, commit 48c0cc4).
 
 | Case | Status | Time (s) | Checks |
 |---|---|---|---|
 | protocol_batch_lctsc | **pass** | 1958.2 | 79 pass, 0 fail, 36 informative |
-| protocol_lung_vmat | **fail** | 2213.8 | 38 pass, 6 fail, 10 informative |
+| protocol_lung_vmat | **pass** | 2156.9 | 44 pass, 0 fail, 10 informative |
 
 ## protocol_batch_lctsc — pass
 
@@ -130,7 +130,7 @@ The cases ran one per process from commit f3a83c7: `protocol_batch_lctsc` (20261
 | LCTSC-Test-S3-102: Lungs D1000cc[Gy] <= 12.4 | 1.29 | <= 12.4 | pass |
 | LCTSC-Test-S3-102: Lungs V12.5Gy[cc] <= 1000.0 | 236.3 | <= 1000.0 | informative |
 
-## protocol_lung_vmat — fail
+## protocol_lung_vmat — pass
 
 
 | Check | Value | Target | Result |
@@ -153,17 +153,17 @@ The cases ran one per process from commit f3a83c7: `protocol_batch_lctsc` (20261
 | protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: Lungs-PTV D37 goal (Gy, maximum term) | [20.0, false] | [20.0, false] | pass |
 | LCTSC-Test-S1-101: protocol run deliverable | True | True | pass |
 | LCTSC-Test-S1-101: PTV V60Gy[%] >= 95.0 (protocol) | 95.94 | >= 95.0 | pass |
-| LCTSC-Test-S1-101: PTV V60Gy[%] >= 95.0: protocol against the recorded harness run | 95.94 | 95.6 ± 0.96 | pass |
+| LCTSC-Test-S1-101: PTV V60Gy[%] >= 95.0: protocol against the recorded harness run | 95.94 | 95.94 ± 0.96 | pass |
 | LCTSC-Test-S1-101: PTV D0.03cc[Gy] <= 72.0 (protocol) | 64.8 | <= 72.0 | informative |
-| LCTSC-Test-S1-101: PTV D0.03cc[Gy] <= 72.0: protocol against the recorded harness run | 64.8 | 65.25 ± 0.65 | pass |
+| LCTSC-Test-S1-101: PTV D0.03cc[Gy] <= 72.0: protocol against the recorded harness run | 64.8 | 64.8 ± 0.65 | pass |
 | LCTSC-Test-S1-101: Lungs-GTV V20Gy[%] <= 37.0 (protocol) | 14.4 | <= 37.0 | pass |
-| LCTSC-Test-S1-101: Lungs-GTV V20Gy[%] <= 37.0: protocol against the recorded harness run | 14.4 | 14.78 ± 0.15 | FAIL |
+| LCTSC-Test-S1-101: Lungs-GTV V20Gy[%] <= 37.0: protocol against the recorded harness run | 14.4 | 14.4 ± 0.14 | pass |
 | LCTSC-Test-S1-101: Lungs-GTV Dmean[Gy] <= 20.0 (protocol) | 8.2 | <= 20.0 | pass |
-| LCTSC-Test-S1-101: Lungs-GTV Dmean[Gy] <= 20.0: protocol against the recorded harness run | 8.2 | 8.37 ± 0.08 | FAIL |
+| LCTSC-Test-S1-101: Lungs-GTV Dmean[Gy] <= 20.0: protocol against the recorded harness run | 8.2 | 8.2 ± 0.08 | pass |
 | LCTSC-Test-S1-101: SpinalCord D0.03cc[Gy] <= 50.5 (protocol) | 14.85 | <= 50.5 | pass |
-| LCTSC-Test-S1-101: SpinalCord D0.03cc[Gy] <= 50.5: protocol against the recorded harness run | 14.85 | 14.89 ± 0.15 | pass |
+| LCTSC-Test-S1-101: SpinalCord D0.03cc[Gy] <= 50.5: protocol against the recorded harness run | 14.85 | 14.85 ± 0.15 | pass |
 | LCTSC-Test-S1-101: Esophagus Dmean[Gy] <= 34.0 (protocol) | 3.21 | <= 34.0 | informative |
-| LCTSC-Test-S1-101: Esophagus Dmean[Gy] <= 34.0: protocol against the recorded harness run | 3.21 | 3.38 ± 0.05 | FAIL |
+| LCTSC-Test-S1-101: Esophagus Dmean[Gy] <= 34.0: protocol against the recorded harness run | 3.21 | 3.21 ± 0.05 | pass |
 | LCTSC-Test-S1-101: Heart V60Gy[%] <= 33.0 (protocol) | 0 | <= 33.0 | informative |
 | LCTSC-Test-S1-101: Heart V60Gy[%] <= 33.0: protocol against the recorded harness run | 0 | 0.0 ± 0.05 | pass |
 | LCTSC-Test-S1-101: Heart V45Gy[%] <= 66.0 (protocol) | 0 | <= 66.0 | informative |
@@ -172,20 +172,20 @@ The cases ran one per process from commit f3a83c7: `protocol_batch_lctsc` (20261
 | LCTSC-Test-S1-101: Heart V40Gy[%] <= 100.0: protocol against the recorded harness run | 0 | 0.0 ± 0.05 | pass |
 | LCTSC-Test-S2-101: protocol run deliverable | True | True | pass |
 | LCTSC-Test-S2-101: PTV V60Gy[%] >= 95.0 (protocol) | 95.96 | >= 95.0 | pass |
-| LCTSC-Test-S2-101: PTV V60Gy[%] >= 95.0: protocol against the recorded harness run | 95.96 | 95.62 ± 0.96 | pass |
+| LCTSC-Test-S2-101: PTV V60Gy[%] >= 95.0: protocol against the recorded harness run | 95.96 | 95.96 ± 0.96 | pass |
 | LCTSC-Test-S2-101: PTV D0.03cc[Gy] <= 72.0 (protocol) | 65.39 | <= 72.0 | informative |
-| LCTSC-Test-S2-101: PTV D0.03cc[Gy] <= 72.0: protocol against the recorded harness run | 65.39 | 65.25 ± 0.65 | pass |
+| LCTSC-Test-S2-101: PTV D0.03cc[Gy] <= 72.0: protocol against the recorded harness run | 65.39 | 65.39 ± 0.65 | pass |
 | LCTSC-Test-S2-101: Lungs-GTV V20Gy[%] <= 37.0 (protocol) | 13.88 | <= 37.0 | pass |
-| LCTSC-Test-S2-101: Lungs-GTV V20Gy[%] <= 37.0: protocol against the recorded harness run | 13.88 | 14.01 ± 0.14 | pass |
+| LCTSC-Test-S2-101: Lungs-GTV V20Gy[%] <= 37.0: protocol against the recorded harness run | 13.88 | 13.88 ± 0.14 | pass |
 | LCTSC-Test-S2-101: Lungs-GTV Dmean[Gy] <= 20.0 (protocol) | 8.54 | <= 20.0 | pass |
-| LCTSC-Test-S2-101: Lungs-GTV Dmean[Gy] <= 20.0: protocol against the recorded harness run | 8.54 | 8.68 ± 0.09 | FAIL |
+| LCTSC-Test-S2-101: Lungs-GTV Dmean[Gy] <= 20.0: protocol against the recorded harness run | 8.54 | 8.54 ± 0.09 | pass |
 | LCTSC-Test-S2-101: SpinalCord D0.03cc[Gy] <= 50.5 (protocol) | 16.4 | <= 50.5 | pass |
-| LCTSC-Test-S2-101: SpinalCord D0.03cc[Gy] <= 50.5: protocol against the recorded harness run | 16.4 | 15.65 ± 0.16 | FAIL |
+| LCTSC-Test-S2-101: SpinalCord D0.03cc[Gy] <= 50.5: protocol against the recorded harness run | 16.4 | 16.4 ± 0.16 | pass |
 | LCTSC-Test-S2-101: Esophagus Dmean[Gy] <= 34.0 (protocol) | 3.14 | <= 34.0 | informative |
-| LCTSC-Test-S2-101: Esophagus Dmean[Gy] <= 34.0: protocol against the recorded harness run | 3.14 | 3.24 ± 0.05 | FAIL |
+| LCTSC-Test-S2-101: Esophagus Dmean[Gy] <= 34.0: protocol against the recorded harness run | 3.14 | 3.14 ± 0.05 | pass |
 | LCTSC-Test-S2-101: Heart V60Gy[%] <= 33.0 (protocol) | 0 | <= 33.0 | informative |
 | LCTSC-Test-S2-101: Heart V60Gy[%] <= 33.0: protocol against the recorded harness run | 0 | 0.0 ± 0.05 | pass |
 | LCTSC-Test-S2-101: Heart V45Gy[%] <= 66.0 (protocol) | 0.15 | <= 66.0 | informative |
-| LCTSC-Test-S2-101: Heart V45Gy[%] <= 66.0: protocol against the recorded harness run | 0.15 | 0.19 ± 0.05 | pass |
+| LCTSC-Test-S2-101: Heart V45Gy[%] <= 66.0: protocol against the recorded harness run | 0.15 | 0.15 ± 0.05 | pass |
 | LCTSC-Test-S2-101: Heart V40Gy[%] <= 100.0 (protocol) | 0.38 | <= 100.0 | informative |
-| LCTSC-Test-S2-101: Heart V40Gy[%] <= 100.0: protocol against the recorded harness run | 0.38 | 0.42 ± 0.05 | pass |
+| LCTSC-Test-S2-101: Heart V40Gy[%] <= 100.0: protocol against the recorded harness run | 0.38 | 0.38 ± 0.05 | pass |

@@ -179,9 +179,9 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
   2 to 6 % of the arc's open fluence (the leaf model includes it in the dose). Parking that lengthens no interval
   removes about a quarter of it. Parking every closed run of three or more control points removes about half, but
   lengthens delivery from 223 to 374 s per arc. The first is built. 2026-11-10: the records with arcs rerun from
-  `f3a83c7` (`2026-11-10-arc-pairs-toward-jaw-f3a83c7/` under R8, R10 and R11). R8's three VMAT cases pass every graded
-  check and move by at most 1.6; on the R11 lung case's arcs the move removes 23 to 32 % of the leak, with the same
-  delivery time
+  `f3a83c7` (`2026-11-10-arc-pairs-toward-jaw-f3a83c7/` under R8, R9, R10 and R11). R8's three VMAT cases pass every
+  graded check and move by at most 1.6; R9's 4D case passes, its tumour's D95 within 0.07 Gy; on the R11 lung case's
+  arcs the move removes 23 to 32 % of the leak, with the same delivery time
 - [x] Lateral kernel scaling for lung (`pb` 1.1.0; fitted to the 2 × 2 and 10 × 10 cm Monte Carlo lung slabs)
 - [x] Monte Carlo 2 × 2 cm lung-slab reference and the narrow-field lung check
 
@@ -227,10 +227,10 @@ them in batches and from workflow engines.
   or structure set is not named; the command line runs self-contained in the image.
 - [x] R10.9 (2026-11-10) `radiarch plan` and `batch` take `--objects` (which RT objects to write); a protocol's
   aliases take one breathing phase's structure (`<name>_c<NN>`) when no name matches exactly, and refuse several
-- [ ] (2026-11-10) The lung protocol's record named the harness case's run of 2026-11-05: from `f3a83c7`, 6 of its 18
-  comparisons with it fail (the move of an arc's closed pairs shifted the harness case by more than 1 %), while its
-  18 goal values equal the harness case's rerun from the same commit. The case now names that rerun as its record
-  (the project lead agreed); the case's rerun from that commit is next
+- [x] (2026-11-10) The lung protocol's record named the harness case's run of 2026-11-05: from `f3a83c7`, 6 of its 18
+  comparisons with it failed (the move of an arc's closed pairs shifted the harness case by more than 1 %), while its
+  18 goal values equal the harness case's rerun from the same commit. From `48c0cc4` the case names that rerun as its
+  record (the project lead agreed), and it passes all 44 graded checks
 
 ### R13 — Viewer integration (done; 3D Slicer check waiting)
 Viewing stays outside radiarch: the RT objects go to a DICOMweb server that OHIF reads, and a radiarch

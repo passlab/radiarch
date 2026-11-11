@@ -6,10 +6,14 @@ arc toward an X jaw while it stays closed, lengthening no interval. The R8 recor
 Both protocols of R10 plan VMAT arcs, so both cases are rerun. Their numbers in the rerun of 2026-11-07
 (`../2026-11-07-parked-leaf-pairs-b11713b/`) are superseded by these runs.
 
-**These runs.** Two runs, one case per process, from a clean checkout of commit `f3a83c7` on the 96-core server, in
-the radiarch image built from `e486b71` with the checkout mounted over its code, each capped at 6 BLAS threads:
-`20261110-191147-f3a83c7` (`protocol_batch_lctsc`) and `20261110-191603-f3a83c7` (`protocol_lung_vmat`).
-`run-summary.md` lists every check, and `results.json` holds the full numbers.
+**These runs.** One case per process on the 96-core server, in the radiarch image built from `e486b71` with a clean
+checkout mounted over its code, each capped at 6 BLAS threads:
+- `20261110-191147-f3a83c7` (`protocol_batch_lctsc`) and `20261110-191603-f3a83c7` (`protocol_lung_vmat`, which
+  failed), from commit `f3a83c7`. They are kept as `results-f3a83c7.json` and `run-summary-f3a83c7.md`.
+- `20261111-023616-48c0cc4` (`protocol_lung_vmat`), from commit `48c0cc4`, which names the R8 record's rerun from
+  `f3a83c7` as the case's record.
+
+`results.json` and `run-summary.md` hold the batch from `f3a83c7` and the lung protocol from `48c0cc4`.
 
 ## What the move changes
 
@@ -18,11 +22,12 @@ the radiarch image built from `e486b71` with the checkout mounted over its code,
   rises from 10.10 to 10.76 Gy (its planning goal; limit 21.9 Gy). The PTV V100% rises in three thoraces (by 0.16 to
   0.50 percentage points), falls by 0.16 in one, and is unchanged in two. The first and third thoraces are the
   patients of the R8 SBRT case, and their values equal that case's rerun.
-- **The lung protocol (`protocol_lung_vmat`) fails 6 of its 44 graded checks.** All six compare the protocol's plan with
-  a recorded run of its harness case. Every other check passes, among them every RTOG 0617 goal and every setting
-  the protocol shares with the harness case.
+- **The lung protocol (`protocol_lung_vmat`) failed 6 of its 44 graded checks from `f3a83c7`.** All six compare the
+  protocol's plan with a recorded run of its harness case. Every other check passed, among them every RTOG 0617 goal
+  and every setting the protocol shares with the harness case. From `48c0cc4`, against the harness case's rerun from
+  `f3a83c7`, it passes all 44.
 
-## The lung protocol's failures
+## The lung protocol's failures, and the fix
 
 **The cause.** The case compares each goal value of the protocol's plan with the harness case's value (`lung_vmat_lctsc`)
 in the record its `record` names, within 1 %. That record is still the R8 rerun of 2026-11-05 (commit `412a105`). The
@@ -42,14 +47,15 @@ move changes the harness case itself. Six of its values now differ from the 2026
 difference of 0. In the rerun of 2026-11-07 the harness case had moved by at most 0.19, within the 1 % tolerance,
 so the record the case names was not changed then.
 
-**The fix (the project lead agreed).** The case's `record` now names the R8 record's rerun from this commit
-(`docs/validation/2026-10-23-r8/2026-11-10-arc-pairs-toward-jaw-f3a83c7/results.json`). The 1 % tolerance stays as
-it is. `protocol_lung_vmat` runs again from the commit that makes the change; its run will be added here.
+**The fix (the project lead agreed).** From commit `48c0cc4`, the case's `record` names the R8 record's rerun from
+`f3a83c7` (`docs/validation/2026-10-23-r8/2026-11-10-arc-pairs-toward-jaw-f3a83c7/results.json`). The 1 % tolerance
+is unchanged. The case's run from `48c0cc4` passes all 44 graded checks. All 18 comparisons with the harness case
+read a difference of 0, and every other value equals the run from `f3a83c7`.
 
 ## How to reproduce (optional)
 
 ```bash
-git clone https://github.com/passlab/radiarch && cd radiarch && git checkout f3a83c7
+git clone https://github.com/passlab/radiarch && cd radiarch && git checkout 48c0cc4    # f3a83c7 for the first round
 python3 -m venv .venv && .venv/bin/pip install -e "./src[dev,validation]"     # Python 3.12 or later
 .venv/bin/python -m radiarch.validation.run --cases protocol_batch_lctsc
 .venv/bin/python -m radiarch.validation.run --cases protocol_lung_vmat

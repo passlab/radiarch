@@ -31,7 +31,15 @@ rerun.
 
 From commit `b11713b` on, the sequencer parks closed leaf pairs under an X jaw. `lung_4d_itv` ran again from that
 commit in [`2026-11-07-parked-leaf-pairs-b11713b/`](2026-11-07-parked-leaf-pairs-b11713b/README.md): every value
-equals the rerun of 2026-11-05, which stands.
+equals the rerun of 2026-11-05. The rerun of 2026-11-10 below supersedes both.
+
+## Rerun with an arc's closed leaf pairs moved toward the jaw, 2026-11-10
+
+From commit `f3a83c7` on (release 0.3.1), an arc moves a pair that is closed for part of the arc toward an X jaw
+while it stays closed. `lung_4d_itv` ran again from that commit in
+[`2026-11-10-arc-pairs-toward-jaw-f3a83c7/`](2026-11-10-arc-pairs-toward-jaw-f3a83c7/README.md): all 22 graded
+checks still pass. The tumour's D95 moves by at most 0.07 Gy on any phase. The lungs' V20Gy falls by up to 0.3
+percentage points, and the cord maximum rises by up to 0.5 Gy. Please review the 4D case from this rerun.
 
 ## What to review and sign
 

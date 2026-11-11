@@ -32,9 +32,9 @@ most 0.19. The rerun of 2026-11-10 below supersedes it.
 From commit `f3a83c7` on (release 0.3.1), an arc moves a pair that is closed for part of the arc toward an X jaw
 while it stays closed. Both cases are rerun in
 [`2026-11-10-arc-pairs-toward-jaw-f3a83c7/`](2026-11-10-arc-pairs-toward-jaw-f3a83c7/README.md). The batch passes
-every graded check. The lung protocol fails 6 of its 44: the comparisons with the harness case's run of 2026-11-05,
-which the move shifted beyond their 1 % tolerance. Its 18 goal values equal the harness case's rerun from the same
-commit. The case now names that rerun as its record, and runs again from the commit that makes the change. Please
+every graded check. From `f3a83c7` the lung protocol failed 6 of its 44: the comparisons with the harness case's
+run of 2026-11-05, which the move shifted beyond their 1 % tolerance. Its 18 goal values equal the harness case's
+rerun from the same commit. From `48c0cc4` the case names that rerun as its record, and it passes all 44. Please
 review both cases from this rerun.
 
 ## What to review and sign
