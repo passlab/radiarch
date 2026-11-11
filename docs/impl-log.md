@@ -1818,3 +1818,14 @@ it named one structure, and only after the run had started deriving.
   - a missing target is caught after the derivations;
   - the shipped `demo-lung-imrt-mco` protocol on a phase CT without lungs or cord names both lungs, and the cord as a
     trade-off and a hard constraint.
+
+## Release 0.3.2 (2026-11-11)
+
+- 0.3.2 contains one change since 0.3.1 (`48c0cc4`): `0a00d06`. A protocol run is now refused before planning when the
+  geometry lacks a structure the protocol needs, and the refusal names each one. No output changes for inputs that
+  planned before.
+- **Why raise it.** A deployment that pins radiarch pins a release. Without the raise, two different versions of the
+  code (`48c0cc4` and `0a00d06`) would both state 0.3.1.
+- **The rule.** `docs/PRODUCTION.md` now says the release is also raised before a deployment takes a change that
+  changes no output. It is a patch raise, because the change fixes how a refusal is reported.
+- No code changes, only `src/pyproject.toml`.

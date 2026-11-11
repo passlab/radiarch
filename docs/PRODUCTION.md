@@ -103,7 +103,9 @@ RADIARCH_BUILD_COMMIT=$(git rev-parse --short=7 HEAD) docker compose build
 
 Without the commit, objects state the release alone. The release is raised with every change that
 changes output: the patch number for a fix, the minor number for a feature. A defective output can
-then be withdrawn by version and commit.
+then be withdrawn by version and commit. A deployment that pins radiarch pins a release, so the
+release is also raised before a deployment takes a change that changes no output. One release number
+never stands for two versions of the code.
 
 ### Pushing RT objects (DICOMweb STOW-RS)
 
