@@ -311,6 +311,47 @@ def _one_phase(name: str, aliases: Sequence[str], lower: Dict[str, str]) -> Opti
     return None
 
 
+def missing_structures(protocol, names: Sequence[str]) -> Dict[str, List[str]]:
+    """The structures ``protocol`` needs that a geometry with ``names`` (its own and the aliased ones) lacks, each with
+    what needs it: a derivation's sources, the main target, an extra objective, the ``mco`` section's trade-offs, hard
+    constraints and navigation structures. Each would fail the run later. A goal's structure is not needed: a goal on a
+    structure the patient lacks is reported, not failed. Names match without case, as the derivations do, and a
+    structure a derivation makes counts as there even when its sources are missing, so one gap is named once."""
+    have = {n.lower() for n in names}
+    missing: Dict[str, List[str]] = {}
+
+    def need(name: Optional[str], why: str) -> None:
+        if name and name.lower() not in have and why not in missing.setdefault(name, []):
+            missing[name].append(why)
+
+    for op in protocol.structures:
+        made = op.name or ("Couch" if op.op == "couch" else None)
+        for s in ([op.source] if op.source else []) + list(op.sources):
+            need(s, f"the {op.op} that makes {made!r}" if made else f"the {op.op}")
+        if made:
+            have.add(made.lower())
+    need(protocol.prescription.target, "the main target")
+    for o in protocol.extra_objectives:
+        need(o.structure_name, "an extra objective")
+    if protocol.mco is not None:
+        for o in protocol.mco.tradeoffs:
+            need(o.structure_name, "a trade-off")
+        for c in protocol.mco.hard_constraints:
+            need(c.structure_name, "a hard constraint")
+        for s in protocol.mco.navigation_structures:
+            need(s, "a navigation structure")
+    return missing
+
+
+def missing_message(protocol, missing: Dict[str, List[str]], names: Sequence[str]) -> str:
+    def one(name: str, why: List[str]) -> str:
+        aliases = [a for a in protocol.structure_aliases.get(name, []) if a.lower() != name.lower()]
+        tried = f"; no structure matches it or its aliases {', '.join(aliases)}" if aliases else ""
+        return f"{name!r} (for {', '.join(why)}{tried})"
+    return (f"protocol {protocol.protocol_id!r} needs structures this geometry lacks: {'; '.join(one(n, w) for n, w in missing.items())}. "
+            f"The geometry has {', '.join(sorted(names)) or 'none'}. Add them, or name the patient's in the protocol's structure_aliases")
+
+
 def builtin_protocols() -> List[str]:
     return sorted(p.stem for p in PROTOCOLS_DIR.glob("*.json")) if PROTOCOLS_DIR.is_dir() else []
 
@@ -429,6 +470,10 @@ class AutoplanService:
             if found is not None:
                 ops.append(StructureOperation(op="union", name=name, sources=[found]))
                 aliased[name] = found
+        # refused here, with every gap named, rather than at the first derivation or objective that reads one
+        missing = missing_structures(protocol, [*geo.structure_index, *aliased])
+        if missing:
+            raise AutoplanError(missing_message(protocol, missing, list(geo.structure_index)))
         ops += list(protocol.structures)
         pgeo = gsvc.derive(geo.geometry_id, GeometryDeriveRequest(operations=ops)) if ops else geo
         if target not in pgeo.structure_index:

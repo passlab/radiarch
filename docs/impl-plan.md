@@ -231,6 +231,9 @@ them in batches and from workflow engines.
   comparisons with it failed (the move of an arc's closed pairs shifted the harness case by more than 1 %), while its
   18 goal values equal the harness case's rerun from the same commit. From `48c0cc4` the case names that rerun as its
   record (the project lead agreed), and it passes all 44 graded checks
+- [x] R10.10 (2026-11-11) A protocol run is refused before planning when the geometry lacks a structure the protocol
+  needs (a derivation's source, the target, an objective's or trade-off's structure), naming each one, what needs it
+  and the aliases tried. It used to fail at the first derivation that read one, naming only that one
 
 ### R13 — Viewer integration (done; 3D Slicer check waiting)
 Viewing stays outside radiarch: the RT objects go to a DICOMweb server that OHIF reads, and a radiarch

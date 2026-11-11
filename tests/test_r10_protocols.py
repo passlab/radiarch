@@ -153,3 +153,38 @@ def test_an_alias_matches_one_breathing_phase_and_refuses_several(rx):
     assert _one_phase("Cord", ["SpinalCordX"], lower) == "Cord_c10"
     assert _one_phase("PTV", [], lower) is None
     assert _one_phase("Liver", ["Liver_c"], lower) is None
+
+
+def test_a_protocol_names_every_structure_the_geometry_lacks_before_planning(rx):
+    """A protocol needs a derivation's sources, its target, its objectives' structures and its trade-offs': without
+    them the run is refused before anything is derived, every gap named once with what needs it and the aliases tried.
+    A goal's structure is not needed (``Liver`` here is reported, not failed)."""
+    from radiarch.models.protocol import PlanningProtocol
+    from radiarch.services.autoplan import load_protocol, missing_structures
+    from radiarch.services.geometry import GeometryService
+
+    protocol = {**PROTOCOL, "protocol_id": "test-missing", "structure_aliases": {"Cord": ["SpinalCord", "OAR"], "Lung_L": ["Lung_L", "LLung"]},
+                "structures": PROTOCOL["structures"] + [{"op": "union", "name": "Lungs", "sources": ["Lung_L", "Lung_R"]},
+                                                        {"op": "subtract", "name": "Lungs-PTV", "source": "Lungs", "sources": ["PTV"]}],
+                "extra_objectives": PROTOCOL["extra_objectives"] + [{"type": "DMax", "structure_name": "Heart", "dose_gy": 1.0, "weight": 10.0}]}
+    geo = rx.build_geometry("1.2.3", hu_model="LINEAR")
+    before = len(GeometryService().store._load_index())
+    with pytest.raises(RadiarchError) as e:
+        geo.run_protocol(protocol)
+    detail = str(e.value.detail)
+    assert "'Lung_L' (for the union that makes 'Lungs'; no structure matches it or its aliases LLung)" in detail
+    assert "'Lung_R' (for the union that makes 'Lungs')" in detail and "'Heart' (for an extra objective)" in detail
+    assert "Lungs-PTV" not in detail and "Liver" not in detail and "The geometry has OAR, PTV" in detail
+    assert len(GeometryService().store._load_index()) == before         # refused before the aliases' and derivations' geometry
+
+    p = PlanningProtocol(**protocol)
+    # names match without case; a structure a derivation makes is there for the later ones; the target counts after them
+    assert missing_structures(p, ["ptv", "LUNG_L", "lung_r", "HEART"]) == {}
+    assert missing_structures(PlanningProtocol(**{**protocol, "prescription": {**protocol["prescription"], "target": "PTV2"},
+                                                  "goals": [{"structure": "PTV2", "metric": "D95", "op": ">=", "gy": 2.0}]}),
+                              ["PTV", "Lung_L", "Lung_R", "Heart"]) == {"PTV2": ["the main target"]}
+    # the shipped multi-criteria protocol on a phase CT without lungs or cord: its trade-offs and hard constraints too
+    mco = load_protocol("demo-lung-imrt-mco")
+    assert missing_structures(mco, ["GTV", "Heart", "Esophagus"]) == {
+        "Lung_L": ["the union that makes 'Lungs'"], "Lung_R": ["the union that makes 'Lungs'"],
+        "SpinalCord": ["a trade-off", "a hard constraint"]}

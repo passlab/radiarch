@@ -1794,3 +1794,27 @@ that plans arcs runs again from that commit, one case per process on the 96-core
   lungs' V20Gy falls by up to 0.3 percentage points and the cord maximum rises by up to 0.5 Gy. The R9 folder
   `2026-11-10-arc-pairs-toward-jaw-f3a83c7/` holds it, and the R9 README points to it.
 - Every record with arcs now has a run from 0.3.1.
+
+## A protocol names every structure the geometry lacks, before planning (2026-11-11)
+
+A user planned the multi-criteria lung protocol on one breathing phase of a 4D CT whose structure set had no lungs. The
+run failed at the derivation of `Lungs` with "structure 'Lung_L' not in the geometry". The refusal was right, but
+it named one structure, and only after the run had started deriving.
+
+- **The check.** After the aliases, `missing_structures` lists every structure the protocol needs that neither the
+  geometry nor an alias gives: a derivation's sources, the main target, an extra objective's structure, and an
+  `mco` section's trade-offs, hard constraints and navigation structures. Each of these would fail the run later.
+  A goal's structure is not needed: a goal on a structure the patient lacks is reported, not failed.
+- **The refusal** names each missing structure once, with what needs it and the aliases tried, then the geometry's
+  structures. Example: "'Lung_L' (for the union that makes 'Lungs'; no structure matches it or its aliases LLung,
+  Lung_Left, Left_Lung, Lung-Left)".
+- Names match without case, as the derivations do. A structure that a derivation makes counts as present for later
+  derivations, so one gap is named once.
+- No plan changes, and `AUTOPLAN_VERSION` stays 2. The only difference: a run that would have failed now fails
+  sooner, with a clearer message.
+- **Tests.** In `test_r10_protocols.py`:
+  - every gap is named, with nothing derived first;
+  - names match without case;
+  - a missing target is caught after the derivations;
+  - the shipped `demo-lung-imrt-mco` protocol on a phase CT without lungs or cord names both lungs, and the cord as a
+    trade-off and a hard constraint.
