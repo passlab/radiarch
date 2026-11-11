@@ -47,7 +47,17 @@ The first sets and their deliverable plans are unchanged. On the second set, TG-
 19.32 Gy at the same coverage, and the lung arcs' spinal cord maximum from 32.3 to 27.2 Gy. Two earlier rounds
 failed: TG-119 from `b11713b`, and the lung case from `b11713b` and from `e03cd6d`. They are kept beside it, with the
 cause and the fix. The arcs'
-second set converges poorly (1 of 11 plans), which is open. Please review both photon cases' plans on the second set
+second set converges poorly (1 of 11 plans), which is open. Please review TG-119's plans on the second set from this
+rerun. The lung case is superseded by the rerun of 2026-11-10 below.
+
+## Rerun with an arc's closed leaf pairs moved toward the jaw, 2026-11-10
+
+From commit `f3a83c7` on (release 0.3.1), an arc moves a pair that is closed for part of the arc toward an X jaw
+while it stays closed. The lung case is rerun in
+[`2026-11-10-arc-pairs-toward-jaw-f3a83c7/`](2026-11-10-arc-pairs-toward-jaw-f3a83c7/README.md): every graded check
+passes (38). Only its arcs' deliverable plan, second set and plan on that set move. The protocol's arc plan gives the
+oesophagus 1.0 Gy less and the lungs 0.5 Gy less, at the same coverage. The arcs' second set converges in 3 of 11
+plans (error bound 0.89). R11 closes with that as a known limitation, explained there. Please review the lung case
 from this rerun.
 
 ## What to review and sign

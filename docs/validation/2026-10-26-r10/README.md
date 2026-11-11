@@ -25,7 +25,17 @@ Please review both cases from the rerun.
 From commit `b11713b` on, the sequencer parks closed leaf pairs under an X jaw. Both cases are rerun in
 [`2026-11-07-parked-leaf-pairs-b11713b/`](2026-11-07-parked-leaf-pairs-b11713b/README.md): every graded check still
 passes. The batch is unchanged. The lung protocol still equals its harness case, whose second patient moves by at
-most 0.19. Please review both cases from this rerun.
+most 0.19. The rerun of 2026-11-10 below supersedes it.
+
+## Rerun with an arc's closed leaf pairs moved toward the jaw, 2026-11-10
+
+From commit `f3a83c7` on (release 0.3.1), an arc moves a pair that is closed for part of the arc toward an X jaw
+while it stays closed. Both cases are rerun in
+[`2026-11-10-arc-pairs-toward-jaw-f3a83c7/`](2026-11-10-arc-pairs-toward-jaw-f3a83c7/README.md). The batch passes
+every graded check. The lung protocol fails 6 of its 44: the comparisons with the harness case's run of 2026-11-05,
+which the move shifted beyond their 1 % tolerance. Its 18 goal values equal the harness case's rerun from the same
+commit. The case now names that rerun as its record, and runs again from the commit that makes the change. Please
+review both cases from this rerun.
 
 ## What to review and sign
 

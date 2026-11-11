@@ -50,7 +50,17 @@ From commit `b11713b` on, the sequencer parks closed leaf pairs 10 mm behind an 
 segment, and an arc's pair that no control point opens. The three VMAT cases are rerun in
 [`2026-11-07-parked-leaf-pairs-b11713b/`](2026-11-07-parked-leaf-pairs-b11713b/README.md): every graded check still
 passes. `lung_sbrt_vmat` and `hn_sib_vmat` are unchanged, and only one patient of `lung_vmat_lctsc` moves, by at most
-0.19 (PTV V60Gy 95.62 → 95.43 %). Please review the three VMAT cases from this rerun.
+0.19 (PTV V60Gy 95.62 → 95.43 %). The rerun of 2026-11-10 below supersedes it.
+
+## Rerun with an arc's closed leaf pairs moved toward the jaw, 2026-11-10
+
+From commit `f3a83c7` on (release 0.3.1), an arc moves a pair that is closed for part of the arc toward an X jaw
+while it stays closed, lengthening no interval. The three VMAT cases are rerun in
+[`2026-11-10-arc-pairs-toward-jaw-f3a83c7/`](2026-11-10-arc-pairs-toward-jaw-f3a83c7/README.md): every graded check
+still passes. All three cases move by at most 1.6. Both lung 60 Gy patients' coverage rises (PTV V60Gy 95.6 → 95.94
+and 95.43 → 95.96 %). One SBRT patient's D2cm becomes RTOG 0915's minor deviation (51.65 % against 51.39 %). On the
+R11 lung case's arcs, the move removes 23 to 32 % of the closed pairs' leak. Please review the three VMAT cases from
+this rerun.
 
 ## What to review and sign
 

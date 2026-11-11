@@ -1754,3 +1754,30 @@ lengthens no interval.
   determine.
 - Three points are open for the project lead: how the host answers (an endpoint or a header), what a request
   without a user means, and who sees `requested_by`. No code changed. The plan has an open row in R12.
+
+## The records with arcs rerun from `f3a83c7`; R11 closed (2026-11-10)
+
+From `f3a83c7` (release 0.3.1), an arc moves a pair closed for part of the arc toward an X jaw. Every validation case
+that plans arcs runs again from that commit, one case per process on the 96-core server. Each record has a folder
+`2026-11-10-arc-pairs-toward-jaw-f3a83c7/`. R9's 4D case is still running and follows with its own entry.
+
+- **R8.** `lung_sbrt_vmat`, `lung_vmat_lctsc` and `hn_sib_vmat` pass every graded check (32, 10 and 12). All three
+  move, by at most 1.6. Both lung 60 Gy patients' coverage rises (PTV V60Gy 95.6 → 95.94 and 95.43 → 95.96 %), and
+  one patient's cord maximum rises by 0.8 Gy (limit 50.5 Gy). One SBRT patient's D2cm moves from within RTOG 0915's
+  limit to its minor deviation (51.65 % against 51.39 %).
+- **How much leak the move removes.** The four arcs of the R11 lung case were built again from their sector fluence,
+  with the move and without it. The build with it equals the stored arcs. With the same stored metersets, the
+  closed pairs' leak falls from 2.4, 5.1, 7.2 and 8.1 % of the arc's open fluence to 1.6, 3.7, 5.5 and 5.9 %, by 23 to
+  32 %. Delivery time is unchanged, and no interval falls below its minimum meterset. The script is not in the
+  repository.
+- **R10.** `protocol_batch_lctsc` passes every graded check (79). `protocol_lung_vmat` fails 6 of its 44: the
+  comparisons with the harness case's run that the case's `record` names, from 2026-11-05 (`412a105`). The move
+  shifted the harness case itself by more than the 1 % tolerance. The protocol's 18 goal values equal the harness
+  case's rerun from the same commit. The fix, which the project lead agreed: `cases/protocol_lung_vmat.yaml` names
+  that rerun as its `record`, with the same 1 % tolerance. The case runs again from the commit that makes the change.
+- **R11.** `mco_protocol_lung` passes every graded check (38). Only its arcs' deliverable plan, second set and plan on
+  that set move. The protocol's arc plan gives the oesophagus 1.0 Gy less and the lungs 0.5 Gy less, at the same
+  coverage. The arcs' second set converges in 3 of 11 plans (1 before; error bound 0.89).
+- **R11 closed.** The arcs' second set's convergence is recorded as a known limitation (the diagnosis of 2026-11-08
+  gives the cause). Every plan of the set meets its limits, none is dominated, the plan made on it is deliverable, and
+  the error bound is reported with every set. A second set that converges stays in R11's "Later" row.

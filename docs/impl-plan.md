@@ -1,6 +1,6 @@
 # Radiarch — implementation plan and tasks
 
-State: 2026-11-04. The design is in [`architecture.md`](architecture.md); what each item
+State: 2026-11-10. The design is in [`architecture.md`](architecture.md); what each item
 did, file by file, is in [`impl-log.md`](impl-log.md); the decisions
 are in [`adr/`](adr/); the evaluation that set this roadmap is
 [`reports/tps-evaluation-and-roadmap.md`](reports/tps-evaluation-and-roadmap.md).
@@ -31,7 +31,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 | 14 | R9 Registration, 4D, replanning | done; physicist review waiting | 658b8c7..316b6c6 | 0016 |
 | 15 | R10 Scripting SDK and planning protocols | done; physicist review waiting | 0be71b1..92ce40d | 0017 |
 | 16 | R13 Viewer integration | done; 3D Slicer check by the project lead waiting | fc7473d..26787db | 0018 |
-| 17 | R11 Multi-criteria optimization | in progress: R11.1–R11.10 done, physicist review waiting; R11.11 (B1) done 2026-11-08; the arcs' second set's convergence open | 268b0f0..a36fc4f | 0019 |
+| 17 | R11 Multi-criteria optimization | done; physicist review waiting; the arcs' second set converges poorly, a known limitation (2026-11-10) | 268b0f0..a36fc4f | 0019 |
 
 ## Before the roadmap (done by 2026-10-20)
 
@@ -174,11 +174,14 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [ ] Physicist's review and signature of the R8 record **(waiting)**
 - [ ] Direct leaf optimization for VMAT (progressive sampling or sequential convex programming) **(open)**
 - [x] (2026-11-10) Arcs: leaf pairs closed for part of an arc move toward an X jaw while closed, lengthening no interval
-  (`park_closed_runs`; the records with arcs to be rerun). Measured 2026-11-08 on the 4 mm
+  (`park_closed_runs`, release 0.3.1). Measured 2026-11-08 on the 4 mm
   lung case's arcs: closed pairs sit inside the field for 20 to 35 % of the pair metersets, and their tips pass about
   2 to 6 % of the arc's open fluence (the leaf model includes it in the dose). Parking that lengthens no interval
   removes about a quarter of it. Parking every closed run of three or more control points removes about half, but
-  lengthens delivery from 223 to 374 s per arc. The first is to be built with the next change that reruns the arcs
+  lengthens delivery from 223 to 374 s per arc. The first is built. 2026-11-10: the records with arcs rerun from
+  `f3a83c7` (`2026-11-10-arc-pairs-toward-jaw-f3a83c7/` under R8, R10 and R11). R8's three VMAT cases pass every graded
+  check and move by at most 1.6; on the R11 lung case's arcs the move removes 23 to 32 % of the leak, with the same
+  delivery time
 - [x] Lateral kernel scaling for lung (`pb` 1.1.0; fitted to the 2 × 2 and 10 × 10 cm Monte Carlo lung slabs)
 - [x] Monte Carlo 2 × 2 cm lung-slab reference and the narrow-field lung check
 
@@ -224,6 +227,10 @@ them in batches and from workflow engines.
   or structure set is not named; the command line runs self-contained in the image.
 - [x] R10.9 (2026-11-10) `radiarch plan` and `batch` take `--objects` (which RT objects to write); a protocol's
   aliases take one breathing phase's structure (`<name>_c<NN>`) when no name matches exactly, and refuse several
+- [ ] (2026-11-10) The lung protocol's record named the harness case's run of 2026-11-05: from `f3a83c7`, 6 of its 18
+  comparisons with it fail (the move of an arc's closed pairs shifted the harness case by more than 1 %), while its
+  18 goal values equal the harness case's rerun from the same commit. The case now names that rerun as its record
+  (the project lead agreed); the case's rerun from that commit is next
 
 ### R13 — Viewer integration (done; 3D Slicer check waiting)
 Viewing stays outside radiarch: the RT objects go to a DICOMweb server that OHIF reads, and a radiarch
@@ -278,7 +285,7 @@ OHIF extension shows what OHIF cannot (the dose) and what radiarch computes (DVH
   extension's configuration, and `uploadToken` on the client's export and push. Radiarch's own push credential goes
   only to `RADIARCH_DICOMWEB_URL`, not to a push request's `url` (built first)
 
-### R11 — Multi-criteria optimization (in progress)
+### R11 — Multi-criteria optimization (done; physicist review waiting)
 A set of Pareto-optimal plans computed up front, navigated by sliders or automatically by goal priority, and made
 deliverable by dose mimicking. The research and the design: [`reports/mco-research-and-design.md`](reports/mco-research-and-design.md)
 (§4 D1–D9; ADR 0019 when built). Estimate about 4.5 ew, against the roadmap's 2: the roadmap counted generation and
@@ -342,16 +349,18 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   coverage limit's tolerance); each plan of a second set is now scaled to its lower limits, the two reruns next.
   2026-11-08: both pass from `a36fc4f` (records `docs/validation/2026-10-31-r11/2026-11-08-second-set-a36fc4f/`; the
   R8-R10 cases' rerun with the parked leaf pairs, `2026-11-07-parked-leaf-pairs-b11713b/`)
-- [ ] The arcs' second set converges: 1 of its 11 solves converged in the 4 mm lung record (error bound 0.91). In the
-  diagnosis, metersets scaled by their dose per MU converge 11 of 11 with the scaling to the lower limits (error bound
-  0.40), but the best-of-set check then reads 0.017 over all 11 plans. The arcs' limits cannot all be met exactly: no
-  metersets bring PTV Dmax within 0.25 Gy of 72 Gy (tolerance 0.72 Gy) while the gEUD limit holds, so the plans'
-  trade-offs lie inside that tolerance, at different depths. Solving to a tenth of each tolerance fails. Kept open
-  (2026-11-08)
+- [x] (2026-11-10) The arcs' second set's convergence, closed as a known limitation: 1 of its 11 solves converged in
+  the 4 mm lung record of 2026-11-08 (error bound 0.91), and 3 of 11 in its rerun from `f3a83c7` (error bound 0.89;
+  `docs/validation/2026-10-31-r11/2026-11-10-arc-pairs-toward-jaw-f3a83c7/`). In the diagnosis, metersets scaled by
+  their dose per MU converge 11 of 11 with the scaling to the lower limits (error bound 0.40), but the best-of-set
+  check then reads 0.017 over all 11 plans. The arcs' limits cannot all be met exactly: no metersets bring PTV Dmax
+  within 0.25 Gy of 72 Gy (tolerance 0.72 Gy) while the gEUD limit holds, so the plans' trade-offs lie inside that
+  tolerance, at different depths. Solving to a tenth of each tolerance fails. Every plan meets the set's limits, none
+  is dominated, the plan made on the set is deliverable, and the error bound is reported with every set
 - [x] (2026-11-02) A protocol's evaluation template follows the protocol's prescription: the template's target rows
   scaled when the prescriptions differ (`GoalSetSpec.scale_to_prescription`), organ rows unchanged
 - [x] (2026-11-01) A recomputed imported photon plan goes through its apertures: a VMAT plan's RT Plan had
   recomputed 19 % low (a sliding-window arc's slits narrower than a beamlet dropped); its re-export keeps the
   source's fractions
-- [ ] Later **(open)**: Pareto plans from one shared aperture pool, with shared sweeps for arcs (option B2);
-  tail-mean (CVaR) trade-offs; Pareto sets across beam arrangements; the TROTS benchmark
+- [ ] Later **(open)**: an arcs' second set that converges; Pareto plans from one shared aperture pool, with shared
+  sweeps for arcs (option B2); tail-mean (CVaR) trade-offs; Pareto sets across beam arrangements; the TROTS benchmark
