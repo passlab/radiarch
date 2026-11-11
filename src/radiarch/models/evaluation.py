@@ -18,7 +18,7 @@ import hashlib
 import json
 from datetime import datetime
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -185,6 +185,21 @@ class NTCPParameters(BaseModel):
     source: str = ""
 
 
+class RelativeSerialityParameters(BaseModel):
+    """A relative-seriality NTCP set (Källman 1992): D50, γ (the maximum normalised slope) and s (the seriality)."""
+
+    model_id: str
+    structure: str
+    endpoint: str
+    d50_gy: float = Field(..., gt=0.0)
+    gamma: float = Field(..., gt=0.0)
+    s: float = Field(..., gt=0.0)
+    alpha_beta_gy: float = Field(default=3.0, gt=0.0)
+    reference_volume_cc: Optional[float] = Field(
+        default=None, gt=0.0, description="The volume D50 refers to; null = the structure's own volume.")
+    source: str = ""
+
+
 class TCPParameters(BaseModel):
     model_id: str
     structure: str
@@ -196,21 +211,28 @@ class TCPParameters(BaseModel):
 
 
 class NTCPSpec(BaseModel):
-    """An LKB NTCP evaluation: a built-in model id (with an optional structure override) or explicit parameters."""
+    """An NTCP evaluation: a built-in model id (LKB or relative seriality, with an optional structure override), or
+    explicit LKB ``parameters`` or explicit ``relative_seriality`` parameters."""
 
     model_id: Optional[str] = None
     structure: Optional[str] = Field(default=None, description="Geometry structure; null = the model's structure name.")
     parameters: Optional[NTCPParameters] = None
+    relative_seriality: Optional[RelativeSerialityParameters] = None
 
     @model_validator(mode="after")
     def _check(self) -> "NTCPSpec":
-        if not self.model_id and self.parameters is None:
-            raise ValueError("an NTCP spec needs a model_id or parameters")
+        if not self.model_id and self.parameters is None and self.relative_seriality is None:
+            raise ValueError("an NTCP spec needs a model_id, parameters or relative_seriality")
+        if self.parameters is not None and self.relative_seriality is not None:
+            raise ValueError("give LKB parameters or relative_seriality, not both")
         return self
 
     def hash_payload(self) -> dict:
-        return {"model_id": self.model_id, "structure": self.structure,
-                "parameters": self.parameters.model_dump() if self.parameters else None}
+        out = {"model_id": self.model_id, "structure": self.structure,
+               "parameters": self.parameters.model_dump() if self.parameters else None}
+        if self.relative_seriality is not None:          # only then, so existing evaluations keep their keys
+            out["relative_seriality"] = self.relative_seriality.model_dump()
+        return out
 
 
 class TCPSpec(BaseModel):
@@ -233,8 +255,11 @@ class NTCPResult(BaseModel):
     model_id: str
     structure: str
     endpoint: str
-    parameters: NTCPParameters
-    geud_gy: float
+    model: str = Field(default="lkb", description='"lkb" or "relative_seriality"')
+    parameters: Union[NTCPParameters, RelativeSerialityParameters]
+    geud_gy: Optional[float] = Field(default=None, description="LKB: the gEUD with a = 1/n.")
+    effective_dose_gy: Optional[float] = Field(
+        default=None, description="Relative seriality: the uniform dose over the reference volume with the same NTCP.")
     ntcp: float = Field(..., ge=0.0, le=1.0)
     eqd2_applied: bool
     worst_case_ntcp: Optional[float] = None
@@ -290,11 +315,17 @@ class EvaluationRequest(BaseModel):
     ntcp: List[NTCPSpec] = Field(default_factory=list, max_length=64)
     tcp: List[TCPSpec] = Field(default_factory=list, max_length=16)
     fractions: Optional[int] = Field(default=None, ge=1, description="Fractions of the plan, for EQD2-based goals and models.")
+    lql_transition_gy: Optional[float] = Field(
+        default=None, gt=0.0, le=30.0,
+        description="LQ-L: above this dose per fraction every EQD2 of the request (goals and models) grows linearly, "
+                    "along the LQ curve's tangent there (Astrahan 2008); null = the LQ model.")
 
     @model_validator(mode="after")
     def _check_dose(self) -> "EvaluationRequest":
         if not self.dose_id and not self.dose_ref_uri:
             raise ValueError("provide dose_id or dose_ref_uri")
+        if self.lql_transition_gy is not None and self.fractions is None:
+            raise ValueError("lql_transition_gy needs the plan's fractions")
         return self
 
     def compute_cache_key(self) -> str:
@@ -313,6 +344,8 @@ class EvaluationRequest(BaseModel):
             "tcp": [s.hash_payload() for s in self.tcp],
             "fractions": self.fractions,
         }
+        if self.lql_transition_gy is not None:          # only then, so existing evaluations keep their keys
+            payload["lql_transition_gy"] = round(self.lql_transition_gy, 6)
         return hashlib.sha256(
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()

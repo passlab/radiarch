@@ -48,6 +48,7 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import hashlib
+import io
 import json
 import sys
 from dataclasses import dataclass, field
@@ -214,17 +215,22 @@ class PBKernel:
     sad_mm: float
     fingerprint: str
     meta: dict = field(default_factory=dict)
+    build_digest: str = ""       # SHA-256 of the table and its description as loaded (R12)
 
     @classmethod
     def load(cls, path: Optional[Path] = None) -> "PBKernel":
         path = Path(path) if path else default_kernel_path()
+        from .digest import bytes_digest
+
         raw = path.read_bytes()
-        z = np.load(path)
+        z = np.load(io.BytesIO(raw))
         meta_path = path.with_suffix(".json")
-        meta = json.loads(meta_path.read_text()) if meta_path.is_file() else {}
+        meta_raw = meta_path.read_bytes() if meta_path.is_file() else None
+        meta = json.loads(meta_raw) if meta_raw is not None else {}
+        parts = [(path.name, raw)] + ([(meta_path.name, meta_raw)] if meta_raw is not None else [])
         return cls(np.asarray(z["depth_mm"], float), np.asarray(z["bin_edges_mm"], float), np.asarray(z["bin_counts"], np.int64),
                    np.asarray(z["table"], float), float(z["grid_mm"]), float(z["sad_mm"]),
-                   hashlib.sha256(raw).hexdigest()[:16], meta)
+                   hashlib.sha256(raw).hexdigest()[:16], meta, bytes_digest(parts))
 
     @property
     def half_cells(self) -> int:

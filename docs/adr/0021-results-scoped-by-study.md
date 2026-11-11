@@ -118,7 +118,8 @@ Two properties of radiarch shape the answer:
     the reader still cannot open.
   - Deleting a version checks only that version. A result whose studies were found before its source was deleted
     keeps them. A result whose source is gone before its studies are first found is read by nobody.
-  - An import's registration is not recorded as the plan's parent. The plan's own study is.
+  - An import's registration was not recorded as the plan's parent. Closed 2026-11-11: a plan imported through a radiarch
+    registration keeps it as a parent (`frame_registration_id`), so its studies are the registration's too.
   - A request whose JSON FastAPI cannot parse answers `422` before the check, so without a user it gets `422`, not
     `401`.
 - Two independent reviews found ways round the build; each was reproduced, and all are closed and tested. The first

@@ -76,6 +76,16 @@ class MCsquareEngine:
             bdl=str(params.get("bdl", s.mcsquare_bdl)),
         )
 
+    def digest(self, params: Optional[dict] = None) -> str:
+        """The build a run reads (R12): the launcher, the binaries, the material database, and the run's beam data
+        library and scanner calibration."""
+        from .digest import files_digest, tree_files
+
+        drv = self.driver(params)
+        a = drv.assets
+        files = [a.launcher, *a.binaries(), *tree_files(a.materials_dir), a.bdl_path(drv.bdl_name), *tree_files(a.scanner_dir(drv.scanner))]
+        return files_digest(files, a.root)
+
     # ----- diagnostics --------------------------------------------------
 
     def health(self) -> dict:

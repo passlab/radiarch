@@ -121,11 +121,13 @@ def photon_leaf_model(machine_model_id: str) -> Optional[LeafModel]:
 
 def import_rtplan(source: Union[str, Path], geometry: GeometryResult, store: BeamModelStore, *,
                   machine_model_id: str = "default", beamlet_spacing_mm: Tuple[float, float] = (5.0, 5.0),
-                  strict_frame_of_reference: bool = True, to_geometry: Optional[np.ndarray] = None) -> ImportedPlan:
+                  strict_frame_of_reference: bool = True, to_geometry: Optional[np.ndarray] = None,
+                  registration_id: Optional[str] = None) -> ImportedPlan:
     """Read ``source`` (an RT Plan or RT Ion Plan file) and store it as a beam model of ``geometry``.
 
     ``to_geometry`` (R9): a plan made in another frame of reference, brought into the geometry's by a registration's
-    rigid matrix (plan-frame points into the geometry's frame); its isocenters move, its angles stay."""
+    rigid matrix (plan-frame points into the geometry's frame); its isocenters move, its angles stay. ``registration_id``
+    names the radiarch registration the matrix came from, which the beam model keeps as a parent."""
     plan = read_rtplan(source, beamlet_spacing_mm)
     if isinstance(plan, PhotonPlan):
         plan = plan.model_copy(update={"leaf_model": photon_leaf_model(machine_model_id)})
@@ -151,6 +153,8 @@ def import_rtplan(source: Union[str, Path], geometry: GeometryResult, store: Bea
     digest.update(geometry.geometry_id.encode())
     digest.update(b"|" + machine_model_id.encode() + b"|")
     digest.update(plan.model_dump_json(exclude={"dicom": {"source_path"}}).encode())        # moved isocenters included
+    if registration_id:                                                                     # only then, so other imports keep their keys
+        digest.update(b"|registration:" + registration_id.encode())
     cache_key = digest.hexdigest()
     cached = store.lookup_by_cache_key(cache_key)
     if cached is not None and cached.plan_weights_uri and Path(cached.plan_weights_uri).is_file():
@@ -168,6 +172,7 @@ def import_rtplan(source: Union[str, Path], geometry: GeometryResult, store: Bea
         cache_key=cache_key,
         plan_weights_uri=str(root / PLAN_WEIGHTS_FILENAME),
         imported_plan=plan.dicom,
+        frame_registration_id=registration_id,
     )
     paths = store.save(beam_model_id=beam_model_id, cache_key=cache_key, plan=plan, result=result)
     np.save(paths.root / PLAN_WEIGHTS_FILENAME, weights)

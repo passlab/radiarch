@@ -1932,3 +1932,82 @@ The ADR is built.
   - R9.7 moved robust optimization over the breathing phases to a later item, which had no row. It now has an open
     row under R3.
   - The R7 review row points to the new page.
+
+## Four small open items: engine digest, asymmetric margins, relative-seriality NTCP and LQ-L, an import's registration (2026-11-11)
+
+Group A of `docs/reports/open-items-plan.md`. None changes an existing output. Existing requests keep their cache keys:
+each new field enters a key only when it is set.
+
+- **The engine build's digest (R12):**
+  - `services/dose_engines/digest.py`: SHA-256 over the files a run reads, named and in name order, cached per
+    process by path, inode, size, and modification and change times. `engine_digest(name, params)` never fails a
+    computation; it gives `null` for an engine without build files, such as the test engine.
+  - Each engine has a `digest(params)` method:
+    - CCC: the binary and the kernels.
+    - MCsquare: the launcher, the binaries, the material database, and the run's beam data library and scanner.
+    - `pb`: the kernel table and its description, as the process loaded them (the table is cached per path).
+  - Results record it as `engine_digest`: doses, influence matrices, optimizations, beam-angle searches, arc plans,
+    Pareto sets, MCO deliverable plans and 4D phase doses.
+  - A result computed from cached matrices names the build that made them (`common_digest`), `null` when they differ
+    or predate the digest:
+    - an optimization, a Pareto set and an MCO deliverable plan: their influence matrices';
+    - a beam-angle search: its scoring optimizations';
+    - a sequence's segment dose: the open-field matrix it came from;
+    - a second Pareto set and its delivered dose: the open-field matrix for static fields, the run's build for arcs.
+  - The lineage's attribution, the derivation record and the export manifest carry it. ADR 0013 is updated.
+- **Asymmetric margins (R4):**
+  - `StructureOperation.directional_mm` gives expand and erode one margin per patient direction: right, left,
+    anterior, posterior, superior, inferior. Each is 0 or more; an unknown direction is refused.
+  - `structure_ops.expand_directional` and `erode_directional` dilate by the ellipsoid whose half-axis on each side
+    is that side's margin, by FFT convolution on the structure's box.
+  - With the sides equal in pairs, both give the per-axis result voxel for voxel. The grid's edge is not outside, as
+    in `erode`.
+  - The SDK's `ops.expand` and `ops.erode` take the directions as keywords. ADR 0010 is updated.
+- **Relative-seriality NTCP and LQ-L (R5):**
+  - `radiobiology.relative_seriality_ntcp` follows Källman, Ågren and Brahme 1992. The equation is as Adamus-Górka et
+    al. (Acta Oncol 2008) print it, checked against an explicit product in the test.
+  - It works in logs (ln Pˢ = −s eˣ), so a steep, low-dose voxel whose P is below the float range still counts. It
+    also gives the uniform dose over the reference volume with the same NTCP, or `null` when the NTCP is 0 or 1 to
+    machine precision.
+  - `RelativeSerialityParameters` have an optional `reference_volume_cc`, the volume D50 refers to.
+  - One set ships: heart, long-term cardiac mortality. The values are D50 52.3 Gy, γ 1.28 and s 1, from Gagliardi et
+    al. 1996 as cited by Schneider et al. 2017, with the whole heart as reference.
+  - The spinal-cord sets of Adamus-Górka et al. refer to a length of cord, not the whole structure, so they do not
+    ship.
+  - `NTCPSpec.relative_seriality` takes explicit parameters. `NTCPResult` gains `model` and `effective_dose_gy`, and
+    its `geud_gy` is LKB's only.
+  - `EvaluationRequest.lql_transition_gy` applies LQ-L to every EQD2 of the request: above the transition dose per
+    fraction, each EQD2 follows the LQ curve's tangent there (Astrahan 2008). It needs the plan's fractions. `eqd2`
+    and `bed` take `transition_gy`.
+  - `GET /evaluate/models` lists the relative-seriality sets. ADR 0011 is updated.
+- **An import's registration (ADR 0021's known limit):**
+  - A plan imported through a radiarch registration keeps it as `frame_registration_id`.
+  - The lineage names the registration as a parent, so the access check sees its studies.
+  - The import's cache key includes the registration only when there is one. A replanned day plan does not inherit
+    it.
+- **An independent review** of the build found four defects and some smaller points. All are fixed and tested:
+  - **Every shipped protocol's digest changed.** A structure step dumped `directional_mm: null`, so repeated protocol
+    runs would have planned again instead of reusing their results. The digest now drops an unset one, and the seven
+    protocols' digests equal those before the change.
+  - **Results named the build running now, not the one that made their cached matrices**: optimizations, Pareto sets,
+    MCO deliverable plans and beam-angle searches. A segment dose took the optimization's digest though its matrix
+    was built with the default parameters. Each now names the matrices it read.
+  - **A proton optimization's export carried no digest.** The export source now carries it.
+  - **Smaller points:**
+    - the `pb` digest re-read a file that the process had cached;
+    - the digest cache missed a same-size replacement that kept the modification time;
+    - two files of one name outside the engine folder counted once;
+    - relative seriality lost accuracy where P underflows, and could give −0.0 or a meaningless effective dose;
+    - LQ-L without fractions changed the key and nothing else;
+    - a replanned day plan inherited the import's registration.
+  - **Kept as it is:** the FFT of a directional margin needs memory that grows with the margin. It is about as much as
+    the distance transform for 5 mm, and about twice for 50 mm.
+- **Tests:**
+  - `tests/test_engine_digest.py` (new);
+  - `test_r12_lineage.py`: a digest from the engine to the export, and from cached matrices;
+  - `test_r10_protocols.py`: the protocols' digests; `test_r11_protocol.py`'s reference digest drops the unset field,
+    as the digest does;
+  - `test_r4_machine_structures.py`: equality with the symmetric margins, the moved sides, a derived geometry's
+    direction and the validation;
+  - `test_r5_evaluation.py`: LQ-L, relative seriality, the two in an evaluation;
+  - `test_r9_registration.py`: the parent.

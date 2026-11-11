@@ -262,6 +262,7 @@ async def import_plan(request: BeamModelImportRequest) -> BeamModelResult:
             beamlet_spacing_mm=request.beamlet_spacing_mm,
             strict_frame_of_reference=request.strict_frame_of_reference,
             to_geometry=_frame_transform(request, geometry, path),
+            registration_id=request.registration_id,
         )
     except (ValueError, PlanImportError, RTPlanError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

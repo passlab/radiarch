@@ -47,6 +47,7 @@ from ..models.optimization import (
     OptimizationStage,
     RobustStats,
 )
+from .dose_engines.digest import common_digest
 from .dose import DoseService
 from .dose_engines import get_engine
 from .masks import structure_mask
@@ -111,6 +112,7 @@ class _Problem:
     eval_dose_terms: Callable[[np.ndarray], Tuple[float, np.ndarray]]
     w0: np.ndarray
     rbe: float = 1.0
+    engine_digest: Optional[str] = None      # the build that made the matrices (cached or new), R12
 
 
 class OptimizationService:
@@ -214,6 +216,7 @@ class OptimizationService:
             beam_model_id=prob.beam_model.result.beam_model_id,
             engine_name=prob.engine.name,
             engine_version=prob.engine.version,
+            engine_digest=prob.engine_digest,
         )
         self.store.save(
             opt_id=opt_id, cache_key=cache_key,
@@ -335,7 +338,7 @@ class OptimizationService:
         scenarios = self._resolve_scenarios(request)
         on_progress(OptimizationStage.building_objective, 0.30,
                     f"Building influence ({len(scenarios)} scenario(s))")
-        scenario_dij = self._build_scenario_dij(request, scenarios)
+        scenario_dij, dij_digest = self._build_scenario_dij(request, scenarios)
         aggregation = (request.robustness.aggregation
                        if request.robustness.enabled else "EXPECTED")
 
@@ -380,7 +383,7 @@ class OptimizationService:
             obj_terms=obj_terms, constraint_terms=constraint_terms,
             regularizers=regularizers, aggregation=aggregation,
             cost_and_grad=cost_and_grad, eval_dose_terms=eval_dose_terms,
-            w0=w0, rbe=rbe,
+            w0=w0, rbe=rbe, engine_digest=dij_digest,
         )
 
     # -----------------------------------------------------------------
@@ -455,8 +458,9 @@ class OptimizationService:
 
     def _build_scenario_dij(
         self, request: OptimizationRunRequest, scenarios: List[ScenarioSpec]
-    ) -> Dict[str, Tuple[object, csr_matrix]]:
-        """Build/load a cached Dij per scenario and wrap it in a CSR matrix.
+    ) -> Tuple[Dict[str, Tuple[object, csr_matrix]], Optional[str]]:
+        """Build/load a cached Dij per scenario and wrap it in a CSR matrix; also the digest of the engine build that
+        made them (None when they differ or one predates the digest).
 
         Delegates to :meth:`DoseService.build_influence` so the influence cache
         is shared with the Dose Service. The CSR matrix is reused for both the
@@ -496,7 +500,7 @@ class OptimizationService:
                 shape=(inf.n_voxels, inf.n_elements),
             )
             out[sc.hash()] = (inf, mat)
-        return out
+        return out, common_digest(getattr(r, "engine_digest", None) for r in inf_results)
 
     # -----------------------------------------------------------------
     # Weights + residuals + robust stats

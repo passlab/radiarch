@@ -42,6 +42,7 @@ from ..models.beam_model import (
 )
 from ..models.dose import EngineSpec
 from ..models.optimization import OptimizationRunRequest, SolverConfig
+from .dose_engines.digest import common_digest
 from .bao_persistence import BAOStore
 from .bao_search import get_search_strategy
 from .beam_model import BeamModelService
@@ -92,10 +93,12 @@ class BAOService:
 
         # --- scoring closure: angle set → composite plan cost --------
         scored = {"n": 0}
+        digests: List[Optional[str]] = []        # the engine builds behind the scoring optimizations (R12)
         total_evals = self._estimate_evals(request, len(candidates))
 
         def score_angle_set(angles: List[CandidateAngle]) -> float:
-            cost, _ = self._score_angle_set(request, angles)
+            cost, _, digest = self._score_angle_set(request, angles)
+            digests.append(digest)
             scored["n"] += 1
             frac = 0.10 + 0.75 * min(1.0, scored["n"] / max(total_evals, 1))
             on_progress(BAOStage.scoring, frac,
@@ -125,6 +128,7 @@ class BAOService:
             geometry_id=request.geometry_id,
             engine_name=request.dose_engine.name,
             engine_version=request.dose_engine.version,
+            engine_digest=common_digest(digests),
             scoring=request.scoring,
             search=request.search,
         )
@@ -173,7 +177,7 @@ class BAOService:
 
         Builds a beam model for ``angles`` and runs OptimizationService with the
         request's objectives + engine and a small iteration budget. Returns
-        ``(final_cost, beam_model_id)``.
+        ``(final_cost, beam_model_id, engine_digest)``.
         """
         beam_model_id = self._build_beam_model(request, angles)
         opt_req = OptimizationRunRequest(
@@ -186,7 +190,7 @@ class BAOService:
                                 max_iterations=request.scoring_iterations),
         )
         result = self.optimization_service.run(opt_req)
-        return float(result.convergence.final_cost), beam_model_id
+        return float(result.convergence.final_cost), beam_model_id, getattr(result, "engine_digest", None)
 
 
 def _noop_progress(stage: BAOStage, fraction: float, message: str) -> None:

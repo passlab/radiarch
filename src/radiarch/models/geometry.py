@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Union, Any, Dict, List, Optional, Tuple
 
 import numpy as np
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .job import JobState
 from .common import ResearchArtifact
@@ -266,10 +266,24 @@ class GeometryBuildRequest(BaseModel):
         }
 
 
+class DirectionalMargin(BaseModel):
+    """A margin per patient direction in mm, for an asymmetric expansion or erosion; a direction left out is 0."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    right: float = Field(default=0.0, ge=0.0, le=100.0)
+    left: float = Field(default=0.0, ge=0.0, le=100.0)
+    anterior: float = Field(default=0.0, ge=0.0, le=100.0)
+    posterior: float = Field(default=0.0, ge=0.0, le=100.0)
+    superior: float = Field(default=0.0, ge=0.0, le=100.0)
+    inferior: float = Field(default=0.0, ge=0.0, le=100.0)
+
+
 class StructureOperation(BaseModel):
     """One step of a derived geometry (R4). ``op`` and the fields it reads:
 
-    * ``expand`` / ``erode``: ``source``, ``margin_mm`` (one value or (x, y, z)) → ``name``
+    * ``expand`` / ``erode``: ``source``, ``margin_mm`` (one value or (x, y, z)) or ``directional_mm`` (a margin per
+      patient direction) → ``name``
     * ``ring``: ``source``, ``inner_mm``, ``outer_mm`` → ``name``
     * ``union`` / ``intersection``: ``sources`` → ``name``
     * ``subtract``: ``source`` minus ``sources`` → ``name``
@@ -284,6 +298,9 @@ class StructureOperation(BaseModel):
     source: Optional[str] = Field(default=None, max_length=128)
     sources: List[str] = Field(default_factory=list, max_length=64)
     margin_mm: Optional[Union[float, Tuple[float, float, float]]] = None
+    directional_mm: Optional[DirectionalMargin] = Field(
+        default=None, description="expand or erode: a margin per patient direction (right, left, anterior, posterior, "
+                                  "superior, inferior) instead of margin_mm.")
     inner_mm: Optional[Union[float, Tuple[float, float, float]]] = None
     outer_mm: Optional[Union[float, Tuple[float, float, float]]] = None
     hu: Optional[float] = None
@@ -300,9 +317,11 @@ class StructureOperation(BaseModel):
         need_name = self.op != "density_override"
         if need_name and not self.name and self.op != "couch":
             raise ValueError(f"{self.op} needs a name for the structure it creates")
+        if self.directional_mm is not None and self.op not in ("expand", "erode"):
+            raise ValueError("directional_mm is for expand and erode")
         if self.op in ("expand", "erode"):
-            if not self.source or self.margin_mm is None:
-                raise ValueError(f"{self.op} needs source and margin_mm")
+            if not self.source or (self.margin_mm is None) == (self.directional_mm is None):
+                raise ValueError(f"{self.op} needs source and one of margin_mm or directional_mm")
         elif self.op == "ring":
             if not self.source or self.inner_mm is None or self.outer_mm is None:
                 raise ValueError("ring needs source, inner_mm and outer_mm")

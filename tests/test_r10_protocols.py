@@ -188,3 +188,27 @@ def test_a_protocol_names_every_structure_the_geometry_lacks_before_planning(rx)
     assert missing_structures(mco, ["GTV", "Heart", "Esophagus"]) == {
         "Lung_L": ["the union that makes 'Lungs'"], "Lung_R": ["the union that makes 'Lungs'"],
         "SpinalCord": ["a trade-off", "a hard constraint"]}
+
+
+def test_a_protocol_digest_ignores_unset_directional_margins():
+    """A structure step without directional margins keeps the digest it had before they existed, so repeated protocol
+    runs still find their cached results; one with them gets its own."""
+    import hashlib
+    import json
+
+    from radiarch.services.autoplan import PROTOCOLS_DIR, load_protocol
+
+    for path in sorted(PROTOCOLS_DIR.glob("*.json")):
+        proto = load_protocol(path.stem)
+        data = proto.model_dump(mode="json")
+        if data.get("mco") is None:
+            data.pop("mco", None)
+        for op in data["structures"]:
+            assert op.pop("directional_mm") is None
+        assert proto.digest() == hashlib.sha256(json.dumps(data, sort_keys=True).encode("utf-8")).hexdigest(), path.stem
+    proto = load_protocol("lung-60gy-30fx-vmat")
+    first = proto.structures[0]
+    if first.op in ("expand", "erode"):
+        moved = proto.model_copy(update={"structures": [first.model_copy(update={"margin_mm": None, "directional_mm": {"superior": 5.0}}),
+                                                        *proto.structures[1:]]})
+        assert moved.digest() != proto.digest()

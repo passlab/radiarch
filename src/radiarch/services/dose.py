@@ -41,6 +41,7 @@ from ..models.dose import (
     default_rbe,
     dose_units_for,
 )
+from .dose_engines.digest import engine_digest
 from .beam_persistence import BeamModelStore
 from .dose_engines import (
     EngineRegistryError,
@@ -201,7 +202,7 @@ class DoseService:
             beam_model_id=beam_model.result.beam_model_id,
             modality=beam_model.result.modality,
             engine_name=engine.name,
-            engine_version=engine.version,
+            engine_version=engine.version, engine_digest=engine_digest(engine.name, request.engine.params),
             dose_grid_uri=dose_uri,
             statistics=_summary_stats(nominal_dose),
             rbe_factor=rbe,
@@ -269,7 +270,7 @@ class DoseService:
             result = InfluenceResult(
                 influence_id=influence_id, plan_id=request.plan_id,
                 geometry_id=geometry.result.geometry_id, beam_model_id=beam_model.result.beam_model_id,
-                modality=beam_model.result.modality, engine_name=engine.name, engine_version=engine.version,
+                modality=beam_model.result.modality, engine_name=engine.name, engine_version=engine.version, engine_digest=engine_digest(engine.name, request.engine.params),
                 scenario=per.scenario, influence_uri=str(self.influence_store.base_dir / influence_id / "dij.npz"),
                 rbe_factor=rbe, dose_units=dose_units_for(rbe),
                 n_voxels=inf.n_voxels, n_elements=inf.n_elements, nnz=inf.nnz, cache_key=key,
@@ -329,7 +330,7 @@ class DoseService:
             beam_model_id=beam_model.result.beam_model_id,
             modality=beam_model.result.modality,
             engine_name=engine.name,
-            engine_version=engine.version,
+            engine_version=engine.version, engine_digest=engine_digest(engine.name, request.engine.params),
             scenario=request.scenario,
             influence_uri=str(influence_root / "dij.npz"),
             rbe_factor=rbe,

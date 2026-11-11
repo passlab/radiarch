@@ -528,6 +528,11 @@ class PencilBeamEngine:
         _KERNELS.setdefault(k.fingerprint, k)
         return k
 
+    def digest(self, params: Optional[dict] = None) -> str:
+        """The build a run reads (R12): the kernel table and its description as this process loaded them (the table
+        is cached per path); the engine's code is radiarch's."""
+        return self.kernel(params).build_digest
+
     def _run(self, params: Optional[dict]) -> _Run:
         p = dict(params or {})
         s = _settings()

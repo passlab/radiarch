@@ -66,7 +66,14 @@ feet), without radiarch taking a decision that belongs to the record system
 - `descendants` scans every store; it is a maintenance view, not a hot
   path. The lock set is recomputed per request from the approved versions'
   graphs; with hundreds of versions this is milliseconds.
-- Not done: an approval that pins the engine binary's digest (the
-  attribution names the version; the container digest needs a computation
-  request that carries it), lineage across radiarch instances, and the audit
-  trail's own immutability (JSONL, as before).
+- Added 2026-11-11: the engine build's digest. A dose, influence matrix,
+  optimization, beam-angle search, arc plan or Pareto set records
+  `engine_digest`, SHA-256 over the files the engine ran on (CCC: binary
+  and kernels; MCsquare: launcher, binaries, materials, the run's beam
+  data library and scanner; `pb`: the kernel table as loaded). A result
+  computed from cached matrices names the build that made them, not the
+  build running now, and `null` when they differ or predate the digest.
+  The attribution, the derivation record and the export manifest carry it,
+  so an approval names the exact build; results from before keep `null`.
+- Not done: lineage across radiarch instances, and the audit trail's own
+  immutability (JSONL, as before).

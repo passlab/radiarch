@@ -88,9 +88,11 @@ class GeometryDeriver:
         for op in request.operations:
             applied.append(op.payload())
             if op.op == "expand":
-                add(op.name, ops.expand(mask_of(op.source), spacing, op.margin_mm))
+                add(op.name, ops.expand(mask_of(op.source), spacing, op.margin_mm) if op.directional_mm is None
+                    else ops.expand_directional(mask_of(op.source), spacing, op.directional_mm.model_dump()))
             elif op.op == "erode":
-                add(op.name, ops.erode(mask_of(op.source), spacing, op.margin_mm))
+                add(op.name, ops.erode(mask_of(op.source), spacing, op.margin_mm) if op.directional_mm is None
+                    else ops.erode_directional(mask_of(op.source), spacing, op.directional_mm.model_dump()))
             elif op.op == "ring":
                 add(op.name, ops.ring(mask_of(op.source), spacing, op.inner_mm, op.outer_mm))
             elif op.op == "union":

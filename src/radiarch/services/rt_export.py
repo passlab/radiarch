@@ -81,7 +81,8 @@ class RTPushRefused(RuntimeError):
 
 class _Source:
     def __init__(self, geometry: GeometryResult, beam_model: BeamModelResult, plan, dose_zyx: Optional[np.ndarray],
-                 dose_id: Optional[str], rbe: float, dose_units: str, engine_name: Optional[str], weights: np.ndarray) -> None:
+                 dose_id: Optional[str], rbe: float, dose_units: str, engine_name: Optional[str], weights: np.ndarray,
+                 engine_digest: Optional[str] = None) -> None:
         self.geometry = geometry
         self.beam_model = beam_model
         self.plan = plan
@@ -91,6 +92,7 @@ class _Source:
         self.dose_units = dose_units
         self.engine_name = engine_name
         self.weights = weights
+        self.engine_digest = engine_digest              # the engine build behind the dose written (R12)
 
 
 class RTExportService:
@@ -444,7 +446,8 @@ class RTExportService:
             dose = _read_volume(dose_result.dose_grid_uri) if dose_result else None
             rbe = dose_result.rbe_factor if dose_result else 1.0
             return _Source(self._geometry(bm.geometry_id), bm, plan, dose, seq_result.dose_id, rbe,
-                           seq_result.dose_units, dose_result.engine_name if dose_result else None, plan.beamlet_mu())
+                           seq_result.dose_units, dose_result.engine_name if dose_result else None, plan.beamlet_mu(),
+                           engine_digest=getattr(dose_result, "engine_digest", None))
 
         if request.optimization_id:
             from .optimization import OptimizationService
@@ -462,7 +465,8 @@ class RTExportService:
                 raise RTExportError(f"optimization has {weights.shape[0]} weights, the plan {plan.n_spots} spots")
             plan = plan.with_spot_mus(weights)
             dose = _read_volume(opt.dose_ref_uri) if opt.dose_ref_uri else None
-            return _Source(self._geometry(opt.geometry_id), bm, plan, dose, None, opt.rbe_factor, opt.dose_units, opt.engine_name, weights)
+            return _Source(self._geometry(opt.geometry_id), bm, plan, dose, None, opt.rbe_factor, opt.dose_units, opt.engine_name, weights,
+                           engine_digest=getattr(opt, "engine_digest", None))
 
         bm, plan = self._beam_model(request.beam_model_id)
         weights = None
@@ -519,10 +523,17 @@ class RTExportService:
                 engine_version = str(getattr(get_engine(engine_name), "version", "") or "") or None
             except Exception:
                 engine_version = None
+        engine_digest = src.engine_digest
+        if engine_digest is None and src.dose_id:        # the build that computed the dose written (R12)
+            try:
+                from .dose import DoseService
+                engine_digest = getattr(DoseService().dose_store.get_by_id(src.dose_id), "engine_digest", None)
+            except Exception:
+                engine_digest = None
         from ..build import commit
 
         return {"capability_id": "radiarch", "capability_version": radiarch_version(), "capability_commit": commit(), "engine_name": engine_name,
-                "engine_version": engine_version, "machine_model_id": src.beam_model.machine_model_id,
+                "engine_version": engine_version, "engine_digest": engine_digest, "machine_model_id": src.beam_model.machine_model_id,
                 "hu_model": getattr(src.geometry, "hu_to_density_model", None), "modality": str(getattr(src.beam_model.modality, "value", src.beam_model.modality))}
 
     @staticmethod

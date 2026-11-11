@@ -307,4 +307,10 @@ def test_dicom_registration_objects_round_trip_and_bring_a_plan_across_frames(ap
             assert r.status_code == 200, r.text
             moved = BeamModelService().store.load_plan(r.json()["beam_model_id"])
             assert np.linalg.norm(np.asarray(moved.beams[0].isocenter_mm) - c_fixed) < 1.5           # onto the fixed tumour
+            # a radiarch registration is the imported plan's parent; a DICOM one is not a radiarch version
+            from radiarch.models.lineage import VersionRef
+            from radiarch.services.lineage import LineageService
+            parents = {q.key for q in LineageService().node(VersionRef(kind="beam_model", id=r.json()["beam_model_id"])).parents}
+            assert (f"registration:{reg.registration_id}" in parents) == ("registration_id" in extra)
+            assert r.json()["frame_registration_id"] == extra.get("registration_id")
         assert client.post("/api/v1/registrations/" + reg.registration_id + "/dicom").status_code == 200

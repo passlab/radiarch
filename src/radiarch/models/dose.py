@@ -422,6 +422,7 @@ class DoseResult(ResearchArtifact):
     modality: Modality
     engine_name: str
     engine_version: str
+    engine_digest: Optional[str] = Field(default=None, description="SHA-256 of the engine build (program and data) that computed it (R12).")
 
     dose_grid_uri: str = Field(..., description="URI/path to the dose volume (NIfTI, float32, in dose_units).")
     statistics: DoseStatistics
@@ -466,6 +467,7 @@ class InfluenceResult(ResearchArtifact):
     modality: Modality
     engine_name: str
     engine_version: str
+    engine_digest: Optional[str] = Field(default=None, description="SHA-256 of the engine build (program and data) that computed it (R12).")
     scenario: Optional[ScenarioSpec] = None
 
     influence_uri: str = Field(..., description="URI/path to the sparse Dij matrix (.npz), in dose_units per unit weight.")

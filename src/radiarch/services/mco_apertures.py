@@ -122,6 +122,13 @@ def _origin(geometry):
     return getattr(geometry, "origin_mm", None) or geometry.result.grid_spec.origin_mm
 
 
+def element_digest(el: ApertureElements, prob, mreq) -> Optional[str]:
+    """The engine build behind the elements' doses (R12): the open-field matrix's for static fields, the run's for arcs."""
+    from .dose_engines.digest import engine_digest
+
+    return getattr(prob, "engine_digest", None) if el.kind == "segments" else engine_digest(mreq.dose_engine.name, mreq.dose_engine.params)
+
+
 def element_matrix(el: ApertureElements, prob, mreq, rows: Optional[np.ndarray] = None) -> sp.csr_matrix:
     """The dose per MU of each element (voxels x elements, CSR), on the voxels ``rows`` (flat indices) or the whole grid."""
     from .sequencing import plan_coverage
@@ -309,6 +316,7 @@ class ApertureSetService:
         ops = MCOOps([o for o, _ in prob.obj_terms], [np.asarray(m).ravel()[index].astype(np.float64) for _, m in prob.obj_terms],
                      forward, backward, terms, None, index, structures, [], on_voxels=True)
         fields = dict(geometry_id=d.geometry_id, beam_model_id=d.beam_model_id, engine_name=first.engine_name, engine_version=first.engine_version,
+                      engine_digest=element_digest(el, prob, mreq),
                       rbe_factor=first.rbe_factor, dose_units=first.dose_units, voxel_cc=first.voxel_cc, modality=first.modality,
                       source_deliverable_id=d.deliverable_id, elements=el.kind)
         if any(c.op == ">=" for c in limits):
@@ -360,6 +368,7 @@ def deliver_on_apertures(dsvc, mco_id: str, result: MCOResult, request: Delivera
     dose_id = str(uuid.uuid4())
     dres = src_dose.model_copy(update={"dose_id": dose_id, "beam_model_id": bm_id, "cache_key": bm_key, "scenario_doses": None,
                                        "dose_grid_uri": str(ds.dose_store.base_dir / dose_id / DOSE_FILENAME), "statistics": _summary_stats(dose),
+                                       "engine_digest": element_digest(el, prob, mreq),
                                        "created_at": datetime.now(timezone.utc)})
     ds.dose_store.save(dose_id=dose_id, cache_key=bm_key, nominal_dose=dose, spacing_mm=tuple(prob.geometry.spacing_mm), scenario_doses=None,
                        result=dres)

@@ -101,6 +101,49 @@ class TestRadiobiology:
         assert params.td50_gy == 30.8 and "Marks" in params.source
         assert len(rb.NTCP_MODELS) >= 10 and all(m.source for m in rb.NTCP_MODELS.values())
 
+    def test_lql_eqd2(self):
+        """LQ-L: the LQ curve's tangent above the transition dose per fraction (Astrahan 2008)."""
+        lq = rb.eqd2(np.array([54.0]), 3, 3.0)[0]
+        lql = rb.eqd2(np.array([54.0]), 3, 3.0, transition_gy=6.0)[0]
+        # 3 x 18 Gy, α/β 3, d_T 6: BED per fraction 6 (1 + 6/3) + 12 (1 + 12/3) = 78, EQD2 = 3 x 78 / (1 + 2/3)
+        assert lql == pytest.approx(3 * 78.0 / (1 + 2 / 3.0)) and lql < lq
+        # at or below the transition it is the LQ model, and the two meet with the same slope at d_T
+        assert rb.eqd2(np.array([54.0]), 3, 3.0, transition_gy=18.0)[0] == pytest.approx(lq)
+        assert rb.eqd2(np.array([60.0]), 30, 3.0, transition_gy=6.0)[0] == pytest.approx(60.0)
+        eps = 1e-4
+        below = rb.bed(np.array([6.0 - eps, 6.0]), 1, 3.0)
+        above = rb.bed(np.array([6.0, 6.0 + eps]), 1, 3.0, transition_gy=6.0)
+        assert (above[1] - above[0]) / eps == pytest.approx((below[1] - below[0]) / eps, rel=1e-3)
+        with pytest.raises(ValueError):
+            rb.eqd2(np.array([54.0]), 3, 3.0, transition_gy=0.0)
+
+    def test_relative_seriality(self):
+        """Källman's model: 0.5 at D50 over the reference volume for any seriality; a small serial organ follows its
+        hottest voxels, a parallel one its mean."""
+        for s in (0.01, 0.2, 1.0, 30.0):
+            r = rb.relative_seriality_ntcp(np.full(50, 52.3), 52.3, 1.28, s)
+            assert r["ntcp"] == pytest.approx(0.5) and r["effective_dose_gy"] == pytest.approx(52.3)
+        # the explicit product of the paper's equation, voxel by voxel
+        d, d50, g, s = np.array([10.0, 30.0, 50.0, 70.0]), 50.0, 2.0, 0.5
+        p = np.exp(-np.exp(np.e * g - (d / d50) * (np.e * g - np.log(np.log(2.0)))))
+        expected = (1 - np.prod((1 - p ** s) ** 0.25)) ** (1 / s)
+        assert rb.relative_seriality_ntcp(d, d50, g, s)["ntcp"] == pytest.approx(expected, rel=1e-12)
+        hot = np.r_[np.full(48, 10.0), [80.0, 80.0]]
+        serial = rb.relative_seriality_ntcp(hot, 50.0, 2.0, 30.0)["ntcp"]
+        parallel = rb.relative_seriality_ntcp(hot, 50.0, 2.0, 0.01)["ntcp"]
+        assert serial > 0.5 > 0.01 > parallel
+        # a larger reference volume gives each voxel a smaller share and a lower NTCP
+        whole = rb.relative_seriality_ntcp(hot, 50.0, 2.0, 1.0)["ntcp"]
+        assert rb.relative_seriality_ntcp(hot, 50.0, 2.0, 1.0, np.full(50, 1 / 100))["ntcp"] < whole
+        # a steep dose response at low dose: P underflows, P^s does not, and nothing is lost or negative
+        r = rb.relative_seriality_ntcp(np.linspace(0, 60, 200), 30.0, 3.0, 0.001)
+        assert r["ntcp"] == pytest.approx(0.530882484, abs=1e-8)              # a 60-digit decimal reference
+        cold = rb.relative_seriality_ntcp(np.full(10, 1.0), 30.0, 3.0, 1.0)
+        assert cold["ntcp"] == 0.0 and str(cold["ntcp"]) == "0.0" and cold["effective_dose_gy"] is None
+        heart = rb.RS_MODELS["heart-cardiac-mortality-gagliardi-rs"]
+        assert (heart.d50_gy, heart.gamma, heart.s) == (52.3, 1.28, 1.0) and "Gagliardi" in heart.source
+        assert all(m.source for m in rb.RS_MODELS.values())
+
     def test_poisson_tcp(self):
         r = rb.poisson_tcp(np.full(20, 84.5), 84.5, 1.5)
         assert r["tcp"] == pytest.approx(0.5) and r["eud_gy"] == pytest.approx(84.5)
@@ -286,6 +329,33 @@ class TestEvaluationService:
             EvaluationService().run(EvaluationRequest(dose_ref_uri=uri, geometry_id=geo.geometry_id, prescription_gy=60.0, ntcp=[NTCPSpec(model_id="nope")]))
         with pytest.raises(ValueError, match="not in the geometry"):
             EvaluationService().run(EvaluationRequest(dose_ref_uri=uri, geometry_id=geo.geometry_id, prescription_gy=60.0, ntcp=[NTCPSpec(model_id="liver-rild-dawson")]))
+        with pytest.raises(ValueError, match="not both"):
+            NTCPSpec(parameters=rb.NTCP_MODELS["kidney-burman"], relative_seriality=rb.RS_MODELS["heart-cardiac-mortality-gagliardi-rs"])
+
+    def test_relative_seriality_and_lql_in_an_evaluation(self, env):
+        from radiarch.services.evaluation import EvaluationService
+
+        geo, uri = _geometry_and_dose(env)
+        base = EvaluationRequest(dose_ref_uri=uri, geometry_id=geo.geometry_id, prescription_gy=60.0, fractions=30,
+                                 ntcp=[NTCPSpec(model_id="lung-pneumonitis-quantec", structure="Lung_Total-GTV")])
+        cord_eqd2 = float(rb.eqd2(np.array([30.0]), 30, 2.0)[0])              # the cord's 30 Gy in 30 fractions: 22.5 Gy
+        cord = rb.RelativeSerialityParameters(model_id="cord-test", structure="SpinalCord", endpoint="test", d50_gy=cord_eqd2,
+                                              gamma=2.0, s=1.0, alpha_beta_gy=2.0)
+        out = EvaluationService().run(base.model_copy(update={"ntcp": base.ntcp + [
+            NTCPSpec(relative_seriality=cord),
+            NTCPSpec(relative_seriality=cord.model_copy(update={"model_id": "cord-ref", "reference_volume_cc": 1000.0}))]}))
+        lkb, rs, ref = out.ntcp
+        assert lkb.model == "lkb" and lkb.geud_gy is not None and lkb.effective_dose_gy is None
+        # the cord's EQD2 is uniform at its D50: 0.5 over its own volume, less over a larger reference volume
+        assert rs.model == "relative_seriality" and rs.ntcp == pytest.approx(0.5) and rs.effective_dose_gy == pytest.approx(cord_eqd2)
+        assert rs.geud_gy is None and ref.ntcp < rs.ntcp
+        # LQ-L changes nothing at fractions below the transition, and keys a new evaluation only when set
+        lql = EvaluationService().run(base.model_copy(update={"lql_transition_gy": 6.0}))
+        plain = EvaluationService().run(base)
+        assert lql.ntcp[0].ntcp == pytest.approx(plain.ntcp[0].ntcp) and lql.evaluation_id != plain.evaluation_id
+        assert base.compute_cache_key() != base.model_copy(update={"lql_transition_gy": 6.0}).compute_cache_key()
+        with pytest.raises(ValueError, match="needs the plan's fractions"):
+            EvaluationRequest(dose_ref_uri=uri, geometry_id=geo.geometry_id, prescription_gy=60.0, lql_transition_gy=6.0)
 
 
 def test_api_templates_models_and_compare(env, monkeypatch):
@@ -306,6 +376,7 @@ def test_api_templates_models_and_compare(env, monkeypatch):
         assert client.get("/api/v1/evaluate/goal-templates/nope").status_code == 404
         m = client.get("/api/v1/evaluate/models").json()
         assert len(m["ntcp"]) >= 10 and len(m["tcp"]) >= 3 and m["default_alpha_beta_gy"]["lungs"] == 3.0
+        assert [x["model_id"] for x in m["ntcp_relative_seriality"]] == ["heart-cardiac-mortality-gagliardi-rs"]
         base = {"geometry_id": geo.geometry_id, "prescription_gy": 60.0, "target_structure": "PTV", "fractions": 30,
                 "goals": {"template_id": "rtog-0617"}}
         r = client.post("/api/v1/evaluate/compare", json={"a": {**base, "dose_ref_uri": uri}, "b": {**base, "dose_ref_uri": uri_hot}})

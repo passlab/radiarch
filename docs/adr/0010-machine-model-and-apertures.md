@@ -30,7 +30,8 @@ was no way to make a PTV, a ring or a density override from the API.
    and geometries written before R4 (`mask_encoding: labels`) still read.
    A cord inside a PTV keeps its voxels; its DVH is right.
 3. **Derived geometries.** `POST /geometry/{id}/derive` applies ordered
-   operations — expand and erode (Euclidean, isotropic or per-axis), ring,
+   operations — expand and erode (Euclidean, isotropic, per-axis, or one
+   margin per patient direction, 2026-11-11), ring,
    union, intersection, subtract, density override (HU through the
    geometry's HU model, or a density), a couch slab — and persists a new
    geometry with `parent_geometry_id` and the operations, cached by the
@@ -69,8 +70,12 @@ was no way to make a PTV, a ring or a density override from the API.
   not. A run on the plan's own beamlets keeps ideal leaves; the dose
   through the apertures is the pencil beam's `fluence: apertures`.
 - Direct aperture optimization, VMAT and fraction-wise delivery
-  constraints stay with R8; structure operations with asymmetric margins
-  and multi-layer segmentations are not modelled.
+  constraints stay with R8; multi-layer segmentations are not modelled.
+  Asymmetric margins came on 2026-11-11 (`directional_mm`: right, left,
+  anterior, posterior, superior, inferior, each 0 or more): a dilation by
+  the ellipsoid whose half-axis on each side is that side's margin, which
+  gives the per-axis result voxel for voxel when the sides are equal in
+  pairs.
 - `test_r4_*.py` cover the machines, masks, structure operations, derived
   geometries, the sequencer and the aperture service end to end on the
   analytic engine.

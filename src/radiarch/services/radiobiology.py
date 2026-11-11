@@ -1,12 +1,22 @@
-"""Radiobiology (roadmap R5): EQD2 and BED, gEUD, LKB NTCP, Poisson TCP.
+"""Radiobiology (roadmap R5): EQD2 and BED, gEUD, LKB and relative-seriality NTCP, Poisson TCP.
 
 * ``eqd2``: the linear-quadratic equivalent dose in 2 Gy fractions,
   ``D (d + α/β) / (2 + α/β)`` with ``d = D / n``; ``bed = D (1 + d/(α/β))``.
   Applied per voxel, a total dose over ``n`` fractions becomes an EQD2
   volume on which 2 Gy constraints and the NTCP parameters below apply.
+  With a transition dose ``d_T`` (LQ-L, Astrahan, Med Phys 35:4161, 2008)
+  the LQ curve continues above ``d_T`` per fraction along its tangent there:
+  ``BED/n = d_T (1 + d_T/(α/β)) + (d − d_T)(1 + 2 d_T/(α/β))``. The LQ model
+  overstates the effect of large fractions; LQ-L is one answer for SBRT.
 * ``geud``: the generalized equivalent uniform dose ``(mean(D^a))^(1/a)``
   (Niemierko 1999); ``a = 1/n`` of the LKB model.
 * ``lkb_ntcp``: the Lyman–Kutcher–Burman model, ``Φ((gEUD − TD50) / (m TD50))``.
+* ``relative_seriality_ntcp``: Källman, Ågren and Brahme (Int J Radiat Biol
+  62:249, 1992), as written in Adamus-Górka et al. (Acta Oncol 47:928, 2008,
+  eq. 1): ``NTCP = [1 − Π (1 − P(D_i)^s)^Δv_i]^(1/s)`` with
+  ``P(D) = exp(−exp(eγ − (D/D50)(eγ − ln ln 2)))``, ``Δv_i`` the voxel's share
+  of the reference volume and ``s`` the relative seriality (near 0 parallel,
+  large serial).
 * ``poisson_tcp``: the Poisson model with the ``D50`` and ``γ50`` of a
   population (voxel-wise product of ``0.5^exp(2γ50(1 − D/D50)/ln 2)``).
 
@@ -22,11 +32,22 @@ from typing import Dict, Optional
 import numpy as np
 from scipy.special import ndtr
 
-from ..models.evaluation import NTCPParameters, TCPParameters
+from ..models.evaluation import NTCPParameters, RelativeSerialityParameters, TCPParameters
 
 
-def eqd2(dose_gy, fractions: int, alpha_beta_gy: float) -> np.ndarray:
-    """Per-voxel EQD2 of a total dose delivered in ``fractions`` equal fractions."""
+def _lql_bed(d: np.ndarray, n: int, ab: float, transition_gy: float) -> np.ndarray:
+    """BED of a total dose ``d`` in ``n`` fractions, linear above ``transition_gy`` per fraction (LQ-L)."""
+    if transition_gy <= 0:
+        raise ValueError("the LQ-L transition dose must be positive")
+    per = d / n
+    dt = float(transition_gy)
+    above = dt * (1.0 + dt / ab) + (per - dt) * (1.0 + 2.0 * dt / ab)
+    return n * np.where(per <= dt, per * (1.0 + per / ab), above)
+
+
+def eqd2(dose_gy, fractions: int, alpha_beta_gy: float, transition_gy: Optional[float] = None) -> np.ndarray:
+    """Per-voxel EQD2 of a total dose delivered in ``fractions`` equal fractions; LQ-L above ``transition_gy`` per
+    fraction when it is given."""
     d = np.asarray(dose_gy, dtype=np.float64)
     n = int(fractions)
     if n < 1:
@@ -34,15 +55,19 @@ def eqd2(dose_gy, fractions: int, alpha_beta_gy: float) -> np.ndarray:
     ab = float(alpha_beta_gy)
     if ab <= 0:
         raise ValueError("alpha/beta must be positive")
+    if transition_gy is not None:
+        return _lql_bed(d, n, ab, transition_gy) / (1.0 + 2.0 / ab)
     per_fraction = d / n
     return d * (per_fraction + ab) / (2.0 + ab)
 
 
-def bed(dose_gy, fractions: int, alpha_beta_gy: float) -> np.ndarray:
+def bed(dose_gy, fractions: int, alpha_beta_gy: float, transition_gy: Optional[float] = None) -> np.ndarray:
     d = np.asarray(dose_gy, dtype=np.float64)
     n = int(fractions)
     if n < 1:
         raise ValueError("fractions must be >= 1")
+    if transition_gy is not None:
+        return _lql_bed(d, n, float(alpha_beta_gy), transition_gy)
     return d * (1.0 + (d / n) / float(alpha_beta_gy))
 
 
@@ -61,6 +86,31 @@ def lkb_ntcp(doses, td50_gy: float, m: float, n: float) -> Dict[str, float]:
     g = geud(doses, a)
     t = (g - float(td50_gy)) / (float(m) * float(td50_gy))
     return {"geud_gy": g, "t": float(t), "ntcp": float(ndtr(t))}
+
+
+LN_LN_2 = math.log(math.log(2.0))
+
+
+def relative_seriality_ntcp(doses, d50_gy: float, gamma: float, s: float, volume_fractions=None) -> Dict[str, float]:
+    """Relative-seriality NTCP of a structure's (EQD2) voxel doses. ``volume_fractions`` are the voxels' shares of the
+    reference volume (default: equal shares of the structure). Also returns the uniform dose over the whole reference
+    volume with the same NTCP, or None when the NTCP is 0 or 1 to machine precision."""
+    d = np.asarray(doses, dtype=np.float64).ravel()
+    if d.size == 0:
+        return {"ntcp": 0.0, "effective_dose_gy": None}
+    dv = np.full(d.size, 1.0 / d.size) if volume_fractions is None else np.asarray(volume_fractions, dtype=np.float64).ravel()
+    eg = math.e * float(gamma)
+    x = eg - (d / float(d50_gy)) * (eg - LN_LN_2)                          # P(D) = exp(−e^x)
+    with np.errstate(over="ignore", divide="ignore"):
+        # ln(1 − P^s) from ln P^s = −s e^x, so that a steep low-dose voxel's P, below the float range, still counts
+        terms = np.log(-np.expm1(-float(s) * np.exp(x)))
+        log_prod = float(np.sum(dv * terms))                                # ln Π (1 − P^s)^Δv
+    inner = -math.expm1(log_prod) if math.isfinite(log_prod) else 1.0       # 1 − Π
+    ntcp = float(min(max(inner, 0.0), 1.0) ** (1.0 / float(s))) + 0.0     # + 0.0: never −0.0
+    effective = None
+    if 0.0 < ntcp < 1.0:
+        effective = float(d50_gy) * (eg - math.log(-math.log(ntcp))) / (eg - LN_LN_2)
+    return {"ntcp": ntcp, "effective_dose_gy": effective}
 
 
 def poisson_tcp(doses, d50_gy: float, gamma50: float, volume_fractions=None) -> Dict[str, float]:
@@ -133,6 +183,18 @@ NTCP_MODELS: Dict[str, NTCPParameters] = {
         source="Burman C et al., IJROBP 1991;21:123-135"),
 }
 
+# Relative-seriality sets. Each names its reference volume; a set fitted to a part of an organ (a length of spinal
+# cord, say) needs that volume in reference_volume_cc, so only whole-organ fits ship here.
+RS_MODELS: Dict[str, RelativeSerialityParameters] = {
+    "heart-cardiac-mortality-gagliardi-rs": RelativeSerialityParameters(
+        model_id="heart-cardiac-mortality-gagliardi-rs", structure="Heart",
+        endpoint="long-term cardiac mortality (ischaemic heart disease, myocardial infarction) after breast cancer radiotherapy",
+        d50_gy=52.3, gamma=1.28, s=1.0, alpha_beta_gy=3.0,
+        source="Gagliardi G, Lax I, Ottolenghi A et al., Br J Radiol 1996;69:839-846 (relative-seriality fit, the whole heart as "
+               "reference volume); D50 52.3 Gy, γ 1.28, s 1 as cited by Schneider U et al., Radiat Oncol 2017;12:74. "
+               "α/β 3 Gy is radiarch's late-effect default, not part of the fit"),
+}
+
 TCP_MODELS: Dict[str, TCPParameters] = {
     "nsclc-martel": TCPParameters(
         model_id="nsclc-martel", structure="PTV", endpoint="30-month local control, NSCLC",
@@ -163,4 +225,5 @@ def default_alpha_beta(structure_name: str) -> float:
     return DEFAULT_ALPHA_BETA["late"]
 
 
-__all__ = ["eqd2", "bed", "geud", "lkb_ntcp", "poisson_tcp", "NTCP_MODELS", "TCP_MODELS", "DEFAULT_ALPHA_BETA", "default_alpha_beta"]
+__all__ = ["eqd2", "bed", "geud", "lkb_ntcp", "relative_seriality_ntcp", "poisson_tcp", "NTCP_MODELS", "RS_MODELS", "TCP_MODELS",
+           "DEFAULT_ALPHA_BETA", "default_alpha_beta"]

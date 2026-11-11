@@ -54,6 +54,65 @@ def test_lineage_of_an_export_reaches_the_geometry(env):  # noqa: F811
         svc.lineage(VersionRef(kind="dose", id="nope"))
 
 
+def test_the_engine_digest_reaches_the_attribution(env, monkeypatch):  # noqa: F811
+    """A result keeps the digest of the engine build that computed it; the lineage and the export name it."""
+    from radiarch.services.dose_engines.analytic import AnalyticEngine
+    from radiarch.services.dose import DoseService
+    from radiarch.services.lineage import LineageService
+    from radiarch.services.optimization import OptimizationService
+
+    digest = "d" * 64
+    monkeypatch.setattr(AnalyticEngine, "digest", lambda self, params=None: digest, raising=False)
+    geo, bm, opt, seq = _photon_pipeline()
+    exp = _export(seq)
+    assert OptimizationService().store.get_by_id(opt.optimization_id).engine_digest == digest
+    assert DoseService().dose_store.get_by_id(seq.dose_id).engine_digest == digest          # the segment dose, from the optimization
+    svc = LineageService()
+    for ref in (VersionRef(kind="optimization", id=opt.optimization_id), VersionRef(kind="dose", id=seq.dose_id),
+                VersionRef(kind="rt_export", id=exp.export_id)):
+        assert svc.node(ref).attribution.engine_digest == digest, ref
+    assert exp.attribution["engine_digest"] == digest
+
+
+def test_a_result_names_the_build_of_the_matrices_it_read(env, monkeypatch):  # noqa: F811
+    """An optimization on a cached Dij names the build that made the Dij, not the build running now; a sequence's
+    segment dose names the build of the open-field Dij it came from; an export without a dose names the optimization's."""
+    from types import SimpleNamespace
+
+    from radiarch.models.apertures import SequenceRequest
+    from radiarch.models.dose import EngineSpec, InfluenceBuildRequest
+    from radiarch.models.optimization import ObjectiveSpec, OptimizationRunRequest, SolverConfig
+    from radiarch.services.apertures import ApertureService
+    from radiarch.services.dose import DoseService
+    from radiarch.services.dose_engines.analytic import AnalyticEngine
+    from radiarch.services.optimization import OptimizationService
+    from radiarch.services.rt_export import RTExportService, _Source
+
+    monkeypatch.setattr(AnalyticEngine, "digest", lambda self, params=None: "A" * 64, raising=False)
+    geo, bm, opt, seq = _photon_pipeline()
+    inf = DoseService().build_influence(InfluenceBuildRequest(geometry_id=geo.geometry_id, beam_model_id=bm.beam_model_id,
+                                                              engine=EngineSpec(name="analytic")))
+    assert inf.engine_digest == "A" * 64
+    # the build changes under the same version; a new optimization reuses the cached Dij
+    monkeypatch.setattr(AnalyticEngine, "digest", lambda self, params=None: ("P" if params else "B") * 64, raising=False)
+    objectives = [ObjectiveSpec(type="DUniform", structure_name="PTV", dose_gy=3.0, weight=1.0)]
+    opt2 = OptimizationService().run(OptimizationRunRequest(
+        geometry_id=geo.geometry_id, beam_model_id=bm.beam_model_id, dose_engine=EngineSpec(name="analytic"),
+        objectives=objectives, solver=SolverConfig(method="L-BFGS-B", max_iterations=10)))
+    assert opt2.engine_digest == "A" * 64
+    # an optimization with other params builds its own Dij now; its sequence's segment dose comes from the default Dij
+    opt_p = OptimizationService().run(OptimizationRunRequest(
+        geometry_id=geo.geometry_id, beam_model_id=bm.beam_model_id, dose_engine=EngineSpec(name="analytic", params={"mu_per_cm": 0.04}),
+        objectives=objectives, solver=SolverConfig(method="L-BFGS-B", max_iterations=10)))
+    assert opt_p.engine_digest == "P" * 64
+    seq_p = ApertureService().sequence(opt_p.optimization_id, SequenceRequest(objectives=objectives, levels=5, max_iterations=10))
+    assert DoseService().dose_store.get_by_id(seq_p.dose_id).engine_digest == "A" * 64
+    # a proton optimization's export has no dose record: the source carries the optimization's digest
+    src = _Source(SimpleNamespace(hu_to_density_model="LINEAR"), SimpleNamespace(machine_model_id="m", modality="PROTON_PBS"),
+                  None, None, None, 1.1, "Gy(RBE)", "mcsquare", None, engine_digest="C" * 64)
+    assert RTExportService._attribution(src)["engine_digest"] == "C" * 64
+
+
 def test_states_and_immutability(env):  # noqa: F811
     from radiarch.services.geometry import GeometryService
     from radiarch.services.lineage import LineageError, LineageService, VersionLocked

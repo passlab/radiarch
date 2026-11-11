@@ -4,18 +4,23 @@ from __future__ import annotations
 
 from typing import Optional
 
-from ..models.geometry import StructureOperation
+from ..models.geometry import DirectionalMargin, StructureOperation
 from ..models.optimization import ObjectiveSpec
 
 
 # ----- structure operations ----------------------------------------------------------
 
-def expand(name: str, source: str, margin_mm: float) -> StructureOperation:
-    return StructureOperation(op="expand", name=name, source=source, margin_mm=margin_mm)
+def expand(name: str, source: str, margin_mm: Optional[float] = None, **directions: float) -> StructureOperation:
+    """``margin_mm``, or a margin per direction: ``right``, ``left``, ``anterior``, ``posterior``, ``superior``,
+    ``inferior`` (mm; a direction left out is 0)."""
+    return StructureOperation(op="expand", name=name, source=source, margin_mm=margin_mm,
+                              directional_mm=DirectionalMargin(**directions) if directions else None)
 
 
-def erode(name: str, source: str, margin_mm: float) -> StructureOperation:
-    return StructureOperation(op="erode", name=name, source=source, margin_mm=margin_mm)
+def erode(name: str, source: str, margin_mm: Optional[float] = None, **directions: float) -> StructureOperation:
+    """As ``expand``, shrinking."""
+    return StructureOperation(op="erode", name=name, source=source, margin_mm=margin_mm,
+                              directional_mm=DirectionalMargin(**directions) if directions else None)
 
 
 def ring(name: str, source: str, inner_mm: float, outer_mm: float) -> StructureOperation:

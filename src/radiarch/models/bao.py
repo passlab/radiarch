@@ -186,6 +186,7 @@ class BAOResult(ResearchArtifact):
     geometry_id: str
     engine_name: str
     engine_version: str
+    engine_digest: Optional[str] = Field(default=None, description="SHA-256 of the engine build (program and data) that computed it (R12).")
     scoring: str
     search: str
     created_at: Optional[datetime] = None

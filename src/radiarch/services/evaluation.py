@@ -32,6 +32,7 @@ from ..models.evaluation import (
     GoalResult,
     GoalsReport,
     NTCPResult,
+    RelativeSerialityParameters,
     RobustIndices,
     RobustStructureMetrics,
     TCPResult,
@@ -238,7 +239,8 @@ class EvaluationService:
     def _grade(self, request: EvaluationRequest, dose: np.ndarray, scenario_doses: Dict[str, np.ndarray],
                masks: np.ndarray, index: Dict[str, int], encoding: str, voxel_volume_cc: float):
         from .clinical_goals import evaluate_goal, load_template, resolve_structure, scaled_goal
-        from .radiobiology import NTCP_MODELS, TCP_MODELS, default_alpha_beta, eqd2, lkb_ntcp, poisson_tcp
+        from .radiobiology import (NTCP_MODELS, RS_MODELS, TCP_MODELS, default_alpha_beta, eqd2, lkb_ntcp, poisson_tcp,
+                                   relative_seriality_ntcp)
 
         available = list(index.keys())
         ntcp_results: List[NTCPResult] = []
@@ -250,7 +252,7 @@ class EvaluationService:
         def eqd2_of(name: str, volume: np.ndarray, alpha_beta: float) -> np.ndarray:
             if request.fractions is None:
                 raise ValueError("EQD2 goals and models need the plan's fractions (request.fractions)")
-            return eqd2(doses_of(name, volume), request.fractions, alpha_beta)
+            return eqd2(doses_of(name, volume), request.fractions, alpha_beta, request.lql_transition_gy)
 
         goals_report = None
         if request.goals is not None:
@@ -303,21 +305,33 @@ class EvaluationService:
             )
 
         for spec in request.ntcp:
-            params = spec.parameters or NTCP_MODELS.get(spec.model_id or "")
+            params = spec.parameters or spec.relative_seriality or NTCP_MODELS.get(spec.model_id or "") or RS_MODELS.get(spec.model_id or "")
             if params is None:
-                raise ValueError(f"unknown NTCP model {spec.model_id!r}; built-in: {sorted(NTCP_MODELS)}")
+                raise ValueError(f"unknown NTCP model {spec.model_id!r}; built-in: {sorted(NTCP_MODELS) + sorted(RS_MODELS)}")
             name = resolve_structure(spec.structure or params.structure, available, {})
             if name is None:
                 raise ValueError(f"NTCP {params.model_id}: structure {spec.structure or params.structure!r} not in the geometry ({available})")
             use_eqd2 = request.fractions is not None
+            if isinstance(params, RelativeSerialityParameters):
+                n_vox = int(structure_mask(masks, index[name], encoding).sum())
+                ref_cc = params.reference_volume_cc
+                shares = None if ref_cc is None else np.full(n_vox, voxel_volume_cc / float(ref_cc))
+
+                def model(doses, p=params, shares=shares):
+                    return relative_seriality_ntcp(doses, p.d50_gy, p.gamma, p.s, shares)
+            else:
+                def model(doses, p=params):
+                    return lkb_ntcp(doses, p.td50_gy, p.m, p.n)
             nominal = eqd2_of(name, dose, params.alpha_beta_gy) if use_eqd2 else doses_of(name, dose)
-            r = lkb_ntcp(nominal, params.td50_gy, params.m, params.n)
+            r = model(nominal)
             per = {}
             for k, v in scenario_doses.items():
                 sd = eqd2_of(name, v, params.alpha_beta_gy) if use_eqd2 else doses_of(name, v)
-                per[k] = lkb_ntcp(sd, params.td50_gy, params.m, params.n)["ntcp"]
+                per[k] = model(sd)["ntcp"]
             ntcp_results.append(NTCPResult(model_id=params.model_id, structure=name, endpoint=params.endpoint, parameters=params,
-                                           geud_gy=r["geud_gy"], ntcp=r["ntcp"], eqd2_applied=use_eqd2,
+                                           model="relative_seriality" if isinstance(params, RelativeSerialityParameters) else "lkb",
+                                           geud_gy=r.get("geud_gy"), effective_dose_gy=r.get("effective_dose_gy"),
+                                           ntcp=r["ntcp"], eqd2_applied=use_eqd2,
                                            worst_case_ntcp=max([r["ntcp"]] + list(per.values())) if per else None, per_scenario=per))
 
         for spec in request.tcp:

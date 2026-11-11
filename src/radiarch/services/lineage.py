@@ -234,6 +234,7 @@ class LineageService:
                 add("beam_model", ck.split(":")[1])                   # (R10); a second set's metersets on its apertures (R11.11)
             if ck.startswith("metersets:"):
                 add("mco", ck.split(":")[2])
+            add("registration", g("frame_registration_id"))         # an imported plan moved across frames of reference (R9)
             attr.machine_model_id = g("machine_model_id")
             attr.modality = _enum_value(g("modality"))
             imported = g("imported_plan")
@@ -254,6 +255,7 @@ class LineageService:
             if ck.startswith(APERTURE_PREFIX):
                 add("sequence", ck[len(APERTURE_PREFIX):])
             attr.engine_name, attr.engine_version = _engine_base(g("engine_name")), g("engine_version")
+            attr.engine_digest = g("engine_digest")
             attr.modality = _enum_value(g("modality"))
             stats = g("statistics")
             summary = {"dose_units": g("dose_units"), "rbe": g("rbe_factor"), "max": getattr(stats, "max_gy", None),
@@ -265,6 +267,7 @@ class LineageService:
             if ck.startswith("mco:"):                              # a navigated plan of a Pareto set (R11.5)
                 add("mco", ck.split(":")[1])
             attr.engine_name, attr.engine_version = g("engine_name"), g("engine_version")
+            attr.engine_digest = g("engine_digest")
             conv = g("convergence")
             summary = {"dose_units": g("dose_units"), "rbe": g("rbe_factor"), "iterations": getattr(conv, "iterations", None),
                        "final_cost": getattr(conv, "final_cost", None)}
@@ -279,6 +282,7 @@ class LineageService:
             add("geometry", g("geometry_id"))
             add("beam_model", g("beam_model_id"))
             attr.engine_name, attr.engine_version = g("engine_name"), g("engine_version")
+            attr.engine_digest = g("engine_digest")
             summary = {"angles": [getattr(a, "gantry_deg", None) for a in g("selected_angles") or []], "score": g("final_score")}
         elif ref.kind == "evaluation":
             add("dose", g("dose_id"))
@@ -294,6 +298,7 @@ class LineageService:
             a = g("attribution")
             if isinstance(a, dict):
                 attr.engine_name, attr.engine_version = a.get("engine_name"), a.get("engine_version")
+                attr.engine_digest = a.get("engine_digest")
                 attr.machine_model_id = a.get("machine_model_id") or attr.machine_model_id
             attr.dataset.study_instance_uid = str(g("study_instance_uid") or "")
             attr.dataset.frame_of_reference_uid = str(g("frame_of_reference_uid") or "")
@@ -311,6 +316,7 @@ class LineageService:
             add("geometry", g("geometry_id"))
             add("beam_model", g("beam_model_id"))
             attr.engine_name, attr.engine_version = g("engine_name"), g("engine_version")
+            attr.engine_digest = g("engine_digest")
             summary = {"tradeoffs": [f"{o.type}({o.structure_name})" for o in g("tradeoffs") or []], "plans": len(g("plans") or []),
                        "error_bound": g("error_bound"), "converged": g("converged")}
         elif ref.kind == "plan":
@@ -475,7 +481,7 @@ class LineageService:
         a = node.attribution
         params: Dict[str, Any] = {"kind": ref.kind, "id": ref.id, "cache_key": node.cache_key,
                                   "parents": [p.key for p in node.parents], "roots": [r.key for r in graph.roots]}
-        for k in ("engine_name", "engine_version", "machine_model_id", "hu_model", "modality"):
+        for k in ("engine_name", "engine_version", "engine_digest", "machine_model_id", "hu_model", "modality"):
             if getattr(a, k):
                 params[k] = getattr(a, k)
         params["dataset"] = {k: v for k, v in a.dataset.model_dump().items() if v}

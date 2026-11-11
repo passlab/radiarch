@@ -30,6 +30,7 @@ from loguru import logger
 from ..models.dose import DoseResult
 from ..models.four_d import AccumulateRequest, AverageCTRequest, ITVRequest, PhaseDoseRequest
 from ..models.geometry import GeometryResult
+from .dose_engines.digest import engine_digest
 
 
 class FourDError(ValueError):
@@ -214,7 +215,7 @@ class FourDService:
             dose = np.asarray(dose, np.float32)
             did = str(uuid.uuid4())
             result = DoseResult(dose_id=did, geometry_id=gid, beam_model_id=bm.result.beam_model_id, modality=bm.result.modality,
-                                engine_name=engine.name, engine_version=engine.version, dose_grid_uri=str(ds.dose_store.base_dir / did / DOSE_FILENAME),
+                                engine_name=engine.name, engine_version=engine.version, engine_digest=engine_digest(engine.name, request.engine.params), dose_grid_uri=str(ds.dose_store.base_dir / did / DOSE_FILENAME),
                                 statistics=_summary_stats(dose), cache_key=key, created_at=datetime.now(timezone.utc))
             ds.dose_store.save(dose_id=did, cache_key=key, nominal_dose=dose, spacing_mm=bundle.spacing_mm, scenario_doses=None, result=result)
             out.append(result)

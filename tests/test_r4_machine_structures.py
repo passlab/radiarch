@@ -143,6 +143,41 @@ class TestStructureOps:
         # z extent grows by 10 mm (5 voxels), x only by 1 voxel
         assert (zz.max() - c) * 2.0 >= 19.0 and (xx.max() - c) * 2.0 <= 13.0
 
+    def test_directional_margins_equal_the_symmetric_ones_when_paired(self):
+        """Six equal margins give ``expand``/``erode`` of one value, pairs give the per-axis margin, voxel for voxel,
+        also on a non-cubic grid and for a structure that touches the grid's edge."""
+        sp = (2.0, 2.5, 3.0)
+        rng = np.random.default_rng(7)
+        blob = np.zeros((24, 30, 28), dtype=bool)
+        blob[6:18, 8:22, 0:15] = True                                           # touches the x = 0 edge
+        blob &= rng.random(blob.shape) > 0.15                                   # holes, so the shape is irregular
+        same = dict(right=5.0, left=5.0, anterior=5.0, posterior=5.0, superior=5.0, inferior=5.0)
+        paired = dict(right=4.0, left=4.0, anterior=6.0, posterior=6.0, superior=9.0, inferior=9.0)
+        assert np.array_equal(ops.expand_directional(blob, sp, same), ops.expand(blob, sp, 5.0))
+        assert np.array_equal(ops.expand_directional(blob, sp, paired), ops.expand(blob, sp, (4.0, 6.0, 9.0)))
+        solid = ops.expand(blob, sp, 3.0)
+        assert np.array_equal(ops.erode_directional(solid, sp, same), ops.erode(solid, sp, 5.0))
+        assert np.array_equal(ops.erode_directional(solid, sp, paired), ops.erode(solid, sp, (4.0, 6.0, 9.0)))
+        assert np.array_equal(ops.expand_directional(blob, sp, {}), blob)
+
+    def test_directional_margin_moves_only_the_sides_asked(self):
+        """The grid is LPS: +z superior, +y posterior, +x the patient's left."""
+        sp = (2.0, 2.0, 2.0)
+        m = _ball()
+        def extent(mask):
+            idx = np.nonzero(mask)
+            return [(int(i.min()), int(i.max())) for i in idx]                 # (z, y, x)
+        (z0, z1), (y0, y1), (x0, x1) = extent(m)
+        g = ops.expand_directional(m, sp, dict(superior=10.0, left=6.0))
+        assert g[m].all()
+        assert extent(g) == [(z0, z1 + 5), (y0, y1), (x0, x1 + 3)]
+        g = ops.expand_directional(m, sp, dict(inferior=4.0, anterior=8.0, right=2.0))
+        assert extent(g) == [(z0 - 2, z1), (y0 - 4, y1), (x0 - 1, x1)]
+        e = ops.erode_directional(m, sp, dict(posterior=6.0))
+        assert m[e].all() and extent(e)[1] == (y0, y1 - 3) and extent(e)[0] == (z0, z1)
+        with pytest.raises(ValueError, match="unknown margin directions"):
+            ops.expand_directional(m, sp, dict(up=5.0))
+
     def test_ring_and_booleans(self):
         sp = (2.0, 2.0, 2.0)
         m = _ball()
@@ -277,6 +312,12 @@ class TestDerivedGeometry:
         assert np.array_equal(pa.ct_hu, da.ct_hu)
         assert np.array_equal(pa.mask_zyx(pa.label_of("CTV")), da.mask_zyx(da.label_of("CTV")))
         assert da.mask_zyx(da.label_of("PTV"))[pa.mask_zyx(pa.label_of("CTV"))].all()
+        # a margin superior only grows the CTV toward +z (LPS superior), in the derived geometry's own arrays
+        sup = svc.derive(parent.geometry_id, GeometryDeriveRequest(operations=[StructureOperation(
+            op="expand", source="CTV", directional_mm={"superior": 6.0}, name="PTV_sup")]))
+        sa = load_geometry_arrays(sup)
+        ctv_z, sup_z = np.nonzero(pa.mask_zyx(pa.label_of("CTV")))[0], np.nonzero(sa.mask_zyx(sa.label_of("PTV_sup")))[0]
+        assert (sup_z.min(), sup_z.max()) == (ctv_z.min(), ctv_z.max() + 3)
 
     def test_operation_validation(self):
         with pytest.raises(ValueError):
@@ -286,6 +327,20 @@ class TestDerivedGeometry:
         with pytest.raises(ValueError):
             StructureOperation(op="density_override", source="CTV")
         assert StructureOperation(op="couch", y_top_mm=10.0, thickness_mm=5.0).name is None
+        with pytest.raises(ValueError, match="one of margin_mm or directional_mm"):
+            StructureOperation(op="expand", source="CTV", name="PTV", margin_mm=5.0, directional_mm={"superior": 5.0})
+        with pytest.raises(ValueError, match="directional_mm is for expand and erode"):
+            StructureOperation(op="ring", source="CTV", name="R", inner_mm=0.0, outer_mm=5.0, directional_mm={"left": 5.0})
+        with pytest.raises(ValueError):
+            StructureOperation(op="expand", source="CTV", name="PTV", directional_mm={"up": 5.0})          # unknown direction
+        with pytest.raises(ValueError):
+            StructureOperation(op="expand", source="CTV", name="PTV", directional_mm={"left": -1.0})
+        from radiarch.sdk import ops as sdk_ops
+        op = sdk_ops.expand("PTV", "CTV", superior=10.0, inferior=5.0)
+        assert op.margin_mm is None and op.directional_mm.superior == 10.0 and op.directional_mm.left == 0.0
+        assert sdk_ops.erode("Core", "PTV", 3.0).directional_mm is None
+        # an operation without it keeps its payload, so derived geometries keep their keys
+        assert "directional_mm" not in StructureOperation(op="expand", source="CTV", name="PTV", margin_mm=5.0).payload()
 
     def test_evaluation_sees_overlapping_structures(self, geometry_service, monkeypatch, tmp_path):
         """A dose on the derived geometry: the cord's DVH counts its voxels inside the PTV."""

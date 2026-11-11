@@ -241,7 +241,8 @@ class DeliverableService:
                                             notes=[f"the {'projected' if projected else 'navigated'} plan of state {state.state_id} "
                                                    f"of Pareto set {mco_id}"]),
                 rbe_factor=prob.rbe, dose_units=dose_units_for(prob.rbe), compute_time_s=0.0, geometry_id=result.geometry_id,
-                beam_model_id=result.beam_model_id, engine_name=prob.engine.name, engine_version=prob.engine.version)
+                beam_model_id=result.beam_model_id, engine_name=prob.engine.name, engine_version=prob.engine.version,
+                engine_digest=getattr(prob, "engine_digest", None))
             osvc.store.save(opt_id=opt_id, cache_key=opt_key, weights=x_seq.astype(np.float32), dose=dose_full,
                             spacing_mm=prob.geometry.spacing_mm, result=opt)
 

@@ -34,6 +34,8 @@ class TestSection:
         p = PlanningProtocol(**PROTOCOL)
         old = p.model_dump(mode="json")
         old.pop("mco")
+        for op in old.get("structures") or []:          # the dump before directional margins existed
+            op.pop("directional_mm", None)
         assert p.digest() == hashlib.sha256(json.dumps(old, sort_keys=True).encode("utf-8")).hexdigest()
         assert PlanningProtocol(**MCO).digest() != PlanningProtocol(**{**MCO, "mco": None}).digest()
 

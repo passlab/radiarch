@@ -145,6 +145,7 @@ class MCOResult(ResearchArtifact):
     beam_model_id: str
     engine_name: str
     engine_version: str
+    engine_digest: Optional[str] = Field(default=None, description="SHA-256 of the engine build (program and data) that computed it (R12).")
     rbe_factor: float = 1.0
     dose_units: str = "Gy"
     tradeoffs: List[ObjectiveSpec]

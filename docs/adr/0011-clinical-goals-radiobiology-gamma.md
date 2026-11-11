@@ -52,7 +52,15 @@ of two evaluations (`dvh_impact`), which a commissioning harness needs.
   the result carries `goals` (a report with counts by priority and a robust
   verdict), `ntcp` and `tcp`. The cache key includes them.
 - The goal templates are data: adding a site or protocol is a JSON file.
-- Not done here: NTCP models beyond LKB (e.g. relative seriality), the
-  LQ-L model for SBRT equivalent doses, clinical-goal priorities as
+- Added 2026-11-11: the relative-seriality NTCP model (Källman et al.
+  1992, the equation as Adamus-Górka et al. 2008 print it), with an
+  optional reference volume and one built-in set (heart, Gagliardi et al.
+  1996, whole-organ reference); and LQ-L (`lql_transition_gy`): above the
+  transition dose per fraction every EQD2 of the request follows the LQ
+  curve's tangent there (Astrahan 2008). Sets fitted to part of an organ,
+  such as a length of spinal cord, need their reference volume and do not
+  ship. Both are off unless asked for, so existing evaluations keep their
+  values and keys.
+- Not done here: clinical-goal priorities as
   optimizer constraints (that is the planning protocol of R10), a
   structure-set comparison with Dice and surface distances (A2's own).

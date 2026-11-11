@@ -112,7 +112,9 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
   2026-11-06: references made on the compute server; the Agility fits 0.196 % and 1.01 mm; the irregular field's
   gamma 100 %; two checks fail, the 1 × 1 cm dose (−5.9 %) and the 5 mm gap (+3.2 points of 3). Recorded
   (run `20261106-163934-727654c`, in the R8 record); physicist review waiting
-- [ ] Asymmetric margins **(open)**
+- [x] (2026-11-11) Asymmetric margins: `directional_mm` on expand and erode, one margin per patient direction (right,
+  left, anterior, posterior, superior, inferior); with the sides equal in pairs it gives the per-axis margin voxel for
+  voxel; in the SDK, `ops.expand("PTV", "CTV", superior=10, inferior=5, ...)`
 
 ### R5 — Evaluation
 - [x] Clinical goals with priority and pass/fail; templates (RTOG 0617, QUANTEC, TG-101, NCCN head and neck, PENTEC)
@@ -120,7 +122,8 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] Interpolated gamma (validated against pymedphys)
 - [x] Dose-impact comparison of two evaluations
 - [ ] Goal tables checked against their sources by a physicist **(waiting)**
-- [ ] Relative-seriality NTCP; LQ-L for SBRT **(open)**
+- [x] (2026-11-11) Relative-seriality NTCP (Källman 1992), with an optional reference volume and one built-in set (heart,
+  Gagliardi 1996); LQ-L for SBRT (`lql_transition_gy`, Astrahan 2008), off unless asked for
 
 ### R6 — RT object writer
 - [x] RT Structure Set, RT Plan (step and shoot), RT Ion Plan, RT Dose (plan and beam), RT Image (DRR)
@@ -140,7 +143,10 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
   evicted; a state file that cannot be read stops the sweep
 - [x] (2026-11-10) A repeated request joins the job already queued or running for the same inputs, on every job route;
   a job past its task's hard time limit is taken for lost
-- [ ] Engine binary digest in the attribution **(open)**
+- [x] (2026-11-11) Engine build digest in the attribution: `engine_digest`, SHA-256 of the files the engine ran on, on
+  every result an engine computes, in the lineage's attribution, the derivation record and the export manifest
+- [x] (2026-11-11) A plan imported through a radiarch registration keeps it as a parent (`frame_registration_id`), so its
+  lineage and its studies include the registration's (ADR 0021's known limit)
 - [ ] Lineage across radiarch instances; an immutable audit trail **(open)**
 - [x] (2026-11-11) Stored results scoped by the studies a user may see (ADR 0021; the project lead decided its open
   points). With `RADIARCH_ACCESS_URL` set, the host is asked whether a user may see a study, and every read,

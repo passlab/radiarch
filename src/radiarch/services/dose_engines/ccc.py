@@ -216,6 +216,13 @@ class CCCEngine:
             return float(override)
         return self.calibration(params).record().factor_gy_per_unit
 
+    def digest(self, params: Optional[dict] = None) -> str:
+        """The build a run reads (R12): the binary and the kernels."""
+        from .digest import files_digest, tree_files
+
+        drv = self.driver(params)
+        return files_digest([drv.binary, *tree_files(drv.kernel_dir)], drv.engine_dir)
+
     # ----- health / validation ------------------------------------------
 
     def health(self) -> dict:

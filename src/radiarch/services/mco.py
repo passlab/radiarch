@@ -216,7 +216,8 @@ class MCOService:
                          f"the values are each trade-off's worst case over the scenarios, and the error bound includes the "
                          f"gap between the two")
         fields = dict(geometry_id=request.geometry_id, beam_model_id=request.beam_model_id, engine_name=prob.engine.name,
-                      engine_version=prob.engine.version, rbe_factor=prob.rbe, dose_units=dose_units_for(prob.rbe),
+                      engine_version=prob.engine.version,
+                      engine_digest=getattr(prob, "engine_digest", None), rbe_factor=prob.rbe, dose_units=dose_units_for(prob.rbe),
                       voxel_cc=float(np.prod(prob.geometry.spacing_mm)) / 1000.0, modality=prob.beam_model.result.modality.value)
         return self.generate(request, ops, np.asarray(prob.w0, dtype=np.float64), key, fields, notes, on, t0)
 

@@ -20,6 +20,8 @@ Each item below says whether it changes outputs.
 
 ### A. Small items that change no existing output
 
+Built 2026-11-11 (`docs/impl-plan.md`, `docs/impl-log.md`).
+
 | Item | What it gives | Effort | Changes outputs |
 |---|---|---|---|
 | The engine binary's digest in the attribution (R12) | A result names the exact engine build, not only its version | 0.25 | no (one more attribution field) |

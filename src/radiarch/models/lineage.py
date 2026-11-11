@@ -72,6 +72,7 @@ class Attribution(BaseModel):
     capability_version: str
     engine_name: Optional[str] = None
     engine_version: Optional[str] = None
+    engine_digest: Optional[str] = Field(default=None, description="SHA-256 of the engine build that computed it (R12); null before 2026-11-11.")
     machine_model_id: Optional[str] = None
     hu_model: Optional[str] = None
     modality: Optional[str] = None

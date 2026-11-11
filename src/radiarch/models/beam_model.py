@@ -305,6 +305,7 @@ class BeamModelResult(ResearchArtifact):
     cache_key: str
     plan_weights_uri: Optional[str] = Field(default=None, description="For an imported RT Plan: the plan's own metersets per fluence element (.npy), the weights a dose recalculation uses.")
     imported_plan: Optional[DicomPlanProvenance] = Field(default=None, description="Set when the beam model was imported from a DICOM RT Plan (R2).")
+    frame_registration_id: Optional[str] = Field(default=None, description="An imported plan made on another CT: the radiarch registration that moved it into this geometry's frame of reference (R9); a parent in the lineage.")
     created_at: Optional[datetime] = None
 
 

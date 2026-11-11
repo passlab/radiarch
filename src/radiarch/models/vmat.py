@@ -136,6 +136,7 @@ class ArcResult(ResearchArtifact):
     machine_model_id: str
     engine_name: str
     engine_version: str
+    engine_digest: Optional[str] = Field(default=None, description="SHA-256 of the engine build (program and data) that computed it (R12).")
     n_control_points: int
     total_mu: float = Field(..., description="For all fractions (the plan's metersets); the arcs report per fraction.")
     fractions: int = 1

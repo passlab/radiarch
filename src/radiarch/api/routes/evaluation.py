@@ -70,9 +70,11 @@ async def get_goal_template(template_id: str) -> dict:
 
 @router.get("/models", summary="The NTCP and TCP parameter sets that ship with radiarch, with their sources.")
 async def list_radiobiology_models() -> dict:
-    from ...services.radiobiology import DEFAULT_ALPHA_BETA, NTCP_MODELS, TCP_MODELS
+    from ...services.radiobiology import DEFAULT_ALPHA_BETA, NTCP_MODELS, RS_MODELS, TCP_MODELS
 
-    return {"ntcp": [m.model_dump() for m in NTCP_MODELS.values()], "tcp": [m.model_dump() for m in TCP_MODELS.values()],
+    return {"ntcp": [m.model_dump() for m in NTCP_MODELS.values()],
+            "ntcp_relative_seriality": [m.model_dump() for m in RS_MODELS.values()],
+            "tcp": [m.model_dump() for m in TCP_MODELS.values()],
             "default_alpha_beta_gy": DEFAULT_ALPHA_BETA}
 
 

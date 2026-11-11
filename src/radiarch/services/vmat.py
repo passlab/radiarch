@@ -50,6 +50,7 @@ from ..config import get_settings
 from ..models.machine import MLCSpec, PhotonMachineSpec
 from ..models.photon_plan import ArcControlPoint, MLCRow, PhotonArc, PhotonBeam, PhotonPlan, arc_step_deg
 from ..models.vmat import ArcDeliverabilityReport, ArcRequest, ArcResult, ArcSpec
+from .dose_engines.digest import engine_digest
 from .sequencing import Aperture, FluenceMap, apply_machine_limits, fluence_maps, hard_constraint_terms, park_position, sequence_row
 
 CostTerms = Callable[[np.ndarray], Tuple[float, np.ndarray]]
@@ -492,7 +493,7 @@ class VMATService:
         dose_root = self.dose_service.dose_store.base_dir / dose_id
         dose_result = DoseResult(
             dose_id=dose_id, plan_id=request.plan_id, geometry_id=opt.geometry_id, beam_model_id=bm_id,
-            modality=Modality.photon_imrt, engine_name=f"{engine.name}+arcs", engine_version=engine.version,
+            modality=Modality.photon_imrt, engine_name=f"{engine.name}+arcs", engine_version=engine.version, engine_digest=engine_digest(engine.name, request.dose_engine.params),
             dose_grid_uri=str(dose_root / DOSE_FILENAME), statistics=_summary_stats(res.dose),
             rbe_factor=opt.rbe_factor, dose_units=dose_units_for(opt.rbe_factor), cache_key=f"vmat:{vmat_id}",
         )
@@ -501,7 +502,7 @@ class VMATService:
         result = ArcResult(
             vmat_id=vmat_id, cache_key=cache_key, optimization_id=optimization_id, geometry_id=opt.geometry_id,
             source_beam_model_id=opt.beam_model_id, beam_model_id=bm_id, dose_id=dose_id, machine_model_id=machine.machine_id,
-            engine_name=engine.name, engine_version=engine.version,
+            engine_name=engine.name, engine_version=engine.version, engine_digest=engine_digest(engine.name, request.dose_engine.params),
             n_control_points=sum(len(b.arc.control_points) for b in res.plan.beams), total_mu=float(res.interval_mu.sum()),
             fractions=request.fractions,
             arcs=res.reports, convergence=res.convergence, deliverable=not any(r.issues for r in res.reports),

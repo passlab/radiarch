@@ -140,6 +140,9 @@ class PlanningProtocol(BaseModel):
         data = self.model_dump(mode="json")
         if data.get("mco") is None:          # so a protocol without one keeps its digest (and its runs' cache keys)
             data.pop("mco", None)
+        for op in data.get("structures") or []:
+            if op.get("directional_mm") is None:          # likewise for a structure step without directional margins
+                op.pop("directional_mm", None)
         return hashlib.sha256(json.dumps(data, sort_keys=True).encode("utf-8")).hexdigest()
 
 

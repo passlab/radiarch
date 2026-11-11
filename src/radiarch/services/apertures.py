@@ -155,7 +155,7 @@ class ApertureService:
         dose_root = self.dose_service.dose_store.base_dir / dose_id
         dose_result = DoseResult(
             dose_id=dose_id, plan_id=request.plan_id, geometry_id=opt.geometry_id, beam_model_id=bm_id,
-            modality=Modality.photon_imrt, engine_name=f"{opt.engine_name}+segments", engine_version=opt.engine_version,
+            modality=Modality.photon_imrt, engine_name=f"{opt.engine_name}+segments", engine_version=opt.engine_version, engine_digest=getattr(inf_result, "engine_digest", None),
             dose_grid_uri=str(dose_root / DOSE_FILENAME), statistics=_summary_stats(res.dose),
             rbe_factor=opt.rbe_factor, dose_units=dose_units_for(opt.rbe_factor), cache_key=f"apertures:{sequence_id}",
         )

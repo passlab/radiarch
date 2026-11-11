@@ -215,7 +215,8 @@ class ReplanService:
         result = bm.result.model_copy(update={
             "beam_model_id": bm_id, "geometry_id": geometry_id, "cache_key": cache_key,
             "fluence_elements": FluenceElementSet(total_count=plan.n_beamlets, per_beam=per_beam),
-            "beam_model_ref_uri": str(BeamModelPaths.for_id(svc.store.base_dir, bm_id).plan)})
+            "beam_model_ref_uri": str(BeamModelPaths.for_id(svc.store.base_dir, bm_id).plan),
+            "frame_registration_id": None})          # the import's registration moved the planning plan, not this one
         svc.store.save(beam_model_id=bm_id, cache_key=cache_key, plan=plan, result=result)
         return result
 
