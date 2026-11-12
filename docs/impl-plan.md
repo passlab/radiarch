@@ -112,6 +112,15 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
   2026-11-06: references made on the compute server; the Agility fits 0.196 % and 1.01 mm; the irregular field's
   gamma 100 %; two checks fail, the 1 × 1 cm dose (−5.9 %) and the 5 mm gap (+3.2 points of 3). Recorded
   (run `20261106-163934-727654c`, in the R8 record); physicist review waiting
+- [x] (2026-11-11) Small fields and narrow gaps, the two failed checks above: a rounded leaf end passes half the leaf
+  gap as a tail beyond its tip (`LeafModel.leaf_tip_tail_mm`, `LEAF_MODEL_VERSION` 4), and `pb` 1.2.0 drops its 4 mm
+  edge blur. Both were fitted together on the 10 × 10 cm field's leaf edge and the 10 mm gap field; the lung scaling's
+  exponent was refitted (0.925). `pb_vs_mc` plans each reference field as the Monte Carlo collimates it, and scores
+  the pencil beam on the references' voxels, which sit half a voxel to the side of its phantoms (found by the
+  review). `pb_vs_mc` from the working tree: the 1 × 1 cm field 0.765 against 0.764, the 5 mm gap 50.87 against
+  50.06 %, every graded check passes (`docs/reports/mlc-leaf-model.md`). `pb_vs_ccc`'s gamma with 10 mm beamlets,
+  94.55 % against at least 95 %, is recorded as a finding about CCC's scatter cut-off (`known_findings.yaml`). The
+  records' reruns follow on the compute server
 - [x] (2026-11-11) Asymmetric margins: `directional_mm` on expand and erode, one margin per patient direction (right,
   left, anterior, posterior, superior, inferior); with the sides equal in pairs it gives the per-axis margin voxel for
   voxel; in the SDK, `ops.expand("PTV", "CTV", superior=10, inferior=5, ...)`
@@ -170,6 +179,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] Pencil kernel from OpenGATE (Monte Carlo run of the Mohan 6 MV spectrum)
 - [x] Kernel table (integral-conserving, SVD of the cumulative kernel) and the engine `pb`: dose path, influence matrix with unbiased sampling, per-segment doses, scenarios, calibration
 - [x] Production kernel table (3 × 10⁷ primaries), four components, penumbra FWHM 4.0 mm fitted to Monte Carlo
+  (none from `pb` 1.2.0, with the leaf ends' tail)
 - [x] NumPy path; CuPy path tested on GPUs (`gpu` extra, `test_gpu_matches_cpu`)
 - [x] Cross-engine gamma against CCC in CI
 - [x] Arcs in the plan model; RT Plan writes and reads them as DYNAMIC beams

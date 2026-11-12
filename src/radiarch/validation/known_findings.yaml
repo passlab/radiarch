@@ -10,3 +10,6 @@
 - case: geometry_volumes_lctsc
   checks: "Esophagus volume"
   reason: "one oesophagus volume against the reference rasterization (R7 record)"
+- case: pb_vs_ccc
+  checks: "^water 10 x 10, 10 mm beamlets: gamma "
+  reason: "pb 1.2.0 against CCC with 10 mm beamlets: CCC's shipped scatter cut-off at depth, and pb's sharper leaf edge, where pb follows the Monte Carlo (mlc-leaf-model.md, 2026-11-11)"

@@ -6,8 +6,10 @@ references and against the collapsed cone, and lung SBRT VMAT plans on public CT
 
 from __future__ import annotations
 
+import math
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Sequence
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -37,10 +39,60 @@ def _penumbra(prof: np.ndarray, x: np.ndarray) -> float:
 # pb_vs_mc — the pencil-beam engine against the OpenGATE references
 # ---------------------------------------------------------------------------
 
+AGILITY_PITCH_MM = 5.096         # the Agility's leaf pitch at isocenter in the OpenGATE model (the MLC references' rows)
+
+
+def _source_cone_radius_mm(field_mm: float) -> float:
+    """The radius at isocenter of the cone the Monte Carlo source fills for a field (:func:`_cone_solid_angle`)."""
+    return 1000.0 * math.tan(math.atan(0.75 * field_mm / 1000.0) + math.radians(0.5))
+
+
+def _versa_field_plan(field_mm: float, model=None):
+    """A square field collimated as the Monte Carlo references' (``mc_reference``; the Versa has no X jaws): x by the
+    tips of the Agility's pairs at +-field/2, y by the jaws, the X jaws at the edge of the source's cone, beyond which
+    the Monte Carlo emits nothing. ``model``: the Agility's leaf model (None: ideal leaves). One segment of 1 MU."""
+    from ..models.photon_plan import MLCRow, PhotonBeam, PhotonPlan, PhotonSegment
+    h = 0.5 * field_mm
+    n = int(math.ceil(h / AGILITY_PITCH_MM))
+    rows = [MLCRow(y_min_mm=k * AGILITY_PITCH_MM, y_max_mm=(k + 1) * AGILITY_PITCH_MM, x_left_mm=-h, x_right_mm=h) for k in range(-n, n)]
+    r = _source_cone_radius_mm(field_mm)
+    seg = PhotonSegment(mu=1.0, x_jaw_mm=(-r, r), y_jaw_mm=(-h, h), beamlet_spacing_mm=(5.0, 5.0), mlc_rows=rows)
+    return PhotonPlan(name=f"validation-versa-{field_mm:g}mm", beams=[PhotonBeam(beam_id="B1", gantry_deg=0.0, segments=[seg])], leaf_model=model)
+
+
+def _pb_dose(eng, phantom: ph.Phantom, plan, params: dict, average: bool, ref: Optional[dict] = None) -> np.ndarray:
+    """The pencil beam's dose of a plan through its apertures on the phantom's grid: at the voxel centres, or
+    (``average``, with the Monte Carlo reference ``ref``) as the Monte Carlo's dose reaches that grid. That is: averaged
+    over each of the reference's voxels, from 2 x 2 x 2 points in it, then resampled onto the phantom as the reference
+    is (:func:`_resample_to`). The references' voxels sit half a voxel to the side of the phantoms' (an even count
+    against an odd one), so the resampled Monte Carlo is a mean over two voxels across the beam; the pencil beam goes
+    the same way. The phantoms are uniform across the beam and share the references' depths, so each depth's density
+    is the phantom's on the axis."""
+    p = {**params, "fluence": "apertures"}
+    if not average or ref is None:
+        return eng.compute_plan_dose(phantom.density, phantom.spacing_mm, phantom.origin_mm, plan, params=p)
+    shape = tuple(int(n) for n in np.asarray(ref["dose"]).shape)
+    spacing = tuple(float(v) for v in ref["spacing_mm"])
+    origin = tuple(float(v) for v in ref["origin_mm"])
+    depth = origin[1] + np.arange(shape[1]) * spacing[1]
+    y = phantom.axis_mm("y")
+    j = np.clip(np.rint((depth - y[0]) / float(phantom.spacing_mm[1])).astype(int), 0, y.size - 1)
+    if not np.allclose(y[j], depth, atol=1e-6):
+        raise ValueError(f"the reference's depths do not fall on the phantom's ({phantom.name})")
+    column = phantom.density[phantom.centre_index("z"), :, phantom.centre_index("x")][j]
+    fine = np.broadcast_to(column.repeat(2)[None, :, None], (2 * shape[0], 2 * shape[1], 2 * shape[2])).astype(np.float32)
+    nz, ny, nx = shape
+    d = eng.compute_plan_dose(fine, tuple(v / 2.0 for v in spacing), tuple(o - v / 4.0 for o, v in zip(origin, spacing)), plan, params=p)
+    return _resample_to(d.reshape(nz, 2, ny, 2, nx, 2).mean(axis=(1, 3, 5)), spacing, origin, phantom)
+
+
 def run_pb_vs_mc(spec: dict, ctx: Context) -> CaseResult:
     """As ``photon_vs_mc`` for CCC: water depth dose, profile, out-of-field dose and gamma normalised at 10 cm;
     lung and bone slabs as heterogeneity correction factors (slab over water at the same depth). The pencil-beam
-    engine's lateral kernel scaling (1.1.0) was fitted to the lung slabs, so their factors are a consistency check."""
+    engine's lateral kernel scaling (1.1.0) was fitted to the lung slabs, so their factors are a consistency check.
+    Every reference field is collimated by the Agility, so the Agility's leaf model is fitted first (:func:`_fit_agility`)
+    and every field is planned as the Monte Carlo collimates it (:func:`_versa_field_plan`); in full mode the pencil beam
+    reaches the phantom's grid as the Monte Carlo does (:func:`_pb_dose`)."""
     res = CaseResult(spec["name"], spec["kind"])
     from ..services.gamma import gamma_index
 
@@ -51,14 +103,17 @@ def run_pb_vs_mc(spec: dict, ctx: Context) -> CaseResult:
     if not cases:
         raise Skip("no Monte Carlo reference: run `python -m radiarch.validation.mc_reference --case <name>`")
     params = dict(spec.get("params", {}))
+    agility = _fit_agility(eng, spec, ctx)
+    model = agility.model if agility is not None else None
+    if agility is None:
+        res.notes.append("no MLC references: the fields are planned with ideal leaves")
     water: Dict[str, np.ndarray] = {}
     for case in sorted(cases, key=lambda c: not c.startswith("water")):
         ref = _mc_reference(case)
         s = ctx.spacing(ref["spacing_mm"][0])
         phantom = _phantom_for(case, s)
         field = float(ref["provenance"].get("field_mm", 100.0))
-        plan = _open_field_plan(field, spec.get("leaf_width_mm", 10.0), spec.get("beamlet_mm", 10.0))
-        pb = eng.compute_plan_dose(phantom.density, phantom.spacing_mm, phantom.origin_mm, plan, params={**params, "fluence": "apertures"})
+        pb = _pb_dose(eng, phantom, _versa_field_plan(field, model), params, not ctx.fast, ref)
         mc = _resample_to(ref["dose"], ref["spacing_mm"], ref["origin_mm"], phantom)
         cz, cx = phantom.centre_index("z"), phantom.centre_index("x")
         y = phantom.axis_mm("y")
@@ -82,7 +137,8 @@ def run_pb_vs_mc(spec: dict, ctx: Context) -> CaseResult:
             pm = mc[cz - 1:cz + 2, j10 - 1:j10 + 2, :].mean(axis=(0, 1)); pm = pm / pm[cx]
             pen_p, pen_m = _penumbra(pp, x), _penumbra(pm, x)
             res.add(f"{case}: penumbra 80-20 % at 10 cm, pb (mm)", pen_p, f"{pen_m:.1f} ± {max(2.0, s):g} (MC)", abs(pen_p - pen_m) <= max(2.0, s),
-                    "the engine's fluence penumbra (penumbra_fwhm_mm) was fitted to this reference: a consistency check, not an independent one")
+                    "the engine's edge blur (penumbra_fwhm_mm) and the Agility's tip tail were fitted to this edge and the 10 mm gap field: "
+                    "a consistency check, not an independent one")
             oar = 0.4 * field
             op_, om = float(np.interp(oar, x, pp)), float(np.interp(oar, x, pm))
             res.add(f"{case}: off-axis ratio at {oar:g} mm, 10 cm depth", op_, f"{om:.3f} ± 0.03 (MC)", abs(op_ - om) <= 0.03, "in-field profile")
@@ -112,9 +168,12 @@ def run_pb_vs_mc(spec: dict, ctx: Context) -> CaseResult:
                         + ("; the lateral kernel scaling was fitted to this slab and the 2 x 2 cm one: a consistency check" if lung else "")
                         + ("; informative in fast mode (the fit is at full resolution)" if lung and ctx.fast else ""))
         res.notes.append(f"{case}: MC {ref['primaries']:.2e} primaries")
-    _field_size_checks(res, eng, spec, ctx)
-    _narrow_lung_checks(res, eng, spec, ctx)
-    _mlc_checks(res, eng, spec, ctx)
+    _field_size_checks(res, eng, spec, ctx, model)
+    _narrow_lung_checks(res, eng, spec, ctx, model)
+    if agility is None:
+        res.notes.append("the leaf-model checks need the mlc_open / mlc_closed / mlc_gap10 / mlc_shape Monte Carlo references")
+    else:
+        _mlc_checks(res, agility, spec, ctx)
     k = eng.kernel()
     res.notes.append(f"pb kernel {k.fingerprint} from {k.meta.get('source', {}).get('file', '?')} "
                      f"({k.meta.get('source', {}).get('primaries', 0):.1e} primaries); the same Mohan 6 MV spectrum as the references")
@@ -140,12 +199,14 @@ def _fwhm(prof: np.ndarray, x: np.ndarray) -> float:
     return float(right - left)
 
 
-def _field_size_checks(res: CaseResult, eng, spec: dict, ctx: Context) -> None:
+def _field_size_checks(res: CaseResult, eng, spec: dict, ctx: Context, model=None) -> None:
     """Dose on the axis at 10 cm per unit primary fluence, 1 x 1, 2 x 2, 4 x 4 and 20 x 20 over 10 x 10 cm: the
     Monte Carlo against the pencil beam (graded) and CCC (reported); for the small fields also the width at half
     maximum at 10 cm (graded). The Monte Carlo emits uniformly in solid angle within a cone that depends on the field,
     so its dose per primary is scaled by that cone's solid angle; there is no head, so this is phantom scatter (and
-    collimator scatter) only. The small fields' tolerances are wider, as small-field dosimetry's are (IAEA TRS-483)."""
+    collimator scatter) only. The small fields' tolerances are wider, as small-field dosimetry's are (IAEA TRS-483).
+    The pencil beam plans each field as the Monte Carlo collimates it, with the Agility's leaf model ``model``; CCC
+    keeps its jaw-defined fields."""
     fields = {c: _mc_reference(c) for c in ("water_10x10",) + FIELD_SIZE_CASES}
     if fields["water_10x10"] is None or not any(fields[c] is not None for c in FIELD_SIZE_CASES):
         res.notes.append("field-size checks need the water_1x1 / water_2x2 / water_4x4 / water_20x20 Monte Carlo references")
@@ -169,7 +230,7 @@ def _field_size_checks(res: CaseResult, eng, spec: dict, ctx: Context) -> None:
         plan = _open_field_plan(field, spec.get("leaf_width_mm", 10.0), spec.get("beamlet_mm", 10.0))
         j10 = phantom.depth_index(100.0)
         mc = _resample_to(ref["dose"], ref["spacing_mm"], ref["origin_mm"], phantom)
-        pb = eng.compute_plan_dose(phantom.density, phantom.spacing_mm, phantom.origin_mm, plan, params={"fluence": "apertures"})
+        pb = _pb_dose(eng, phantom, _versa_field_plan(field, model), {}, not ctx.fast, ref)
         vals[case] = {"mc": float(_cax3(mc, phantom)[j10]) * _cone_solid_angle(field), "pb": float(_cax3(pb, phantom)[j10])}
         if case in small_tol:
             cz = phantom.centre_index("z")
@@ -194,7 +255,7 @@ def _field_size_checks(res: CaseResult, eng, spec: dict, ctx: Context) -> None:
         if case in widths:
             w = widths[case]
             res.add(f"{label}: width at half maximum at 10 cm, pb vs MC (mm)", round(w["pb"], 2), f"{w['mc']:.2f} ± {fwhm_tol:g} (MC)",
-                    abs(w["pb"] - w["mc"]) <= fwhm_tol, "the field's size as the beam sees it: the fluence penumbra fitted at 10 x 10 cm, on a small field")
+                    abs(w["pb"] - w["mc"]) <= fwhm_tol, "the field's size as the beam sees it: the edge fitted on the 10 x 10 cm field and the 10 mm gap, on a small field")
         if "ccc" in r:
             res.add(f"{label} over 10x10, dose at 10 cm, CCC vs MC", round(r["ccc"], 4), f"{r['mc']:.3f} (MC)", None,
                     "informative: CCC's shipped scatter cut-off (R8 finding)")
@@ -202,13 +263,14 @@ def _field_size_checks(res: CaseResult, eng, spec: dict, ctx: Context) -> None:
     res.metrics["small_field_fwhm_at_10cm_mm"] = widths
 
 
-def _narrow_lung_checks(res: CaseResult, eng, spec: dict, ctx: Context) -> None:
+def _narrow_lung_checks(res: CaseResult, eng, spec: dict, ctx: Context, model=None) -> None:
     """A 2 x 2 cm field through the lung slab (3–11 cm deep): the dose on the axis at depths in and beyond the
     lung over the dose at 2 cm in the water above it, for Monte Carlo, the pencil beam and CCC. Lateral
     electronic disequilibrium lowers the dose inside the lung for narrow fields; a pencil beam scaled in depth only
     misses it (25 % high), the pencil beam's lateral kernel scaling (1.1.0) follows it. Graded for the pencil beam
     against the heterogeneity tolerance (a consistency check: the scaling was fitted to this reference and the 10 x 10
-    cm slab); CCC is reported."""
+    cm slab); CCC is reported. The pencil beam plans the field as the Monte Carlo collimates it (``model``: the
+    Agility's leaf model); CCC keeps its jaw-defined field."""
     ref = _mc_reference("lung_slab_2x2")
     if ref is None:
         res.notes.append("the narrow-field lung check needs the lung_slab_2x2 Monte Carlo reference")
@@ -219,7 +281,7 @@ def _narrow_lung_checks(res: CaseResult, eng, spec: dict, ctx: Context) -> None:
     beamlet = float(spec.get("narrow_beamlet_mm", 5.0))
     plan = _open_field_plan(field, spec.get("leaf_width_mm", 10.0), beamlet)
     doses = {"mc": _resample_to(ref["dose"], ref["spacing_mm"], ref["origin_mm"], phantom),
-             "pb": eng.compute_plan_dose(phantom.density, phantom.spacing_mm, phantom.origin_mm, plan, params={"fluence": "apertures"})}
+             "pb": _pb_dose(eng, phantom, _versa_field_plan(field, model), {}, not ctx.fast, ref)}
     try:
         params = {"n_jobs": int(spec.get("n_jobs", 16))}
         if ctx.fast:
@@ -281,16 +343,17 @@ def _sweep_region(phantom: ph.Phantom):
     return _region(phantom, (-50.0, 50.0), (-35.0, 35.0))
 
 
-def _fit_leaf_model(dose_of, mc_t: float, mc_gap: float, t_region, gap_region, tongue_and_groove_mm: float):
+def _fit_leaf_model(dose_of, mc_t: float, mc_gap: float, t_region, gap_region, tongue_and_groove_mm: float, tip_tail_mm: float = 0.0):
     """The leaf transmission and the dosimetric leaf gap that make the pencil beam give the Monte Carlo's dose under
     the closed field's leaves (``mc_t``) and over the 10 mm gap field's ``gap_region`` (``mc_gap``; the checks use
-    :func:`_sweep_region`), both relative to the open field. ``dose_of(case, model)`` is the pencil beam's relative
-    dose. Both doses are linear in the transmission, so for a trial gap the transmission that fits the closed field
-    is exact; the gap is then a secant search on the gap field (its dose there is nearly linear in the gap)."""
+    :func:`_sweep_region`), both relative to the open field, for a given tip tail. ``dose_of(case, model)`` is the
+    pencil beam's relative dose. Both doses are linear in the transmission, so for a trial gap the transmission that
+    fits the closed field is exact; the gap is then a secant search on the gap field (its dose there is nearly linear
+    in the gap)."""
     from ..models.photon_plan import LeafModel
 
     def model(t, g):
-        return LeafModel(leaf_transmission=t, dosimetric_leaf_gap_mm=g, tongue_and_groove_mm=tongue_and_groove_mm)
+        return LeafModel(leaf_transmission=t, dosimetric_leaf_gap_mm=g, tongue_and_groove_mm=tongue_and_groove_mm, leaf_tip_tail_mm=tip_tail_mm)
 
     def at(g):
         """The transmission that fits the closed field with gap ``g``, and the gap field's misfit with both."""
@@ -315,62 +378,140 @@ def _fit_leaf_model(dose_of, mc_t: float, mc_gap: float, t_region, gap_region, t
     return t1, g1
 
 
-def _mlc_checks(res: CaseResult, eng, spec: dict, ctx: Context) -> None:
-    """The leaf model (``docs/reports/mlc-leaf-model.md``) against Monte Carlo through the Versa's Agility MLC, leaf
-    by leaf. Like a planning system's commissioning: the MLC's transmission and effective leaf gap are fitted to two
-    Monte Carlo fields (every pair closed on the axis; a 10 mm gap on every pair, integrated across the gap as a
-    sweeping gap measures it), then the pencil beam with that leaf
-    model is graded against a third, irregular field (closed pairs off the axis, 5 and 10 mm gaps, steps between
-    pairs; gamma, the dose under the closed pairs and in the gaps). The same field with ideal leaves is reported. All
-    four fields share one source cone, so their doses relate directly; each is taken relative to the open field's
-    (20 x 10 cm between the X blocks and the Y jaws) on the axis at 10 cm."""
+def _golden_min(f, lo: float, hi: float, tol: float) -> float:
+    """The minimum of a unimodal ``f`` on ``[lo, hi]`` by golden-section search, to ``tol``."""
+    r = (math.sqrt(5.0) - 1.0) / 2.0
+    a, b = lo, hi
+    c, d = b - r * (b - a), a + r * (b - a)
+    fc, fd = f(c), f(d)
+    while b - a > tol:
+        if fc <= fd:
+            b, d, fd = d, c, fc
+            c = b - r * (b - a)
+            fc = f(c)
+        else:
+            a, c, fc = c, d, fd
+            d = a + r * (b - a)
+            fd = f(d)
+    return 0.5 * (a + b)
+
+
+@dataclass
+class _AgilityFit:
+    """The Agility's leaf model fitted to the MLC references, with what the checks need of the fit."""
+
+    model: object                       # LeafModel
+    refs: Dict[str, dict]
+    phantom: ph.Phantom
+    mc: Dict[str, np.ndarray]           # the MLC references on the phantom, relative to the open field's dose at 10 cm
+    dose_of: Callable                   # (case, model) -> the pencil beam's dose relative to its open field's
+    mc_t: float
+    mc_gap: float
+    tail_fit: Optional[Dict[str, float]] = None
+
+
+def _fit_agility(eng, spec: dict, ctx: Context) -> Optional[_AgilityFit]:
+    """The leaf model of the Versa's Agility in the OpenGATE model, as a commissioning fits it, from three Monte Carlo
+    fields at 10 cm. The leaf transmission and the dosimetric leaf gap: every pair closed on the axis, and a 10 mm gap
+    on every pair integrated across the gap, as a sweeping gap measures it (:func:`_fit_leaf_model`). The tip tail, how
+    the rounded ends pass that gap (``LeafModel.leaf_tip_tail_mm``): the shape of the 10 mm gap field across the gap
+    (the middle 70 mm of pairs, +-20 mm) and of the 10 x 10 cm field's leaf edge (40-75 mm from the axis), the root
+    mean square of both, by golden-section search with the transmission and gap fitted at the spec's tail and refitted
+    at the result. In full mode the pencil beam reaches the phantom as the Monte Carlo does (:func:`_pb_dose`); fast
+    mode keeps the spec's tail (``mlc_tip_tail_mm``) and scores voxel centres. None without the MLC references."""
+    from ..models.photon_plan import LeafModel
+
     refs = {c: _mc_reference(c) for c in MLC_CASES}
     if any(r is None for r in refs.values()):
-        res.notes.append("the leaf-model checks need the mlc_open / mlc_closed / mlc_gap10 / mlc_shape Monte Carlo references")
-        return
-    from ..models.photon_plan import LeafModel
-    from ..services.gamma import gamma_index
-
-    tols = spec.get("tolerances", {})
-    crit = spec.get("mlc_gamma", {"dose_percent": 3.0, "dta_mm": 2.0, "threshold_percent": 10.0, "pass_percent": 95.0})
-    low_tol = float(tols.get("mlc_low_dose_percent", 1.0)) / 100.0
-    gap_tol = float(tols.get("mlc_gap_percent", 3.0)) / 100.0
+        return None
+    average = not ctx.fast
     tg = float(spec.get("mlc_tongue_and_groove_mm", 0.5))
+    tail = float(spec.get("mlc_tip_tail_mm", 0.0))
     s = ctx.spacing(refs["mlc_open"]["spacing_mm"][0])
     phantom = _phantom_for("mlc_open", s)
     norm = _region(phantom, (-10.0, 10.0), (-10.0, 10.0))
     mc = {c: _resample_to(r["dose"], r["spacing_mm"], r["origin_mm"], phantom) for c, r in refs.items()}
     mc_norm = float(mc["mlc_open"][norm].mean())
     mc = {c: d / mc_norm for c, d in mc.items()}
-    pb_open = eng.compute_plan_dose(phantom.density, phantom.spacing_mm, phantom.origin_mm, _mlc_plan(refs["mlc_open"]["provenance"]),
-                                    params={"fluence": "apertures"})
-    pb_norm = float(pb_open[norm].mean())
+    pb_norm = float(_pb_dose(eng, phantom, _mlc_plan(refs["mlc_open"]["provenance"]), {}, average, refs["mlc_open"])[norm].mean())
     cache: Dict[tuple, np.ndarray] = {}
 
     def dose_of(case: str, model) -> np.ndarray:
         key = (case,) + (tuple(model.model_dump().values()) if model is not None else ())
         if key not in cache:
-            plan = _mlc_plan(refs[case]["provenance"], model)
-            cache[key] = eng.compute_plan_dose(phantom.density, phantom.spacing_mm, phantom.origin_mm, plan, params={"fluence": "apertures"}) / pb_norm
+            cache[key] = _pb_dose(eng, phantom, _mlc_plan(refs[case]["provenance"], model), {}, average, refs[case]) / pb_norm
         return cache[key]
 
     # the fit: under the closed leaves away from the tips' line, the blocks and the jaws; across the gap
     t_region = _region(phantom, (25.0, 75.0), (-35.0, 35.0)) | _region(phantom, (-75.0, -25.0), (-35.0, 35.0))
     gap_region = _sweep_region(phantom)
     mc_t, mc_gap = float(mc["mlc_closed"][t_region].mean()), float(mc["mlc_gap10"][gap_region].mean())
-    t, g = _fit_leaf_model(dose_of, mc_t, mc_gap, t_region, gap_region, tg)
-    fitted = LeafModel(leaf_transmission=t, dosimetric_leaf_gap_mm=g, tongue_and_groove_mm=tg)
-    res.add("Agility MLC (Monte Carlo): leaf transmission fitted at 10 cm (%)", round(100 * t, 3), "informative", None,
-            f"every pair closed on the axis; the dose 25-75 mm from the tips' line, {100 * mc_t:.3f} % of the open field's")
-    res.add("Agility MLC (Monte Carlo): dosimetric leaf gap fitted at 10 cm (mm)", round(g, 2), "informative", None,
-            f"a 10 mm gap on every pair; its dose integrated over 100 mm along the leaves, {mc_gap * 100:.2f} mm of open field, "
+    t, g = _fit_leaf_model(dose_of, mc_t, mc_gap, t_region, gap_region, tg, tail)
+    tail_fit = None
+    ref10 = _mc_reference("water_10x10")
+    if not ctx.fast and spec.get("mlc_fit_tip_tail", True) and ref10 is not None:
+        jm, z = phantom.depth_index(100.0), phantom.axis_mm("z")
+        pairs, across = np.abs(z) <= 35.0, np.abs(phantom.axis_mm("x")) <= 20.0
+        mc_gap_profile = mc["mlc_gap10"][pairs][:, jm - 1:jm + 2, :].mean(axis=(0, 1))
+        p10 = _phantom_for("water_10x10", ctx.spacing(ref10["spacing_mm"][0]))
+        cz, cx, j10 = p10.centre_index("z"), p10.centre_index("x"), p10.depth_index(100.0)
+        x10 = np.abs(p10.axis_mm("x"))
+        edge = (x10 >= 40.0) & (x10 <= 75.0)
+        m10 = _resample_to(ref10["dose"], ref10["spacing_mm"], ref10["origin_mm"], p10)[cz - 1:cz + 2, j10 - 1:j10 + 2, :].mean(axis=(0, 1))
+        m10 = m10 / m10[cx]
+
+        def misfit(lam: float) -> Tuple[float, float]:
+            m = LeafModel(leaf_transmission=t, dosimetric_leaf_gap_mm=g, tongue_and_groove_mm=tg, leaf_tip_tail_mm=lam)
+            gp = dose_of("mlc_gap10", m)[pairs][:, jm - 1:jm + 2, :].mean(axis=(0, 1))
+            d10 = _pb_dose(eng, p10, _versa_field_plan(100.0, m), {}, average, ref10)[cz - 1:cz + 2, j10 - 1:j10 + 2, :].mean(axis=(0, 1))
+            d10 = d10 / d10[cx]
+            return float(np.sqrt(np.mean((gp[across] - mc_gap_profile[across]) ** 2))), float(np.sqrt(np.mean((d10[edge] - m10[edge]) ** 2)))
+
+        lo, hi = spec.get("mlc_tip_tail_range_mm", [0.5, 5.0])
+        tail = round(_golden_min(lambda lam: float(np.hypot(*misfit(lam))), float(lo), float(hi), 0.05), 2)
+        t, g = _fit_leaf_model(dose_of, mc_t, mc_gap, t_region, gap_region, tg, tail)
+        r_gap, r_edge = misfit(tail)
+        tail_fit = {"tip_tail_mm": tail, "rms_gap_profile": r_gap, "rms_10x10_edge": r_edge}
+    model = LeafModel(leaf_transmission=t, dosimetric_leaf_gap_mm=g, tongue_and_groove_mm=tg, leaf_tip_tail_mm=tail)
+    return _AgilityFit(model, refs, phantom, mc, dose_of, mc_t, mc_gap, tail_fit)
+
+
+def _mlc_checks(res: CaseResult, fit: _AgilityFit, spec: dict, ctx: Context) -> None:
+    """The leaf model (``docs/reports/mlc-leaf-model.md``) against Monte Carlo through the Versa's Agility MLC, leaf
+    by leaf. Like a planning system's commissioning: the MLC's transmission, effective leaf gap and tip tail are fitted
+    to Monte Carlo fields (:func:`_fit_agility`), then the pencil beam with that leaf model is graded against a further,
+    irregular field (closed pairs off the axis, 5 and 10 mm gaps, steps between pairs; gamma, the dose under the closed
+    pairs and in the gaps). The same field with ideal leaves is reported. All four fields share one source cone, so
+    their doses relate directly; each is taken relative to the open field's (20 x 10 cm between the X blocks and the Y
+    jaws) on the axis at 10 cm."""
+    from ..services.gamma import gamma_index
+
+    tols = spec.get("tolerances", {})
+    crit = spec.get("mlc_gamma", {"dose_percent": 3.0, "dta_mm": 2.0, "threshold_percent": 10.0, "pass_percent": 95.0})
+    low_tol = float(tols.get("mlc_low_dose_percent", 1.0)) / 100.0
+    gap_tol = float(tols.get("mlc_gap_percent", 3.0)) / 100.0
+    phantom, mc, dose_of, fitted, refs = fit.phantom, fit.mc, fit.dose_of, fit.model, fit.refs
+    s = float(phantom.spacing_mm[0])
+    res.add("Agility MLC (Monte Carlo): leaf transmission fitted at 10 cm (%)", round(100 * fitted.leaf_transmission, 3), "informative", None,
+            f"every pair closed on the axis; the dose 25-75 mm from the tips' line, {100 * fit.mc_t:.3f} % of the open field's")
+    res.add("Agility MLC (Monte Carlo): dosimetric leaf gap fitted at 10 cm (mm)", round(fitted.dosimetric_leaf_gap_mm, 2), "informative", None,
+            f"a 10 mm gap on every pair; its dose integrated over 100 mm along the leaves, {fit.mc_gap * 100:.2f} mm of open field, "
             "as a sweeping gap measures it; nominal tips as the Versa model calibrates them")
+    if fit.tail_fit is not None:
+        res.add("Agility MLC (Monte Carlo): tip tail fitted at 10 cm (mm)", fit.tail_fit["tip_tail_mm"], "informative", None,
+                "how the rounded ends pass the leaf gap: the shape across the 10 mm gap and of the 10 x 10 cm field's leaf edge "
+                f"(root mean square {100 * fit.tail_fit['rms_gap_profile']:.2f} and {100 * fit.tail_fit['rms_10x10_edge']:.2f} % of the open dose), "
+                "with the engine's edge blur")
+    else:
+        res.notes.append(f"the Agility's tip tail: {fitted.leaf_tip_tail_mm:g} mm from the case, not fitted "
+                         "(fast mode, mlc_fit_tip_tail false, or no water_10x10 reference)")
     centre = _region(phantom, (-0.5 * s - 1e-6, 0.5 * s + 1e-6), (-35.0, 35.0))
     res.add("10 mm gap on every pair, fitted leaf model: dose at the gap's centre at 10 cm, pb vs MC (% of open)",
             round(100 * float(dose_of("mlc_gap10", fitted)[centre].mean()), 2), f"{100 * float(mc['mlc_gap10'][centre].mean()):.2f} (MC)", None,
-            "informative: the pencil beam's error on a narrow opening, which a fit to this dose would put into the leaf gap")
+            "informative: the pencil beam's error on a narrow opening")
+    t_region = _region(phantom, (25.0, 75.0), (-35.0, 35.0)) | _region(phantom, (-75.0, -25.0), (-35.0, 35.0))
     line = _region(phantom, (-10.0, 10.0), (-35.0, 35.0))
-    leak_mc = float(mc["mlc_closed"][line].mean()) - mc_t
+    leak_mc = float(mc["mlc_closed"][line].mean()) - fit.mc_t
     leak_pb = float(dose_of("mlc_closed", fitted)[line].mean()) - float(dose_of("mlc_closed", fitted)[t_region].mean())
     res.add("closed pairs touching on the axis: excess dose within 10 mm of the tips' line, pb vs MC (% of open)", round(100 * leak_pb, 3),
             f"{100 * leak_mc:.3f} (MC)", None, "informative: touching rounded ends against the nominal gap the Versa calibration gives them, plus the fitted leaf gap")
@@ -394,8 +535,8 @@ def _mlc_checks(res: CaseResult, eng, spec: dict, ctx: Context) -> None:
         res.add(f"irregular MLC field, {label}: gamma {crit['dose_percent']:g} %/{crit['dta_mm']:g} mm pass rate, depth 20-200 mm (%)",
                 round(float(gm.pass_rate_pct), 1), f"≥ {crit['pass_percent']}" if graded else "informative",
                 float(gm.pass_rate_pct) >= float(crit["pass_percent"]) if graded else None,
-                ("TG-218's IMRT criteria; transmission and leaf gap fitted to the closed and gap fields, "
-                 f"tongue-and-groove {tg:g} mm as the synthetic machines'" + ("; informative in fast mode" if ctx.fast else ""))
+                ("TG-218's IMRT criteria; transmission, leaf gap and tip tail fitted to other fields, "
+                 f"tongue-and-groove {fitted.tongue_and_groove_mm:g} mm as the synthetic machines'" + ("; informative in fast mode" if ctx.fast else ""))
                 if label == "leaf model" else "without the leaf model: what it changes")
         for name, (region, t_abs) in points.items():
             vp, vm = float(pb[region].mean()), float(mc["mlc_shape"][region].mean())
@@ -403,8 +544,8 @@ def _mlc_checks(res: CaseResult, eng, spec: dict, ctx: Context) -> None:
             res.add(f"irregular MLC field, {label}: dose {name} at 10 cm, pb vs MC (% of open)", round(100 * vp, 2),
                     f"{100 * vm:.2f} ± {100 * t_abs:g} (MC)" if graded else f"{100 * vm:.2f} (MC)",
                     abs(vp - vm) <= t_abs if graded else None, "relative to the open 20 x 10 cm field on the axis at 10 cm")
-    res.metrics["mlc_leaf_model"] = {"fitted": fitted.model_dump(), "mc_transmission_region": mc_t, "mc_gap_centre": mc_gap,
-                                     "shape": out, "bands": refs["mlc_shape"]["provenance"]["mlc"]["bands"]}
+    res.metrics["mlc_leaf_model"] = {"fitted": fitted.model_dump(), "mc_transmission_region": fit.mc_t, "mc_gap_centre": fit.mc_gap,
+                                     "tip_tail_fit": fit.tail_fit, "shape": out, "bands": refs["mlc_shape"]["provenance"]["mlc"]["bands"]}
     res.notes.append("MLC fields: MC " + ", ".join(f"{c} {r['primaries']:.1e}" for c, r in refs.items()) + " primaries")
 
 

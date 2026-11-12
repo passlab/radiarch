@@ -2012,6 +2012,75 @@ each new field enters a key only when it is set.
   - `test_r5_evaluation.py`: LQ-L, relative seriality, the two in an evaluation;
   - `test_r9_registration.py`: the parent.
 
+## Small fields and narrow gaps: the rounded ends' tail and the pencil beam's edge (2026-11-11)
+
+The first dose-accuracy item of `docs/reports/open-items-plan.md`: the two checks of `pb_vs_mc` that failed on
+2026-11-06, the 1 × 1 cm field's dose (−5.9 %) and the irregular field's 5 mm gap (+3.2 points). **Output changes:**
+`pb` 1.1.1 → 1.2.0 and `LEAF_MODEL_VERSION` 3 → 4, so every pencil-beam dose and every aperture dose with a
+machine's leaf model changes, and cached ones are not reused. `AUTOPLAN_VERSION` and the protocols do not move.
+`docs/reports/mlc-leaf-model.md` ("The rounded ends' tail and the pencil beam's edge") has the diagnosis, the fit and
+the results.
+
+- **The diagnosis**, on the Monte Carlo references already made:
+  - `pb` 1.1's 4 mm Gaussian edge blur took 5.9 % from the 1 × 1 cm field's centre. Without it the pencil beam gives
+    0.764 against the Monte Carlo's 0.764; the kernel's components play no part.
+  - The Monte Carlo's edges have a tail outside the field, most at the leaf tips. The leaf model's tips moved back by
+    half the leaf gap put that fluence at a 5 mm gap's centre.
+  - The harness compared the pencil beam at its phantom's voxel centres with references whose voxels sit half a
+    voxel to the side, so each resampled Monte Carlo value was a mean of two voxels across the beam. That softened
+    the references' edges by about 0.6 mm, which the 4 mm blur had absorbed. The review found it.
+- **The model:**
+  - `LeafModel.leaf_tip_tail_mm` (and `MLCSpec`): a rounded end passes half the leaf gap as a tail
+    `min(1, A exp(-s / λ))` beyond its tip, in rectangles to 4 λ (`photon_plan.tip_tail`). 0 keeps the moved tip.
+    One aperture model still serves the sequencing coverage, the pencil beam and CCC.
+  - In a tongue-and-groove strip between pairs open in different places, each tail reaches the midpoint between
+    the tips, so the fluence does not jump as the openings part.
+  - `sequencing.park_position` parks a closed pair far enough behind an X jaw that its whole tail stays under it.
+  - `pb`'s default edge blur 4.0 mm → none: the Monte Carlo's source is a point. The lung scaling's exponent
+    0.9 → 0.925, refitted on the two lung slabs with the new edge.
+  - Both synthetic machines take the Agility's tail, 2.3 mm.
+  - The influence matrix's beamlet tables cover the cells as the dose path's fluence grid does (`pb._grid_anchor`,
+    offsets to 0.05 mm). With the sharper edge the two paths differed by up to 6.5 % at a field's edge voxels; now
+    they are equal. The duplicate float64 cache of the tables is gone.
+- **The harness (`pb_vs_mc`):**
+  - Every reference field is planned as the Monte Carlo collimates it: x by the Agility's leaf tips with the fitted
+    leaf model, y by the jaws (`_versa_field_plan`). Before, the open fields used jaws and ideal leaves.
+  - In full mode the pencil beam is scored on each reference's voxels and resampled as the reference is
+    (`_pb_dose`).
+  - The Agility's leaf model is fitted first (`_fit_agility`). The tail is fitted at run time to the 10 mm gap field's
+    profile and the 10 × 10 cm field's leaf edge.
+  - The blur was fitted with the tail on the same two fields, on a grid of blurs 0–2.5 mm and tails 1–3 mm: no blur,
+    a tail of about 2.3 mm. The 10 × 10 cm field's lateral checks are therefore consistency checks; the small
+    fields, the 4 × 4 and 20 × 20 cm fields and the irregular field are independent.
+- **Results** (`pb_vs_mc` from the working tree, run `20261112-032744`):
+  - all 35 graded checks pass, none fail; the Agility fits 0.198 %, a leaf gap of 0.96 mm and a tail of 2.32 mm;
+  - the 1 × 1 cm field 0.765 against 0.764 (was 0.719); the irregular field's 5 mm gap 50.87 against 50.06 % (was
+    53.26), its 10 mm gap 80.60 against 81.17 %, its gamma 3 %/2 mm 100 %;
+  - the 10 × 10 cm penumbra 6.04 against 5.87 mm; the 2 × 2 cm field in lung 0.981 / 1.009 / 1.019 at 50 / 80 /
+    100 mm.
+  - `photon_pdd_10x10_pb`, `photon_profile_10x10_pb` and `dij_consistency` pass; `photon_output_vs_field_pb` is
+    informative, as before.
+  - **`pb_vs_ccc` fails one graded check:** pb against CCC, 10 × 10 cm in water with 10 mm beamlets, gamma
+    3 %/3 mm 94.55 % (95.63 before, at least 95). Most failing points are in the field above 9 cm deep, where CCC's
+    shipped scatter cut-off already had it near the limit; the sharper pb edge adds the rest. There pb follows the
+    Monte Carlo (gamma 99.3 %). In fast mode, as CI's nightly run does it, it passes at 97.4 %. No tolerance changed;
+    the project lead had it recorded as a finding about CCC (`known_findings.yaml`).
+  - The full test suite on the compute server: 1221 pass; one test needs a git checkout, which the synced tree is not.
+- **An independent review** of the first build found the half-voxel offset above and:
+  - tongue-and-groove strips lost both tails as the neighbours' openings parted, a jump in the fluence;
+  - parking 10 mm behind a jaw no longer hid a closed pair's tail;
+  - the influence-matrix tables multiplied with sub-millimetre offsets, with a second float64 copy of each;
+  - documentation that overstated the fit's independence and the averaging, and two weak tests.
+
+  All are fixed and tested. CCC's comparisons with the same references (`photon_vs_mc`, R7) have the same half-voxel
+  offset; they are not changed here.
+- **Tests:** `test_r4_mlc_leaf_model.py` (the tail: its integral, explicit moved tips at λ 0, gaps, a closed pair,
+  a tongue-and-groove strip as the openings part, the jaws, the machines); `test_r4_mlc_monte_carlo.py` (the fit with
+  a tail, the golden-section search, the Versa field plan, the pencil beam on a reference's grid half a voxel to the
+  side); `test_r4_sequencing.py` (parking beyond the tail; a parked pair passes only the transmission, an unparked
+  one its tail).
+- **The records** with pencil-beam or aperture doses are rerun from the commit, as the leaf model's were (R8 to R11).
+
 ## The digest cache hashes a recently changed file afresh (2026-11-11)
 
 `tests/test_engine_digest.py::test_files_digest_depends_on_names_and_bytes` failed about two runs in five on the

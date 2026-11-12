@@ -51,6 +51,8 @@ class MLCSpec(BaseModel):
                                           "opening acts (rounded leaf ends); 0 = square tips.")
     tongue_and_groove_mm: float = Field(default=0.0, ge=0.0, le=2.0, description="Width of the strip at each boundary between "
                                         "leaf pairs that a closed neighbour shadows; 0 = none.")
+    leaf_tip_tail_mm: float = Field(default=0.0, ge=0.0, le=5.0, description="Decay length of a rounded leaf end's transmission "
+                                    "beyond its tip, which passes half the dosimetric leaf gap; 0 = the tip moved back by half the gap.")
 
     @model_validator(mode="after")
     def _ascending(self) -> "MLCSpec":
@@ -108,7 +110,8 @@ class PhotonMachineSpec(BaseModel):
     def leaf_model(self) -> LeafModel:
         """What the leaves and jaws let through, for the plans made from this machine's apertures."""
         return LeafModel(leaf_transmission=self.mlc.leaf_transmission, jaw_transmission=self.jaws.jaw_transmission,
-                         dosimetric_leaf_gap_mm=self.mlc.dosimetric_leaf_gap_mm, tongue_and_groove_mm=self.mlc.tongue_and_groove_mm)
+                         dosimetric_leaf_gap_mm=self.mlc.dosimetric_leaf_gap_mm, tongue_and_groove_mm=self.mlc.tongue_and_groove_mm,
+                         leaf_tip_tail_mm=self.mlc.leaf_tip_tail_mm)
 
     @property
     def default_energy(self) -> PhotonEnergy:

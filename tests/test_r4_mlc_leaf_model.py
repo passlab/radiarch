@@ -6,7 +6,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from radiarch.models.photon_plan import LEAF_MODEL_VERSION, LeafModel, MLCRow, PhotonBeam, PhotonPlan, PhotonSegment
+from radiarch.models.photon_plan import LEAF_MODEL_VERSION, LeafModel, MLCRow, PhotonBeam, PhotonPlan, PhotonSegment, tip_tail
 from radiarch.services import sequencing as S
 from radiarch.services.machine_model import load_photon_spec
 from radiarch.services.photon_beamlets import build_photon_plan
@@ -96,6 +96,85 @@ class TestFluence:
         assert _at(rects, 8.0, 2.5) == pytest.approx(TJ)        # open leaves, under the jaw
         assert _at(rects, 15.0, 2.5) == 0.0                      # under both: about T x TJ, left out
 
+
+
+class TestTipTail:
+    """A rounded end passes half the leaf gap as a tail beyond its tip, which a narrow opening sees less of than a tip
+    moved back by the same amount (LEAF_MODEL_VERSION 4)."""
+
+    TAIL = MODEL.model_copy(update={"leaf_tip_tail_mm": 2.0})
+
+    def test_the_strips_pass_half_the_gap_and_at_most_the_open_fluence(self):
+        for half, tail in ((0.5, 2.5), (0.75, 1.5), (0.5, 0.25), (1.0, 1.0)):
+            strips = tip_tail(half, tail)
+            assert sum((s1 - s0) * f for s0, s1, f in strips) == pytest.approx(half, rel=1e-12)
+            assert strips[0][0] == 0.0 and all(a[1] == pytest.approx(b[0]) for a, b in zip(strips, strips[1:]))
+            assert all(0.0 < f <= 1.0 for *_, f in strips)
+            assert [f for *_, f in strips[:-1]] == sorted((f for *_, f in strips[:-1]), reverse=True)
+        assert tip_tail(0.75, 1.5)[0][2] == pytest.approx(0.5, abs=0.05)     # f(0) = half gap / tail
+        assert tip_tail(0.5, 0.25)[0][2] == 1.0                              # a gap wider than the tail: open first
+        assert tip_tail(0.0, 2.0) == () and tip_tail(0.5, 0.0) == ()
+
+    def test_no_tail_is_the_tip_moved_back(self):
+        seg = PhotonSegment(mu=1.0, x_jaw_mm=(-20, 20), y_jaw_mm=(-15, 15), mlc_rows=_rows([(-3.0, 4.0)] * 6))
+        rects = seg.fluence_rectangles(MODEL.model_copy(update={"leaf_tip_tail_mm": 0.0}))
+        h = DLG / 2
+        for x, f in ((-3.0 - h + 0.01, 1.0), (-3.0 - h - 0.01, T), (4.0 + h - 0.01, 1.0), (4.0 + h + 0.01, T)):
+            assert _at(rects, x, 2.5) == pytest.approx(f)
+
+    def test_a_tongue_and_groove_strip_does_not_jump_as_the_overlap_closes(self):
+        """Adjacent pairs open on either side of x = 0: their strip's fluence is continuous as the openings part, and
+        a short tail approaches the moved tips."""
+        def strip(eps, tail):
+            rows = [MLCRow(y_min_mm=-5, y_max_mm=0, x_left_mm=-10, x_right_mm=0), MLCRow(y_min_mm=0, y_max_mm=5, x_left_mm=eps, x_right_mm=10)]
+            seg = PhotonSegment(mu=1.0, x_jaw_mm=(-40, 40), y_jaw_mm=(-5, 5), mlc_rows=rows)
+            model = LeafModel(dosimetric_leaf_gap_mm=DLG, tongue_and_groove_mm=TG, leaf_tip_tail_mm=tail)
+            return _integral(seg.fluence_rectangles(model), y0=-TG / 2, y1=TG / 2)
+        for tail in (2.5, 0.5):
+            assert strip(1e-9, tail) == pytest.approx(strip(0.0, tail), abs=1e-6)      # no jump as the openings part
+            assert abs(strip(0.01, tail) - strip(0.0, tail)) <= TG * 0.01 + 1e-9       # at most the strip's width per mm
+        assert strip(0.5, 1e-3) == pytest.approx(strip(0.5, 0.0), abs=1e-3)           # a short tail is the moved tips'
+        assert strip(0.0, 2.5) == pytest.approx(TG * DLG)                              # touching: both tips' leaf gap
+
+    def test_a_gap_passes_as_much_with_a_tail_as_with_the_tip_moved_back(self):
+        model = self.TAIL.model_copy(update={"leaf_transmission": 0.0})
+        for gap in (0.0, 2.0, 5.0, 10.0):
+            seg = PhotonSegment(mu=1.0, x_jaw_mm=(-40, 40), y_jaw_mm=(-15, 15), mlc_rows=_rows([(0.0, gap)] * 6))
+            rects = seg.fluence_rectangles(model)
+            assert _integral(rects) == pytest.approx(30.0 * (gap + DLG), rel=1e-9)
+            for x in np.arange(-15.0, 26.0, 0.37):
+                _at(rects, x, 2.5)                                           # disjoint: one rectangle at most
+
+    def test_a_narrow_gap_keeps_less_of_the_leaf_gap_near_its_centre(self):
+        rows = _rows([(0.0, 5.0)] * 6)
+        seg = PhotonSegment(mu=1.0, x_jaw_mm=(-40, 40), y_jaw_mm=(-15, 15), mlc_rows=rows)
+        step, tail = seg.fluence_rectangles(MODEL), seg.fluence_rectangles(self.TAIL)
+        assert _integral(tail, -1.0, 6.0, -2.0, 2.0) < _integral(step, -1.0, 6.0, -2.0, 2.0)
+        assert _at(tail, 2.5, 2.5) == 1.0
+        f0 = tip_tail(0.5 * DLG, 2.0)[0][2]
+        assert _at(tail, -0.1, 2.5) == pytest.approx(T + (1.0 - T) * f0)
+        assert _at(tail, 5.1, 2.5) == pytest.approx(T + (1.0 - T) * f0)
+        assert _at(tail, -30.0, 2.5) == pytest.approx(T)
+
+    def test_a_closed_pair_leaks_a_line_with_the_leaf_gap(self):
+        tips = [(-10, 10)] * 6
+        tips[2] = (5.0, 5.0)
+        seg = PhotonSegment(mu=1.0, x_jaw_mm=(-40, 40), y_jaw_mm=(-15, 15), mlc_rows=_rows(tips))
+        rects = seg.fluence_rectangles(self.TAIL)
+        f0 = tip_tail(0.5 * DLG, 2.0)[0][2]
+        assert _at(rects, 4.9, -2.5) == pytest.approx(T + (1.0 - T) * f0) == pytest.approx(_at(rects, 5.1, -2.5))
+        assert _at(rects, -38.0, -2.5) == pytest.approx(T)
+        band = (-5.0 + TG / 2, 0.0 - TG / 2)
+        assert _integral(rects, y0=band[0], y1=band[1]) == pytest.approx((band[1] - band[0]) * (T * 80.0 + (1.0 - T) * DLG), rel=1e-9)
+
+    def test_the_tail_stops_at_the_jaws(self):
+        seg = PhotonSegment(mu=1.0, x_jaw_mm=(-20, 20), y_jaw_mm=(-15, 15), mlc_rows=_rows([(-18.0, 18.0)] * 6))
+        rects = seg.fluence_rectangles(self.TAIL)
+        assert min(r[0] for r in rects) >= -20.0 and max(r[1] for r in rects) <= 20.0
+
+    def test_the_machines_carry_a_tail(self):
+        for name in ("synthetic-120", "synthetic-160"):
+            assert load_photon_spec(name).leaf_model().leaf_tip_tail_mm > 0.0
 
 class TestThreePathsAgree:
     """The sequencing coverage, the pencil beam's rectangles and CCC's coverage cells integrate to the same fluence."""

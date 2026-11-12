@@ -45,6 +45,8 @@ Two paths
 ---------
 * :meth:`PencilBeamEngine.influence_matrix`: one column per beamlet; the
   beamlet rectangle is convolved with each component once per beamlet size
+  and offset of its centre from the 1 mm fluence grid, to 0.05 mm (one table
+  for 4 and 5 mm beamlets, four for 2.5 mm, a hundred for 3.3 mm, at most 400),
   and evaluated within a lateral cutoff (``cutoff_mm``) of the beamlet.
 * :meth:`PencilBeamEngine.compute_plan_dose`: each beam's fluence convolved
   with the full kernel (200 mm), no cutoff. ``fluence="beamlets"`` (default
@@ -59,8 +61,8 @@ their column's maximum are kept with probability value / threshold and set
 to the threshold, an unbiased thinning as matRad's; default 0.003, 0 keeps
 all; the numbers are a Weyl sequence over the beamlets, which halves the
 noise of independent draws; ``seed`` shifts it), ``penumbra_fwhm_mm`` (a Gaussian fluence
-penumbra for the source size and the collimator edges, applied to the
-kernel), ``fluence``,
+penumbra for the source size and the collimators' scatter, applied to the kernel; the rounded leaf
+ends' transmission is the plan's leaf model, :class:`~radiarch.models.photon_plan.LeafModel`), ``fluence``,
 ``device`` (``cpu``, ``gpu``, ``auto``), ``n_jobs``, ``min_density`` (voxels
 below it get no dose unless a slice encloses them: air outside the body gets
 none, airways and other cavities do; default 0.05 g/cm^3),
@@ -103,11 +105,14 @@ from .registry import register_engine
 DEFAULT_COMPONENTS = 4
 DEFAULT_CUTOFF_MM = 80.0
 DEFAULT_MIN_DENSITY = 0.05
-DEFAULT_PENUMBRA_FWHM_MM = 4.0   # fitted to the OpenGATE 10 x 10 cm penumbra (80-20 %: 4.9 / 5.9 / 7.5 mm at 5 / 10 / 20 cm
-                                 # against 4.9 / 5.9 / 7.1 mm), kernel f046d6a503757f17
+DEFAULT_PENUMBRA_FWHM_MM = 0.0   # fitted with the Agility's tip tail to the OpenGATE 10 x 10 cm field's leaf edge and 10 mm gap field at
+                                 # 10 cm (2026-11-11; blurs 0 to 2.5 mm), kernel f046d6a503757f17: the Monte Carlo's source is a point. A real
+                                 # machine's commissioning sets its source size. 1.1 used 4.0, fitted to the edge alone with ideal leaves and
+                                 # the reference half a voxel off: it took 5.9 % from a 1 x 1 cm field's centre
 DEFAULT_LATERAL_NEAR_MM = 30.0    # kernel radius stretched in low density (secondary electrons); beyond it, photon scatter
 DEFAULT_LATERAL_SIGMA_MM = 5.0    # the neighbourhood whose density sets the stretch
-DEFAULT_LATERAL_EXPONENT = 0.9    # stretch = rho_eff ** -exponent; with the near radius, fitted to the Monte Carlo lung slabs (2 x 2 and 10 x 10 cm within 2 %)
+DEFAULT_LATERAL_EXPONENT = 0.925  # stretch = rho_eff ** -exponent; with the near radius, fitted to the Monte Carlo lung slabs (2 x 2 within 1.9 %,
+                                  # 10 x 10 cm within 2.6 % at every depth; 1.2.0 refitted it with the new edge, 1.1 had 0.9)
 DEFAULT_LATERAL_MAX_SCALE = 5.0   # density 0.2 and below
 DEFAULT_LATERAL_SCALES = 5        # precomputed scales from 1 to the maximum, geometric
 DEFAULT_SAMPLING = 0.003          # influence-matrix entries below 0.3 % of their column's maximum are sampled
@@ -369,9 +374,10 @@ def aperture_rectangles(seg: PhotonSegment, model: Optional[LeafModel] = None) -
 @lru_cache(maxsize=8)
 def _planes(kernel_key: str, n: int, fwhm_mm: float) -> np.ndarray:
     """The components on the isocenter-plane grid, each convolved with a Gaussian of ``fwhm_mm``: the
-    fluence penumbra of the source size and the collimator edges, which the pencil kernel (a point source,
+    fluence penumbra of the source size and the collimators' scatter, which the pencil kernel (a point source,
     an ideal edge) does not have. Convolving the kernel instead of each fluence gives both paths the same
-    edge."""
+    edge. A symmetric blur takes dose from inside an edge, which a small field cannot spare; what rounded
+    leaf ends pass beyond their tips is in the leaf model instead (``LeafModel.leaf_tip_tail_mm``)."""
     planes = _KERNELS[kernel_key].planes(n)
     if fwhm_mm > 0:
         from scipy.ndimage import gaussian_filter
@@ -418,21 +424,36 @@ def _scaled_planes(kernel_key: str, n: int, fwhm_mm: float, scales: Tuple[float,
     return np.stack(out)
 
 
-@lru_cache(maxsize=32)
 def _beamlet_tables(kernel_key: str, n: int, fwhm_mm: float, bx: float, by: float, reach_mm: float,
-                    scales: Tuple[float, ...] = (1.0,), near_mm: float = DEFAULT_LATERAL_NEAR_MM) -> Tuple[np.ndarray, int]:
-    """Each component at each scale convolved with a ``bx x by`` rectangle, on the 1 mm grid out to
-    ``reach_mm``: ``(tables (n_scales, n, 2h+1, 2h+1) indexed [w, u], h)``."""
+                    scales: Tuple[float, ...] = (1.0,), near_mm: float = DEFAULT_LATERAL_NEAR_MM,
+                    ox: float = 0.0, oy: float = 0.0) -> Tuple[np.ndarray, int]:
+    """Each component at each scale convolved with a ``bx x by`` rectangle centred at ``(ox, oy)`` (at most half a
+    cell), on the 1 mm grid out to ``reach_mm``: ``(tables (n_scales, n, 2h+1, 2h+1) indexed [w, u], h)``. A beamlet
+    is looked up from the grid point nearest its centre (:func:`_grid_anchor`), so its table covers the cells as the
+    fluence grid of :meth:`PencilBeamEngine.compute_plan_dose` does and the two paths agree at a sharp edge."""
     from scipy.signal import fftconvolve
     planes = _scaled_planes(kernel_key, n, fwhm_mm, scales, near_mm)
     h_plane = (planes.shape[-1] - 1) // 2
     h = min(int(math.ceil(reach_mm / GRID_MM)) + 1, h_plane)
-    m = int(math.ceil(max(bx, by) / 2 / GRID_MM)) + 1
+    m = int(math.ceil(max(bx, by) / 2 / GRID_MM)) + 2
     x = np.arange(-m, m + 1) * GRID_MM
-    rect = np.outer(_cover(-by / 2, by / 2, x), _cover(-bx / 2, bx / 2, x))
+    rect = np.outer(_cover(oy - by / 2, oy + by / 2, x), _cover(ox - bx / 2, ox + bx / 2, x))
     out = np.stack([np.stack([fftconvolve(p, rect, mode="same")[h_plane - h:h_plane + h + 1, h_plane - h:h_plane + h + 1] for p in ps])
                     for ps in planes])
     return out * GRID_MM ** 2, h
+
+
+ANCHOR_STEP_MM = 0.05            # a beamlet's offset from the fluence grid, to this: exact for sizes of its multiples
+MAX_BEAMLET_TABLES = 128         # an engine's influence-matrix tables (about 5 MB each) before it starts afresh
+
+
+def _grid_anchor(c: float) -> Tuple[float, float]:
+    """The fluence grid's point nearest a beamlet's centre ``c`` (cells centred at whole millimetres; halves go up)
+    and the centre's offset from it, to :data:`ANCHOR_STEP_MM`: at most 20 offsets per axis, exact for beamlets whose
+    size is a multiple of it. A coarser step moves a beamlet's edges against the dose path's (1/16 mm: 6 % at a 3.3 mm
+    beamlet field's low-dose edge)."""
+    a = math.floor(c / GRID_MM + 0.5) * GRID_MM
+    return a, round(round((c - a) / ANCHOR_STEP_MM) * ANCHOR_STEP_MM, 6)
 
 
 _ALPHA = 0.7548776662466927      # 1/plastic number and 1/golden ratio: the R2 low-discrepancy sequence
@@ -516,7 +537,7 @@ class PencilBeamEngine:
     """Photon dose engine on singular-value-decomposed pencil kernels (NumPy, optional CuPy)."""
 
     name: str = "pb"
-    version: str = "1.1.1"
+    version: str = "1.2.0"
     modalities: List[str] = field(default_factory=lambda: ["PHOTON_IMRT"])
     test_only: bool = False
 
@@ -733,8 +754,12 @@ class PencilBeamEngine:
             self._attach_lateral(r, vox, lat)
             amp = self._amplitudes(r, vox)
             for s in segs:
-                for bx, by in {(float(b[2]), float(b[3])) for b in s.beamlets}:
-                    self._tables_dev(r, bx, by)          # built before the threads share them
+                needed = {(float(b[2]), float(b[3]), _grid_anchor(float(b[0]))[1], _grid_anchor(float(b[1]))[1]) for b in s.beamlets}
+                cache = self.__dict__.setdefault("_table_cache", {})
+                if len(cache) + len(needed) > MAX_BEAMLET_TABLES:
+                    cache.clear()                        # between segments only: the threads below read, never build
+                for bx, by, ox, oy in needed:
+                    self._tables_dev(r, bx, by, ox, oy)  # built before the threads share them
                 u, w = self._rotated(xp, vox, s.segment.collimator_deg)
                 order = xp.argsort(u)
                 u_sorted = u[order]
@@ -759,7 +784,8 @@ class PencilBeamEngine:
 
     def _beamlet_column(self, r: _Run, column: int, x, y, bx, by, u, w, order, u_sorted, vox, amp):
         xp = r.be.xp
-        tables, h = self._tables_dev(r, bx, by)
+        (x0, ox), (y0, oy) = _grid_anchor(float(x)), _grid_anchor(float(y))
+        tables, h = self._tables_dev(r, bx, by, ox, oy)
         reach_u, reach_w = r.cutoff_mm + bx / 2.0, r.cutoff_mm + by / 2.0
         lo = int(xp.searchsorted(u_sorted, x - reach_u))
         hi = int(xp.searchsorted(u_sorted, x + reach_u, side="right"))
@@ -769,8 +795,8 @@ class PencilBeamEngine:
         dw = w[sub] - y
         m = xp.abs(dw) <= reach_w
         sel = sub[m]
-        fu = (u[sel] - x) / GRID_MM + h
-        fw = dw[m] / GRID_MM + h
+        fu = (u[sel] - x0) / GRID_MM + h
+        fw = (w[sel] - y0) / GRID_MM + h
         val = xp.zeros(sel.shape[0], dtype=xp.float32)
         if "k" in vox:
             k, f = vox["k"][sel], vox["f"][sel]
@@ -790,12 +816,12 @@ class PencilBeamEngine:
             val = xp.where(low, xp.float32(thr), val)
         return r.be.to_host(vox["flat"][sel[keep]]), r.be.to_host(val[keep])
 
-    def _tables_dev(self, r: _Run, bx: float, by: float):
-        key = (r.kernel_key, r.n, r.fwhm_mm, round(bx, 6), round(by, 6), round(r.cutoff_mm, 6), r.be.gpu, r.scales, r.near_mm)
+    def _tables_dev(self, r: _Run, bx: float, by: float, ox: float = 0.0, oy: float = 0.0):
+        key = (r.kernel_key, r.n, r.fwhm_mm, round(bx, 6), round(by, 6), round(r.cutoff_mm, 6), r.be.gpu, r.scales, r.near_mm, ox, oy)
         cache = self.__dict__.setdefault("_table_cache", {})
         if key not in cache:
             tab, h = _beamlet_tables(r.kernel_key, r.n, r.fwhm_mm, round(bx, 6), round(by, 6),
-                                     r.cutoff_mm * math.sqrt(2.0) + max(bx, by), r.scales, r.near_mm)
+                                     r.cutoff_mm * math.sqrt(2.0) + max(bx, by) + GRID_MM, r.scales, r.near_mm, ox, oy)
             cache[key] = (r.be.xp.asarray(tab.astype(np.float32)), h)
         return cache[key]
 

@@ -1,7 +1,8 @@
 # Leaf transmission, rounded leaf ends and tongue-and-groove in aperture doses
 
 Status: design agreed with the project lead, 2026-11-04; built 2026-11-04 (see "As built"); the records rerun
-2026-11-05; checked against Monte Carlo 2026-11-06 (see "Against Monte Carlo"). Radiarch is not for clinical use.
+2026-11-05; checked against Monte Carlo 2026-11-06 (see "Against Monte Carlo"); the rounded ends pass a tail beyond
+their tips from 2026-11-11 (see "The rounded ends' tail and the pencil beam's edge"). Radiarch is not for clinical use.
 
 ## The problem
 
@@ -163,7 +164,101 @@ working tree before the commit gave the same values:
      its 10 mm gap with about 1.6 mm.
 
   Both are the pencil beam on openings of a centimetre and less. Planning systems with a single leaf gap share the
-  second, which is why their leaf gap is often tuned on clinical VMAT plans.
+  second, which is why their leaf gap is often tuned on clinical VMAT plans. Both are fixed from `pb` 1.2.0 (below).
+
+## The rounded ends' tail and the pencil beam's edge (2026-11-11)
+
+The two findings, diagnosed on the same references and fixed together. The change is `pb` 1.2.0 and
+`LEAF_MODEL_VERSION` 4.
+
+**Why the 1 × 1 cm field was low.** `pb` 1.1 blurred every field edge with a Gaussian of 4 mm FWHM, fitted to the
+10 × 10 cm field's penumbra. A symmetric blur moves fluence from inside an edge to outside it. A 1 cm field's edges
+are close to its centre, so the blur took 5.9 % from it. Without the blur, the pencil beam gives the 1 × 1 cm field
+0.764 against the Monte Carlo's 0.764. The kernel's components play no part: 4 and 8 give the same.
+
+**What the edge looks like.** Against the Monte Carlo, an unblurred pencil beam matches inside a field. Outside each
+edge, the Monte Carlo has a tail: up to 6–9 % of the axis dose just past the edge, falling off over about 10 mm. The
+leaf tips have the most; the jaws have less. The 4 mm blur imitated the tail by taking dose from inside the field.
+
+**Why the 5 mm gap was high.** The leaf model moved each tip back by half the leaf gap, so all the extra fluence sat
+at the opening's edge. In a 5 mm gap, that edge is close to the centre. The Monte Carlo's rounded ends pass the same
+amount as a tail spread over millimetres under the leaf, and less of it reaches a narrow gap's centre. The irregular
+field showed it. Over ideal leaves, the Monte Carlo's excess was about 3.3 points in both gaps. The moved tips gave
+6.4 points to the 5 mm gap and 2.4 to the 10 mm gap.
+
+**The comparison was half a voxel off.** An independent review of the first build found it. The references' voxels
+sit half a voxel to the side of the harness's phantoms: an even count of voxels against an odd one, centred on the
+axis. Resampled onto the phantom, each Monte Carlo value is therefore the mean of two voxels across the beam, while
+the pencil beam was taken at the voxel's centre. At an edge, that softens the Monte Carlo by about 0.6 mm (80–20 %).
+The 4 mm blur, fitted to that edge, absorbed it too. Now the pencil beam is scored on each reference's own voxels,
+each the mean of 2 × 2 × 2 points in it, and resampled onto the phantom as the reference is (`cases_r8._pb_dose`).
+CCC's comparisons with the same references (`photon_vs_mc`, R7) still have the offset; they are not changed here.
+
+**The model.**
+- A rounded end passes half the leaf gap as a tail beyond its tip: `f(s) = min(1, A exp(-s / λ))` of the open
+  fluence, on top of the leaf transmission, with integral DLG / 2. `LeafModel.leaf_tip_tail_mm` is λ; 0 keeps the
+  moved tip. The tail is a set of rectangles, 0.25 mm wide at the tip and up to λ wide. It stops at 4 λ, where a
+  real rounded end is the leaf's full thickness, and its last rectangle holds the rest of the integral. So the
+  sequencing coverage, the pencil beam and CCC still share one aperture model.
+- In a tongue-and-groove strip between pairs open in different places, each tail reaches the midpoint between the
+  tips, so the fluence does not jump as the openings part.
+- A closed pair is parked far enough behind an X jaw that its whole tail stays under the jaw.
+- The pencil beam's Gaussian edge blur stands for the source size and the collimators' scatter. It goes from 4.0 mm
+  FWHM to none: the Monte Carlo's source is a point, and the fit wants no blur. A real machine's commissioning would
+  set its own.
+- The lung's lateral kernel scaling was fitted with the old edge, so it was refitted on the same two lung slabs. Its
+  exponent goes from 0.9 to 0.925. The 2 × 2 cm slab is within 1.9 % at every depth. The 10 × 10 cm slab is within
+  2.6 %, as in the R8 record; the exponent does not move it.
+- The synthetic machines take the Agility's tail, 2.3 mm, with their own 1.5 mm leaf gap.
+
+**The fit, as a commissioning would do it.** The blur and the tail were fitted together on two fields: the 10 × 10 cm
+field's leaf edge at 10 cm (40 to 75 mm from the axis), and the 10 mm gap field across its gap. The fit minimised
+the root mean square of both, with the leaf transmission and leaf gap refitted at each point of a grid of blurs from
+0 to 2.5 mm and tails from 1 to 3 mm. The minimum was no blur and a tail of about 2.3 mm. In full mode the harness
+fits the tail itself at run time: the transmission and gap stay at their first fit during the search and are
+refitted at the end. The blur is the engine's default.
+
+The 10 × 10 cm field's graded checks across the beam (the penumbra, the off-axis ratio, the dose 2 cm outside the
+edge, its gamma) use the fitted edge, so they are consistency checks. The independent checks are the 1 × 1, 2 × 2,
+4 × 4 and 20 × 20 cm fields, the narrow lung field beyond its fit, and the irregular MLC field.
+
+**The comparisons now plan each field as the Monte Carlo collimates it.** x is set by the Agility's leaf tips with the
+fitted leaf model, y by the jaws, and the X jaws sit at the edge of the source's cone. Before, the open fields'
+pencil-beam plans used jaws on both axes with ideal leaves, so the 4 mm blur also stood in for the leaf tips.
+
+**Results.** The run `20261112-032744` used the working tree before the commit. The Agility fits 0.198 %, a leaf gap of
+0.96 mm and a tail of 2.32 mm. All 35 graded checks pass and none fail. The `pb` 1.1 column is the R8 record's run,
+with the old comparison:
+
+| Check | `pb` 1.1 (727654c) | `pb` 1.2.0 | Monte Carlo | Tolerance |
+|---|---|---|---|---|
+| 1 × 1 over 10 × 10, dose at 10 cm | 0.719 (fails) | 0.765 | 0.764 | 5 % |
+| 1 × 1, width at half maximum at 10 cm (mm) | 11.37 | 11.77 | 11.52 | 1 mm |
+| 2 × 2 over 10 × 10 | 0.844 | 0.848 | 0.839 | 3 % |
+| 2 × 2, width at half maximum (mm) | 22.16 | 22.72 | 22.41 | 1 mm |
+| 4 × 4 and 20 × 20 over 10 × 10 | 0.906, 1.064 | 0.907, 1.064 | 0.895, 1.058 | 2 % |
+| 10 × 10 penumbra 80–20 % at 10 cm (mm) | 5.93 | 6.04 | 5.87 | 2.5 mm |
+| 10 × 10, 2 cm outside the edge (% of the axis) | 4.79 | 5.09 | 5.12 | 1 point |
+| 2 × 2 in lung, at 50 / 80 / 100 mm over 20 mm | 0.986 / 1.014 / 1.020 | 0.981 / 1.009 / 1.019 | 1 | 3 % |
+| Irregular field, gamma 3 %/2 mm | 100.0 % | 100.0 % | | ≥ 95 % |
+| Irregular field, under the pairs closed at 20 mm (% of open) | 1.82 | 1.82 | 1.81 | 1 point |
+| Irregular field, 10 mm gap (% of open) | 80.06 | 80.60 | 81.17 | 3 points |
+| Irregular field, 5 mm gap (% of open) | 53.26 (fails) | 50.87 | 50.06 | 3 points |
+
+Informative: the 10 mm gap field's centre, 80.49 against 80.82 % (80.53 before). Touching closed pairs leak 5.99 % of
+the open dose within 10 mm of their tips' line, against the Monte Carlo's 5.90 % (6.36 before).
+
+**One graded check against CCC fails: a recorded finding.** `pb_vs_ccc` compares the pencil beam with CCC on the
+10 × 10 cm field in water. With 10 mm beamlets, its gamma 3 %/3 mm is 94.55 % against at least 95 % (95.63 % with
+`pb` 1.1). Most failing points are in the field deeper than 9 cm, where CCC's shipped scatter cut-off loses dose (R7
+and R8 records). The sharper pencil-beam edge adds the rest, and at that edge the pencil beam follows the Monte Carlo
+(gamma 99.3 %). The project lead had it recorded as a finding about CCC; no tolerance changed
+(`validation/known_findings.yaml`). In fast mode, as CI's nightly run does it, the check passes at 97.4 %.
+
+**Also changed.** Each beamlet's influence-matrix table now covers the cells as the dose path's fluence grid does. Its
+offset from the grid is kept to 0.05 mm: exact for beamlets whose size is a multiple of it, and at most 400 tables
+per size. With the sharper edge, the two paths differed by up to 6.5 % at the edge voxels of a 6 cm field; with the
+4 mm blur the difference was 1.6 %. A field's influence matrix now equals its dose.
 
 ## What changes, and the reruns
 
@@ -178,9 +273,15 @@ apertures, and MCO deliverable plans. Records with such doses get dated reruns o
 The open-field records do not change: R7, and R8's Monte Carlo comparisons on jaw-defined fields. The physicist then reviews the records once, with the MLC model
 in.
 
+From `pb` 1.2.0 (2026-11-11) every pencil-beam dose changes as well, open fields included, and every aperture dose
+from a machine's leaf model. The same records are rerun, together with R8's pencil-beam cases (`pb_vs_mc`,
+`pb_vs_ccc`, `photon_pdd_10x10_pb`, `photon_profile_10x10_pb`, `photon_output_vs_field_pb`, `dij_consistency`).
+
 ## Still not modelled
 
-- Head scatter and source occlusion in small apertures (the output factor).
+- Head scatter and source occlusion in small apertures (the output factor). The Monte Carlo has a point source, so
+  the fitted blur is none; a real machine's commissioning would set its source size.
+- A tail beyond the jaws' edges. The Monte Carlo's Y jaws show one about two thirds the size of the leaf tips'.
 - Transmission that varies with leaf position (interleaf leakage beyond an average).
 - Jaw tracking.
 - Leaf position errors.

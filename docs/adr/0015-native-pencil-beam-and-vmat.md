@@ -44,7 +44,10 @@ TG-101; the results it names are lung VMAT and SBRT plans, a head-and-neck
    **influence matrix** convolves each beamlet size once with each component
    and evaluates columns within 80 mm of the beamlet. The fluence penumbra of a
    real source and collimator is a Gaussian applied to the kernel planes, so
-   both paths share the edge; its width is fitted to the Monte Carlo field edge.
+   both paths share the edge; its width is fitted to the Monte Carlo field edge
+   (none since `pb` 1.2.0, with the leaf ends' tail; decision 14). Each
+   beamlet's table covers the cells as the dose path's fluence grid does, so
+   the influence matrix of a field equals its dose.
 4. **The influence matrix is thinned without bias.** Below 0.3 % of a column's
    maximum, an entry v is kept with probability v / T and set to T (matRad's
    Dij sampling). The numbers are a Weyl sequence over the beamlets for each
@@ -135,7 +138,29 @@ TG-101; the results it names are lung VMAT and SBRT plans, a head-and-neck
     more time. Interface build-down and re-build-up are not modelled.
     (Scaling kernels by density follows O'Connor's theorem; superposition
     engines and some commercial pencil beams scale laterally in the same
-    spirit.)
+    spirit.) `pb` 1.2.0 refitted the exponent with its new edge (decision 14):
+    0.925, the narrow field within 1.9 % and the broad one within 2.6 % at
+    every depth.
+14. **The edge: a narrower blur, and the leaf ends' tail in the leaf model
+    (`pb` 1.2.0, 2026-11-11).** Against the Monte Carlo, an unblurred pencil
+    beam matches inside a field; outside each edge the Monte Carlo has a tail
+    of up to 6–9 % of the axis dose that falls off over about 10 mm, most at
+    the leaf tips. `pb` 1.1's 4 mm Gaussian imitated the tail by taking dose
+    from inside the field, which took 5.9 % from a 1 × 1 cm field's centre;
+    and the leaf model moved each tip back by half the leaf gap, which put
+    its fluence at the edge of a 5 mm gap and overdosed it by 3.2 points
+    (`docs/reports/mlc-leaf-model.md`). Now a rounded leaf end passes half
+    the leaf gap as a tail beyond its tip, exp(−s / λ) under the leaf
+    (`LeafModel.leaf_tip_tail_mm`, `LEAF_MODEL_VERSION` 4), and the Gaussian
+    keeps the source size, none for the Monte Carlo's point source. The blur
+    and λ were fitted together to the 10 × 10 cm field's leaf edge and the
+    10 mm gap field at 10 cm; the small fields and the irregular MLC field
+    stay independent checks. The harness plans every reference field as the
+    Monte Carlo collimates it, x by the Agility's leaf tips, where 1.1 used
+    jaws. It also scores the pencil beam on each reference's voxels and
+    resamples it as the reference: the references sit half a voxel to the
+    side of the phantoms, so the resampled Monte Carlo is a mean of two
+    voxels across the beam, which 1.1's blur had absorbed.
 
 ## Findings
 

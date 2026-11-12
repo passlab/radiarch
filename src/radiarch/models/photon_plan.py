@@ -21,6 +21,7 @@ the same beamlets as the plans the vendored OpenTPS copy would build: a
 from __future__ import annotations
 
 import math
+from functools import lru_cache
 from typing import List, Literal, Optional, Sequence, Tuple
 
 import numpy as np
@@ -50,8 +51,9 @@ class MLCRow(BaseModel):
         return self.x_right_mm - self.x_left_mm
 
 
-LEAF_MODEL_VERSION = "3"     # raise when the aperture fluence changes: cached sequences, arcs and deliverable plans are then not reused
-                             # (2: closed pairs parked under an X jaw; 3: an arc's pairs closed for part of it move toward the jaw)
+LEAF_MODEL_VERSION = "4"     # raise when the aperture fluence changes: cached sequences, arcs and deliverable plans are then not reused
+                             # (2: closed pairs parked under an X jaw; 3: an arc's pairs closed for part of it move toward the jaw;
+                             # 4: a rounded leaf end passes a tail beyond its tip)
 
 
 class LeafModel(BaseModel):
@@ -59,22 +61,68 @@ class LeafModel(BaseModel):
     the plans made from its apertures so that every dose path computes the same fluence.
 
     Leaf transmission applies under the leaves inside the jaws, jaw transmission where the leaves are open outside
-    the jaws; under both, about the product of the two (3e-5), nothing. Each tip moves back by half the dosimetric
-    leaf gap (rounded leaf ends), a closed pair included. In a strip of the tongue-and-groove width centred on the
-    boundary between two adjacent pairs, the opening is the overlap of the two pairs' openings."""
+    the jaws; under both, about the product of the two (3e-5), nothing. A rounded leaf end passes half the dosimetric
+    leaf gap beyond its tip, a closed pair included: as a tail that falls off over ``leaf_tip_tail_mm``
+    (:func:`tip_tail`), or, with no tail, as a tip moved back by half the gap. In a strip of the tongue-and-groove
+    width centred on the boundary between two adjacent pairs, the opening is the overlap of the two pairs' openings."""
 
     leaf_transmission: float = Field(default=0.0, ge=0.0, le=0.2)
     jaw_transmission: float = Field(default=0.0, ge=0.0, le=0.1)
     dosimetric_leaf_gap_mm: float = Field(default=0.0, ge=0.0, le=5.0)
     tongue_and_groove_mm: float = Field(default=0.0, ge=0.0, le=2.0)
+    leaf_tip_tail_mm: float = Field(default=0.0, ge=0.0, le=5.0, description="Decay length of a rounded end's transmission "
+                                    "beyond its tip; 0 = the tip moved back by half the dosimetric leaf gap.")
 
 
 Rectangle = Tuple[float, float, float, float, float]     # x0, x1, y0, y1, the factor of the open fluence
+TailStrip = Tuple[float, float, float]                   # s0, s1 past the tip, the factor of the open fluence
 
 
-def _x_parts(a: float, b: float, xj0: float, xj1: float, inside: float, open_out: float, leaf_in: float) -> List[Tuple[float, float, float]]:
+@lru_cache(maxsize=64)
+def tip_tail(half_gap_mm: float, tail_mm: float) -> Tuple[TailStrip, ...]:
+    """What a rounded leaf end passes beyond its nominal tip: strips ``(s0, s1, f)`` at distances ``s`` past the tip,
+    ``f(s) = min(1, A exp(-s / tail_mm))`` of the open fluence on top of the leaf transmission, ``A`` such that the
+    strips pass ``half_gap_mm`` in all (half the dosimetric leaf gap; with ``half_gap_mm`` at most ``tail_mm``,
+    ``f(0) = half_gap_mm / tail_mm``). A narrow opening sees less of a tail than of a tip moved back by the same
+    amount, which overdoses 5 mm gaps against Monte Carlo (``docs/reports/mlc-leaf-model.md``). Each strip carries the
+    mean of ``f`` over it; widths grow from 0.25 mm to ``tail_mm`` and the strips stop at 4 ``tail_mm`` (where a real
+    rounded end is the leaf's full thickness), the rest of the integral, 1.8 %, in the last. Empty without a gap or a
+    tail."""
+    if half_gap_mm <= 0.0 or tail_mm <= 0.0:
+        return ()
+    amp, flat = (half_gap_mm / tail_mm, 0.0) if half_gap_mm <= tail_mm else (1.0, half_gap_mm - tail_mm)
+    out: List[TailStrip] = [(0.0, flat, 1.0)] if flat > 0.0 else []
+    reach = 4.0 * tail_mm
+    s, w = 0.0, min(0.25, 0.5 * tail_mm)
+    while s < reach - 1e-9:
+        s1 = min(s + w, reach)
+        out.append((flat + s, flat + s1, amp * tail_mm * (math.exp(-s / tail_mm) - math.exp(-s1 / tail_mm)) / (s1 - s)))
+        s, w = s1, min(1.5 * w, tail_mm)
+    s0, s1, f = out[-1]
+    out[-1] = (s0, s1, f + amp * tail_mm * math.exp(-s / tail_mm) / (s1 - s0))
+    return tuple(out)
+
+
+def _under(lo: float, hi: float, tip: float, side: int, leaf_in: float, tail: Sequence[TailStrip]) -> List[Tuple[float, float, float]]:
+    """The pieces of ``[lo, hi]`` under one bank whose tip is at ``tip`` (``side`` -1: the bank lies left of it, +1:
+    right): the tail's strips next to the tip, the leaf transmission beyond."""
+    if hi <= lo:
+        return []
+    out = []
+    for s0, s1, f in tail:
+        x0, x1 = (tip - s1, tip - s0) if side < 0 else (tip + s0, tip + s1)
+        out.append((max(x0, lo), min(x1, hi), leaf_in + (1.0 - leaf_in) * f))
+    reach = tail[-1][1] if tail else 0.0
+    out.append((lo, min(hi, tip - reach)) + (leaf_in,) if side < 0 else (max(lo, tip + reach), hi, leaf_in))
+    return out
+
+
+def _x_parts(a: float, b: float, xj0: float, xj1: float, inside: float, open_out: float, leaf_in: float,
+             tail: Sequence[TailStrip] = ()) -> List[Tuple[float, float, float]]:
     """A band's x pieces with their factors: the opening ``[a, b]`` (``inside`` within the jaws, ``open_out`` outside)
-    and, within the jaws, the parts under the leaves (``leaf_in``)."""
+    and, within the jaws, the parts under the leaves (``leaf_in``), with each tip's ``tail`` (:func:`tip_tail`). Where
+    the tips overlap (``b < a``, a tongue-and-groove strip between pairs open in different places) each tail reaches
+    the midpoint between them, the lesser of the two, so the fluence does not jump as the overlap closes."""
     out = []
     if b > a:
         lo, hi = max(a, xj0), min(b, xj1)
@@ -82,8 +130,10 @@ def _x_parts(a: float, b: float, xj0: float, xj1: float, inside: float, open_out
             out.append((lo, hi, inside))
         out += [(a, min(b, xj0), open_out)] if a < xj0 else []
         out += [(max(a, xj1), b, open_out)] if b > xj1 else []
-        out += [(xj0, min(a, xj1), leaf_in)] if a > xj0 else []
-        out += [(max(b, xj0), xj1, leaf_in)] if b < xj1 else []
+    if b > a or tail:
+        left, right = (a, b) if b >= a else (0.5 * (a + b),) * 2
+        out += _under(xj0, min(left, xj1), a, -1, leaf_in, tail)
+        out += _under(max(right, xj0), xj1, b, 1, leaf_in, tail)
     else:
         out.append((xj0, xj1, leaf_in))
     return [(x0, x1, f) for x0, x1, f in out if x1 > x0 and f > 0.0]
@@ -180,9 +230,11 @@ class PhotonSegment(BaseModel):
                     out.append((x0, x1, y0, y1, 1.0))
             return out
         half_gap = 0.5 * model.dosimetric_leaf_gap_mm
+        tail = tip_tail(half_gap, model.leaf_tip_tail_mm)
+        shift = 0.0 if tail else half_gap
         t = 0.5 * model.tongue_and_groove_mm
         rows = sorted(self.mlc_rows, key=lambda r: r.y_min_mm)
-        tips = [(r.x_left_mm - half_gap, r.x_right_mm + half_gap) for r in rows]
+        tips = [(r.x_left_mm - shift, r.x_right_mm + shift) for r in rows]
         adjacent = [abs(a.y_max_mm - b.y_min_mm) < 1e-6 for a, b in zip(rows, rows[1:])]
         # bands (y0, y1, a, b): each row less its tongue-and-groove strips, and the strips with the overlap of both openings
         bands = []
@@ -208,10 +260,11 @@ class PhotonSegment(BaseModel):
             yi0, yi1 = max(y0, yj0), min(y1, yj1)
             if yi1 > yi0:            # inside the jaws' y range
                 out += [(x0, x1, yi0, yi1, f) for x0, x1, f in
-                        _x_parts(a, b, xj0, xj1, 1.0, model.jaw_transmission, model.leaf_transmission)]
+                        _x_parts(a, b, xj0, xj1, 1.0, model.jaw_transmission, model.leaf_transmission, tail)]
+            ja, jb = a - (half_gap - shift), b + (half_gap - shift)     # under a jaw a tail is the moved tips' (times the jaw transmission)
             for z0, z1 in ((y0, min(y1, yj0)), (max(y0, yj1), y1)):    # outside them: the opening under a jaw
-                if z1 > z0 and b > a and model.jaw_transmission > 0.0:
-                    out.append((a, b, z0, z1, model.jaw_transmission))
+                if z1 > z0 and jb > ja and model.jaw_transmission > 0.0:
+                    out.append((ja, jb, z0, z1, model.jaw_transmission))
         if model.leaf_transmission > 0.0:
             out += [(xj0, xj1, g0, g1, model.leaf_transmission) for g0, g1 in gaps if g1 > g0]
         return [r for r in out if r[1] > r[0] and r[3] > r[2]]
@@ -498,6 +551,7 @@ __all__ = [
     "MLCRow",
     "LeafModel",
     "LEAF_MODEL_VERSION",
+    "tip_tail",
     "PhotonSegment",
     "ArcControlPoint",
     "PhotonArc",

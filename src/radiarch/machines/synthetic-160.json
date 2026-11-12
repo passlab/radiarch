@@ -109,7 +109,8 @@
     "max_leaf_speed_mm_s": 35.0,
     "leaf_transmission": 0.005,
     "dosimetric_leaf_gap_mm": 1.5,
-    "tongue_and_groove_mm": 0.5
+    "tongue_and_groove_mm": 0.5,
+    "leaf_tip_tail_mm": 2.3
   },
   "jaws": {
     "x_range_mm": [
@@ -128,6 +129,6 @@
   "min_mu_per_segment": 2.0,
   "min_segment_area_mm2": 400.0,
   "max_segments_per_beam": 40,
-  "notes": "A made-up machine with 80 leaf pairs of 5 mm over 40 cm, interdigitating, no minimum gap; generic 6 MV. Leaf transmission, dosimetric leaf gap and tongue-and-groove width are representative values for a 120-leaf MLC (LoSasso, Chui and Ling 1998, Med Phys 25:1919), not a commissioned machine's. The leaf transmission (0.5 %) is lower, as on 160-leaf MLCs; the gap and the tongue-and-groove width are the 120-leaf values.",
+  "notes": "A made-up machine with 80 leaf pairs of 5 mm over 40 cm, interdigitating, no minimum gap; generic 6 MV. Leaf transmission, dosimetric leaf gap and tongue-and-groove width are representative values for a 120-leaf MLC (LoSasso, Chui and Ling 1998, Med Phys 25:1919), not a commissioned machine's. The tip tail (2.3 mm) is the Elekta Agility's in the OpenGATE model, fitted in radiarch's pb_vs_mc (2026-11-11). The leaf transmission (0.5 %) is lower, as on 160-leaf MLCs; the gap and the tongue-and-groove width are the 120-leaf values.",
   "default_field_mm": 200.0
 }

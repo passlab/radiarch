@@ -42,7 +42,7 @@ import scipy.sparse as sp
 from loguru import logger
 
 from ..models.machine import MLCSpec, PhotonMachineSpec
-from ..models.photon_plan import LeafModel, MLCRow, PhotonBeam, PhotonPlan, PhotonSegment
+from ..models.photon_plan import LeafModel, MLCRow, PhotonBeam, PhotonPlan, PhotonSegment, tip_tail
 
 
 # ---------------------------------------------------------------------------
@@ -338,20 +338,25 @@ PARK_BEHIND_JAW_MM = 10.0      # how far behind an X jaw a closed pair waits
 
 
 def park_position(x_jaw_mm: Tuple[float, float], mlc: MLCSpec) -> Optional[float]:
-    """Where a closed pair waits: ``PARK_BEHIND_JAW_MM`` behind the X1 jaw, or behind X2 when the leaves cannot reach
-    that far left; when neither fits whole, the deeper of the two. Touching rounded tips leak a line of up to 16 % of
-    the open dose (the Monte Carlo of ``docs/reports/mlc-leaf-model.md``); under a jaw it is cut to the jaw's
-    transmission. None when the MLC forbids interdigitation: a closed pair then has to close between its neighbours'
-    tips, and stays where the sequencer closed it."""
+    """Where a closed pair waits: ``PARK_BEHIND_JAW_MM`` behind the X1 jaw (or as far as its rounded tips' leak reaches,
+    if farther), or behind X2 when the leaves cannot reach that far left; when neither fits whole, the deeper of the
+    two. Touching rounded tips leak a line of up to 16 % of the open dose (the Monte Carlo of
+    ``docs/reports/mlc-leaf-model.md``), as far as their tail reaches (:func:`~radiarch.models.photon_plan.tip_tail`)
+    or half the leaf gap without one; under a jaw it is cut to the jaw's transmission. None when the MLC forbids
+    interdigitation: a closed pair then has to close between its neighbours' tips, and stays where the sequencer
+    closed it."""
     if not mlc.interdigitation:
         return None
     reach = min(float(mlc.max_leaf_position_mm), float(mlc.max_overtravel_mm))   # both tips of a closed pair at one x
     half_gap = 0.5 * float(mlc.dosimetric_leaf_gap_mm)
+    tail = tip_tail(half_gap, float(mlc.leaf_tip_tail_mm))
+    leak = tail[-1][1] if tail else half_gap
+    behind = max(PARK_BEHIND_JAW_MM, leak)
     x1, x2 = float(x_jaw_mm[0]), float(x_jaw_mm[1])
-    left, right = max(x1 - PARK_BEHIND_JAW_MM, -reach), min(x2 + PARK_BEHIND_JAW_MM, reach)
-    if left + half_gap <= x1:
+    left, right = max(x1 - behind, -reach), min(x2 + behind, reach)
+    if left + leak <= x1:
         return left
-    if right - half_gap >= x2:
+    if right - leak >= x2:
         return right
     return left if x1 - left >= right - x2 else right
 

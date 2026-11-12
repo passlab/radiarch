@@ -95,9 +95,12 @@ class TestParking:
     """Closed pairs wait under an X jaw: touching rounded tips leak a line of up to 16 % of the open dose."""
 
     def test_park_position(self):
-        mlc = load_photon_spec("synthetic-120").mlc                         # reach 150 mm, leaf gap 1.5 mm
+        mlc = load_photon_spec("synthetic-120").mlc                         # reach 150 mm, leaf gap 1.5 mm, its tail 4 x 2.3 mm
         assert S.park_position((-20.0, 30.0), mlc) == -20.0 - S.PARK_BEHIND_JAW_MM          # behind X1
-        assert S.park_position((-145.0, 30.0), mlc) == -150.0                              # as far behind X1 as the leaves reach
+        assert S.park_position((-145.0, 30.0), mlc) == 30.0 + S.PARK_BEHIND_JAW_MM          # the tail not wholly under X1: behind X2
+        stepped = mlc.model_copy(update={"leaf_tip_tail_mm": 0.0})                          # tips moved back by half the gap
+        assert S.park_position((-145.0, 30.0), stepped) == -150.0                          # as far behind X1 as the leaves reach
+        assert S.park_position((-20.0, 30.0), mlc.model_copy(update={"leaf_tip_tail_mm": 4.0})) == -20.0 - 16.0   # a longer tail waits deeper
         assert S.park_position((-149.5, 30.0), mlc) == 30.0 + S.PARK_BEHIND_JAW_MM          # the gap not wholly under X1: behind X2
         assert S.park_position((-149.5, 149.6), mlc) == -150.0                             # neither fits whole: the deeper
         assert S.park_position((-20.0, 30.0), mlc.model_copy(update={"interdigitation": False})) is None
@@ -114,10 +117,10 @@ class TestParking:
         y0, y1 = middle.y_min_mm + model.tongue_and_groove_mm, middle.y_max_mm - model.tongue_and_groove_mm
         inside = [r for r in seg.fluence_rectangles(model) if r[2] < y1 and r[3] > y0 and r[1] > -20.0 and r[0] < 20.0]
         assert inside and all(r[4] == model.leaf_transmission for r in inside)
-        # without parking the same pair would leak its rounded tips' gap at full fluence inside the jaws
+        # without parking the same pair would leak its rounded tips' tail inside the jaws (the leaf gap's fluence)
         unparked = seg.model_copy(update={"mlc_rows": [seg.mlc_rows[0], middle.model_copy(update={"x_left_mm": 0.0, "x_right_mm": 0.0}),
                                                        seg.mlc_rows[2]]})
-        assert any(r[4] == 1.0 and r[2] < y1 and r[3] > y0 for r in unparked.fluence_rectangles(model))
+        assert any(r[4] > model.leaf_transmission + 0.1 and r[2] < y1 and r[3] > y0 for r in unparked.fluence_rectangles(model))
 
 
 class TestSequencePlan:

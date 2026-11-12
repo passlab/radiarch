@@ -147,3 +147,68 @@ class TestHarness:
         t, g = cases_r8._fit_leaf_model(lambda c, m: dose(c, m) / open_norm, mc_t, mc_gap, t_region, gap_region, 0.5)
         assert t == pytest.approx(0.004, abs=1e-4)
         assert g == pytest.approx(0.8, abs=0.05)
+
+    def test_the_fit_recovers_a_known_model_with_a_tip_tail(self):
+        """With the tip tail given, the transmission and the leaf gap come back as without one."""
+        from radiarch.services.dose_engines.pb import PencilBeamEngine
+        from radiarch.validation import phantoms as ph
+        ok, reason = PencilBeamEngine().availability()
+        if not ok:
+            pytest.skip(reason)
+        eng = PencilBeamEngine()
+        phantom = ph.water_box(120.0, 150.0, 5.0)
+        provs = {c: _prov(c, mr.MLC_BANDS[c]) for c in ("mlc_open", "mlc_closed", "mlc_gap10")}
+
+        def dose(case, model):
+            return cases_r8._pb_dose(eng, phantom, cases_r8._mlc_plan(provs[case], model), {}, False)
+
+        norm = cases_r8._region(phantom, (-10.0, 10.0), (-10.0, 10.0))
+        open_norm = float(dose("mlc_open", None)[norm].mean())
+        truth = LeafModel(leaf_transmission=0.004, dosimetric_leaf_gap_mm=0.8, tongue_and_groove_mm=0.5, leaf_tip_tail_mm=2.0)
+        t_region = cases_r8._region(phantom, (25.0, 75.0), (-35.0, 35.0)) | cases_r8._region(phantom, (-75.0, -25.0), (-35.0, 35.0))
+        gap_region = cases_r8._sweep_region(phantom)
+        mc_t = float(dose("mlc_closed", truth)[t_region].mean()) / open_norm
+        mc_gap = float(dose("mlc_gap10", truth)[gap_region].mean()) / open_norm
+        t, g = cases_r8._fit_leaf_model(lambda c, m: dose(c, m) / open_norm, mc_t, mc_gap, t_region, gap_region, 0.5, 2.0)
+        assert t == pytest.approx(0.004, abs=1e-4)
+        assert g == pytest.approx(0.8, abs=0.05)
+
+    def test_the_golden_section_search_finds_a_minimum(self):
+        assert cases_r8._golden_min(lambda v: (v - 2.37) ** 2, 0.5, 5.0, 0.01) == pytest.approx(2.37, abs=0.01)
+
+    def test_an_open_field_is_planned_as_the_monte_carlo_collimates_it(self):
+        model = LeafModel(leaf_transmission=0.002, dosimetric_leaf_gap_mm=1.0, leaf_tip_tail_mm=2.5)
+        seg = cases_r8._versa_field_plan(10.0, model).beams[0].segments[0]
+        assert seg.y_jaw_mm == (-5.0, 5.0)
+        assert all(r.x_left_mm == -5.0 and r.x_right_mm == 5.0 for r in seg.mlc_rows)
+        assert [r.y_min_mm for r in seg.mlc_rows] == pytest.approx([-cases_r8.AGILITY_PITCH_MM, 0.0])
+        assert seg.x_jaw_mm[1] == pytest.approx(cases_r8._source_cone_radius_mm(10.0)) and seg.x_jaw_mm[1] > 15.0
+        assert cases_r8._versa_field_plan(10.0, model).leaf_model == model
+
+    def test_the_pencil_beam_reaches_the_phantom_as_the_monte_carlo_does(self):
+        """On a reference grid half a voxel to the side, as the Monte Carlo's: at an edge on the axis the resampled mean
+        stays near the point dose (a mean shifted by half a voxel would sit in the shadow), and a narrow field's
+        centre falls (a mean over two voxels across its peak)."""
+        from radiarch.models.photon_plan import MLCRow, PhotonBeam, PhotonPlan, PhotonSegment
+        from radiarch.services.dose_engines.pb import PencilBeamEngine
+        from radiarch.validation import phantoms as ph
+        ok, reason = PencilBeamEngine().availability()
+        if not ok:
+            pytest.skip(reason)
+        eng = PencilBeamEngine()
+        s = 4.0
+        phantom = ph.water_box(40.0, 60.0, s)
+        n = phantom.shape[0] - 1                                           # even, centred: voxel centres at +-s/2
+        ref = {"dose": np.zeros((n, phantom.shape[1], n)), "spacing_mm": (s, s, s), "origin_mm": (-(n - 1) / 2 * s, s / 2, -(n - 1) / 2 * s)}
+        cz, cx, j = phantom.centre_index("z"), phantom.centre_index("x"), phantom.depth_index(30.0)
+        rows = [MLCRow(y_min_mm=y, y_max_mm=y + 5.0, x_left_mm=-20.0, x_right_mm=0.0) for y in np.arange(-20.0, 20.0, 5.0)]
+        edge = PhotonPlan(beams=[PhotonBeam(beam_id="A", gantry_deg=0.0, segments=[
+            PhotonSegment(mu=1.0, x_jaw_mm=(-20.0, 0.0), y_jaw_mm=(-20.0, 20.0), mlc_rows=rows)])])
+        point = cases_r8._pb_dose(eng, phantom, edge, {}, False)[cz, j, cx]
+        mean = cases_r8._pb_dose(eng, phantom, edge, {}, True, ref)[cz, j, cx]
+        assert mean == pytest.approx(point, rel=0.05)
+        narrow = cases_r8._versa_field_plan(6.0)
+        point = cases_r8._pb_dose(eng, phantom, narrow, {}, False)[cz, j, cx]
+        mean = cases_r8._pb_dose(eng, phantom, narrow, {}, True, ref)[cz, j, cx]
+        assert mean < 0.95 * point
+        assert cases_r8._pb_dose(eng, phantom, narrow, {}, True) is not None       # without a reference: the voxel centres

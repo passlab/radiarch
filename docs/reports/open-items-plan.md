@@ -33,9 +33,11 @@ About 1.25 ew in all.
 
 ### B. Dose accuracy
 
+Small fields and narrow gaps: built 2026-11-11 (`pb` 1.2.0, `LEAF_MODEL_VERSION` 4; `docs/reports/mlc-leaf-model.md`). The records' reruns follow on the compute server.
+
 | Item | What it gives | Effort | Needs | Changes outputs |
 |---|---|---|---|---|
-| Small fields and narrow gaps (R8's two failed checks) | `pb` within tolerance for the 1 × 1 cm field (now −5.9 %) and under a 5 mm leaf gap (now +3.2 points). Likely a source-size term in the kernel's edge, and the leaf tip's model refitted to the gap field | 1–1.5 | the Monte Carlo references already made | yes: `pb`'s version; R8 to R11's aperture cases rerun |
+| Small fields and narrow gaps (R8's two failed checks) | `pb` within tolerance for the 1 × 1 cm field (was −5.9 %) and under a 5 mm leaf gap (was +3.2 points). Likely a source-size term in the kernel's edge, and the leaf tip's model refitted to the gap field | 1–1.5 | the Monte Carlo references already made | yes: `pb`'s version; R8 to R11's aperture cases rerun |
 | An independent lung reference (R8, question 2) | A whole-plan Monte Carlo of a lung VMAT plan on a patient CT, so `pb`'s lung scaling is checked against data it was not fitted to | 1.5 | the physicist's choice of reference | no (a new check) |
 | A full linac-head Monte Carlo reference (R7) | References with a head model instead of a collimated point source | 2–3 | head geometry or phase-space files; the physicist's answer to R7, question 1 | no (new references); a refit after it would |
 | A matRad cross-check (R7) | A second planning system's dose. matRad also runs in GNU Octave, which would remove the MATLAB need (to confirm) | 0.5–1 | — | no |
