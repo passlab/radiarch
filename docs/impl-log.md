@@ -2011,3 +2011,14 @@ each new field enters a key only when it is set.
     direction and the validation;
   - `test_r5_evaluation.py`: LQ-L, relative seriality, the two in an evaluation;
   - `test_r9_registration.py`: the parent.
+
+## The digest cache hashes a recently changed file afresh (2026-11-11)
+
+`tests/test_engine_digest.py::test_files_digest_depends_on_names_and_bytes` failed about two runs in five on the
+workstation. It rewrites a file in place with the same size and its old modification time. Within one tick of the
+file system's clock, a few milliseconds, the change time does not move either, so the cache returned the old digest.
+CI had passed it by chance.
+
+- `files_digest` no longer takes from the cache a file changed in the last two seconds; it hashes it afresh, as git
+  does with racily clean entries. Engine files change rarely, so the cache still serves every later run.
+- The test now passes every time (eight runs in a row).

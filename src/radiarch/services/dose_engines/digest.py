@@ -2,12 +2,14 @@
 
 A result keeps the digest of the build that computed it, so that an approval can name that exact build, and a build
 that changed under the same version number shows as a different one. The digest is SHA-256 over each file's name and
-bytes, in name order; it is cached per process by path, inode, size and modification and change times.
+bytes, in name order; it is cached per process by path, inode, size and modification and change times, except for
+files changed in the last two seconds: a rewrite within one tick of the file system's clock keeps both times.
 """
 
 from __future__ import annotations
 
 import hashlib
+import time
 from functools import lru_cache
 from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
@@ -15,6 +17,7 @@ from typing import Iterable, List, Optional, Tuple
 from loguru import logger
 
 _Entry = Tuple[str, str, int, int, int, int]          # name, resolved path, inode, size, mtime_ns, ctime_ns
+RACY_NS = 2_000_000_000                                # a file changed this recently is hashed afresh, as git does
 
 
 @lru_cache(maxsize=64)
@@ -48,7 +51,9 @@ def files_digest(files: Iterable[Path], root: Optional[Path] = None) -> str:
         except ValueError:
             name = p.name
         entries[str(p)] = (name, str(p), st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)      # one entry per file
-    return _digest(tuple(sorted(entries.values())))
+    key = tuple(sorted(entries.values()))
+    racy = any(time.time_ns() - max(e[4], e[5]) < RACY_NS for e in key)
+    return _digest.__wrapped__(key) if racy else _digest(key)
 
 
 def tree_files(directory: Path) -> List[Path]:
