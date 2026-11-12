@@ -33,7 +33,8 @@ About 1.25 ew in all.
 
 ### B. Dose accuracy
 
-Small fields and narrow gaps: built 2026-11-11 (`pb` 1.2.0, `LEAF_MODEL_VERSION` 4; `docs/reports/mlc-leaf-model.md`). The records' reruns follow on the compute server.
+Small fields and narrow gaps: built 2026-11-11 (`pb` 1.2.0, `LEAF_MODEL_VERSION` 4; `docs/reports/mlc-leaf-model.md`),
+and the records rerun with it 2026-11-12 (`docs/validation/README.md`).
 
 | Item | What it gives | Effort | Needs | Changes outputs |
 |---|---|---|---|---|

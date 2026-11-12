@@ -1,6 +1,6 @@
 # Radiarch — implementation plan and tasks
 
-State: 2026-11-11. The design is in [`architecture.md`](architecture.md); what each item
+State: 2026-11-12. The design is in [`architecture.md`](architecture.md); what each item
 did, file by file, is in [`impl-log.md`](impl-log.md); the decisions
 are in [`adr/`](adr/); the evaluation that set this roadmap is
 [`reports/tps-evaluation-and-roadmap.md`](reports/tps-evaluation-and-roadmap.md).
@@ -119,8 +119,10 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
   the pencil beam on the references' voxels, which sit half a voxel to the side of its phantoms (found by the
   review). `pb_vs_mc` from the working tree: the 1 × 1 cm field 0.765 against 0.764, the 5 mm gap 50.87 against
   50.06 %, every graded check passes (`docs/reports/mlc-leaf-model.md`). `pb_vs_ccc`'s gamma with 10 mm beamlets,
-  94.55 % against at least 95 %, is recorded as a finding about CCC's scatter cut-off (`known_findings.yaml`). The
-  records' reruns follow on the compute server
+  94.55 % against at least 95 %, is recorded as a finding about CCC's scatter cut-off (`known_findings.yaml`).
+  2026-11-12: R8 to R11 rerun from `0228ec6` (each record's `2026-11-12-small-fields-0228ec6/`). Both small-field
+  checks pass; TG-119's first-set deliverable core D5, 22.45 Gy against 22.44, is recorded as a finding; the lung
+  protocol runs again with the new R8 run as its record; physicist review waiting
 - [x] (2026-11-11) Asymmetric margins: `directional_mm` on expand and erode, one margin per patient direction (right,
   left, anterior, posterior, superior, inferior); with the sides equal in pairs it gives the per-axis margin voxel for
   voxel; in the SDK, `ops.expand("PTV", "CTV", superior=10, inferior=5, ...)`

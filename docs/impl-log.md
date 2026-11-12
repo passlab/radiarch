@@ -2091,3 +2091,30 @@ CI had passed it by chance.
 - `files_digest` no longer takes from the cache a file changed in the last two seconds; it hashes it afresh, as git
   does with racily clean entries. Engine files change rarely, so the cache still serves every later run.
 - The test now passes every time (eight runs in a row).
+
+## The records rerun with the leaf ends' tail and no edge blur (2026-11-12)
+
+From `0228ec6` (`pb` 1.2.0, `LEAF_MODEL_VERSION` 4), every case with pencil-beam or aperture doses ran again from a
+clean checkout, one case per process on the 96-core server. Each record has a folder
+`2026-11-12-small-fields-0228ec6/`, and `docs/validation/README.md` names the new runs.
+
+- **R8** (nine cases). Both checks that failed on 2026-11-06 pass: the 1 × 1 cm field's dose 0.765 against the Monte
+  Carlo's 0.764, and the 5 mm gap 50.87 against 50.06 %. `pb_vs_mc` passes all 35 graded checks. `pb_vs_ccc`'s gamma
+  with 10 mm beamlets reads 94.55 %, the finding recorded with the change. The three VMAT cases pass every graded
+  check. The second SBRT patient's D2cm is now within RTOG 0915's limit (50.05 % against 51.39 %); the first stays a
+  minor deviation (57.37 %). The lung 60 Gy cord maximum rises by about 2.5 Gy, to 17.6 and 18.9 Gy.
+- **R9.** `lung_4d_itv` passes all 22 graded checks; the tumour's accumulated D95 is 60.98 and 61.67 Gy.
+- **R10.** `protocol_batch_lctsc` passes all 79. `protocol_lung_vmat` fails 9 of its 44: the comparisons with the
+  harness case's run of 2026-11-10, which the change moved by more than the 1 % tolerance. Its 18 goal values equal
+  the harness case's rerun from the same commit. As on 2026-11-10, the case's `record` now names that rerun, with the
+  same tolerance, and the case runs again from this commit.
+- **R11.** `mco_protocol_lung` passes all 38. Its seven-field plan lands on another trade-off of the new Pareto set:
+  the cord maximum 4.6 → 21.4 Gy and the oesophagus mean 1.1 → 3.3 Gy, the heart's V60Gy 4.2 → 0.3 %, every goal met.
+  The cause was not diagnosed further. The arcs' second set converges in 1 of 11 plans (3 before; error bound 0.85).
+  `mco_front_tg119` fails one of its 19: the first set's deliverable plan gives the core D5 22.45 Gy, 0.01 Gy over
+  the institutions' limit (22.40 before). The case doses with CCC, so only the leaf ends' tail moved it. The plan on
+  the second set passes (19.14 Gy). The project lead had it recorded as a finding (`known_findings.yaml`); no
+  tolerance changed. Direct aperture optimization removes the loss at its source.
+- **The harness names a run's folder by the second it ends.** Two cases that end in the same second write the same
+  folder, and the second overwrites the first. It happened once in this round (`photon_pdd_10x10_pb`, which ran
+  again alone). Not changed here.

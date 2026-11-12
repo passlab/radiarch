@@ -2,7 +2,8 @@
 
 Status: design agreed with the project lead, 2026-11-04; built 2026-11-04 (see "As built"); the records rerun
 2026-11-05; checked against Monte Carlo 2026-11-06 (see "Against Monte Carlo"); the rounded ends pass a tail beyond
-their tips from 2026-11-11 (see "The rounded ends' tail and the pencil beam's edge"). Radiarch is not for clinical use.
+their tips from 2026-11-11 (see "The rounded ends' tail and the pencil beam's edge"), and the records rerun with it
+2026-11-12. Radiarch is not for clinical use.
 
 ## The problem
 
@@ -276,6 +277,9 @@ in.
 From `pb` 1.2.0 (2026-11-11) every pencil-beam dose changes as well, open fields included, and every aperture dose
 from a machine's leaf model. The same records are rerun, together with R8's pencil-beam cases (`pb_vs_mc`,
 `pb_vs_ccc`, `photon_pdd_10x10_pb`, `photon_profile_10x10_pb`, `photon_output_vs_field_pb`, `dij_consistency`).
+They ran on 2026-11-12 from `0228ec6`, in each record's `2026-11-12-small-fields-0228ec6/` folder. Beside the CCC
+finding above, one graded check fails: TG-119's deliverable plan from its first Pareto set gives the core D5 22.45 Gy,
+0.01 Gy over the institutions' limit (the R11 record's rerun).
 
 ## Still not modelled
 

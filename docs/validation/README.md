@@ -1,6 +1,6 @@
 # Validation records: the reviewing physicist's way in
 
-State: 2026-11-11.
+State: 2026-11-12.
 
 Radiarch is a research treatment-planning system. The records in this folder are research evidence, not a clinical
 commissioning: **radiarch is not for clinical use, and signing records a review of research evidence, not a clinical
@@ -35,17 +35,19 @@ every case. Reruns not named here were steps on the way; each still explains wha
 | Record | Documents to sign (commit) | Cases read from a later run (folder, commit) | Signed by |
 |---|---|---|---|
 | R7 | CCC 1.0.0, MCsquare 0.3.0 and services 0.1.0 (`20fc3bf`) | `lung_e2e_lctsc`: R8's `2026-10-24-correction-d458e46` (`d458e46`), with CCC 1.1.0 | physicist and project lead; services: project lead |
-| R8 | `pb` 1.1.1, CCC 1.1.0, MCsquare 0.3.0 and services 0.1.0 (`52ed834`) | `lung_e2e_lctsc`: `2026-10-24-correction-d458e46` (`d458e46`). `lung_sbrt_vmat`, `lung_vmat_lctsc`, `hn_sib_vmat`: `2026-11-10-arc-pairs-toward-jaw-f3a83c7` (`f3a83c7`). `pb_vs_mc`'s 16 small-field and MLC checks: `2026-11-06-mc-leaf-model-727654c` (`727654c`) | physicist and project lead; services: project lead |
-| R9 | services 0.1.0 and `pb` 1.1.1 (`316b6c6`) | `lung_4d_itv`: `2026-11-10-arc-pairs-toward-jaw-f3a83c7` (`f3a83c7`) | physicist and project lead |
-| R10 | `pb` 1.1.1 (`92ce40d`) | `protocol_batch_lctsc`: `2026-11-10-arc-pairs-toward-jaw-f3a83c7` (`f3a83c7`). `protocol_lung_vmat`: the same folder (`48c0cc4`) | physicist and project lead |
-| R11 | MCO 0.2.0 (`b4085b0`) | TG-119: `2026-11-08-second-set-a36fc4f` (`a36fc4f`). The lung case: `2026-11-10-arc-pairs-toward-jaw-f3a83c7` (`f3a83c7`). The proton case: none | physicist and project lead |
+| R8 | `pb` 1.1.1, CCC 1.1.0, MCsquare 0.3.0 and services 0.1.0 (`52ed834`) | `lung_e2e_lctsc`: `2026-10-24-correction-d458e46` (`d458e46`). `pb_vs_mc`, `pb_vs_ccc`, `photon_pdd_10x10_pb`, `photon_profile_10x10_pb`, `photon_output_vs_field_pb`, `dij_consistency`, `lung_sbrt_vmat`, `lung_vmat_lctsc`, `hn_sib_vmat`: `2026-11-12-small-fields-0228ec6` (`0228ec6`) | physicist and project lead; services: project lead |
+| R9 | services 0.1.0 and `pb` 1.1.1 (`316b6c6`) | `lung_4d_itv`: `2026-11-12-small-fields-0228ec6` (`0228ec6`) | physicist and project lead |
+| R10 | `pb` 1.1.1 (`92ce40d`) | `protocol_batch_lctsc`: `2026-11-12-small-fields-0228ec6` (`0228ec6`). `protocol_lung_vmat`: the same folder (`0228ec6`; it runs again from the next commit, which names the R8 rerun from `0228ec6` as its record) | physicist and project lead |
+| R11 | MCO 0.2.0 (`b4085b0`) | TG-119 and the lung case: `2026-11-12-small-fields-0228ec6` (`0228ec6`). The proton case: none | physicist and project lead |
 
 The reruns of 2026-11-05 (`*-leaf-model-412a105`) each compare their cases with a baseline from the commit before
 the MLC leaf model. Read them for what the leaf model changed.
 
 ## 3. Graded checks that fail in the current runs
 
-Every other graded check of the current runs passes. R10's and R11's current runs pass every graded check.
+Every other graded check of the current runs passes. R10's batch passes every graded check. Its lung protocol fails
+9 comparisons with the harness case's run of 2026-11-10, which the change moved; it runs again from the commit that
+names the new run as its record (the R10 folder `2026-11-12-small-fields-0228ec6` says why).
 
 | Record and case | Check | Value | Target | Reading | Where |
 |---|---|---|---|---|---|
@@ -53,10 +55,10 @@ Every other graded check of the current runs passes. R10's and R11's current run
 | (the same case) | CCC without the cut-off: PDD10, dose beyond 15 cm, gamma, the lung slab's factors | PDD10 71.4 %; 1.05 to 1.12 at depth; gamma 78 % | PDD10 68.0 ± 2.0 %; 1 ± 0.02; ≥ 95 % | the setting is shown to say why the cut-off ships | R8 CCC document |
 | R7 and R8, `dvh_crosscheck_pancreatic` (3) | single-voxel maxima against dicompyler-core | 3.5 to 4.6 % apart | ± 3 % | the two rasterizers assign the boundary voxels differently; the means agree within 2.3 % | ADR 0014 "Findings" |
 | R7 and R8, `geometry_volumes_lctsc` (1) | LCTSC-Test-S2-102 oesophagus volume against the contour polygons | 39.7 cc | 37.8 cc ± 5 % | 5.0 % above, at the edge of the tolerance | ADR 0014 "Findings" |
-| R8, `pb_vs_mc` (1) | 1 × 1 cm field over 10 × 10 cm, dose at 10 cm, `pb` against Monte Carlo | 0.719 | 0.764 ± 0.038 | `pb` is 5.9 % low for the smallest field | R8 rerun `2026-11-06-mc-leaf-model-727654c` |
-| R8, `pb_vs_mc` (1) | irregular MLC field, dose under a 5 mm gap at 10 cm, % of open | 53.3 | 50.1 ± 3 points | the leaf model passes 3.2 points too much through a narrow gap | the same rerun |
+| R8, `pb_vs_ccc` (1) | water 10 × 10 cm, 10 mm beamlets: gamma 3 %/3 mm of `pb` against CCC | 94.55 % | ≥ 95 % | most failing points lie deeper than 9 cm, where CCC's shipped scatter cut-off loses dose; `pb`'s sharper edge adds the rest, and there `pb` follows the Monte Carlo. A recorded finding (`src/radiarch/validation/known_findings.yaml`) | R8 rerun `2026-11-12-small-fields-0228ec6`; `../reports/mlc-leaf-model.md` |
 | R9, `registration_4d_lung` (2) | patient 111_HM10395, tumour from the 50 % to the 0 % phase, Demons: Dice; and Dice above no registration | 0.767 | ≥ 0.80; > 0.789 | this patient's reference contours vary between phases | R9 question 1 |
 | R9, `replan_pancreas_cbct` (5) | B-spline places the stomach-duodenum better than rigid alignment alone, on cone-beam CTs | worse in 5 of 10 pairs (0.821 → 0.724 at worst) | better than rigid | an intensity metric cannot follow day-to-day gas and filling; the B-spline never folds | ADR 0016; R9 question 2 |
+| R11, `mco_front_tg119` (1) | the deliverable plan made from the first Pareto set: Core D5 | 22.45 Gy | ≤ 10.0, or ≤ 22.44 (the institutions' mean plus two SD) | the first set's known loss from fluence to apertures (`../reports/mco-deliverable-options.md`); the leaf ends' tail adds 0.05 Gy. The plan on the second set passes (19.14 Gy). Direct aperture optimization is the cure | R11 rerun `2026-11-12-small-fields-0228ec6`; R11 question 3 |
 
 ## 4. Limitations the records state
 
@@ -69,13 +71,15 @@ None of these is a failed check. Each is in its record, and some are open items 
   are consistency checks, not independent ones (R8 question 2).
 - **CCC's scatter cut-off** gives small fields the 10 × 10 cm dose at depth, and organs a few centimetres outside the
   field get no dose (R8 question 3).
-- **One SBRT patient's D2cm** is RTOG 0915's minor deviation from `f3a83c7` (51.65 % against 51.39 %).
+- **One SBRT patient's D2cm** is RTOG 0915's minor deviation: 57.37 % against 51.27 % (at most 59.58 % is minor), from
+  `0228ec6`. The other patient's is within its limit (50.05 % against 51.39 %).
 - **Dose accumulation** pulls each phase's dose back through its registration. It does not conserve energy where
   tissue compresses; the Jacobian is reported (R9 question 3).
-- **TG-119 under MCO:** the plan made on the second set gives the core D5 19.32 Gy. That is within the institutional
-  limit of 22.44 Gy but above TG-119's goal of 10 Gy (R11's rerun of 2026-11-08).
-- **The arcs' second Pareto set** converges in 3 of its 11 plans (error bound 0.89). Every plan meets the set's
-  limits, none is dominated, and the plan made on the set is deliverable. The R11 rerun of 2026-11-10 explains why.
+- **TG-119 under MCO:** the plan made on the second set gives the core D5 19.14 Gy. That is within the institutional
+  limit of 22.44 Gy but above TG-119's goal of 10 Gy (R11's rerun of 2026-11-12).
+- **The arcs' second Pareto set** converges in 1 of its 11 plans (error bound 0.85, from `0228ec6`). Every plan meets
+  the set's limits, none is dominated, and the plan made on the set is deliverable. The R11 rerun of 2026-11-10
+  explains why.
 
 ## 5. The goal templates
 
@@ -98,8 +102,6 @@ structure, a metric, a limit and a priority, with a note. Please check every row
 - **R7, question 1:** is the Monte Carlo reference acceptable? `pb`'s kernel and the leaf model's fit rest on it.
 - **R8, question 3:** should `pb` be the default engine for plan doses, with CCC as the check?
 - **R8, question 2:** which independent lung reference should come next?
-- **R8's two failed small-field checks:** may they stand as stated limitations, or must they be fixed before SBRT
-  plans are compared with clinical ones?
 - **R9, question 2:** should cone-beam CTs default to rigid alignment?
 - **R11, question 3:** must the deliverable plan meet every goal the navigated plan met?
 
@@ -111,8 +113,8 @@ names each run reviewed: the record's documents at their commit, and each later 
 For example:
 
 > I reviewed, as research evidence and not as a clinical commissioning, the R8 record's documents at commit
-> `52ed834` and its later runs `2026-10-24-correction-d458e46` (`d458e46`), `2026-11-06-mc-leaf-model-727654c`
-> (`727654c`) and `2026-11-10-arc-pairs-toward-jaw-f3a83c7` (`f3a83c7`). My comments follow.
+> `52ed834` and its later runs `2026-10-24-correction-d458e46` (`d458e46`) and `2026-11-12-small-fields-0228ec6`
+> (`0228ec6`). My comments follow.
 
 The project lead records the statement in each document's signature table, with the date and a reference to the
 email. For the goal templates, fill in section 5's table or name the templates checked in the email. Comments that

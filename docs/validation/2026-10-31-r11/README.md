@@ -47,8 +47,7 @@ The first sets and their deliverable plans are unchanged. On the second set, TG-
 19.32 Gy at the same coverage, and the lung arcs' spinal cord maximum from 32.3 to 27.2 Gy. Two earlier rounds
 failed: TG-119 from `b11713b`, and the lung case from `b11713b` and from `e03cd6d`. They are kept beside it, with the
 cause and the fix. The arcs'
-second set converges poorly (1 of 11 plans), which is open. Please review TG-119's plans on the second set from this
-rerun. The lung case is superseded by the rerun of 2026-11-10 below.
+second set converges poorly (1 of 11 plans), which is open. Both cases are superseded by the reruns below.
 
 ## Rerun with an arc's closed leaf pairs moved toward the jaw, 2026-11-10
 
@@ -57,8 +56,20 @@ while it stays closed. The lung case is rerun in
 [`2026-11-10-arc-pairs-toward-jaw-f3a83c7/`](2026-11-10-arc-pairs-toward-jaw-f3a83c7/README.md): every graded check
 passes (38). Only its arcs' deliverable plan, second set and plan on that set move. The protocol's arc plan gives the
 oesophagus 1.0 Gy less and the lungs 0.5 Gy less, at the same coverage. The arcs' second set converges in 3 of 11
-plans (error bound 0.89). R11 closes with that as a known limitation, explained there. Please review the lung case
-from this rerun.
+plans (error bound 0.89). R11 closes with that as a known limitation, explained there. The rerun of 2026-11-12 below
+supersedes it.
+
+## Rerun with the leaf ends' tail and no edge blur, 2026-11-12
+
+From commit `0228ec6` on (`pb` 1.2.0, `LEAF_MODEL_VERSION` 4), a rounded leaf end passes half the leaf gap as a tail
+beyond its tip, and `pb` no longer blurs a field's edge. Both photon cases are rerun in
+[`2026-11-12-small-fields-0228ec6/`](2026-11-12-small-fields-0228ec6/README.md). The lung case passes every graded
+check (38). Its seven-field plan lands on another trade-off of the new set: the cord maximum rises from 4.6 to 21.4 Gy
+and the oesophagus mean from 1.1 to 3.3 Gy, while the heart's V60Gy falls from 4.2 to 0.3 %, every goal met. The arcs'
+second set converges in 1 of its 11 plans (error bound 0.85), the known limitation above. TG-119 passes 18 of its 19:
+the first set's deliverable plan gives the core D5 22.45 Gy, 0.01 Gy over the institutions' limit (22.40 before). The
+plan on the second set passes (19.14 Gy). The failure stays in the record and is listed as a finding; no tolerance
+changed. Please review both photon cases from this rerun.
 
 ## What to review and sign
 

@@ -39,7 +39,16 @@ From commit `f3a83c7` on (release 0.3.1), an arc moves a pair that is closed for
 while it stays closed. `lung_4d_itv` ran again from that commit in
 [`2026-11-10-arc-pairs-toward-jaw-f3a83c7/`](2026-11-10-arc-pairs-toward-jaw-f3a83c7/README.md): all 22 graded
 checks still pass. The tumour's D95 moves by at most 0.07 Gy on any phase. The lungs' V20Gy falls by up to 0.3
-percentage points, and the cord maximum rises by up to 0.5 Gy. Please review the 4D case from this rerun.
+percentage points, and the cord maximum rises by up to 0.5 Gy. The rerun of 2026-11-12 below supersedes it.
+
+## Rerun with the leaf ends' tail and no edge blur, 2026-11-12
+
+From commit `0228ec6` on (`pb` 1.2.0, `LEAF_MODEL_VERSION` 4), a rounded leaf end passes half the leaf gap as a tail
+beyond its tip, and `pb` no longer blurs a field's edge (`docs/reports/mlc-leaf-model.md`). `lung_4d_itv` ran again
+from that commit in [`2026-11-12-small-fields-0228ec6/`](2026-11-12-small-fields-0228ec6/README.md): all 22 graded
+checks still pass. The tumour's D95 falls by up to 0.39 Gy on a phase and stays above 60.0 Gy; accumulated over the
+phases it rises a little (60.98 and 61.67 Gy). The lungs' V20Gy and the cord maximum fall a little. Please review the
+4D case from this rerun.
 
 ## What to review and sign
 

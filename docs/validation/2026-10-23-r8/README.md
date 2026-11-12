@@ -42,7 +42,7 @@ fitted and graded on an irregular MLC field. [`2026-11-06-mc-leaf-model-727654c/
 holds the run. The 34 checks of this record's `pb_vs_mc` repeat with the same values. Of the 16 new checks 8 are graded, and two fail; they
 are kept as findings: the 1 × 1 cm field's dose (−5.9 %, tolerance 5 %) and the irregular field's 5 mm gap (+3.2 points,
 tolerance 3). The references here ran 18 times the primaries they state (OpenGATE 10 runs them on every thread);
-every comparison is a ratio, so no value changes. Please review the two failures from the rerun.
+every comparison is a ratio, so no value changes. The rerun of 2026-11-12 below fixes both and supersedes it.
 
 ## Rerun with closed leaf pairs parked, 2026-11-07
 
@@ -59,8 +59,20 @@ while it stays closed, lengthening no interval. The three VMAT cases are rerun i
 [`2026-11-10-arc-pairs-toward-jaw-f3a83c7/`](2026-11-10-arc-pairs-toward-jaw-f3a83c7/README.md): every graded check
 still passes. All three cases move by at most 1.6. Both lung 60 Gy patients' coverage rises (PTV V60Gy 95.6 → 95.94
 and 95.43 → 95.96 %). One SBRT patient's D2cm becomes RTOG 0915's minor deviation (51.65 % against 51.39 %). On the
-R11 lung case's arcs, the move removes 23 to 32 % of the closed pairs' leak. Please review the three VMAT cases from
-this rerun.
+R11 lung case's arcs, the move removes 23 to 32 % of the closed pairs' leak. The rerun of 2026-11-12 below supersedes
+it.
+
+## Rerun with the leaf ends' tail and no edge blur, 2026-11-12
+
+From commit `0228ec6` on (`pb` 1.2.0, `LEAF_MODEL_VERSION` 4), a rounded leaf end passes half the leaf gap as a tail
+beyond its tip, and `pb` no longer blurs a field's edge (`docs/reports/mlc-leaf-model.md`). Nine cases are rerun in
+[`2026-11-12-small-fields-0228ec6/`](2026-11-12-small-fields-0228ec6/README.md): `pb_vs_mc`, `pb_vs_ccc`, the three
+`pb` beam-data cases, `dij_consistency` and the three VMAT cases. Both failures of 2026-11-06 now pass: the 1 × 1 cm
+field's dose (0.765 against 0.764) and the 5 mm gap (50.87 against 50.06 %). One graded check against CCC now fails:
+the gamma of `pb` against CCC on the 10 × 10 cm field with 10 mm beamlets, 94.55 % against 95 %. It is recorded as a
+finding about CCC's scatter cut-off at depth; no tolerance changed. Every other graded check passes. The second SBRT
+patient's D2cm is now within RTOG 0915's limit (50.05 % against 51.39 %); the first stays a minor deviation (57.37 %).
+Please review these nine cases from this rerun.
 
 ## What to review and sign
 
