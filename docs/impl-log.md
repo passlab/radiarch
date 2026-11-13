@@ -2118,3 +2118,11 @@ clean checkout, one case per process on the 96-core server. Each record has a fo
 - **The harness names a run's folder by the second it ends.** Two cases that end in the same second write the same
   folder, and the second overwrites the first. It happened once in this round (`photon_pdd_10x10_pb`, which ran
   again alone). Not changed here.
+
+## The lung protocol's rerun from `9357fdc` (2026-11-12)
+
+- **The lung protocol.** `protocol_lung_vmat` ran again from `9357fdc`, whose case names the R8 record's rerun from
+  `0228ec6` as its record, in 2219.1 s. It passes all 44 graded checks. All 18 comparisons with the harness case read
+  a difference of 0, and every other value equals the run from `0228ec6`. The R10 folder
+  `2026-11-12-small-fields-0228ec6/` holds it with the batch, and keeps the first round beside them
+  (`results-0228ec6.json`, `run-summary-0228ec6.md`).

@@ -6,10 +6,14 @@ same day (`../../2026-10-23-r8/2026-11-12-small-fields-0228ec6/`) describes the 
 Carlo. Both protocols of R10 plan VMAT arcs with the pencil beam, so both cases are rerun. Their numbers in the rerun
 of 2026-11-10 (`../2026-11-10-arc-pairs-toward-jaw-f3a83c7/`) are superseded by these runs.
 
-**These runs.** Two runs, one case per process, from a clean checkout of commit `0228ec6` on the 96-core server, in
-the radiarch image built from `48c0cc4` with the checkout mounted over its code, each capped at 6 BLAS threads:
-`20261112-140015-0228ec6` (`protocol_batch_lctsc`) and `20261112-140428-0228ec6` (`protocol_lung_vmat`).
-`run-summary.md` lists every check, and `results.json` holds the full numbers.
+**These runs.** One case per process on the 96-core server, in the radiarch image built from `48c0cc4` with a clean
+checkout mounted over its code, each capped at 6 BLAS threads:
+- `20261112-140015-0228ec6` (`protocol_batch_lctsc`) and `20261112-140428-0228ec6` (`protocol_lung_vmat`, which
+  failed), from commit `0228ec6`. They are kept as `results-0228ec6.json` and `run-summary-0228ec6.md`.
+- `20261112-232403-9357fdc` (`protocol_lung_vmat`), from commit `9357fdc`, which names the R8 record's rerun from
+  `0228ec6` as the case's record.
+
+`results.json` and `run-summary.md` hold the batch from `0228ec6` and the lung protocol from `9357fdc`.
 
 ## What the change does
 
@@ -18,9 +22,11 @@ the radiarch image built from `48c0cc4` with the checkout mounted over its code,
   and the cord maximum rises in four (by up to 2.8 Gy, to 8.47 Gy in LCTSC-Test-S3-101; limit 21.9 Gy). The lungs'
   V12.5Gy rises by 13 to 16 cc in three thoraces, to at most 251 cc (informative, limit 1000 cc). The first and
   third thoraces are the patients of the R8 SBRT case, and their 28 values equal that case's rerun.
-- **The lung protocol (`protocol_lung_vmat`) fails 9 of its 44 graded checks.** All nine compare the protocol's plan
-  with a recorded run of its harness case, as in the rerun of 2026-11-10. Every other check passes, among them every
-  RTOG 0617 goal and every setting the protocol shares with the harness case.
+- **The lung protocol (`protocol_lung_vmat`) failed 9 of its 44 graded checks from `0228ec6`.** All nine compare the
+  protocol's plan with a recorded run of its harness case, as in the rerun of 2026-11-10. Every other check passed,
+  among them every RTOG 0617 goal and every setting the protocol shares with the harness case. From `9357fdc`, against
+  the harness case's rerun from `0228ec6`, it passes all 44. All 18 comparisons with the harness case read a
+  difference of 0, and every other value equals the run from `0228ec6`.
 
 ## The lung protocol's failures, and the fix
 
@@ -44,14 +50,13 @@ than 1 %:
 **The protocol still reproduces its harness case.** All 18 of its goal values equal those of the R8 record's rerun of
 `lung_vmat_lctsc` from the same commit, to the reported precision.
 
-**The fix, as on 2026-11-10 (the project lead agreed).** The case's `record` now names the R8 record's rerun from
-`0228ec6` (`docs/validation/2026-10-23-r8/2026-11-12-small-fields-0228ec6/results.json`). The 1 % tolerance stays as
-it is. `protocol_lung_vmat` runs again from the commit that makes the change; its run will be added here.
+**The fix, as on 2026-11-10.** From commit `9357fdc`, the case's `record` names the R8 record's rerun from `0228ec6`
+(`docs/validation/2026-10-23-r8/2026-11-12-small-fields-0228ec6/results.json`). The 1 % tolerance is unchanged.
 
 ## How to reproduce (optional)
 
 ```bash
-git clone https://github.com/passlab/radiarch && cd radiarch && git checkout 0228ec6
+git clone https://github.com/passlab/radiarch && cd radiarch && git checkout 9357fdc    # 0228ec6 for the first round
 python3 -m venv .venv && .venv/bin/pip install -e "./src[dev,validation]"     # Python 3.12 or later
 .venv/bin/python -m radiarch.validation.run --cases protocol_batch_lctsc
 .venv/bin/python -m radiarch.validation.run --cases protocol_lung_vmat

@@ -42,10 +42,10 @@ of 2026-11-12 below supersedes it.
 From commit `0228ec6` on (`pb` 1.2.0, `LEAF_MODEL_VERSION` 4), a rounded leaf end passes half the leaf gap as a tail
 beyond its tip, and `pb` no longer blurs a field's edge. Both cases are rerun in
 [`2026-11-12-small-fields-0228ec6/`](2026-11-12-small-fields-0228ec6/README.md). The batch passes every graded check
-(79); the heart maximum falls in all six thoraces. The lung protocol fails 9 of its 44: the comparisons with the
-harness case's run of 2026-11-10, which the change shifted beyond their 1 % tolerance. Its 18 goal values equal the
-harness case's rerun from the same commit. The case now names that rerun as its record, and runs again from the
-commit that makes the change. Please review the batch from this rerun.
+(79); the heart maximum falls in all six thoraces. From `0228ec6` the lung protocol failed 9 of its 44: the
+comparisons with the harness case's run of 2026-11-10, which the change shifted beyond their 1 % tolerance. Its 18
+goal values equal the harness case's rerun from the same commit. From `9357fdc` the case names that rerun as its
+record, and it passes all 44. Please review both cases from this rerun.
 
 ## What to review and sign
 

@@ -1,10 +1,10 @@
 {
  "intended_use": "RESEARCH USE ONLY. NOT FOR CLINICAL USE. Radiarch is a research treatment-planning system; its plans, doses and evaluations must not be used to treat patients.",
- "radiarch_commit": "0228ec6",
  "timestamp": "20261112-140015",
  "fast": false,
  "cpu": "AMD EPYC 7413 24-Core Processor, 96 logical CPUs",
  "python": "3.12.16",
+ "radiarch_commit": "0228ec6 (protocol_batch_lctsc), 9357fdc (protocol_lung_vmat)",
  "results": [
   {
    "name": "protocol_batch_lctsc",
@@ -856,8 +856,8 @@
   {
    "name": "protocol_lung_vmat",
    "kind": "protocol_reproduces",
-   "status": "fail",
-   "seconds": 2271.8,
+   "status": "pass",
+   "seconds": 2219.1,
    "checks": [
     {
      "name": "protocol lung-60gy-30fx-vmat encodes lung_vmat_lctsc: prescription (Gy, fractions)",
@@ -988,7 +988,7 @@
     {
      "name": "LCTSC-Test-S1-101: PTV V60Gy[%] >= 95.0: protocol against the recorded harness run",
      "value": 95.66,
-     "target": "95.94 \u00b1 0.96",
+     "target": "95.66 \u00b1 0.96",
      "passed": true,
      "note": "the harness case's run in the record named by the case"
     },
@@ -1002,8 +1002,8 @@
     {
      "name": "LCTSC-Test-S1-101: PTV D0.03cc[Gy] <= 72.0: protocol against the recorded harness run",
      "value": 66.16,
-     "target": "64.8 \u00b1 0.65",
-     "passed": false,
+     "target": "66.16 \u00b1 0.66",
+     "passed": true,
      "note": "the harness case's run in the record named by the case"
     },
     {
@@ -1016,8 +1016,8 @@
     {
      "name": "LCTSC-Test-S1-101: Lungs-GTV V20Gy[%] <= 37.0: protocol against the recorded harness run",
      "value": 14.96,
-     "target": "14.4 \u00b1 0.14",
-     "passed": false,
+     "target": "14.96 \u00b1 0.15",
+     "passed": true,
      "note": "the harness case's run in the record named by the case"
     },
     {
@@ -1030,8 +1030,8 @@
     {
      "name": "LCTSC-Test-S1-101: Lungs-GTV Dmean[Gy] <= 20.0: protocol against the recorded harness run",
      "value": 8.07,
-     "target": "8.2 \u00b1 0.08",
-     "passed": false,
+     "target": "8.07 \u00b1 0.08",
+     "passed": true,
      "note": "the harness case's run in the record named by the case"
     },
     {
@@ -1044,8 +1044,8 @@
     {
      "name": "LCTSC-Test-S1-101: SpinalCord D0.03cc[Gy] <= 50.5: protocol against the recorded harness run",
      "value": 17.59,
-     "target": "14.85 \u00b1 0.15",
-     "passed": false,
+     "target": "17.59 \u00b1 0.18",
+     "passed": true,
      "note": "the harness case's run in the record named by the case"
     },
     {
@@ -1058,8 +1058,8 @@
     {
      "name": "LCTSC-Test-S1-101: Esophagus Dmean[Gy] <= 34.0: protocol against the recorded harness run",
      "value": 2.48,
-     "target": "3.21 \u00b1 0.05",
-     "passed": false,
+     "target": "2.48 \u00b1 0.05",
+     "passed": true,
      "note": "the harness case's run in the record named by the case"
     },
     {
@@ -1121,7 +1121,7 @@
     {
      "name": "LCTSC-Test-S2-101: PTV V60Gy[%] >= 95.0: protocol against the recorded harness run",
      "value": 95.58,
-     "target": "95.96 \u00b1 0.96",
+     "target": "95.58 \u00b1 0.96",
      "passed": true,
      "note": "the harness case's run in the record named by the case"
     },
@@ -1135,7 +1135,7 @@
     {
      "name": "LCTSC-Test-S2-101: PTV D0.03cc[Gy] <= 72.0: protocol against the recorded harness run",
      "value": 65.34,
-     "target": "65.39 \u00b1 0.65",
+     "target": "65.34 \u00b1 0.65",
      "passed": true,
      "note": "the harness case's run in the record named by the case"
     },
@@ -1149,8 +1149,8 @@
     {
      "name": "LCTSC-Test-S2-101: Lungs-GTV V20Gy[%] <= 37.0: protocol against the recorded harness run",
      "value": 13.72,
-     "target": "13.88 \u00b1 0.14",
-     "passed": false,
+     "target": "13.72 \u00b1 0.14",
+     "passed": true,
      "note": "the harness case's run in the record named by the case"
     },
     {
@@ -1163,8 +1163,8 @@
     {
      "name": "LCTSC-Test-S2-101: Lungs-GTV Dmean[Gy] <= 20.0: protocol against the recorded harness run",
      "value": 8.39,
-     "target": "8.54 \u00b1 0.09",
-     "passed": false,
+     "target": "8.39 \u00b1 0.08",
+     "passed": true,
      "note": "the harness case's run in the record named by the case"
     },
     {
@@ -1177,8 +1177,8 @@
     {
      "name": "LCTSC-Test-S2-101: SpinalCord D0.03cc[Gy] <= 50.5: protocol against the recorded harness run",
      "value": 18.85,
-     "target": "16.4 \u00b1 0.16",
-     "passed": false,
+     "target": "18.85 \u00b1 0.19",
+     "passed": true,
      "note": "the harness case's run in the record named by the case"
     },
     {
@@ -1191,8 +1191,8 @@
     {
      "name": "LCTSC-Test-S2-101: Esophagus Dmean[Gy] <= 34.0: protocol against the recorded harness run",
      "value": 3.38,
-     "target": "3.14 \u00b1 0.05",
-     "passed": false,
+     "target": "3.38 \u00b1 0.05",
+     "passed": true,
      "note": "the harness case's run in the record named by the case"
     },
     {
@@ -1219,7 +1219,7 @@
     {
      "name": "LCTSC-Test-S2-101: Heart V45Gy[%] <= 66.0: protocol against the recorded harness run",
      "value": 0.14,
-     "target": "0.15 \u00b1 0.05",
+     "target": "0.14 \u00b1 0.05",
      "passed": true,
      "note": "the harness case's run in the record named by the case"
     },
@@ -1240,9 +1240,9 @@
    ],
    "metrics": {
     "LCTSC-Test-S1-101": {
-     "run_id": "8b76ae50-6fd7-42a6-8f9e-b2a187f1c8dc",
+     "run_id": "d373482e-d101-494e-a9f1-59a759754e57",
      "normalisation": 1.0388988952604552,
-     "seconds": 1062.5,
+     "seconds": 1072.6,
      "history": [
       {
        "round": 1,
@@ -1299,9 +1299,9 @@
      ]
     },
     "LCTSC-Test-S2-101": {
-     "run_id": "07f8e8bc-9bf0-4514-b552-d66225b10967",
+     "run_id": "31660be0-f393-40a8-a7a3-9405fe03cfcc",
      "normalisation": 1.0356645771255175,
-     "seconds": 1181.8,
+     "seconds": 1115.2,
      "history": [
       {
        "round": 1,
@@ -1365,15 +1365,18 @@
  "runs": {
   "one_case_per_process": [
    "20261112-140015-0228ec6",
-   "20261112-140428-0228ec6"
+   "20261112-232403-9357fdc"
   ],
-  "commit": "0228ec6",
+  "commits": {
+   "20261112-140015-0228ec6": "0228ec6",
+   "20261112-232403-9357fdc": "9357fdc"
+  },
   "machines": {
    "20261112-140015-0228ec6": {
     "cpu": "AMD EPYC 7413 24-Core Processor, 96 logical CPUs",
     "python": "3.12.16"
    },
-   "20261112-140428-0228ec6": {
+   "20261112-232403-9357fdc": {
     "cpu": "AMD EPYC 7413 24-Core Processor, 96 logical CPUs",
     "python": "3.12.16"
    }

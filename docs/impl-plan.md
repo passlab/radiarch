@@ -122,7 +122,7 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
   94.55 % against at least 95 %, is recorded as a finding about CCC's scatter cut-off (`known_findings.yaml`).
   2026-11-12: R8 to R11 rerun from `0228ec6` (each record's `2026-11-12-small-fields-0228ec6/`). Both small-field
   checks pass; TG-119's first-set deliverable core D5, 22.45 Gy against 22.44, is recorded as a finding; the lung
-  protocol runs again with the new R8 run as its record; physicist review waiting
+  protocol, run again from `9357fdc` with the new R8 run as its record, passes all 44; physicist review waiting
 - [x] (2026-11-11) Asymmetric margins: `directional_mm` on expand and erode, one margin per patient direction (right,
   left, anterior, posterior, superior, inferior); with the sides equal in pairs it gives the per-axis margin voxel for
   voxel; in the SDK, `ops.expand("PTV", "CTV", superior=10, inferior=5, ...)`
