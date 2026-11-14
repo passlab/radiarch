@@ -18,6 +18,10 @@ in O4.
 Each objective is a small callable class exposing a ``name`` attribute and a
 ``__call__`` matching the :class:`Objective` protocol, so they can be stored
 and dispatched uniformly by the optimizer.
+
+The dose and mask may be NumPy arrays or, on the optimizer's GPU path (:mod:`.array_backend`), CuPy arrays: the code
+is written once with NumPy's functions, which CuPy arrays take over through NumPy's dispatch protocols
+(``__array_ufunc__``, ``__array_function__``); only the conversion on entry names the module.
 """
 
 from __future__ import annotations
@@ -26,6 +30,8 @@ from typing import Protocol, Tuple, runtime_checkable
 
 import numpy as np
 from loguru import logger
+
+from .array_backend import array_module
 
 
 @runtime_checkable
@@ -55,8 +61,9 @@ def _prepare(dose: np.ndarray, mask: np.ndarray) -> Tuple[np.ndarray, np.ndarray
     Multiplying by this float mask — rather than indexing — keeps the gradient
     dense and the same shape as ``dose``, which is what the optimizer expects.
     """
-    dose_arr = np.asarray(dose, dtype=np.float64)
-    mask_arr = np.asarray(mask, dtype=np.float64)
+    xp = array_module(mask) if array_module(dose) is np else array_module(dose)     # the device's, when either is on it
+    dose_arr = xp.asarray(dose, dtype=xp.float64)
+    mask_arr = xp.asarray(mask, dtype=xp.float64)
     if dose_arr.shape != mask_arr.shape:
         raise ValueError(
             f"dose shape {dose_arr.shape} != mask shape {mask_arr.shape}"
@@ -505,11 +512,12 @@ class ReferenceDose:
         n = float(m.sum())
         if n <= 0:
             return 0.0, np.zeros_like(d)
-        diff = (d - self.reference) * m
+        reference = array_module(d).asarray(self.reference)
+        diff = (d - reference) * m
         if self.role == "organ":
             e = np.maximum(diff, 0.0)
         else:
-            hot = self.reference > float(np.median(self.reference[m > 0]))
+            hot = reference > float(np.median(reference[m > 0]))
             e = np.where(hot, np.maximum(diff, 0.0), np.minimum(diff, 0.0))
         loss = self.weight * float(np.sum(e * e)) / n
         return loss, 2.0 * self.weight * e / n

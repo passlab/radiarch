@@ -19,6 +19,9 @@ tolerances) the penalty only makes the rounds ill-conditioned, so 10 stays the c
 Before that, a feasibility run minimizes the constraint terms alone. If even that leaves a violation beyond a
 constraint's tolerance, no plan on these beams meets the set, and :class:`InfeasibleConstraintsError` names the
 constraints that fail, as a commercial MCO does before it generates any plan.
+
+A term's mask, multipliers and residuals live where its mask does: NumPy arrays on the CPU, CuPy arrays on the
+optimizer's GPU path (:mod:`.array_backend`); the solve loop is the same for both.
 """
 
 from __future__ import annotations
@@ -30,6 +33,7 @@ import numpy as np
 from loguru import logger
 
 from ..models.optimization import HardConstraint, HardConstraintOutcome
+from .array_backend import array_module
 from .objectives import _geud
 
 AL_ROUNDS = 12          # outer rounds before giving up on a tolerance
@@ -47,32 +51,34 @@ class HardConstraintTerm:
 
     def __init__(self, spec: HardConstraint, mask: np.ndarray):
         self.spec = spec
-        self.mask = np.asarray(mask, dtype=np.float64)
-        self.idx = np.flatnonzero(self.mask.ravel() > 0)
+        self.xp = xp = array_module(mask)
+        self.mask = xp.asarray(mask, dtype=xp.float64)
+        self.idx = xp.flatnonzero(self.mask.ravel() > 0)
         self.n = float(self.idx.size)
         self.voxelwise = spec.metric in ("Dmax", "Dmin")
-        self.mu = np.zeros(self.idx.size if self.voxelwise else 1)
+        self.mu = xp.zeros(self.idx.size if self.voxelwise else 1)
 
     def residuals(self, dose: np.ndarray) -> Tuple[np.ndarray, Callable[[np.ndarray], np.ndarray]]:
         """``c`` and a map from ``dPhi/dc`` to the gradient in dose."""
-        s, flat = self.spec, np.asarray(dose, dtype=np.float64).ravel()
+        xp = self.xp
+        s, flat = self.spec, xp.asarray(dose, dtype=xp.float64).ravel()
         if self.n == 0:
-            return np.zeros(self.mu.size), lambda y: np.zeros(dose.shape)
+            return xp.zeros(self.mu.size), lambda y: xp.zeros(dose.shape)
         if self.voxelwise:
             sign = 1.0 if s.metric == "Dmax" else -1.0
             c = sign * (flat[self.idx] - s.value_gy)
 
             def back(y: np.ndarray) -> np.ndarray:
-                g = np.zeros(flat.size)
+                g = xp.zeros(flat.size)
                 g[self.idx] = sign * y
                 return g.reshape(dose.shape)
             return c, back
         if s.metric == "Dmean":
             value, dvdd = float(flat[self.idx].mean()), self.mask / self.n
         else:
-            value, dvdd = _geud(np.asarray(dose, dtype=np.float64), self.mask, self.n, float(s.eud_a))
+            value, dvdd = _geud(xp.asarray(dose, dtype=xp.float64), self.mask, self.n, float(s.eud_a))
         sign = 1.0 if s.op == "<=" else -1.0
-        return np.array([sign * (value - s.value_gy)]), lambda y: sign * float(y[0]) * dvdd
+        return xp.asarray([sign * (value - s.value_gy)]), lambda y: sign * float(y[0]) * dvdd
 
     def term(self, dose: np.ndarray, rho: float) -> Tuple[float, np.ndarray]:
         c, back = self.residuals(dose)
@@ -88,7 +94,7 @@ class HardConstraintTerm:
         return float(max(0.0, c.max())) if c.size else 0.0
 
     def outcome(self, dose: np.ndarray) -> HardConstraintOutcome:
-        s, flat = self.spec, np.asarray(dose, dtype=np.float64).ravel()
+        s, flat = self.spec, self.xp.asarray(dose, dtype=self.xp.float64).ravel()
         if self.n == 0:
             achieved = 0.0
         elif s.metric == "Dmax":
@@ -98,7 +104,7 @@ class HardConstraintTerm:
         elif s.metric == "Dmean":
             achieved = float(flat[self.idx].mean())
         else:
-            achieved = _geud(np.asarray(dose, dtype=np.float64), self.mask, self.n, float(s.eud_a))[0]
+            achieved = _geud(flat.reshape(dose.shape), self.mask, self.n, float(s.eud_a))[0]
         v = self.violation(dose)
         return HardConstraintOutcome(label=s.label, achieved_gy=round(achieved, 6), violation_gy=round(v, 6),
                                      met=v <= s.tolerance_gy)
@@ -108,15 +114,16 @@ class ObjectiveCap(HardConstraintTerm):
     """A trade-off objective held at no more than ``cap_gy``: ``f(d) - cap <= 0``, one residual (projection, R11.4)."""
 
     def __init__(self, objective, mask: np.ndarray, cap_gy: float, label: str, tolerance_gy: float = 0.01):
-        self.objective, self.mask = objective, np.asarray(mask, dtype=np.float64)
+        self.xp = xp = array_module(mask)
+        self.objective, self.mask = objective, xp.asarray(mask, dtype=xp.float64)
         self.cap, self.label, self.tolerance = float(cap_gy), label, float(tolerance_gy)
         self.voxelwise = False
-        self.mu = np.zeros(1)
+        self.mu = xp.zeros(1)
         self.spec = _CapSpec(tolerance_gy=self.tolerance)
 
     def residuals(self, dose: np.ndarray):
-        v, g = self.objective.value_and_grad(np.asarray(dose, dtype=np.float64), self.mask)
-        return np.array([v - self.cap]), lambda y: float(y[0]) * g
+        v, g = self.objective.value_and_grad(self.xp.asarray(dose, dtype=self.xp.float64), self.mask)
+        return self.xp.asarray([v - self.cap]), lambda y: float(y[0]) * g
 
     def outcome(self, dose: np.ndarray) -> HardConstraintOutcome:
         v = self.violation(dose)
@@ -194,7 +201,7 @@ def solve_with_hard_constraints(
         def cost_and_grad(x: np.ndarray, rho=rho) -> Tuple[float, np.ndarray]:
             x = np.asarray(x, dtype=np.float64).ravel()
             d = forward(x)
-            loss, gd = dose_terms(d) if dose_terms is not None else (0.0, np.zeros(d.shape))
+            loss, gd = dose_terms(d) if dose_terms is not None else (0.0, array_module(d).zeros(d.shape))
             for t in terms:
                 tl, tg = t.term(d, rho)
                 loss += tl

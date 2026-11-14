@@ -79,6 +79,14 @@ In the multi-criteria cases the objective terms weigh more than the products. A 
 (a generalized EUD and the sigmoid of the dose-volume terms, over the full grid) and about 1070 s in the products.
 Both must move to the GPU for the gain.
 
+## The optimizer on a GPU, built (2026-11-13)
+
+ADR 0022: `RADIARCH_OPTIMIZER_DEVICE` (`cpu` by default, `gpu`, `auto`) moves the fluence solves' products and
+objective terms to the GPU. On an A100, `protocol_lung_vmat` with `pb` on the GPU as well takes 496 s against 2072 s
+on the CPU (its fluence solves 2 to 7 s against 117 to 124 s), and `mco_front_tg119` 2278 s against 4510 s (its first
+set's 19 solves 16 s against 1226 s), every graded check passing. The meterset solves still run on the CPU and are
+now most of what remains.
+
 ## MCsquare: speed, and the crash
 
 MCsquare runs on the CPU with as many threads as it is given. Our binary is the upstream "Release_1.1", built

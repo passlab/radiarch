@@ -21,6 +21,9 @@ Design (mirrors :class:`radiarch.services.dose.DoseService`):
 Geometry/beam-model loading and the cached ``Dij`` build are delegated to
 :class:`DoseService` so the two services agree on bundle shapes and share the
 influence cache.
+
+The products with ``Dij`` and the objective terms run on the CPU, or on a GPU when the setting
+``optimizer_device`` asks for it (:mod:`.array_backend`); the solver stays on the host either way.
 """
 
 from __future__ import annotations
@@ -36,6 +39,7 @@ from loguru import logger
 from scipy.sparse import csr_matrix
 
 from ..config import get_settings
+from .array_backend import CPU, DeviceMatrix, OptimizerDevice, device_cache_key, optimizer_device
 from ..models.dose import InfluenceBuildRequest, ScenarioSpec, default_rbe, dose_units_for
 from ..models.optimization import (
     CheckpointInfo,
@@ -113,6 +117,9 @@ class _Problem:
     w0: np.ndarray
     rbe: float = 1.0
     engine_digest: Optional[str] = None      # the build that made the matrices (cached or new), R12
+    device: OptimizerDevice = CPU            # where the solve loops evaluate (array_backend)
+    dev_mats: Dict[str, DeviceMatrix] = field(default_factory=dict)   # GPU: each scenario's matrix on the device
+    dev_obj_terms: list = field(default_factory=list)                  # obj_terms with their masks on the device
 
 
 class OptimizationService:
@@ -140,7 +147,7 @@ class OptimizationService:
     ) -> OptimizationResult:
         on_progress = progress_callback or _noop_progress
         t0 = time.monotonic()
-        cache_key = request.compute_cache_key()
+        cache_key = device_cache_key(request.compute_cache_key())
 
         cached = self.store.lookup_by_cache_key(cache_key)
         if cached is not None:
@@ -177,6 +184,8 @@ class OptimizationService:
             w_final, convergence = solver.run(
                 prob.cost_and_grad, prob.w0, max_iter, tol, callback=_callback
             )
+        if prob.device.gpu:
+            convergence.notes = list(convergence.notes or []) + ["solved on the GPU (optimizer_device)"]
         w_final = np.clip(np.asarray(w_final, dtype=np.float32).ravel(), 0.0, None)
 
         # --- final dose on the nominal scenario ----------------------
@@ -267,22 +276,29 @@ class OptimizationService:
             cost_history=out.cost_history, hard_constraints=out.outcomes, constraint_rounds=out.rounds, notes=notes)
 
     def hard_terms(self, prob: "_Problem", constraints) -> List[HardConstraintTerm]:
-        return [HardConstraintTerm(c, self._resolve_mask(prob.geometry, c.structure_name, prob.grid_shape)) for c in constraints]
+        dev = prob.device.asarray if prob.device.gpu else (lambda m: m)
+        return [HardConstraintTerm(c, dev(self._resolve_mask(prob.geometry, c.structure_name, prob.grid_shape))) for c in constraints]
 
     @staticmethod
     def nominal_ops(prob: "_Problem"):
         """``forward`` (weights → nominal dose), ``backward`` (a dose gradient → weights) and the regularizers'
-        ``weight_terms``: the pieces a solve outside :meth:`run` needs (hard constraints, the Pareto set)."""
-        _, mat = prob.scenario_dij[prob.scenarios[0].hash()]
+        ``weight_terms``: the pieces a solve outside :meth:`run` needs (hard constraints, the Pareto set). On the GPU
+        ``forward`` gives the dose on the device (:func:`.array_backend.to_host` brings it back) and ``backward``
+        takes it there."""
+        if prob.device.gpu:
+            dm = prob.dev_mats[prob.scenarios[0].hash()]
+            forward, backward = dm.forward, dm.backward
+        else:
+            _, mat = prob.scenario_dij[prob.scenarios[0].hash()]
 
-        def forward(w: np.ndarray) -> np.ndarray:
-            # in float64, like ``backward`` (R11.8): the engines' apply_influence rounds the weights and the dose to
-            # float32, which makes the cost a staircase at about 1e-7 of the weights; line searches near an optimum
-            # then fail and a solve cannot tell a stall from convergence (TG-119's Pareto plans)
-            return np.asarray(mat @ np.asarray(w, dtype=np.float64).ravel()).reshape(prob.grid_shape, order="C")
+            def forward(w: np.ndarray) -> np.ndarray:
+                # in float64, like ``backward`` (R11.8): the engines' apply_influence rounds the weights and the dose to
+                # float32, which makes the cost a staircase at about 1e-7 of the weights; line searches near an optimum
+                # then fail and a solve cannot tell a stall from convergence (TG-119's Pareto plans)
+                return np.asarray(mat @ np.asarray(w, dtype=np.float64).ravel()).reshape(prob.grid_shape, order="C")
 
-        def backward(grad_dose: np.ndarray) -> np.ndarray:
-            return np.asarray(mat.T @ np.asarray(grad_dose).ravel(order="C"), dtype=np.float64)
+            def backward(grad_dose: np.ndarray) -> np.ndarray:
+                return np.asarray(mat.T @ np.asarray(grad_dose).ravel(order="C"), dtype=np.float64)
 
         def weight_terms(w: np.ndarray) -> Tuple[float, np.ndarray]:
             loss, grad = 0.0, np.zeros(w.size)
@@ -341,15 +357,18 @@ class OptimizationService:
         scenario_dij, dij_digest = self._build_scenario_dij(request, scenarios)
         aggregation = (request.robustness.aggregation
                        if request.robustness.enabled else "EXPECTED")
+        device, dev_mats = self._device_matrices(scenario_dij, scenarios, grid_shape)
+        dev_obj_terms = [(o, device.asarray(m)) for o, m in obj_terms] if device.gpu else obj_terms
+        dev_constraint_terms = [(c, device.asarray(m)) for c, m in constraint_terms] if device.gpu else constraint_terms
 
         def eval_dose_terms(dose: np.ndarray) -> Tuple[float, np.ndarray]:
             total = 0.0
-            grad_dose = np.zeros(grid_shape, dtype=np.float64)
-            for obj, mask in obj_terms:
+            grad_dose = device.xp.zeros(grid_shape, dtype=device.xp.float64)
+            for obj, mask in dev_obj_terms:
                 loss, g = obj(dose, mask)
                 total += loss
                 grad_dose += g
-            for con, mask in constraint_terms:
+            for con, mask in dev_constraint_terms:
                 loss, g = con(dose, mask)
                 total += loss
                 grad_dose += g
@@ -361,10 +380,15 @@ class OptimizationService:
             per_grad: List[np.ndarray] = []
             for sc in scenarios:
                 inf, mat = scenario_dij[sc.hash()]
-                dose = engine.apply_influence(inf, w.astype(np.float32),
-                                              grid_shape).dose
-                loss, grad_dose = eval_dose_terms(dose)
-                grad_w = mat.T @ grad_dose.ravel(order="C")  # O10: Dijᵀ·dL/dD
+                if device.gpu:          # the dose in float64 on the device, as nominal_ops computes it
+                    dm = dev_mats[sc.hash()]
+                    loss, grad_dose = eval_dose_terms(dm.forward(w))
+                    grad_w = dm.backward(grad_dose)
+                else:
+                    dose = engine.apply_influence(inf, w.astype(np.float32),
+                                                  grid_shape).dose
+                    loss, grad_dose = eval_dose_terms(dose)
+                    grad_w = mat.T @ grad_dose.ravel(order="C")  # O10: Dijᵀ·dL/dD
                 per_loss.append(loss)
                 per_grad.append(np.asarray(grad_w, dtype=np.float64))
             loss, grad = _aggregate(per_loss, per_grad, aggregation)
@@ -384,7 +408,24 @@ class OptimizationService:
             regularizers=regularizers, aggregation=aggregation,
             cost_and_grad=cost_and_grad, eval_dose_terms=eval_dose_terms,
             w0=w0, rbe=rbe, engine_digest=dij_digest,
+            device=device, dev_mats=dev_mats, dev_obj_terms=dev_obj_terms,
         )
+
+    @staticmethod
+    def _device_matrices(scenario_dij, scenarios, grid_shape) -> Tuple[OptimizerDevice, Dict[str, DeviceMatrix]]:
+        """The device of the setting ``optimizer_device`` and, on the GPU, every scenario's matrix on it. Falls back
+        to the CPU when the matrices and their transposes (float64, about 24 bytes per non-zero) would take more
+        than 80 % of the GPU's free memory."""
+        device = optimizer_device()
+        if not device.gpu:
+            return device, {}
+        need = sum(24 * scenario_dij[sc.hash()][1].nnz for sc in scenarios)
+        free = device.free_bytes()
+        if need > 0.8 * free:
+            logger.warning("optimizer: the influence matrices need {:.1f} GB on the GPU and {:.1f} GB are free; "
+                           "solving on the CPU", need / 1e9, free / 1e9)
+            return CPU, {}
+        return device, {sc.hash(): device.matrix(scenario_dij[sc.hash()][1], grid_shape) for sc in scenarios}
 
     # -----------------------------------------------------------------
     # Objective / constraint / regularizer construction

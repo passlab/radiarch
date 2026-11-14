@@ -245,7 +245,8 @@ existing RT Plan --beam-model/import--> beam model --dose/recalculate--> dose
 carries the engines under `/app/engines`. All settings are `RADIARCH_*` environment variables
 (`config.py`, `.env.example`). `docs/PRODUCTION.md` covers worker sizing, limits, the API key,
 the audit log and storage hygiene. The pencil-beam engine uses a GPU through CuPy when
-`RADIARCH_PB_DEVICE` is `gpu` or `auto`.
+`RADIARCH_PB_DEVICE` is `gpu` or `auto`, and the optimizer's products and objective terms when
+`RADIARCH_OPTIMIZER_DEVICE` is (`services/array_backend.py`). The CPU is the default for both.
 
 ## 8. Quality
 

@@ -2165,3 +2165,27 @@ changed for it.
   released no code.
 - **Decided with the project lead**: the optimizer moves to the GPU next; every GPU path stays behind a setting, and
   the CPU path stays the default. The plan's new section "Performance and GPU paths" holds the items.
+
+## The optimizer on a GPU, behind a setting (2026-11-13)
+
+ADR 0022. The project lead: every GPU path behind a setting, the CPU path the default.
+- **`services/array_backend.py`** (new): `optimizer_device` (`cpu`, `gpu`, `auto`; `RADIARCH_OPTIMIZER_DEVICE` in
+  `config.py`), `DeviceMatrix` (an influence matrix and its transpose in float64 CSR on the device: `forward` to the
+  dose on the device, `backward` to the weights' gradient on the host), `device_cache_key` (unchanged for `cpu`; its
+  own for `gpu` and `auto`; from the setting, so the API and the worker agree), `array_module`, `to_host`.
+- **`objectives.py`**: the conversion on entry takes the device's module when the dose or the mask is on it; the rest
+  is NumPy code that CuPy arrays take over through NumPy's dispatch protocols. `ReferenceDose` moves its reference to
+  the dose's device.
+- **`hard_constraints.py`**: a term keeps its mask, voxel indices and multipliers on its mask's device.
+- **`optimization.py`**: `_assemble_problem` puts each scenario's matrix and the objectives' masks on the device
+  (`_device_matrices`; the CPU when they would take more than 80 % of the free memory); `cost_and_grad`,
+  `eval_dose_terms`, `nominal_ops` and `hard_terms` use them; a result made there notes "solved on the GPU".
+- **`mco.py`, `mco_deliverable.py`, `bao.py`** and the routes `optimization`, `mco` and `bao`: the cache keys by the
+  setting; navigation doses back to the host; the nominal Pareto set's masks on the device.
+- **Tests**: `tests/test_optimizer_device.py` (the setting, keys and fallbacks everywhere; on a GPU every objective,
+  hard-constraint term and product against the CPU's to 10⁻¹², and a run against a CPU run's cost). Two Pareto tests
+  that assumed host arrays and CPU notes now hold on both devices.
+- **Measured on an A100**: `protocol_lung_vmat` (`pb` on the GPU too) 496 s against 2072 s; `mco_front_tg119` 2278 s
+  against 4510 s, every graded check passing, the first set's error bound 0.6457 against the record's 0.6443. The
+  meterset solves, still on the CPU, are what remains. `docs/PRODUCTION.md` and `docs/architecture.md` name the
+  setting.

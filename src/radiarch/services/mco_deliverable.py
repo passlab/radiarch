@@ -34,6 +34,7 @@ from ..models.beam_model import Modality
 from ..models.dose import dose_units_for
 from ..models.mco import DeliverableRequest, DeliverableStage, DeviationRow, MCODeliverable
 from ..models.optimization import ConvergenceInfo, ObjectiveSpec, OptimizationResult, HardConstraint
+from .array_backend import device_cache_key, to_host
 from .clinical_goals import parse_metric
 from .mco import MCOService
 from .navigation import NavigationService
@@ -180,7 +181,7 @@ class DeliverableService:
         state = self.navigation.get_state(mco_id, request.state_id)
         if state is None:
             raise ValueError(f"no state {request.state_id!r} in Pareto set {mco_id}")
-        return request.compute_cache_key(result.cache_key, state.blend)
+        return device_cache_key(request.compute_cache_key(result.cache_key, state.blend))
 
     def run(self, mco_id: str, request: DeliverableRequest, progress_callback: Optional[DeliverableProgressCallback] = None) -> MCODeliverable:
         from .apertures import ApertureService
@@ -219,7 +220,7 @@ class DeliverableService:
             x, _, pnotes = self.mco.project_ops(result, mreq, ops, lam)
             notes += pnotes
             projected = not pnotes
-        dose_full = forward(x)
+        dose_full = to_host(forward(x))
         projected_stack = ops.navigation(ops.forward(x))
 
         # 2. the navigated plan as an optimization: its dose is the reference the deliverable plan mimics; its weights,

@@ -43,6 +43,7 @@ from ..models.beam_model import (
 from ..models.dose import EngineSpec
 from ..models.optimization import OptimizationRunRequest, SolverConfig
 from .dose_engines.digest import common_digest
+from .array_backend import device_cache_key
 from .bao_persistence import BAOStore
 from .bao_search import get_search_strategy
 from .beam_model import BeamModelService
@@ -73,7 +74,7 @@ class BAOService:
     ) -> BAOResult:
         on_progress = progress_callback or _noop_progress
         t0 = time.monotonic()
-        cache_key = request.compute_cache_key()
+        cache_key = device_cache_key(request.compute_cache_key())
 
         cached = self.store.lookup_by_cache_key(cache_key)
         if cached is not None:

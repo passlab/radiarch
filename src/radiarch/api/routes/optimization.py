@@ -35,6 +35,7 @@ from ...models.optimization import (
 )
 from ...models.apertures import SequenceRequest, SequenceResult
 from ...models.vmat import ArcRequest, ArcResult
+from ...services.array_backend import device_cache_key
 from ...services.audit import emit, make_event
 from ...services.dose_engines import EngineRegistryError
 from ...services.optimization import OptimizationService
@@ -84,7 +85,7 @@ async def run_optimization(
 ):
     request = request.model_copy(update={"requested_by": user})
     try:
-        cache_key = request.compute_cache_key()
+        cache_key = device_cache_key(request.compute_cache_key())
         service = _service()
         cached = service.store.lookup_by_cache_key(cache_key)
         if cached is not None:

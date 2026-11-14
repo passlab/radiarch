@@ -15,6 +15,7 @@ from scipy.optimize import minimize
 from radiarch.models.mco import MCORunRequest
 from radiarch.models.dose import EngineSpec
 from radiarch.models.optimization import HardConstraint, ObjectiveSpec, SolverConfig
+from radiarch.services.array_backend import to_host
 from radiarch.services.pareto import Solved, distance_to_inner, normalize, sandwich
 
 from test_optimization_service import _fake_beam_model_bundle, _fake_geometry_bundle  # noqa: F401
@@ -268,8 +269,8 @@ class TestService:
         prob = msvc.optimization._assemble_problem(msvc._base(req))
         forward, backward, _ = msvc.optimization.nominal_ops(prob)
         w = np.ones(backward(np.zeros(prob.grid_shape)).size)
-        d = forward(w)
-        assert d.dtype == np.float64 and np.any(forward(w * (1.0 + 1e-9)) != d)
+        d = to_host(forward(w))                     # on the device when the optimizer runs on a GPU
+        assert d.dtype == np.float64 and np.any(to_host(forward(w * (1.0 + 1e-9))) != d)
         g = np.random.default_rng(0).random(d.shape)
         assert float(np.sum(d * g)) == pytest.approx(float(w @ backward(g)), rel=1e-12)   # the adjoint of the backward
 
@@ -375,7 +376,7 @@ def test_a_pareto_set_through_the_sdk(rx):
     with pytest.raises(RadiarchError) as e:                                    # and so does the server
         rx.request("POST", "/mco/run", json=body)
     assert e.value.status_code == 422 and "not trade-off objectives" in str(e.value.detail)
-    assert all(p.converged for p in ps.plans) and all("deliver no dose" in n for n in ps.notes)
+    assert all(p.converged for p in ps.plans) and all("deliver no dose" in n for n in ps.notes if "on the GPU" not in n)
     with pytest.raises(RadiarchError) as e:
         rx.get("/mco/no-such-set")
     assert e.value.status_code == 404

@@ -28,6 +28,7 @@ from ._inflight import in_flight
 from ...core.store import store
 from ...models.mco import (ApertureSetRequest, AutoNavigateRequest, DeliverableJobStatus, DeliverableRequest, MCODeliverable, MCOJobStatus,
                            MCORunRequest, MCOResult, NavigateRequest, NavigationState)
+from ...services.array_backend import device_cache_key
 from ...services.audit import emit, make_event
 from ...services.mco import MCOService
 from ...services.mco_apertures import ApertureSetRefused, ApertureSetService
@@ -77,7 +78,7 @@ class MCORunResponse(BaseModel):
 async def run_mco(request: MCORunRequest, response: Response, api_key_prefix: Optional[str] = Depends(api_key_auth),
                   user: Optional[str] = Depends(requester)):
     request = request.model_copy(update={"requested_by": user})
-    key = request.compute_cache_key()
+    key = device_cache_key(request.compute_cache_key())
     cached = _service().store.lookup_by_cache_key(key)
     if cached is not None:
         response.status_code = status.HTTP_200_OK

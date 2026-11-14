@@ -76,6 +76,7 @@ class Settings(BaseSettings):
 
     # Native photon pencil-beam engine (roadmap R8): kernels in engines/pb, NumPy or CuPy
     pb_device: str = Field(default="cpu", description="Pencil-beam engine device: 'cpu', 'gpu' (CuPy, fails when absent) or 'auto'. Per-run params override.")
+    optimizer_device: str = Field(default="cpu", description="Where the optimizer evaluates doses and objectives: 'cpu', 'gpu' (CuPy, fails when absent) or 'auto'. The solver stays on the CPU; GPU results get cache keys of their own.")
     pb_n_jobs: int = Field(default=4, ge=1, description="Threads for the pencil-beam engine's influence matrix on the CPU.")
     pb_components: int = Field(default=0, ge=0, description="Kernel components of the pencil-beam engine; 0 = the engine's default.")
     pb_cutoff_mm: float = Field(default=0.0, ge=0.0, description="Lateral cutoff of the pencil-beam influence matrix (mm); 0 = the engine's default.")

@@ -41,6 +41,7 @@ from ..config import get_settings
 from ..models.dose import dose_units_for
 from ..models.mco import ErrorPoint, MCORunRequest, MCOResult, MCOStage, ParetoPlan
 from ..models.optimization import OptimizationRunRequest
+from .array_backend import array_module, device_cache_key, to_host
 from .hard_constraints import InfeasibleConstraintsError, infeasible_message, solve_with_hard_constraints
 from .optimization import OptimizationService
 from .optimization_solvers import gain_on_offer, get_solver
@@ -170,8 +171,8 @@ class MCOOps:
     def navigation(self, dose: np.ndarray) -> np.ndarray:
         """A dose of :attr:`forward` on the navigation voxels, scenarios x voxels (one row when nominal)."""
         if self.robust:
-            return np.asarray(dose)
-        return np.asarray(dose).ravel()[None, :] if self.on_voxels else np.asarray(dose).ravel()[self.index][None, :]
+            return to_host(dose)
+        return to_host(dose).ravel()[None, :] if self.on_voxels else to_host(dose).ravel()[self.index][None, :]
 
     def values(self, dose: np.ndarray) -> np.ndarray:
         return np.array([o.value(dose, m) for o, m in zip(self.objectives, self.masks)])
@@ -186,7 +187,7 @@ class MCOOps:
             return scenario_wise([o.objective for o in self.objectives], self.masks, raw, self.smoothing_gy)
 
         def dose_terms(d: np.ndarray):
-            loss, grad = 0.0, np.zeros(d.shape)
+            loss, grad = 0.0, array_module(d).zeros(d.shape)
             for wi, o, m in zip(raw, self.objectives, self.masks):
                 v, g = o.value_and_grad(d, m)
                 loss, grad = loss + wi * v, grad + wi * g
@@ -201,7 +202,7 @@ class MCOService:
 
     def run(self, request: MCORunRequest, progress_callback: Optional[MCOProgressCallback] = None) -> MCOResult:
         on = progress_callback or _noop
-        key = request.compute_cache_key()
+        key = device_cache_key(request.compute_cache_key())
         cached = self.store.lookup_by_cache_key(key)
         if cached is not None:
             on(MCOStage.done, 1.0, "cache hit")
@@ -210,7 +211,7 @@ class MCOService:
         on(MCOStage.loading, 0.02, "loading the geometry, beam model and dose matrix")
         prob = self.optimization._assemble_problem(self._base(request))
         ops = self.ops(prob, request)
-        notes: List[str] = []
+        notes: List[str] = ["solved on the GPU (optimizer_device)"] if prob.device.gpu else []
         if ops.robust:
             notes.append(f"robust over {len(ops.scenarios)} scenarios: each plan minimizes the worst scenario of its weighted sum; "
                          f"the values are each trade-off's worst case over the scenarios, and the error bound includes the "
@@ -381,7 +382,7 @@ class MCOService:
         forward, backward, weight_terms = osvc.nominal_ops(prob)
         regs = weight_terms if prob.regularizers else None
         if not request.robustness.enabled:
-            return MCOOps([o for o, _ in prob.obj_terms], [m for _, m in prob.obj_terms], forward, backward,
+            return MCOOps([o for o, _ in prob.obj_terms], [m for _, m in prob.dev_obj_terms or prob.obj_terms], forward, backward,
                           osvc.hard_terms(prob, request.hard_constraints), regs, index, structures, [])
         stacked = StackedOps([prob.scenario_dij[sc.hash()][1][index] for sc in prob.scenarios])
         scenarios = [sc.name for sc in prob.scenarios]
@@ -423,7 +424,7 @@ def project_blend(objectives, masks, forward, backward, constraint_terms, x0: np
     scale = 1.0 / np.asarray(span, dtype=np.float64)
 
     def dose_terms(d: np.ndarray):
-        loss, grad = 0.0, np.zeros(d.shape)
+        loss, grad = 0.0, array_module(d).zeros(d.shape)
         for s, o, m in zip(scale, objectives, masks):
             v, g = o.value_and_grad(d, m)
             loss, grad = loss + s * v, grad + s * g

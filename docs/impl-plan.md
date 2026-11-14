@@ -399,7 +399,11 @@ Every GPU path stays behind a setting; the CPU path stays the default (the proje
 - [x] (2026-11-13) The investigation: the optimizer's products and objective terms on one CPU thread are 77 to 93 % of
   the multi-criteria cases; `pb` on an A100 runs the lung protocol case 2.8 times faster (its plans differ from the
   CPU's); the products are 50 to 150 times faster on an A100
-- [ ] The optimizer's products and objective terms on the GPU, behind a setting; the CPU path the default **(next)**
+- [x] (2026-11-13) The optimizer's products and objective terms on the GPU, behind a setting (`optimizer_device`); the
+  CPU path the default (ADR 0022): the fluence solves, their hard constraints, the nominal Pareto sets and the
+  projections. The lung protocol case 496 s against 2072 s, TG-119 2278 s against 4510 s on an A100
+- [ ] The meterset solves on the GPU too (the arcs' intervals, segment metersets, second sets) and the robust Pareto
+  sets **(next)**
 - [ ] `pb` on the GPU in the image (CuPy), behind its existing setting; records made on one device, an output change
   **(open)**
 - [ ] CPU: the influence store without zlib compression; the radiological depth over threads **(open)**

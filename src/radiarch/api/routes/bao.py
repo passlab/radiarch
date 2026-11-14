@@ -23,6 +23,7 @@ from pydantic import BaseModel
 
 from ...core.store import store
 from ...models.bao import BAOJobStatus, BAORunRequest, BAOResult
+from ...services.array_backend import device_cache_key
 from ...services.audit import emit, make_event
 from ...services.bao import BAOService
 from ...services.dose_engines import EngineRegistryError
@@ -62,7 +63,7 @@ async def run_bao(
     api_key_prefix: Optional[str] = Depends(api_key_auth),
 ):
     try:
-        cache_key = request.compute_cache_key()
+        cache_key = device_cache_key(request.compute_cache_key())
         service = _service()
         cached = service.store.lookup_by_cache_key(cache_key)
         if cached is not None:
