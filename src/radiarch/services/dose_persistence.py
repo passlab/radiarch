@@ -14,7 +14,7 @@ And under ``{artifact_dir}/influence/``::
     influence/
       _index.json                    # cache_key → influence_id
       {influence_id}/
-        dij.npz                      # sparse CSR matrix
+        dij.npz                      # sparse CSR matrix, stored or deflated (influence_store_compress_level)
         meta.json                    # full InfluenceResult
 
 Atomicity follows the same belt-and-suspenders pattern as the geometry
@@ -30,6 +30,7 @@ import json
 import os
 import shutil
 import tempfile
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Optional
@@ -37,6 +38,7 @@ from typing import Dict, Optional
 import numpy as np
 import SimpleITK as sitk
 
+from ..config import get_settings
 from ..models.dose import DoseResult, InfluenceResult
 from .dose_engines.protocol import InfluenceData
 
@@ -126,6 +128,25 @@ def read_dose_volume(path: Path) -> np.ndarray:
     """Load a dose NIfTI back into a (nz, ny, nx) float32 array."""
     img = sitk.ReadImage(str(path))
     return sitk.GetArrayFromImage(img).astype(np.float32)
+
+
+# ---------------------------------------------------------------------------
+# Influence matrix IO
+# ---------------------------------------------------------------------------
+
+def write_npz(path: Path, arrays: Dict[str, np.ndarray], level: int) -> None:
+    """An .npz that ``np.load`` reads: the arrays stored as they are (``level`` 0) or deflated at ``level`` 1 to 9.
+
+    ``np.savez_compressed`` deflates at level 6 only: 79 s of the lung protocol case's two matrices (2.5 GB),
+    against 2 s stored (2026-11-14).
+    """
+    if level == 0:
+        np.savez(path, **arrays)
+        return
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=level, allowZip64=True) as zf:
+        for name, value in arrays.items():
+            with zf.open(name + ".npy", "w", force_zip64=True) as f:
+                np.lib.format.write_array(f, np.asanyarray(value), allow_pickle=False)
 
 
 # ---------------------------------------------------------------------------
@@ -227,6 +248,11 @@ class DoseStore(_IndexedStoreBase):
 class InfluenceStore(_IndexedStoreBase):
     """File-backed influence-matrix persistence with a JSON cache index."""
 
+    def __init__(self, base_dir: str | os.PathLike[str], compress_level: Optional[int] = None) -> None:
+        super().__init__(base_dir)
+        self.compress_level = int(get_settings().influence_store_compress_level if compress_level is None
+                                  else compress_level)
+
     def lookup_by_cache_key(self, cache_key: str) -> Optional[InfluenceResult]:
         influence_id = self._load_index().get(cache_key)
         if not influence_id:
@@ -257,13 +283,16 @@ class InfluenceStore(_IndexedStoreBase):
             prefix=f".{influence_id}.tmp.",
         ) as tmp:
             tmp_path = Path(tmp)
-            np.savez_compressed(
+            write_npz(
                 tmp_path / INFLUENCE_FILENAME,
-                indptr=influence.indptr,
-                indices=influence.indices,
-                data=influence.data,
-                shape=np.asarray([influence.n_voxels, influence.n_elements],
-                                 dtype=np.int64),
+                {
+                    "indptr": influence.indptr,
+                    "indices": influence.indices,
+                    "data": influence.data,
+                    "shape": np.asarray([influence.n_voxels, influence.n_elements],
+                                        dtype=np.int64),
+                },
+                self.compress_level,
             )
             (tmp_path / META_FILENAME).write_text(result.model_dump_json(indent=2))
 
@@ -334,4 +363,5 @@ __all__ = [
     "DoseStore",
     "InfluenceStore",
     "read_dose_volume",
+    "write_npz",
 ]

@@ -67,7 +67,7 @@ class Settings(BaseSettings):
             "Empty = the copy vendored with OpenTPS core."
         ),
     )
-    ccc_n_jobs: int = Field(default=4, ge=0, description="Parallel CCC processes per dose/Dij build; 0 = half the cores, at most 32. The matrices are the same for any count.")
+    ccc_n_jobs: int = Field(default=8, ge=0, description="Parallel CCC processes per dose/Dij build; 0 = half the cores, at most 32. The matrices are the same for any count.")
     ccc_scatter: str = Field(default="shipped", description="CCC scatter setting: 'shipped' (truncated at ~2 cm, fast) or 'full' (0.01 % cutoff, 10 cm mask; ~45x slower). Per-run params override.")
     ccc_calibration_spacing_mm: float = Field(
         default=2.5, gt=0,
@@ -223,6 +223,14 @@ class Settings(BaseSettings):
     influence_store_max_gb: float = Field(
         default=100.0,
         description="Same as dose_store_max_gb but for the Dij cache.",
+    )
+    influence_store_compress_level: int = Field(
+        default=0, ge=0, le=9,
+        description=(
+            "Deflate level of the stored influence matrices: 0 stores them as they are (the fastest, about 2.4 "
+            "times the disk), 1 to 9 deflate them (6 was the store's level before 2026-11-14). Every level writes "
+            "an .npz that np.load reads, and the matrix comes back the same."
+        ),
     )
     dose_min_age_hours: int = Field(
         default=24,

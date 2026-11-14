@@ -2243,3 +2243,21 @@ The project lead chose four items from `docs/reports/engine-performance.md`; mea
   path as through a direct density; one TrueBeam beam model, no beamlet output. Not adopted. Its module reads the MLC
   array's memory as written, so a reordered copy is read as another aperture.
 - ADR 0015 records the two pencil-beam changes, the plan's section "Performance and GPU paths" its rows.
+
+## The influence store uncompressed, and the collapsed cone's default (2026-11-14)
+
+The project lead set the collapsed cone's default to 8 processes and asked for the influence store's compression to be
+tried (`docs/reports/engine-performance.md`). Measured on the 96-core server and one A100.
+- **The collapsed cone's default** (`config.py`): `ccc_n_jobs` 8, not 4; the matrices are the same for any count, and
+  TG-119's builds in 295 s rather than 660 s. The validation cases already ran 8 or 16.
+- **The influence store** (`dose_persistence.py`: `write_npz`, `InfluenceStore(compress_level=)`; `config.py`:
+  `influence_store_compress_level`): the store deflated every matrix at zlib level 6 on one thread, 79 s for the lung
+  protocol case's two matrices (2.5 GB) and 8.2 s to read them back. Stored as they are they take 2.0 s and 1.3 s, on
+  2.47 GB of disk against 1.04 GB; level 1 takes 33 s and 9.0 s on 1.18 GB. The default is now 0, stored; 1 to 9
+  deflate. Every level writes an `.npz` that `np.load` reads, so matrices already stored and the download route keep
+  working. The lung protocol case: on one A100 140 s against 230 s, every value the earlier GPU run's; on the CPU, two
+  runs side by side, 1571 s stored against 1672 s at level 6, every value the record's at both levels (the store's own
+  writes and reads 3.3 s against 84.5 s; one run made apart, 1628 s against 1639 s, hid the gain in the variation of
+  the other stages). Both suites pass on the server (CPU 1245, GPU 1277). Tests:
+  `test_every_compress_level_gives_the_same_matrix` (levels 0, 1 and 6, arrays and dtypes, the zip's entry types),
+  `test_the_store_keeps_matrices_as_they_are_by_default`. `docs/PRODUCTION.md` names the setting.

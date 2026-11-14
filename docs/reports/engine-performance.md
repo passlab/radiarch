@@ -134,6 +134,40 @@ output. Not adopted: WiscPlan at 32 processes builds influence matrices about as
 Its speed would suit plan and arc-segment doses once its lung behaviour is explained and a beam model is commissioned
 to radiarch's machine.
 
+## The influence store, and the collapsed cone's default (2026-11-14)
+
+The project lead set the collapsed cone's default to 8 processes (it was 4: TG-119's matrix in 295 s rather than 660 s,
+the same matrix) and asked for the influence store's compression to be tried.
+
+The store wrote every influence matrix with `np.savez_compressed`: zlib at level 6, on one thread. The lung protocol
+case's two matrices (6048 beamlets on 3.6 and 3.7 million voxels, 143 and 158 million values, 2.5 GB as arrays),
+written three ways in the radiarch image on the server, the median of three writes:
+
+| Way | Write | Read back | On disk |
+|---|---|---|---|
+| zlib level 6 (`np.savez_compressed`, before) | 79 s | 8.2 s | 1.04 GB |
+| zlib level 1 | 33 s | 9.0 s | 1.18 GB |
+| Stored as they are (`np.savez`) | 2.0 s | 1.3 s | 2.47 GB |
+
+Each way gave every array back the same. Per array at level 1, the row pointers deflate 12 times, the beamlet indices
+3.0 times and the dose values (float32) 1.6 times: the values cost the most time for the least space.
+
+The store now takes `RADIARCH_INFLUENCE_STORE_COMPRESS_LEVEL`: 0, the default, stores the arrays as they are; 1 to 9
+deflate them. Every level writes an `.npz` that `np.load` reads, so matrices stored before and the influence-matrix
+download keep working. The lung protocol case with its matrices stored as they are:
+
+| Run | Level 6 (before) | Stored (after) | Results |
+|---|---|---|---|
+| CPU, 6 threads, the two runs side by side | 1672 s | 1571 s | every value the record's, at both levels |
+| One A100 (`pb` and the optimizer on the GPU) | 230 s | 140 s | every value the earlier GPU run's |
+
+On the CPU the store's own writes and reads took 3.3 s against 84.5 s. Two CPU runs made apart differ by tens of
+seconds in their other stages (1639 s and 1628 s), so the CPU's comparison is of two runs made at the same time.
+
+The cost is disk: about 2.4 times as much per matrix. The store's cap (`RADIARCH_INFLUENCE_STORE_MAX_GB`, 100 GB) and
+its eviction are unchanged, so it holds fewer matrices. A site short on disk sets level 1: 2.1 times smaller than
+stored, and 2.4 times faster to write than level 6.
+
 ## MCsquare: speed, and the crash
 
 MCsquare runs on the CPU with as many threads as it is given. Our binary is the upstream "Release_1.1", built
@@ -183,7 +217,8 @@ The largest gains are in radiarch's own code, and they need no new engine:
    is done. Plans change with the device, so this is an output change: decide whether the records are made on the
    GPU (and rerun them), or make the GPU's influence matrices round as the CPU's do first.
 3. **Two CPU fixes for machines without a GPU**: store influence matrices uncompressed or with a faster codec (86 s
-   of the case's 2072 s), and split the radiological depth over threads (505 s on one thread).
+   of the case's 2072 s), and split the radiological depth over threads (505 s on one thread). Both built
+   (2026-11-14).
 
 For the engines that are programs, adopt rather than port:
 
@@ -201,3 +236,7 @@ Each case ran in the radiarch image built from `48c0cc4` with a clean checkout o
 6 BLAS threads, under cProfile; the GPU runs added CuPy 14.2 (`cupy-cuda12x[ctk]`) and one A100. The products were
 timed as the best of five on the influence matrix the GPU run stored. The stage times come from the services' log
 lines; cProfile adds little to time spent in NumPy, SciPy and CuPy.
+
+The store's formats (2026-11-14) were timed on one thread in the same image, with a clean checkout of `c6c07d9`, on
+the two matrices a GPU run of the lung protocol case stored; the files were written to the container's own disk and
+read back while still in the page cache, as the optimizer reads them right after they are built.

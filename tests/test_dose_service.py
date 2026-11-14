@@ -10,6 +10,7 @@ stores so caches don't leak across tests.
 from __future__ import annotations
 
 import tempfile
+import zipfile
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +36,7 @@ from radiarch.models.geometry import (
     GridSpec,
 )
 from radiarch.services.dose import DoseService
+from radiarch.services.dose_persistence import InfluenceStore
 from radiarch.services.dose_engines.protocol import (
     BeamModelBundle,
     GeometryBundle,
@@ -243,6 +245,27 @@ class TestBuildInfluence:
         assert inf.n_voxels == r.n_voxels
         assert inf.n_elements == r.n_elements
         assert inf.nnz == r.nnz
+
+    @pytest.mark.parametrize("level", [0, 1, 6])
+    def test_every_compress_level_gives_the_same_matrix(self, svc, tmp_path, level):
+        """Stored (0) or deflated (1 to 9), the matrix comes back array for array, in an .npz np.load reads."""
+        r = svc.build_influence(self._req())
+        inf = svc.influence_store.load_influence(r.influence_id)
+        store = InfluenceStore(tmp_path, compress_level=level)
+        paths = store.save(influence_id=r.influence_id, cache_key=r.cache_key, influence=inf, result=r)
+        back = store.load_influence(r.influence_id)
+        for name in ("indptr", "indices", "data"):
+            a, b = getattr(inf, name), getattr(back, name)
+            assert a.dtype == b.dtype and np.array_equal(a, b)
+        assert (back.n_voxels, back.n_elements) == (inf.n_voxels, inf.n_elements)
+        with zipfile.ZipFile(paths.dij) as zf:
+            kinds = {i.compress_type for i in zf.infolist()}
+        assert kinds == {zipfile.ZIP_STORED if level == 0 else zipfile.ZIP_DEFLATED}
+
+    def test_the_store_keeps_matrices_as_they_are_by_default(self, svc):
+        from radiarch.config import Settings, get_settings
+        assert Settings.model_fields["influence_store_compress_level"].default == 0
+        assert svc.influence_store.compress_level == get_settings().influence_store_compress_level
 
     def test_apply_influence_matches_compute_dose(self, svc):
         """End-to-end: apply(Dij, w) ≈ compute_dose(w).

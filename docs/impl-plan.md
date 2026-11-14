@@ -409,6 +409,8 @@ Every GPU path stays behind a setting; the CPU path stays the default (the proje
   **(open)**
 - [x] (2026-11-14) The collapsed cone's process count: `RADIARCH_CCC_N_JOBS=0` = half the cores, at most 32 (the
   default stays 4); TG-119's matrix 660, 295, 147 and 79 s at 4, 8, 16 and 32 processes, the same matrix at each
+- [x] (2026-11-14) The collapsed cone's default 8 processes, not 4 (the project lead): the same matrices, TG-119's
+  in 295 s rather than 660 s
 - [x] (2026-11-14) The pencil beam's radiological depth on its CPU threads (the same depths): the lung protocol case
   1639 s against 2072 s on the CPU, every value the record's
 - [x] (2026-11-14) The pencil beam's influence matrices on the GPU in batches, one fused kernel per batch (the same
@@ -418,6 +420,9 @@ Every GPU path stays behind a setting; the CPU path stays the default (the proje
 - [x] (2026-11-14) DoseCUDA's collapsed cone, a measured trial: 0.03 s for a field against WiscPlan's 7 to 20 s, but
   23 % below Monte Carlo inside a lung slab where WiscPlan is within 1 to 5 %, one TrueBeam beam model and no beamlet
   output; not adopted (`reports/engine-performance.md`)
-- [ ] The influence store without zlib compression (86 s of the CPU lung protocol case, 87 s of its GPU run) **(open)**
+- [x] (2026-11-14) The influence store without zlib compression (`RADIARCH_INFLUENCE_STORE_COMPRESS_LEVEL`, 0 the
+  default; 1 to 9 deflate): the lung protocol case's two matrices written in 2 s against 79 s and read in 1.3 s against
+  8.2 s, on 2.4 times the disk; the case on one A100 140 s against 230 s, on the CPU 1571 s against 1672 s (two runs
+  side by side), every value the same
 - [ ] Measured trials, each against the references: MOQUI (proton Monte Carlo), pyRadMC (photon Monte Carlo)
   **(open)**

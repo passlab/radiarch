@@ -84,10 +84,11 @@ full list; what follows is what *must* change from defaults.
 | `RADIARCH_AUDIT_LOG_PATH` | `/var/log/radiarch/audit.jsonl` | D7.3. Ships to your log aggregator. |
 | `RADIARCH_DOSE_STORE_MAX_GB` | Site-specific. Default 50 GB. | D7.2. Set to 70-80% of your dose volume. |
 | `RADIARCH_INFLUENCE_STORE_MAX_GB` | Site-specific. Default 100 GB. | Dij matrices are big; size to your concurrent-optimization budget. |
+| `RADIARCH_INFLUENCE_STORE_COMPRESS_LEVEL` | `0` (the default) where disk is not short; `1` to `9` to deflate | Influence matrices stored as they are write in seconds and take about 2.4 times the disk of level 6, the store's level before 2026-11-14 (the lung protocol case's two matrices: 2 s and 2.5 GB, against 79 s and 1.0 GB). The matrices come back the same at any level; files written at any level stay readable. |
 | `RADIARCH_CELERY_WORKER_MAX_MEMORY_KB` | 4 GB for fast workers, 16 GB+ for dose workers | D7.1. Recycles leaked memory. |
 | `RADIARCH_DOSE_SOFT_TIME_LIMIT_S` | Bench your worst clinical case + 30 % | Defaults work for SimpleFantom; clinical CT needs longer. |
 | `RADIARCH_CORS_ORIGINS` | Explicit list of allowed origins | Default `*` is wrong for production. |
-| `RADIARCH_CCC_N_JOBS` | `0` (half the cores, at most 32) or the cores you can give it; the default is 4 | WiscPlan processes per dose or influence matrix. The matrices are the same for any count; TG-119's took 660 s at 4 and 79 s at 32 on a 96-core server. |
+| `RADIARCH_CCC_N_JOBS` | `0` (half the cores, at most 32) or the cores you can give it; the default is 8 | WiscPlan processes per dose or influence matrix. The matrices are the same for any count; TG-119's took 660 s at 4 and 79 s at 32 on a 96-core server. |
 | `RADIARCH_PB_DEVICE` | `auto` on a host with a CUDA GPU (install the `gpu` extra) | The pencil-beam engine runs on the GPU when it can. Its plans differ from the CPU's beyond the validation records' 1 % comparisons, which were made on the CPU (`docs/reports/engine-performance.md`). |
 | `RADIARCH_OPTIMIZER_DEVICE` | `cpu` (the default); `gpu` or `auto` on a host with a CUDA GPU (the `gpu` extra) | The optimizer's products with the influence matrices and its objective terms run on the GPU; the solver stays on the CPU. Results agree with the CPU's to the solver's tolerance, not digit for digit, and are stored under cache keys of their own. A problem whose matrices need more than 80 % of the GPU's free memory is solved on the CPU, with a warning. |
 
