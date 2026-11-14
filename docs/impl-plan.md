@@ -1,6 +1,6 @@
 # Radiarch — implementation plan and tasks
 
-State: 2026-11-12. The design is in [`architecture.md`](architecture.md); what each item
+State: 2026-11-13. The design is in [`architecture.md`](architecture.md); what each item
 did, file by file, is in [`impl-log.md`](impl-log.md); the decisions
 are in [`adr/`](adr/); the evaluation that set this roadmap is
 [`reports/tps-evaluation-and-roadmap.md`](reports/tps-evaluation-and-roadmap.md).
@@ -74,6 +74,9 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] Driver: MHD CT, scanner tables, beam data library, plan text, config, sparse-beamlet and dose readers
 - [x] Identical inputs to the goldens, identical dose to the previous path at a fixed seed
 - [x] Engine assets with provenance (`engines/mcsquare/`, done in R15)
+- [x] (2026-11-13) A run the engine crashed (SIGSEGV, SIGBUS, SIGABRT) is run once more; `mco_robust_proton` runs the
+  engine on one thread (the nightly's segfault of 2026-11-13: 4 of 28 runs with 8 threads, 0 of 24 with one)
+- [ ] Find the engine's race (a build with AddressSanitizer and the upstream bounds patches) **(open)**
 
 ### R2 — DICOM RT in
 - [x] RT Plan and RT Ion Plan readers into the internal plans

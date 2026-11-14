@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import struct
+import sys
 import tempfile
 from pathlib import Path
 
@@ -155,6 +156,61 @@ class TestReaders:
         ok, reason = ASSETS.availability()
         assert ok or "Linux" in reason or "binary" in reason, reason
         assert len(ASSETS.fingerprint()) == 16
+
+
+# ---------------------------------------------------------------------------
+# A run that crashes is run once more (a stand-in launcher; no engine needed)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.skipif(sys.platform != "linux", reason="the driver runs MCsquare on Linux only")
+class TestCrashRetry:
+    # Counts its attempts in the work directory, leaves a partial output each time, and exits with
+    # FAIL on the attempts up to CRASHES.
+    LAUNCHER = ('n=$(cat count 2>/dev/null || echo 0); n=$((n + 1)); echo $n > count\n'
+                'mkdir -p Outputs; echo partial > Outputs/part$n.txt; echo "attempt $n"\n'
+                'if [ "$n" -le {crashes} ]; then exit {fail}; fi\n')
+
+    def _driver(self, tmp_path, crashes, fail):
+        root = tmp_path / "engine"
+        (root / "Materials").mkdir(parents=True)
+        (root / "Materials" / "list.dat").write_text("")
+        (root / "BDL").mkdir()
+        (root / "BDL" / D.DEFAULT_BDL).write_text("")
+        (root / "Scanners" / D.DEFAULT_SCANNER).mkdir(parents=True)
+        (root / "MCsquare_linux").write_text("")
+        (root / "MCsquare_linux").chmod(0o755)
+        (root / "MCsquare").write_text(self.LAUNCHER.format(crashes=crashes, fail=fail))
+        work = tmp_path / "work"
+        work.mkdir()
+        return D.MCsquareDriver(assets=D.MCsquareAssets(root)), work
+
+    def test_crash_signal(self):
+        assert D.crash_signal(139) == 11 and D.crash_signal(-11) == 11      # through the shell, or the process itself
+        assert D.crash_signal(134) == 6 and D.crash_signal(135) == 7
+        assert all(D.crash_signal(rc) is None for rc in (0, 1, 2, 127, 137, 143, -9, -15))
+
+    @pytest.mark.parametrize("fail", [139, 135, 134])
+    def test_one_crash_is_run_again(self, tmp_path, fail):
+        drv, work = self._driver(tmp_path, crashes=1, fail=fail)
+        run = drv.run(work)
+        assert run.returncode == 0 and run.attempts == 2
+        assert (work / "count").read_text().strip() == "2"
+        assert (work / "mcsquare-attempt1.log").read_text().strip() == "attempt 1"
+        assert run.stdout_path.read_text().strip() == "attempt 2"
+        assert sorted(p.name for p in (work / "Outputs").iterdir()) == ["part2.txt"]     # the crash's output is gone
+
+    def test_a_second_crash_raises(self, tmp_path):
+        drv, work = self._driver(tmp_path, crashes=2, fail=139)
+        with pytest.raises(RuntimeError, match=r"exited with 139 \(attempt 2; the first crashed too\)"):
+            drv.run(work)
+        assert (work / "count").read_text().strip() == "2"
+
+    @pytest.mark.parametrize("fail", [1, 137, 143])
+    def test_other_failures_are_not_run_again(self, tmp_path, fail):
+        drv, work = self._driver(tmp_path, crashes=1, fail=fail)
+        with pytest.raises(RuntimeError, match=rf"exited with {fail} in "):
+            drv.run(work)
+        assert (work / "count").read_text().strip() == "1"
 
 
 # ---------------------------------------------------------------------------

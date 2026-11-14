@@ -46,6 +46,7 @@ import os
 import platform
 import re
 import shutil
+import signal
 import struct
 import subprocess
 import tempfile
@@ -64,8 +65,19 @@ EV_PER_G_TO_GY = 1.602176e-19 * 1000.0  # eV/g per primary → Gy per proton (Op
 TEMPLATE_PATH = Path(__file__).with_name("mcsquare_config_template.txt")
 DEFAULT_SCANNER = "UCL_Toshiba"
 DEFAULT_BDL = "BDL_default_DN_RangeShifter.txt"
+# The engine crashes now and then in a multithreaded run (a segfault in about 1 of 12 beamlet runs with
+# 8 threads, 2026-11-13); a run that dies on one of these signals is run once more. A kill from outside
+# (the OOM killer, a cancel) is not retried.
+CRASH_SIGNALS = (signal.SIGSEGV, signal.SIGBUS, signal.SIGABRT)
+RETRIES_ON_CRASH = 1
 
 Vec3 = Tuple[float, float, float]
+
+
+def crash_signal(returncode: int) -> Optional[int]:
+    """The crash signal a run died on, or None: ``-N`` from the process itself, ``128 + N`` through the launcher's shell."""
+    sig = -returncode if returncode < 0 else returncode - 128 if returncode > 128 else 0
+    return sig if sig in CRASH_SIGNALS else None
 
 
 def default_assets_dir() -> Path:
@@ -665,6 +677,7 @@ class MCsquareRun:
     config_path: Path
     stdout_path: Path
     returncode: int
+    attempts: int = 1
 
 
 class MCsquareDriver:
@@ -764,7 +777,11 @@ class MCsquareDriver:
     # ----- running ----------------------------------------------------
 
     def run(self, work: Path, config_path: Optional[Path] = None) -> MCsquareRun:
-        """Run the engine in ``work`` through its launcher; raises on a non-zero exit."""
+        """Run the engine in ``work`` through its launcher; raises on a non-zero exit.
+
+        A run that crashes (:data:`CRASH_SIGNALS`) is run once more from the same inputs: the first
+        attempt's log is kept as ``mcsquare-attempt1.log`` and its partial ``Outputs/`` removed.
+        """
         ok, reason = self.availability()
         if not ok:
             raise RuntimeError(f"MCsquare is not available: {reason}")
@@ -773,15 +790,26 @@ class MCsquareDriver:
         stdout_path = work / "mcsquare.log"
         env = dict(os.environ)
         env["MCsquare_Materials_Dir"] = str(self.assets.materials_dir)
-        with open(stdout_path, "w") as log:
-            proc = subprocess.run(
-                ["sh", str(self.assets.launcher), str(config_path)],
-                cwd=str(work), stdout=log, stderr=subprocess.STDOUT, env=env, check=False,
-            )
+        attempts = 0
+        while True:
+            attempts += 1
+            with open(stdout_path, "w") as log:
+                proc = subprocess.run(
+                    ["sh", str(self.assets.launcher), str(config_path)],
+                    cwd=str(work), stdout=log, stderr=subprocess.STDOUT, env=env, check=False,
+                )
+            sig = crash_signal(proc.returncode)
+            if sig is None or attempts > RETRIES_ON_CRASH:
+                break
+            stdout_path.replace(work / f"mcsquare-attempt{attempts}.log")
+            shutil.rmtree(work / "Outputs", ignore_errors=True)
+            logger.warning("MCsquare crashed ({}, exit {}) in {}; running it once more",
+                           signal.Signals(sig).name, proc.returncode, work)
         if proc.returncode != 0:
             tail = stdout_path.read_text()[-2000:]
-            raise RuntimeError(f"MCsquare exited with {proc.returncode} in {work}:\n{tail}")
-        return MCsquareRun(work, config_path, stdout_path, proc.returncode)
+            again = f" (attempt {attempts}; the first crashed too)" if attempts > 1 else ""
+            raise RuntimeError(f"MCsquare exited with {proc.returncode}{again} in {work}:\n{tail}")
+        return MCsquareRun(work, config_path, stdout_path, proc.returncode, attempts)
 
     # ----- results ----------------------------------------------------
 
@@ -914,7 +942,8 @@ class MCsquareDriver:
 
 
 __all__ = [
-    "EV_PER_G_TO_GY", "DEFAULT_SCANNER", "DEFAULT_BDL", "default_assets_dir",
+    "EV_PER_G_TO_GY", "DEFAULT_SCANNER", "DEFAULT_BDL", "CRASH_SIGNALS", "RETRIES_ON_CRASH", "crash_signal",
+    "default_assets_dir",
     "MCsquareAssets", "CalibrationTables", "BeamDataLibrary",
     "default_config", "render_config", "mcsquare_offset", "to_engine_frame", "from_engine_frame",
     "native_row_permutation", "isocenter_to_mcsquare", "write_ct_mhd", "read_mhd",

@@ -47,3 +47,10 @@ count, scanner and beam data library are settings and per-request parameters;
 - The validation harness's proton case runs through the driver with the
   water-only calibration, against the NIST PSTAR CSDA ranges entered on 2026-10-21.
 - The legacy `/plans` workflows ran on OpenTPS until R15 rewrote them on the services.
+- **A crashed run is run once more (2026-11-13).** The engine dies now and then on a segmentation fault in a
+  multithreaded beamlet run (exit 139): 4 of 28 fast runs of `mco_robust_proton` with 8 threads, 0 of 24 with one, so
+  a race inside the engine is the likely cause; upstream knows no such crash. `MCsquareDriver.run` runs the engine
+  once more when it dies on SIGSEGV, SIGBUS or SIGABRT, keeps the first attempt's log as `mcsquare-attempt1.log`
+  and removes its partial outputs; a kill from outside (the OOM killer, a cancel) is not retried. The retry
+  recovered 2 of 3 crashed runs in a trial, so `mco_robust_proton` also runs the engine on one thread
+  (`docs/reports/engine-performance.md`).

@@ -2126,3 +2126,23 @@ clean checkout, one case per process on the 96-core server. Each record has a fo
   a difference of 0, and every other value equals the run from `0228ec6`. The R10 folder
   `2026-11-12-small-fields-0228ec6/` holds it with the batch, and keeps the first round beside them
   (`results-0228ec6.json`, `run-summary-0228ec6.md`).
+
+## MCsquare: a crashed run is run once more; the robust proton case on one thread (2026-11-13)
+
+- **The failure.** The nightly run of 2026-11-13 (`ad883f2`) erred in `mco_robust_proton`: MCsquare died on a
+  segmentation fault (exit 139) while computing the robust scenarios' beamlets with 8 threads. The case passed in the
+  nights before, and neither the engine nor its driver nor the case had changed since 2026-10-30. `pb_vs_mc`, red
+  since 2026-11-07, passed.
+- **Repeated on the 96-core server, fast mode.** With 8 threads 4 of 28 runs crashed; with one thread 0 of 24. One
+  thread doubles the case's time (about 110 s against 55 s). Our binary is upstream's "Release_1.1", built
+  2024-08-06; upstream reports no such crash, and has open out-of-bounds reads (issue #42, merge request !7).
+- **The retry.** `MCsquareDriver.run` runs the engine once more when it dies on SIGSEGV, SIGBUS or SIGABRT (128 + N
+  through the launcher's shell, or -N), keeps the first attempt's log as `mcsquare-attempt1.log`, removes its partial
+  `Outputs/` and logs a warning; `MCsquareRun.attempts` counts the runs. A kill from outside (SIGKILL, SIGTERM) and
+  any other failure raise at once. In a trial of 16 runs with 8 threads, 3 crashed: the retry recovered 2, and the
+  engine crashed again in the third. Tests: `TestCrashRetry` (a stand-in launcher that fails on chosen attempts).
+- **One thread.** `mco_robust_proton` now runs MCsquare with one thread (`nb_threads: 1`). The engine digest covers
+  the engine's files only, so no cached result changes.
+- **Open.** The check "robust set: the robust gap within the error bound" failed in 1 of 16 runs with 8 threads and 1
+  of 24 with one, by up to 6 %: in fast mode, with the seed from the clock, the gap and the bound vary from run to
+  run and sit close together. Not changed here. ADR 0006 records the retry.

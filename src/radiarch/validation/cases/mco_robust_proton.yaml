@@ -1,8 +1,8 @@
 name: mco_robust_proton
 kind: mco_robust
-description: A robust proton Pareto set (R11) on a synthetic phantom - a cylindrical CTV, an organ 5 mm behind it, a bone slab over half the anterior field - with two fields (gantry 0 and 90) on MCsquare, against range errors of 3.5 % and 3 mm lateral setup errors. Checks the worst-case and nominal values, the CTV minimum in every scenario, the robust plans against the nominal set's plans in the scenarios, automatic navigation and the deliverable spots. Each solve takes up to 2000 iterations. Fast mode doubles the grid, widens the spots and runs fewer primaries.
+description: A robust proton Pareto set (R11) on a synthetic phantom - a cylindrical CTV, an organ 5 mm behind it, a bone slab over half the anterior field - with two fields (gantry 0 and 90) on MCsquare, against range errors of 3.5 % and 3 mm lateral setup errors. Checks the worst-case and nominal values, the CTV minimum in every scenario, the robust plans against the nominal set's plans in the scenarios, automatic navigation and the deliverable spots. Each solve takes up to 2000 iterations. Fast mode doubles the grid, widens the spots and runs fewer primaries. MCsquare runs on one thread, since with 8 its robust beamlet runs crashed now and then (4 of 28 fast runs, 0 of 24 on one thread; 2026-11-13).
 engine: mcsquare
-engine_params: {nb_primaries: 10000, nb_threads: 8}
+engine_params: {nb_primaries: 10000, nb_threads: 1}
 spacing_mm: 2.0
 spot_spacing_mm: 5.0
 gantry_deg: [0.0, 90.0]
