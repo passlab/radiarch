@@ -325,6 +325,43 @@ def test_gpu_matches_cpu(eng):
     assert np.max(np.abs(d_gpu[mm] / d_cpu[mm] - 1)) < 0.01      # roulette entries at the threshold may round differently
 
 
+def test_radiological_depth_on_threads_is_the_same(eng):
+    """The radiological depth's blocks of rays and points on threads (``n_jobs``) give the depths of one thread, and
+    so the influence matrix is the same too."""
+    density, sp, org = _water()
+    density[:, 10:20, :] = 0.26
+    plan = _field(60.0, gantry=30.0)
+    one = eng.influence_matrix(density, sp, org, plan, params={"device": "cpu", "n_jobs": 1})
+    four = eng.influence_matrix(density, sp, org, plan, params={"device": "cpu", "n_jobs": 4})
+    assert one.nnz > 0 and (one != four).nnz == 0
+
+
+@pytest.mark.skipif(not _gpu_ok(), reason="CuPy or a CUDA device not available")
+@pytest.mark.parametrize("budget", [16_000_000, 3_000])
+def test_gpu_batched_columns_equal_one_at_a_time(eng, monkeypatch, budget):
+    """The batched GPU columns are the one-column-at-a-time GPU columns, bit for bit: in lung (the density-scaled
+    lateral tables), with the roulette, two beamlet sizes, and batches cut small enough to split a field."""
+    import radiarch.services.dose_engines.pb as pbm
+
+    density, sp, org = _water()
+    density[:, 10:20, :] = 0.26
+    plan = _field(60.0, gantry=30.0)
+    plan2 = _field(40.0, gantry=200.0, beamlet=2.5)
+    params = {"device": "gpu"}
+
+    def one_at_a_time(self, r, jobs, u, w, order, u_sorted, vox, amp):
+        return [(c, *self._beamlet_column(r, c, x, y, bx, by, u, w, order, u_sorted, vox, amp)) for c, x, y, bx, by in jobs]
+
+    monkeypatch.setattr(pbm, "GPU_PAIR_BUDGET", budget)
+    for p in (plan, plan2):
+        batched = eng.influence_matrix(density, sp, org, p, params=params).tocsc()
+        with monkeypatch.context() as m:
+            m.setattr(pbm.PencilBeamEngine, "_beamlet_columns_gpu", one_at_a_time)
+            single = eng.influence_matrix(density, sp, org, p, params=params).tocsc()
+        assert batched.nnz > 0 and np.array_equal(batched.indptr, single.indptr)
+        assert np.array_equal(batched.indices, single.indices) and np.array_equal(batched.data, single.data)
+
+
 def test_gpu_backend_keeps_the_locale():
     """Initialising CUDA sets the thread's locale to C; the backend puts it back, so text files keep their encoding."""
     import locale

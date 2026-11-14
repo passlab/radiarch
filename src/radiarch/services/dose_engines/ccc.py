@@ -25,6 +25,7 @@ warning.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -177,6 +178,17 @@ class CCCCalibration:
 # Engine
 # ---------------------------------------------------------------------------
 
+def auto_jobs() -> int:
+    """The process count for ``n_jobs`` 0: half the cores this process may run on, at most 32. Each process takes a
+    share of the beamlets and every beamlet is computed alone, so the matrices are the same for any count; on the
+    96-core server TG-119's matrix took 660, 295, 147 and 79 s at 4, 8, 16 and 32 processes."""
+    try:
+        cores = len(os.sched_getaffinity(0))
+    except AttributeError:                       # not Linux
+        cores = os.cpu_count() or 1
+    return max(1, min(32, cores // 2))
+
+
 @dataclass
 class CCCEngine:
     """Photon dose engine on the WiscPlan collapsed-cone binary."""
@@ -195,7 +207,7 @@ class CCCEngine:
         set the two constants directly. ``RADIARCH_CCC_SCATTER`` is the default."""
         s = _settings()
         p = params or {}
-        n_jobs = int(p.get("n_jobs", s.ccc_n_jobs))
+        n_jobs = int(p.get("n_jobs", s.ccc_n_jobs)) or auto_jobs()
         scatter = str(p.get("scatter", getattr(s, "ccc_scatter", "shipped") or "shipped")).lower()
         if scatter not in ("shipped", "full"):
             raise EngineParamError(f"ccc scatter must be 'shipped' or 'full', not {scatter!r}")

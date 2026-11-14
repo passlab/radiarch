@@ -91,6 +91,49 @@ CPU), TG-119 1004 s (4.5 times), of which its solves are 104 s, and the lung Par
 influence matrices (about 220 s of the protocol case) and the collapsed cone on the CPU (about 840 s of TG-119), where
 a GPU collapsed cone (DoseCUDA, above) would be the next measured trial.
 
+## Faster engines, and a GPU collapsed cone tried (2026-11-14)
+
+The project lead chose four items: the collapsed cone's process count, the pencil beam's GPU influence matrices, its
+radiological depth on CPU threads, and a measured trial of DoseCUDA. Measured on the 96-core server and one A100:
+
+| Item | Before | After | Results |
+|---|---|---|---|
+| Collapsed cone, TG-119 influence matrix, 4 to 32 processes (`RADIARCH_CCC_N_JOBS`; 0 = half the cores, at most 32) | 660 s | 79 s | the same matrix at 4, 8, 16 and 32 processes |
+| Pencil beam's radiological depth on its CPU threads, the lung protocol case on the CPU | 2072 s | 1639 s | every value the record's |
+| Pencil beam's GPU influence matrices in batches, one fused kernel per batch, the case on one A100 | 299 s | 224 to 227 s | the same matrix bit for bit |
+
+- **The collapsed cone** already ran a process per batch of beamlets, each beamlet alone; only its default, 4, held it
+  back. From 8 to 32 processes each doubling halves the time.
+- **The radiological depth** samples rays and interpolates them at the voxels, both independent per ray and voxel;
+  SciPy's interpolation releases the GIL, so threads give the depths of one thread.
+- **On the GPU** the time was not, as first thought, Python waiting between beamlet columns: batching the columns
+  alone saved 1 %. It was the interpolation of the kernel tables, which CuPy ran as a separate pass over every
+  (beamlet, voxel) pair for each step. One CUDA kernel per batch now computes every pair's value; it repeats CuPy's
+  operations in their order and precision, compiled without fused multiply-add, so the matrix is the same bit for bit.
+- **The GPU optimizer was not reproducible.** Two GPU runs of the lung protocol case ended on different plans (one
+  patient's cord maximum 16.5 and 19.1 Gy): cuSPARSE splits long rows and adds the parts in an order that varies from
+  run to run. Both products now sum each row in a fixed order (a warp per row), and two runs give every value the same.
+  The CPU path was not affected.
+
+**DoseCUDA** (GPL-2.0, commit `48c0421`), built outside radiarch and run on the harness's Monte Carlo phantoms, graded
+with `photon_vs_mc`'s metrics:
+
+| Metric | DoseCUDA | WiscPlan CCC | Monte Carlo |
+|---|---|---|---|
+| Water 10 × 10: PDD at 10 cm | 63.1 % | 68.1 % | 68.0 % |
+| Water 10 × 10: gamma 3 %/3 mm pass | 96.4 % | 98.0 % | — |
+| Lung slab 10 × 10: correction factor 50 mm deep (in lung) | 0.772 | 1.008 | 1.002 |
+| Lung slab 10 × 10: correction factor 80 mm deep (in lung) | 0.789 | 1.009 | 1.063 |
+| Lung slab 2 × 2: dose 80 mm deep over dose 20 mm deep | 0.525 | — | 0.641 |
+| Bone slab 10 × 10: correction factor 80 mm deep | 0.911 | 0.929 | 0.941 |
+
+It computed an open 10 × 10 field on 1.7 million voxels in 0.03 s, against WiscPlan's 7 to 20 s, and a 5 × 5 mm
+aperture in 7.6 ms. But it gives about 23 % less dose than Monte Carlo inside lung, through its own CT-number path as
+through a direct density; it ships one beam model (a TrueBeam 6 MV, hence its lower depth dose); and it has no beamlet
+output. Not adopted: WiscPlan at 32 processes builds influence matrices about as fast, with its validated accuracy.
+Its speed would suit plan and arc-segment doses once its lung behaviour is explained and a beam model is commissioned
+to radiarch's machine.
+
 ## MCsquare: speed, and the crash
 
 MCsquare runs on the CPU with as many threads as it is given. Our binary is the upstream "Release_1.1", built

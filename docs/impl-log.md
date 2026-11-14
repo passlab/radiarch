@@ -2214,3 +2214,32 @@ ADR 0022, under the same setting (`optimizer_device`, the CPU the default).
   2535 s (20001 s in the record), every graded check passing, its second sets' error bounds 0.4501 and 0.9413 (0.3893
   and 0.8545 in the record, from slightly different deliverable plans). The engines remain: the pencil beam's
   influence matrices and the collapsed cone.
+
+## Faster engines, a GPU collapsed cone tried, and the GPU optimizer made reproducible (2026-11-14)
+
+The project lead chose four items from `docs/reports/engine-performance.md`; measured on the 96-core server and one A100.
+- **The collapsed cone's process count** (`ccc.py`: `auto_jobs`; `config.py`): `RADIARCH_CCC_N_JOBS=0` = half the
+  cores the process may run on, at most 32; the default stays 4. TG-119's influence matrix: 660, 295, 147 and 79 s at
+  4, 8, 16 and 32 processes, the same matrix at each (the 4-process run shared the server). Tests:
+  `test_the_matrix_is_the_same_for_any_process_count` (the engine, one process against three),
+  `test_n_jobs_zero_is_half_the_cores`. `docs/PRODUCTION.md` names the setting.
+- **The pencil beam's radiological depth on its CPU threads** (`pb.py`, `radiological_depth(..., n_jobs)`): blocks of
+  rays and of voxels on a thread pool, cut smaller so every thread has some; one thread and the GPU take the old loop.
+  The lung protocol case on the CPU: 1639 s against 2072 s, all 44 graded checks passing, every value the record's.
+  Test: `test_radiological_depth_on_threads_is_the_same`.
+- **The pencil beam's GPU influence matrices** (`pb.py`: `_beamlet_columns_gpu`, `_pair_values`, `_PAIR_VALUES_SRC`,
+  `GPU_PAIR_BUDGET`): beamlets that share a table taken together, at most 16 million (beamlet, voxel) pairs a batch,
+  one fused CUDA kernel computing every pair's value, the roulette per beamlet. Batching alone saved 1 %; the fused
+  kernel 1.8 times on a 1200-beamlet phantom; the lung protocol case on one A100 224 to 227 s against 299 s. The matrix
+  is the one-column GPU path's, bit for bit (`test_gpu_batched_columns_equal_one_at_a_time`, two beamlet sizes, lung,
+  batches cut small).
+- **The GPU optimizer's products in a fixed order** (`array_backend.py`: `_ROW_SUMS_SRC`, `_row_sums`): two GPU runs of
+  the lung protocol case had ended on different plans, cuSPARSE adding the parts of long rows in a varying order. Both
+  products are now a warp per row; two runs give every value the same, in 225.6 and 223.9 s. ADR 0022's correction.
+  Test: `test_the_products_repeat_bit_for_bit` (long rows both ways, 20 repeats).
+- **DoseCUDA, a measured trial** (GPL-2.0, `48c0421`, built outside radiarch with CUDA 13.0 for the A100): 0.03 s for
+  an open field against WiscPlan's 7 to 20 s, 7.6 ms for a 5 × 5 mm aperture; about 23 % below Monte Carlo inside a lung
+  slab (correction factors 0.77 and 0.79 against 1.00 and 1.06; WiscPlan 1.01 and 1.01), through its own CT-number
+  path as through a direct density; one TrueBeam beam model, no beamlet output. Not adopted. Its module reads the MLC
+  array's memory as written, so a reordered copy is read as another aperture.
+- ADR 0015 records the two pencil-beam changes, the plan's section "Performance and GPU paths" its rows.

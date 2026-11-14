@@ -276,6 +276,13 @@ TG-101; the results it names are lung VMAT and SBRT plans, a head-and-neck
 - CuPy's first CUDA use sets the thread's locale to C (driver 580), after
   which Python reads and writes text as ASCII; the GPU backend restores the
   locale, and the harness passes explicit encodings.
+- The radiological depth runs on the engine's CPU threads (`n_jobs`, 2026-11-14): its blocks of rays and of voxels
+  are independent and SciPy's interpolation releases the GIL, so the depths are those of one thread; the lung
+  protocol case on the CPU took 1639 s against 2072 s.
+- On the GPU the influence matrix is built in batches of beamlets that share a table, one fused CUDA kernel computing
+  every (beamlet, voxel) pair's value (2026-11-14). The kernel repeats CuPy's operations in their order and precision
+  and is compiled without fused multiply-add, so the matrix is the one-column-at-a-time GPU path's, bit for bit
+  (`test_gpu_batched_columns_equal_one_at_a_time`); the lung protocol case on the GPU took 227 s against 299 s.
 - Open: a Monte Carlo reference of a tumour in lung (interfaces, build-up
   inside the target) and whole-plan Monte Carlo recomputation; direct leaf
   optimization for VMAT; the physicist's review of the R8 record.

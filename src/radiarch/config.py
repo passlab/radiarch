@@ -67,7 +67,7 @@ class Settings(BaseSettings):
             "Empty = the copy vendored with OpenTPS core."
         ),
     )
-    ccc_n_jobs: int = Field(default=4, ge=1, description="Parallel CCC processes per dose/Dij build.")
+    ccc_n_jobs: int = Field(default=4, ge=0, description="Parallel CCC processes per dose/Dij build; 0 = half the cores, at most 32. The matrices are the same for any count.")
     ccc_scatter: str = Field(default="shipped", description="CCC scatter setting: 'shipped' (truncated at ~2 cm, fast) or 'full' (0.01 % cutoff, 10 cm mask; ~45x slower). Per-run params override.")
     ccc_calibration_spacing_mm: float = Field(
         default=2.5, gt=0,

@@ -84,4 +84,9 @@ optimizer on the GPU, the engines are what is left: the pencil beam's influence 
   them within the solver's tolerance.
 - Still on the CPU: the engines (the pencil beam has its own setting), building each problem's matrices, and the small
   linear programs of the Pareto sets' sandwich and navigation.
+- **Correction, 2026-11-14: the products in a fixed order.** Two GPU runs of the lung protocol case ended on different
+  plans (one patient's cord maximum 16.5 and 19.1 Gy): cuSPARSE's product splits long rows (a voxel inside many
+  beamlets, a beamlet's column of the transpose) and adds the parts in an order that varies from run to run. Both
+  products of `DeviceMatrix` are now one CUDA kernel, a warp per row summing in a fixed order, and two runs give every
+  value the same, in the same time (`test_the_products_repeat_bit_for_bit`).
 - A GPU's memory bounds the problems it takes: about 14 scenarios of the lung protocol's matrix size fit in 40 GB.

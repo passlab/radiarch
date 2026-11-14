@@ -99,6 +99,18 @@ class TestOnTheGPU:
         assert np.allclose(dm.backward(g), cpu.backward(g), rtol=1e-12, atol=0)
         assert isinstance(dm.backward(gpu.asarray(g)), np.ndarray)
 
+    def test_the_products_repeat_bit_for_bit(self):
+        # cuSPARSE summed long rows in a varying order: two runs of one solve could end on two plans. Long rows both
+        # ways here: 3000 entries a row, 1500 a column
+        A = sp.random(1500, 6000, density=0.5, format="csr", random_state=3, dtype=np.float32)
+        dm = AB.optimizer_device("gpu").matrix(A, (1500,))
+        rng = np.random.default_rng(4)
+        w, g = rng.random(6000), rng.random(1500)
+        f0, b0 = AB.to_host(dm.forward(w)), dm.backward(g)
+        assert all(np.array_equal(AB.to_host(dm.forward(w)), f0) for _ in range(20))
+        assert all(np.array_equal(dm.backward(g), b0) for _ in range(20))
+        assert np.allclose(f0, A.astype(np.float64) @ w, rtol=1e-12) and np.allclose(b0, A.T.astype(np.float64) @ g, rtol=1e-12)
+
     @pytest.mark.parametrize("obj", [
         O.DMin("s", 60, 2.0), O.DMax("s", 40, 1.5), O.DUniform("s", 50), O.DVHMin("s", 55, 0.05), O.DVHMax("s", 30, 0.2),
         O.EUD("s", 30, 4.0), O.MeanDose("s", 10), O.EUDMax("s", 5, 8.0), O.EUDMin("s", 65, -10.0), O.RMSOver("s", 40),

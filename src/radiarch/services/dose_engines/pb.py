@@ -272,11 +272,13 @@ def _segment_extent(seg: PhotonSegment, beamlets: np.ndarray, apertures: bool, m
 # ---------------------------------------------------------------------------
 
 def radiological_depth(be: Backend, density, spacing_mm, origin_mm, source, xb, yb, d, sad_mm,
-                       u, w, t, ray_spacing_mm: float, ray_step_mm: float):
+                       u, w, t, ray_spacing_mm: float, ray_step_mm: float, n_jobs: int = 1):
     """Water-equivalent depth (mm) at points given by their isocenter-plane coordinates ``(u, w)`` and
     distance ``t`` from the source along the axis. Rays from the source through a regular ``(u, w)`` grid
     are sampled every ``ray_step_mm`` (trilinear density, zero outside the volume), integrated by the
-    trapezoid rule and interpolated at the points."""
+    trapezoid rule and interpolated at the points. On the CPU with ``n_jobs`` > 1 the blocks of rays and of
+    points run on that many threads (SciPy's interpolation releases the GIL); every value is computed as on one
+    thread, so the depths are the same."""
     xp = be.xp
     sx, sy, sz = (float(v) for v in spacing_mm)
     ox, oy, oz = (float(v) for v in origin_mm)
@@ -300,9 +302,13 @@ def radiological_depth(be: Backend, density, spacing_mm, origin_mm, source, xb, 
     tt = xp.asarray(t_start + np.arange(nt) * ray_step_mm)
     ww = xp.asarray(w0 + np.arange(nw) * ray_spacing_mm)
     xb_, yb_, d_, s_ = (xp.asarray(np.asarray(v, float)) for v in (xb, yb, d, source))
+    threads = 1 if be.gpu else max(1, int(n_jobs))
     rows = max(1, RAY_CHUNK_SAMPLES // (nw * nt))
+    if threads > 1:                     # smaller blocks so that every thread has some; each ray is computed whole
+        rows = max(1, min(rows, math.ceil(nu / (4 * threads))))
     padded = xp.pad(density, _PAD) if be.gpu else None
-    for i0 in range(0, nu, rows):
+
+    def rays(i0: int) -> None:
         i1 = min(nu, i0 + rows)
         uu = xp.asarray(u0 + np.arange(i0, i1) * ray_spacing_mm)
         dirs = d_[None, None, :] + (uu[:, None, None] * xb_[None, None, :] + ww[None, :, None] * yb_[None, None, :]) / sad_mm
@@ -312,11 +318,24 @@ def radiological_depth(be: Backend, density, spacing_mm, origin_mm, source, xb, 
         rho = _lookup(be, density, coords.reshape(3, -1), padded).reshape(coords.shape[1:])
         acc = xp.cumsum((rho[..., 1:] + rho[..., :-1]) * 0.5, axis=-1) * ray_step_mm
         grid[i0:i1, :, 1:] = (acc * length[..., None]).astype(xp.float32)
+
     out = xp.empty(u.shape[0], dtype=xp.float32)
-    for k0 in range(0, u.shape[0], VOXEL_CHUNK):
-        k1 = min(u.shape[0], k0 + VOXEL_CHUNK)
+    chunk = VOXEL_CHUNK if threads == 1 else max(65536, min(VOXEL_CHUNK, math.ceil(u.shape[0] / (4 * threads))))
+
+    def points(k0: int) -> None:
+        k1 = min(u.shape[0], k0 + chunk)
         c = xp.stack([(u[k0:k1] - u0) / ray_spacing_mm, (w[k0:k1] - w0) / ray_spacing_mm, (t[k0:k1] - t_start) / ray_step_mm])
         out[k0:k1] = be.ndimage.map_coordinates(grid, c, order=1, mode="nearest", prefilter=False)
+
+    if threads == 1:
+        for i0 in range(0, nu, rows):
+            rays(i0)
+        for k0 in range(0, u.shape[0], chunk):
+            points(k0)
+    else:
+        with ThreadPoolExecutor(max_workers=threads) as pool:
+            list(pool.map(rays, range(0, nu, rows)))
+            list(pool.map(points, range(0, u.shape[0], chunk)))
     return out
 
 
@@ -445,6 +464,71 @@ def _beamlet_tables(kernel_key: str, n: int, fwhm_mm: float, bx: float, by: floa
 
 ANCHOR_STEP_MM = 0.05            # a beamlet's offset from the fluence grid, to this: exact for sizes of its multiples
 MAX_BEAMLET_TABLES = 128         # an engine's influence-matrix tables (about 5 MB each) before it starts afresh
+GPU_PAIR_BUDGET = 16_000_000     # (beamlet, voxel) pairs per GPU batch of influence-matrix columns: about 1.6 GB of work arrays
+
+# The value of each (beamlet, voxel) pair of a GPU batch in one pass: what _bilinear / _bilinear_scaled and the sum
+# over the kernel's components in _beamlet_column compute, operation for operation and in the same precision (the
+# interpolation in float64 from float32 tables, the product and the sum in float32). Compiled without fused
+# multiply-add, so every rounding is the one CuPy's separate kernels make and the columns stay the same.
+_PAIR_VALUES_SRC = r'''
+extern "C" __global__ void pair_values(const long long* sel, const long long* beam, const double* u, const double* w,
+        const double* x0, const double* y0, const float* tables, const float* amp, const int* kk, const float* ff,
+        const int scaled, const int ncomp, const int nw, const int nu, const long long nvox, const double grid,
+        const double h, const long long npairs, float* out) {
+    long long p = (long long)blockIdx.x * blockDim.x + threadIdx.x;
+    if (p >= npairs) return;
+    long long s = sel[p], bj = beam[p];
+    double fu = (u[s] - x0[bj]) / grid + h;
+    double fw = (w[s] - y0[bj]) / grid + h;
+    int j = (int)floor(fw), i = (int)floor(fu);
+    j = j < 0 ? 0 : (j > nw - 2 ? nw - 2 : j);
+    i = i < 0 ? 0 : (i > nu - 2 ? nu - 2 : i);
+    double a = fw - (double)j, b = fu - (double)i;
+    long long r0 = (long long)j * nu + i, r1 = (long long)(j + 1) * nu + i;
+    float val = 0.0f;
+    for (int c = 0; c < ncomp; ++c) {
+        double v;
+        if (scaled) {
+            int k = kk[s];
+            float f = ff[s];
+            const float* t0 = tables + ((long long)k * ncomp + c) * nw * nu;
+            const float* t1 = tables + ((long long)(k + 1) * ncomp + c) * nw * nu;
+            double at0 = (1 - a) * ((1 - b) * (double)t0[r0] + b * (double)t0[r0 + 1]) + a * ((1 - b) * (double)t0[r1] + b * (double)t0[r1 + 1]);
+            double at1 = (1 - a) * ((1 - b) * (double)t1[r0] + b * (double)t1[r0 + 1]) + a * ((1 - b) * (double)t1[r1] + b * (double)t1[r1 + 1]);
+            v = (double)(1.0f - f) * at0 + (double)f * at1;
+        } else {
+            const float* t0 = tables + (long long)c * nw * nu;
+            v = (1 - a) * ((1 - b) * (double)t0[r0] + b * (double)t0[r0 + 1]) + a * ((1 - b) * (double)t0[r1] + b * (double)t0[r1 + 1]);
+        }
+        val = val + amp[(long long)c * nvox + s] * (float)v;
+    }
+    out[p] = val;
+}
+'''
+_PAIR_KERNEL: list = []
+
+
+def _pair_values(xp, sel, beam, u, w, x0s, y0s, tables, amp, vox, h: float):
+    """The fused :data:`_PAIR_VALUES_SRC` over a batch's pairs (float32, one per pair)."""
+    if not _PAIR_KERNEL:
+        _PAIR_KERNEL.append(xp.RawKernel(_PAIR_VALUES_SRC, "pair_values", options=("--fmad=false",)))
+    n = int(sel.shape[0])
+    out = xp.empty(n, dtype=xp.float32)
+    if n == 0:
+        return out
+    scaled = "k" in vox
+    k = vox["k"] if scaled else xp.zeros(1, dtype=xp.int32)
+    f = vox["f"] if scaled else xp.zeros(1, dtype=xp.float32)
+    ncomp, nw, nu = int(tables.shape[1]), int(tables.shape[2]), int(tables.shape[3])
+    args = (xp.ascontiguousarray(sel, dtype=xp.int64), xp.ascontiguousarray(beam, dtype=xp.int64),
+            xp.ascontiguousarray(u, dtype=xp.float64), xp.ascontiguousarray(w, dtype=xp.float64),
+            xp.ascontiguousarray(x0s, dtype=xp.float64), xp.ascontiguousarray(y0s, dtype=xp.float64),
+            xp.ascontiguousarray(tables, dtype=xp.float32), xp.ascontiguousarray(amp, dtype=xp.float32),
+            xp.ascontiguousarray(k, dtype=xp.int32), xp.ascontiguousarray(f, dtype=xp.float32),
+            np.int32(scaled), np.int32(ncomp), np.int32(nw), np.int32(nu), np.int64(amp.shape[1]),
+            np.float64(GRID_MM), np.float64(h), np.int64(n), out)
+    _PAIR_KERNEL[0](((n + 255) // 256,), (256,), args)
+    return out
 
 
 def _grid_anchor(c: float) -> Tuple[float, float]:
@@ -663,7 +747,7 @@ class PencilBeamEngine:
         smin = float(min(spacing))
         ray = float(r.ray_spacing_mm or max(smin, 2.0))
         step = float(r.ray_step_mm or max(smin / 2.0, 0.5))
-        drad = radiological_depth(r.be, density_dev, spacing, origin, src, xb, yb, d, sad, u, w, t, ray, step)
+        drad = radiological_depth(r.be, density_dev, spacing, origin, src, xb, yb, d, sad, u, w, t, ray, step, r.n_jobs)
         return {"flat": cand_flat[sel], "u0": u, "w0": w, "t": t, "isq": (sad / t) ** 2, "drad": drad}
 
     def _amplitudes(self, r: _Run, vox) -> Any:
@@ -766,7 +850,9 @@ class PencilBeamEngine:
                 jobs = [(s.first_column + k, *map(float, s.beamlets[k])) for k in range(s.beamlets.shape[0])]
                 def work(chunk, u=u, w=w, order=order, u_sorted=u_sorted, vox=vox, amp=amp):
                     return [(c, *self._beamlet_column(r, c, x, y, bx, by, u, w, order, u_sorted, vox, amp)) for c, x, y, bx, by in chunk]
-                if r.be.gpu or r.n_jobs <= 1 or len(jobs) < 16:
+                if r.be.gpu and r.sampling_mode != "random":
+                    results = self._beamlet_columns_gpu(r, jobs, u, w, order, u_sorted, vox, amp)
+                elif r.be.gpu or r.n_jobs <= 1 or len(jobs) < 16:
                     results = work(jobs)
                 else:
                     size = max(1, math.ceil(len(jobs) / (4 * r.n_jobs)))
@@ -815,6 +901,65 @@ class PencilBeamEngine:
             keep = keep & (~low | (rand * thr < val))
             val = xp.where(low, xp.float32(thr), val)
         return r.be.to_host(vox["flat"][sel[keep]]), r.be.to_host(val[keep])
+
+    def _beamlet_columns_gpu(self, r: _Run, jobs, u, w, order, u_sorted, vox, amp):
+        """:meth:`_beamlet_column` for many beamlets at once on the GPU. The beamlets that share a table (their size and
+        their centres' offset from the fluence grid) are evaluated together: each one's candidate voxels are laid end
+        to end, at most :data:`GPU_PAIR_BUDGET` (beamlet, voxel) pairs a batch, and every value is computed by the same
+        operations as one column at a time, so the columns are the same; what changes is a few dozen kernel launches
+        and three copies to the host a batch, not per column. Returns ``(column, rows, values)`` per job."""
+        import cupyx
+
+        xp = r.be.xp
+        groups: dict = {}
+        for c, x, y, bx, by in jobs:
+            (x0, ox), (y0, oy) = _grid_anchor(float(x)), _grid_anchor(float(y))
+            groups.setdefault((bx, by, ox, oy), []).append((c, float(x), float(y), x0, y0))
+        out = []
+        for (bx, by, ox, oy), members in groups.items():
+            tables, h = self._tables_dev(r, bx, by, ox, oy)
+            reach_u, reach_w = r.cutoff_mm + bx / 2.0, r.cutoff_mm + by / 2.0
+            cols = np.array([m[0] for m in members], dtype=np.int64)
+            xs, ys, x0s, y0s = (xp.asarray(np.array([m[i] for m in members], dtype=np.float64)) for i in (1, 2, 3, 4))
+            lo = xp.searchsorted(u_sorted, xs - reach_u)
+            cnt = r.be.to_host(xp.maximum(xp.searchsorted(u_sorted, xs + reach_u, side="right") - lo, 0))
+            a = 0
+            while a < len(members):
+                b, total = a, 0
+                while b < len(members) and (b == a or total + int(cnt[b]) <= GPU_PAIR_BUDGET):
+                    total += int(cnt[b])
+                    b += 1
+                n = b - a
+                if total == 0:
+                    out += [(int(c), np.zeros(0, np.int64), np.zeros(0, np.float32)) for c in cols[a:b]]
+                    a = b
+                    continue
+                c_dev = xp.asarray(cnt[a:b])
+                ends = xp.cumsum(c_dev)
+                idx = xp.arange(total)
+                pb_ = xp.searchsorted(ends, idx, side="right")                 # each pair's beamlet in the batch
+                sub = order[lo[a:b][pb_] + (idx - (ends - c_dev)[pb_])]
+                m = xp.abs(w[sub] - ys[a:b][pb_]) <= reach_w
+                sel, pbm = sub[m], pb_[m]
+                val = _pair_values(xp, sel, pbm, u, w, x0s[a:b], y0s[a:b], tables[:, :r.n], amp, vox, h)
+                keep = val > 0
+                if r.sampling > 0 and int(val.size):
+                    # the roulette of _beamlet_column, per beamlet: its threshold from its own largest entry, rounded to
+                    # float32 as the one-column comparison rounds it, and its Weyl numbers from its own column
+                    top = xp.full(n, -xp.inf, dtype=xp.float32)
+                    cupyx.scatter_max(top, pbm, val)
+                    thr = (top.astype(xp.float64) * r.sampling).astype(xp.float32)[pbm]
+                    low = val < thr
+                    col = xp.asarray(cols[a:b].astype(np.float64))[pbm]
+                    rand = ((vox["flat"][sel].astype(xp.float64) * _ALPHA + (col + 1) * _BETA + r.seed * 0.1234567) % 1.0).astype(xp.float32)
+                    keep = keep & (~low | (rand * thr < val))
+                    val = xp.where(low, thr, val)
+                rows_h, vals_h = r.be.to_host(vox["flat"][sel[keep]]), r.be.to_host(val[keep])
+                per = np.bincount(r.be.to_host(pbm[keep]), minlength=n)
+                cut = np.cumsum(per)[:-1]
+                out += [(int(c), rr, vv) for c, rr, vv in zip(cols[a:b], np.split(rows_h, cut), np.split(vals_h, cut))]
+                a = b
+        return out
 
     def _tables_dev(self, r: _Run, bx: float, by: float, ox: float = 0.0, oy: float = 0.0):
         key = (r.kernel_key, r.n, r.fwhm_mm, round(bx, 6), round(by, 6), round(r.cutoff_mm, 6), r.be.gpu, r.scales, r.near_mm, ox, oy)

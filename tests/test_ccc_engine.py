@@ -283,3 +283,28 @@ class TestPhysics:
         b = engine.compute_dose(geometry, beam_model, w).dose
         assert np.allclose(a, b) and a.max() > 0
         assert engine.health()["available"] is True and engine.health()["test_only"] is False
+
+
+def test_n_jobs_zero_is_half_the_cores(monkeypatch):
+    from radiarch.config import get_settings
+    from radiarch.services.dose_engines import ccc
+
+    monkeypatch.setattr(ccc.os, "sched_getaffinity", lambda pid: set(range(96)), raising=False)
+    assert ccc.auto_jobs() == 32                                   # at most 32
+    monkeypatch.setattr(ccc.os, "sched_getaffinity", lambda pid: set(range(6)), raising=False)
+    assert ccc.auto_jobs() == 3
+    monkeypatch.setattr(ccc.os, "sched_getaffinity", lambda pid: {0}, raising=False)
+    assert ccc.auto_jobs() == 1
+    monkeypatch.setattr(get_settings(), "ccc_n_jobs", 0)
+    assert ccc.CCCEngine().driver().n_jobs == 1
+
+
+@needs_binary
+def test_the_matrix_is_the_same_for_any_process_count(engine):
+    """Each process takes a share of the beamlets and every beamlet is computed alone: one process and three give the
+    same matrix, entry for entry."""
+    density, spacing, origin = _water_slab()
+    plan = build_photon_plan([(0.0, 0.0)], (-20.0, 20.0), (-20.0, 20.0), 10.0, 1.0, (10.0, 10.0))
+    one = engine.influence_matrix(density, spacing, origin, plan, params={"n_jobs": 1})
+    three = engine.influence_matrix(density, spacing, origin, plan, params={"n_jobs": 3})
+    assert one.nnz > 0 and (one != three).nnz == 0
