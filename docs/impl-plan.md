@@ -392,3 +392,16 @@ navigation only, not hard constraints, deliverable conversion or the viewer pane
   source's fractions
 - [ ] Later **(open)**: an arcs' second set that converges; Pareto plans from one shared aperture pool, with shared
   sweeps for arcs (option B2); tail-mean (CVaR) trade-offs; Pareto sets across beam arrangements; the TROTS benchmark
+
+### Performance and GPU paths (2026-11-13)
+Where the time goes, what a GPU gives and which GPU engines exist: [`reports/engine-performance.md`](reports/engine-performance.md).
+Every GPU path stays behind a setting; the CPU path stays the default (the project lead, 2026-11-13).
+- [x] (2026-11-13) The investigation: the optimizer's products and objective terms on one CPU thread are 77 to 93 % of
+  the multi-criteria cases; `pb` on an A100 runs the lung protocol case 2.8 times faster (its plans differ from the
+  CPU's); the products are 50 to 150 times faster on an A100
+- [ ] The optimizer's products and objective terms on the GPU, behind a setting; the CPU path the default **(next)**
+- [ ] `pb` on the GPU in the image (CuPy), behind its existing setting; records made on one device, an output change
+  **(open)**
+- [ ] CPU: the influence store without zlib compression; the radiological depth over threads **(open)**
+- [ ] Measured trials, each against the references: MOQUI (proton Monte Carlo), DoseCUDA's collapsed cone, pyRadMC
+  (photon Monte Carlo) **(open)**

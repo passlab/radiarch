@@ -2146,3 +2146,22 @@ clean checkout, one case per process on the 96-core server. Each record has a fo
 - **Open.** The check "robust set: the robust gap within the error bound" failed in 1 of 16 runs with 8 threads and 1
   of 24 with one, by up to 6 %: in fast mode, with the seed from the clock, the gap and the bound vary from run to
   run and sit close together. Not changed here. ADR 0006 records the retry.
+
+## Engine performance and GPU options, investigated (2026-11-13)
+
+`docs/reports/engine-performance.md`. Measured from `ad883f2` on the 96-core server with one A100; nothing in radiarch
+changed for it.
+- **Where the time goes.** In the records' rerun of 2026-11-12 the pencil beam's doses dominate the protocol and VMAT
+  cases, and the optimizer the multi-criteria cases (77 to 93 %). The optimizer's products with the influence matrix
+  (SciPy, one thread) and its objective terms (NumPy over the full grid) both run on one CPU thread.
+- **`pb` on an A100** (CuPy, `RADIARCH_PB_DEVICE=gpu`): `protocol_lung_vmat` 728 to 764 s against 2072 s on the CPU;
+  arc doses 27 times faster, influence matrices 4.5 times. Every RTOG 0617 goal passes, but 6 of the 18 comparisons
+  with the CPU-made record differ by more than 1 %: changing device is an output change.
+- **The optimizer's products** on one of the case's influence matrices (1.6 × 10⁸ non-zeros): 281 and 290 ms on one
+  thread, 91 and 73 ms on 32, 1.8 and 1.9 ms on an A100. In `mco_front_tg119` the objective terms take about 2140 s
+  of the solves' 3596 s and the products about 1070 s, so both must move.
+- **GPU engines that exist**: MOQUI (proton Monte Carlo, MIT), DoseCUDA (a CUDA collapsed cone and proton pencil
+  beam, GPL-2.0), pyRadMC (photon Monte Carlo, Apache-2.0); no GPU port of MCsquare; the classic GPU CCC papers
+  released no code.
+- **Decided with the project lead**: the optimizer moves to the GPU next; every GPU path stays behind a setting, and
+  the CPU path stays the default. The plan's new section "Performance and GPU paths" holds the items.
