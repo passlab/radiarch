@@ -50,6 +50,7 @@ from ..config import get_settings
 from ..models.machine import MLCSpec, PhotonMachineSpec
 from ..models.photon_plan import ArcControlPoint, MLCRow, PhotonArc, PhotonBeam, PhotonPlan, arc_step_deg
 from ..models.vmat import ArcDeliverabilityReport, ArcRequest, ArcResult, ArcSpec
+from .array_backend import CPU, OptimizerDevice, device_cache_key, device_for, optimizer_device, to_host
 from .dose_engines.digest import engine_digest
 from .sequencing import Aperture, FluenceMap, apply_machine_limits, fluence_maps, hard_constraint_terms, park_position, sequence_row
 
@@ -280,24 +281,34 @@ def arc_report(beam: PhotonBeam, machine: PhotonMachineSpec, energy_mv: Optional
 
 def optimize_interval_mu(S: sp.csr_matrix, grid_shape: Tuple[int, int, int], cost_terms: CostTerms, mu0: np.ndarray,
                          mu_min: np.ndarray, method: str = "L-BFGS-B", max_iterations: int = 200, tol: float = 1e-9,
-                         hard_terms: Sequence = ()):
+                         hard_terms: Sequence = (), device: OptimizerDevice = CPU):
     """Minimize the objectives over interval metersets ``mu >= mu_min`` with ``dose = S @ mu`` (the solvers keep
-    variables non-negative, so they run on ``mu - mu_min``); with ``hard_terms``, subject to them."""
+    variables non-negative, so they run on ``mu - mu_min``); with ``hard_terms``, subject to them. On a GPU
+    ``device`` the products and the dose are there."""
     from .optimization_solvers import get_solver
     from .sequencing import constrained_metersets
 
     S = S.tocsr()
-    ST = S.T.tocsr()
     base = np.asarray(S @ mu_min, dtype=np.float64)
     if hard_terms:
         z0 = np.maximum(np.asarray(mu0, float) - mu_min, 0.0)
-        z, conv = constrained_metersets(S, grid_shape, cost_terms, z0, base, hard_terms, method, max_iterations, tol)
+        z, conv = constrained_metersets(S, grid_shape, cost_terms, z0, base, hard_terms, method, max_iterations, tol,
+                                        device=device)
         return mu_min + z, conv
+    device = device_for([S], device)
+    if device.gpu:
+        dm = device.matrix(S, grid_shape, base=base)
 
-    def cost_and_grad(z: np.ndarray) -> Tuple[float, np.ndarray]:
-        dose = (base + np.asarray(S @ np.asarray(z, dtype=np.float64))).reshape(grid_shape)
-        loss, g = cost_terms(dose)
-        return float(loss), np.asarray(ST @ g.ravel(order="C"), dtype=np.float64)
+        def cost_and_grad(z: np.ndarray) -> Tuple[float, np.ndarray]:
+            loss, g = cost_terms(dm.forward(z))
+            return float(loss), dm.backward(g)
+    else:
+        ST = S.T.tocsr()
+
+        def cost_and_grad(z: np.ndarray) -> Tuple[float, np.ndarray]:
+            dose = (base + np.asarray(S @ np.asarray(z, dtype=np.float64))).reshape(grid_shape)
+            loss, g = cost_terms(dose)
+            return float(loss), np.asarray(ST @ to_host(g).ravel(order="C"), dtype=np.float64)
 
     z0 = np.maximum(np.asarray(mu0, float) - mu_min, 0.0)
     z, conv = get_solver(method).run(cost_and_grad, z0, max_iterations, tol)
@@ -322,9 +333,10 @@ class VMATPlanResult:
 def plan_arcs(sector_plan: PhotonPlan, weights: np.ndarray, arcs: List[ArcSpec], density_zyx: np.ndarray,
               spacing_mm: Sequence[float], origin_mm: Sequence[float], cost_terms: CostTerms, machine: PhotonMachineSpec,
               engine, engine_params: Optional[dict] = None, *, energy_mv: Optional[float] = None, method: str = "L-BFGS-B",
-              max_iterations: int = 200, name: Optional[str] = None, fractions: int = 1, hard_terms: Sequence = ()) -> VMATPlanResult:
+              max_iterations: int = 200, name: Optional[str] = None, fractions: int = 1, hard_terms: Sequence = (),
+              device: OptimizerDevice = CPU) -> VMATPlanResult:
     """Sector fluence (``weights`` on ``sector_plan``, whose beams are the arcs' sector beams in order) → arcs; the interval
-    metersets subject to ``hard_terms``."""
+    metersets subject to ``hard_terms``, solved on ``device``."""
     expected = [(bid, g, a) for a in arcs for bid, g in zip(a.sector_beam_ids(), a.sector_centres_deg())]
     if len(sector_plan.beams) != len(expected):
         raise ValueError(f"the optimization has {len(sector_plan.beams)} beams; the arcs have {len(expected)} sectors")
@@ -360,7 +372,7 @@ def plan_arcs(sector_plan: PhotonPlan, weights: np.ndarray, arcs: List[ArcSpec],
     S = engine.segment_dose_matrix(density_zyx, spacing_mm, origin_mm, plan0, params=engine_params)
     grid_shape = tuple(np.asarray(density_zyx).shape)
     mu, conv = optimize_interval_mu(S, grid_shape, cost_terms, np.maximum(mu_init, mu_min), mu_min, method, max_iterations,
-                                    hard_terms=hard_terms)
+                                    hard_terms=hard_terms, device=device)
     out_beams, offset = [], 0
     for b in beams:
         n = len(b.segments)
@@ -443,7 +455,7 @@ class VMATService:
         from .dose_persistence import DOSE_FILENAME
         from .machine_model import PhotonMachineModel
 
-        cache_key = request.compute_cache_key(optimization_id)
+        cache_key = device_cache_key(request.compute_cache_key(optimization_id))
         cached = self.store.lookup_by_cache_key(cache_key)
         if cached is not None:
             return cached
@@ -463,22 +475,15 @@ class VMATService:
         engine = get_engine(request.dose_engine.name)
         origin = getattr(geometry, "origin_mm", None) or geometry.result.grid_spec.origin_mm
         grid_shape = tuple(geometry.density.shape)
-        obj_terms = self.optimization_service._build_objective_terms(request.objectives, geometry, grid_shape)
-        con_terms = self.optimization_service._build_constraint_terms(request.constraints, geometry, grid_shape)
-
-        def cost_terms(dose: np.ndarray) -> Tuple[float, np.ndarray]:
-            total = 0.0
-            grad = np.zeros(grid_shape, dtype=np.float64)
-            for term, mask in obj_terms + con_terms:
-                loss, g = term(dose, mask)
-                total += loss
-                grad += g
-            return total, grad
-
+        device = optimizer_device()
+        cost_terms = self.optimization_service.cost_terms(request.objectives, request.constraints, geometry, grid_shape, device)
         res = plan_arcs(plan, weights, request.arcs, geometry.density, geometry.spacing_mm, origin, cost_terms, machine, engine,
                         request.dose_engine.params, energy_mv=request.energy_mv, method=request.solver_method,
                         max_iterations=request.max_iterations, name=f"{plan.name}-vmat-{machine.machine_id}", fractions=request.fractions,
-                        hard_terms=hard_constraint_terms(self.optimization_service, request.hard_constraints, geometry, grid_shape))
+                        hard_terms=hard_constraint_terms(self.optimization_service, request.hard_constraints, geometry, grid_shape, device),
+                        device=device)
+        if device.gpu:
+            res.convergence.notes = list(res.convergence.notes or []) + ["solved on the GPU (optimizer_device)"]
         vmat_id = str(uuid.uuid4())
         bm_id = str(uuid.uuid4())
         bm_paths = BeamModelPaths.for_id(self.beam_model_service.store.base_dir, bm_id)

@@ -2189,3 +2189,28 @@ ADR 0022. The project lead: every GPU path behind a setting, the CPU path the de
   against 4510 s, every graded check passing, the first set's error bound 0.6457 against the record's 0.6443. The
   meterset solves, still on the CPU, are what remains. `docs/PRODUCTION.md` and `docs/architecture.md` name the
   setting.
+
+## The optimizer on a GPU, second stage: meterset solves, robust Pareto sets, second sets (2026-11-13)
+
+ADR 0022, under the same setting (`optimizer_device`, the CPU the default).
+- **`array_backend.py`**: `DeviceMatrix` takes a fixed `base` dose and a dose shape of the rows alone; `device_for`
+  (the setting's device when the matrices fit in 80 % of its free memory, else the CPU) and `device_bytes`.
+- **`optimization.py`**: a problem puts a scenario's matrix on the device when a solve first needs it
+  (`_Problem.device_matrix`; a robust Pareto set, which solves on its own rows, never does); `cost_terms(objectives,
+  constraints, geometry, grid_shape, device)` builds the meterset solves' cost, its masks on the device, in place of
+  the copies `vmat.py` and `apertures.py` each kept.
+- **`sequencing.py`, `vmat.py`, `apertures.py`**: `constrained_metersets`, `optimize_segment_weights`,
+  `sequence_plan`, `optimize_interval_mu`, `plan_arcs` and `hard_constraint_terms` take a `device`; on the CPU their
+  products are those they computed before. The arc and aperture results are stored under device keys and note "solved
+  on the GPU".
+- **`robust_mco.py`, `mco.py`, `mco_apertures.py`**: `StackedOps` keeps each scenario's rows on the device;
+  `WorstCase`, `ScenarioTerm` and `scenario_wise` work on either device; a robust set's masks and a second set's
+  matrix, masks and limits go to the device, and a second set's cache key follows the setting.
+- **Tests**: `TestMetersetsOnTheCPU` and `TestMetersetsOnTheGPU` in `tests/test_optimizer_device.py`. The whole suite on
+  the 96-core server: 1238 pass on the CPU default, 1266 with the setting at `gpu` on an A100 (one test, which read the
+  setting's default through the environment, then read the field's default instead).
+- **Measured on an A100**: `protocol_lung_vmat` 299 s (2072 s on the CPU; its meterset solves 1.6 to 4.9 s against
+  81 to 83 s); `mco_front_tg119` 1004 s (4510 s), every graded check passing, its solves 104 s; `mco_protocol_lung`
+  2535 s (20001 s in the record), every graded check passing, its second sets' error bounds 0.4501 and 0.9413 (0.3893
+  and 0.8545 in the record, from slightly different deliverable plans). The engines remain: the pencil beam's
+  influence matrices and the collapsed cone.

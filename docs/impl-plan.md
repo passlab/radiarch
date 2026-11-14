@@ -402,8 +402,9 @@ Every GPU path stays behind a setting; the CPU path stays the default (the proje
 - [x] (2026-11-13) The optimizer's products and objective terms on the GPU, behind a setting (`optimizer_device`); the
   CPU path the default (ADR 0022): the fluence solves, their hard constraints, the nominal Pareto sets and the
   projections. The lung protocol case 496 s against 2072 s, TG-119 2278 s against 4510 s on an A100
-- [ ] The meterset solves on the GPU too (the arcs' intervals, segment metersets, second sets) and the robust Pareto
-  sets **(next)**
+- [x] (2026-11-13) The meterset solves on the GPU too (the arcs' intervals, segment metersets, second sets) and the
+  robust Pareto sets: the lung protocol case 299 s, TG-119 1004 s against 4510 s, the lung Pareto case 2535 s against
+  20001 s; the engines now dominate
 - [ ] `pb` on the GPU in the image (CuPy), behind its existing setting; records made on one device, an output change
   **(open)**
 - [ ] CPU: the influence store without zlib compression; the radiological depth over threads **(open)**

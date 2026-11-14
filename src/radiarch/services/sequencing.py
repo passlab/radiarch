@@ -42,6 +42,7 @@ import scipy.sparse as sp
 from loguru import logger
 
 from ..models.machine import MLCSpec, PhotonMachineSpec
+from .array_backend import CPU, OptimizerDevice, device_for, to_host
 from ..models.photon_plan import LeafModel, MLCRow, PhotonBeam, PhotonPlan, PhotonSegment, tip_tail
 
 
@@ -259,33 +260,44 @@ def plan_coverage(source: PhotonPlan, apertures: PhotonPlan) -> sp.csc_matrix:
     return sp.csc_matrix((vals, (rows, cols)), shape=(int(source.n_beamlets), k), dtype=np.float64)
 
 
-def hard_constraint_terms(optimization_service, specs: Sequence, geometry, grid_shape: Tuple[int, int, int]) -> List:
-    """R11.2's hard-constraint terms for ``specs`` (:class:`~radiarch.models.optimization.HardConstraint`) on the dose grid."""
+def hard_constraint_terms(optimization_service, specs: Sequence, geometry, grid_shape: Tuple[int, int, int],
+                          device: OptimizerDevice = CPU) -> List:
+    """R11.2's hard-constraint terms for ``specs`` (:class:`~radiarch.models.optimization.HardConstraint`) on the dose
+    grid, their masks on ``device``."""
     from .hard_constraints import HardConstraintTerm
 
-    return [HardConstraintTerm(s, optimization_service._resolve_mask(geometry, s.structure_name, grid_shape)) for s in specs]
+    def mask(s):
+        m = optimization_service._resolve_mask(geometry, s.structure_name, grid_shape)
+        return device.asarray(m) if device.gpu else m
+    return [HardConstraintTerm(s, mask(s)) for s in specs]
 
 
 def constrained_metersets(S: sp.csr_matrix, grid_shape: Tuple[int, int, int], cost_terms: Callable[[np.ndarray], Tuple[float, np.ndarray]],
                           z0: np.ndarray, base: Optional[np.ndarray], hard_terms: Sequence, method: str, max_iterations: int,
-                          tol: float = 1e-9) -> Tuple[np.ndarray, object]:
+                          tol: float = 1e-9, device: OptimizerDevice = CPU) -> Tuple[np.ndarray, object]:
     """Minimize ``cost_terms`` over ``z >= 0`` with ``dose = base + S @ z``, subject to ``hard_terms`` (R11.2's
     :class:`~radiarch.services.hard_constraints.HardConstraintTerm`) by the augmented Lagrangian. Returns ``z`` and a
     :class:`~radiarch.models.optimization.ConvergenceInfo` whose ``constraint_violations`` give each constraint's
-    excess in Gy (0 when met) and whose ``success`` is false when one is not met."""
+    excess in Gy (0 when met) and whose ``success`` is false when one is not met. On a GPU ``device`` the products
+    and the dose are there (:mod:`.array_backend`)."""
     from ..models.optimization import ConvergenceInfo
     from .hard_constraints import solve_with_hard_constraints
     from .optimization_solvers import get_solver
 
     S = S.tocsr()
-    ST = S.T.tocsr()
-    b = np.zeros(S.shape[0]) if base is None else np.asarray(base, dtype=np.float64).ravel()
+    device = device_for([S], device)
+    if device.gpu:
+        dm = device.matrix(S, grid_shape, base=base)
+        forward, backward = dm.forward, dm.backward
+    else:
+        ST = S.T.tocsr()
+        b = np.zeros(S.shape[0]) if base is None else np.asarray(base, dtype=np.float64).ravel()
 
-    def forward(z: np.ndarray) -> np.ndarray:
-        return (b + np.asarray(S @ np.asarray(z, dtype=np.float64))).reshape(grid_shape)
+        def forward(z: np.ndarray) -> np.ndarray:
+            return (b + np.asarray(S @ np.asarray(z, dtype=np.float64))).reshape(grid_shape)
 
-    def backward(g: np.ndarray) -> np.ndarray:
-        return np.asarray(ST @ np.asarray(g).ravel(order="C"), dtype=np.float64)
+        def backward(g: np.ndarray) -> np.ndarray:
+            return np.asarray(ST @ to_host(g).ravel(order="C"), dtype=np.float64)
 
     out = solve_with_hard_constraints(list(hard_terms), forward, backward, np.asarray(z0, dtype=np.float64), get_solver(method),
                                       max_iterations, tol, dose_terms=cost_terms)
@@ -305,20 +317,30 @@ def optimize_segment_weights(
     max_iterations: int = 200,
     tol: float = 1e-9,
     hard_terms: Sequence = (),
+    device: OptimizerDevice = CPU,
 ) -> Tuple[np.ndarray, object]:
     """Minimize the plan objectives over segment metersets ``w >= 0`` with ``dose = S @ w``; with ``hard_terms``,
-    subject to them (:func:`constrained_metersets`)."""
+    subject to them (:func:`constrained_metersets`). On a GPU ``device`` the products and the dose are there."""
     from .optimization_solvers import get_solver
 
     if hard_terms:
-        return constrained_metersets(segment_dose, grid_shape, cost_terms, w0, None, hard_terms, method, max_iterations, tol)
+        return constrained_metersets(segment_dose, grid_shape, cost_terms, w0, None, hard_terms, method, max_iterations, tol,
+                                     device=device)
     S = segment_dose.tocsr()
-    ST = S.T.tocsr()
+    device = device_for([S], device)
+    if device.gpu:
+        dm = device.matrix(S, grid_shape)
 
-    def cost_and_grad(w: np.ndarray) -> Tuple[float, np.ndarray]:
-        dose = np.asarray(S @ np.asarray(w, dtype=np.float64)).reshape(grid_shape)
-        loss, g_dose = cost_terms(dose)
-        return float(loss), np.asarray(ST @ g_dose.ravel(order="C"), dtype=np.float64)
+        def cost_and_grad(w: np.ndarray) -> Tuple[float, np.ndarray]:
+            loss, g_dose = cost_terms(dm.forward(w))
+            return float(loss), dm.backward(g_dose)
+    else:
+        ST = S.T.tocsr()
+
+        def cost_and_grad(w: np.ndarray) -> Tuple[float, np.ndarray]:
+            dose = np.asarray(S @ np.asarray(w, dtype=np.float64)).reshape(grid_shape)
+            loss, g_dose = cost_terms(dose)
+            return float(loss), np.asarray(ST @ to_host(g_dose).ravel(order="C"), dtype=np.float64)
 
     solver = get_solver(method)
     w, conv = solver.run(cost_and_grad, np.asarray(w0, dtype=np.float64), max_iterations, tol)
@@ -470,8 +492,10 @@ def sequence_plan(
     energy_mv: Optional[float] = None,
     name: Optional[str] = None,
     hard_terms: Sequence = (),
+    device: OptimizerDevice = CPU,
 ) -> SequencingResult:
-    """Fluence → apertures → machine limits → segment weights (subject to ``hard_terms``) → deliverable plan."""
+    """Fluence → apertures → machine limits → segment weights (subject to ``hard_terms``; on ``device``) →
+    deliverable plan."""
     mlc = machine.mlc
     maps = fluence_maps(plan, weights, mlc)
     apertures: List[Aperture] = []
@@ -489,7 +513,8 @@ def sequence_plan(
     cov = coverage_matrix(plan, maps, apertures, mlc, machine, leaf_model)
     S = (dij.tocsr() @ cov.tocsc()).tocsr()
     w0 = np.asarray([ap.level_weight for ap in apertures])
-    mu, conv = optimize_segment_weights(S, grid_shape, cost_terms, w0, method, max_iterations, hard_terms=hard_terms)
+    mu, conv = optimize_segment_weights(S, grid_shape, cost_terms, w0, method, max_iterations, hard_terms=hard_terms,
+                                        device=device)
     # segments under the minimum MU are removed and the rest re-optimized, a few rounds at most
     for _ in range(5):
         keep = mu >= machine.min_mu_per_segment
@@ -499,7 +524,8 @@ def sequence_plan(
         apertures = [ap for ap, k in zip(apertures, keep) if k]
         cov = cov[:, np.flatnonzero(keep)]
         S = (dij.tocsr() @ cov.tocsc()).tocsr()
-        mu, conv = optimize_segment_weights(S, grid_shape, cost_terms, mu[keep], method, max_iterations, hard_terms=hard_terms)
+        mu, conv = optimize_segment_weights(S, grid_shape, cost_terms, mu[keep], method, max_iterations, hard_terms=hard_terms,
+                                            device=device)
     keep = mu >= machine.min_mu_per_segment
     if not keep.any():
         raise ValueError("every segment fell under the machine's minimum MU; the fluence is too low for this machine")

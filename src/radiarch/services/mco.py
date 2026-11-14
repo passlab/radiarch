@@ -384,10 +384,11 @@ class MCOService:
         if not request.robustness.enabled:
             return MCOOps([o for o, _ in prob.obj_terms], [m for _, m in prob.dev_obj_terms or prob.obj_terms], forward, backward,
                           osvc.hard_terms(prob, request.hard_constraints), regs, index, structures, [])
-        stacked = StackedOps([prob.scenario_dij[sc.hash()][1][index] for sc in prob.scenarios])
+        dev = prob.device.asarray if prob.device.gpu else (lambda m: m)
+        stacked = StackedOps([prob.scenario_dij[sc.hash()][1][index] for sc in prob.scenarios], prob.device)
         scenarios = [sc.name for sc in prob.scenarios]
-        cmasks = [structures[c.structure_name].astype(np.float64) for c in request.hard_constraints]
-        return MCOOps([WorstCase(o) for o, _ in prob.obj_terms], [np.asarray(m).ravel()[index].astype(np.float64) for _, m in prob.obj_terms],
+        cmasks = [dev(structures[c.structure_name].astype(np.float64)) for c in request.hard_constraints]
+        return MCOOps([WorstCase(o) for o, _ in prob.obj_terms], [dev(np.asarray(m).ravel()[index].astype(np.float64)) for _, m in prob.obj_terms],
                       stacked.forward, stacked.backward, scenario_terms(request.hard_constraints, cmasks, scenarios), regs, index,
                       structures, scenarios, smoothing_width(request.tradeoffs, request.hard_constraints))
 

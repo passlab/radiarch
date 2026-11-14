@@ -40,6 +40,7 @@ from ..models.mco import (ApertureSetRequest, DeliverableRequest, DeliverableSta
                           NavigationState)
 from ..models.optimization import HardConstraint
 from ..models.photon_plan import PhotonPlan
+from .array_backend import device_cache_key, device_for, to_host
 from .hard_constraints import HardConstraintTerm, solve_with_hard_constraints
 from .mco import MCOOps, MCOProgressCallback, MCOService
 from .objectives import _geud
@@ -229,12 +230,12 @@ class ApertureSetService:
         return d
 
     def cache_key(self, deliverable_id: str, request: ApertureSetRequest) -> str:
-        return request.compute_cache_key(self.source(deliverable_id).cache_key)
+        return device_cache_key(request.compute_cache_key(self.source(deliverable_id).cache_key))
 
     def run(self, deliverable_id: str, request: ApertureSetRequest, progress_callback: Optional[MCOProgressCallback] = None) -> MCOResult:
         on = progress_callback or _noop
         d = self.source(deliverable_id)
-        key = request.compute_cache_key(d.cache_key)
+        key = device_cache_key(request.compute_cache_key(d.cache_key))
         cached = self.mco.store.lookup_by_cache_key(key)
         if cached is not None:
             on(MCOStage.done, 1.0, "cache hit")
@@ -262,15 +263,21 @@ class ApertureSetService:
         if el.kind == "arc intervals":
             on(MCOStage.loading, 0.05, f"the dose per MU of {el.z0.size} arc intervals")
         S = element_matrix(el, prob, mreq, index)
-        ST = S.T.tocsr()
         lower = el.lower
         base = np.asarray(S @ lower, dtype=np.float64)
+        device = device_for([S], prob.device)
+        dev = device.asarray if device.gpu else (lambda m: m)
+        if device.gpu:
+            dm = device.matrix(S, (S.shape[0],), base=base)
+            forward, backward = dm.forward, dm.backward
+        else:
+            ST = S.T.tocsr()
 
-        def forward(y: np.ndarray) -> np.ndarray:
-            return base + np.asarray(S @ np.asarray(y, dtype=np.float64).ravel())
+            def forward(y: np.ndarray) -> np.ndarray:
+                return base + np.asarray(S @ np.asarray(y, dtype=np.float64).ravel())
 
-        def backward(g: np.ndarray) -> np.ndarray:
-            return np.asarray(ST @ np.asarray(g, dtype=np.float64).ravel(), dtype=np.float64)
+            def backward(g: np.ndarray) -> np.ndarray:
+                return np.asarray(ST @ np.asarray(g, dtype=np.float64).ravel(), dtype=np.float64)
 
         y0 = np.maximum(el.z0 - lower, 0.0)
         notes = [f"a second set over the metersets of the {el.z0.size} {el.kind} of deliverable plan {d.deliverable_id}: every plan "
@@ -280,7 +287,7 @@ class ApertureSetService:
         if cover:
             target = req.normalise.structure
             mask = structures[target].astype(np.float64)
-            g0 = float(_geud(forward(y0), mask, float(mask.sum()), -10.0)[0])
+            g0 = float(_geud(to_host(forward(y0)), mask, float(mask.sum()), -10.0)[0])
             rx = req.prescription_gy or req.normalise.gy
             top = req.max_dose_factor * rx
             # within 1 % of each level (0.6 Gy at 60 Gy): the first stage's 0.5 Gy would let a small prescription's plans
@@ -291,7 +298,7 @@ class ApertureSetService:
             notes.append(f"{target}'s coverage held at the deliverable plan's gEUD (a = -10, {g0:.2f} Gy) and its maximum at "
                          f"{req.max_dose_factor:g} times the prescription")
 
-        terms = [HardConstraintTerm(c, structures[c.structure_name].astype(np.float64)) for c in limits]
+        terms = [HardConstraintTerm(c, dev(structures[c.structure_name].astype(np.float64))) for c in limits]
         if terms:
             on(MCOStage.feasibility, 0.08, f"the limits on these apertures: feasibility of {len(terms)} hard constraint(s)")
             solver = get_solver(request.solver.method)
@@ -306,15 +313,17 @@ class ApertureSetService:
                 notes.append(f"{c.label} is relaxed to {o.achieved_gy:.2f} Gy: no metersets on these apertures meet it with the "
                              f"other limits (the feasibility run's best)")
             limits, y0 = relaxed, np.asarray(feas.weights, dtype=np.float64)
-            terms = [HardConstraintTerm(c, structures[c.structure_name].astype(np.float64)) for c in limits]
+            terms = [HardConstraintTerm(c, dev(structures[c.structure_name].astype(np.float64))) for c in limits]
 
         n = len(first.tradeoffs)
         mreq2 = MCORunRequest(requested_by=request.requested_by, geometry_id=d.geometry_id, beam_model_id=d.beam_model_id,
                               dose_engine=mreq.dose_engine, tradeoffs=first.tradeoffs, hard_constraints=limits, solver=request.solver,
                               plan_budget=request.plan_budget or 2 * n + 1, error_tolerance=request.error_tolerance,
                               anchor_epsilon=request.anchor_epsilon, navigation_structures=names, rbe=mreq.rbe)
-        ops = MCOOps([o for o, _ in prob.obj_terms], [np.asarray(m).ravel()[index].astype(np.float64) for _, m in prob.obj_terms],
+        ops = MCOOps([o for o, _ in prob.obj_terms], [dev(np.asarray(m).ravel()[index].astype(np.float64)) for _, m in prob.obj_terms],
                      forward, backward, terms, None, index, structures, [], on_voxels=True)
+        if device.gpu:
+            notes.append("solved on the GPU (optimizer_device)")
         fields = dict(geometry_id=d.geometry_id, beam_model_id=d.beam_model_id, engine_name=first.engine_name, engine_version=first.engine_version,
                       engine_digest=element_digest(el, prob, mreq),
                       rbe_factor=first.rbe_factor, dose_units=first.dose_units, voxel_cc=first.voxel_cc, modality=first.modality,

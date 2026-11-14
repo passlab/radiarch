@@ -54,8 +54,8 @@ class OptimizerDevice:
         """``a`` on this device (no copy on the CPU when it is already a float64 array)."""
         return self.xp.asarray(a, dtype=dtype)
 
-    def matrix(self, csr, grid_shape: Tuple[int, ...]) -> "DeviceMatrix":
-        return DeviceMatrix(csr, grid_shape, self)
+    def matrix(self, csr, grid_shape: Tuple[int, ...], base=None) -> "DeviceMatrix":
+        return DeviceMatrix(csr, grid_shape, self, base)
 
     def free_bytes(self) -> int:
         """The GPU's free memory (0 on the CPU)."""
@@ -105,30 +105,54 @@ def optimizer_device(device: Optional[str] = None) -> OptimizerDevice:
         return CPU
 
 
+def device_bytes(matrices) -> int:
+    """What the matrices and their transposes take on the device: float64 values and int32 indices, twice."""
+    return sum(24 * m.nnz for m in matrices)
+
+
+def device_for(matrices, device: Optional[OptimizerDevice] = None) -> OptimizerDevice:
+    """``device`` (by default the setting's) when ``matrices`` fit in 80 % of its free memory, else the CPU, with a
+    warning."""
+    device = device if device is not None else optimizer_device()
+    if not device.gpu:
+        return device
+    need, free = device_bytes(matrices), device.free_bytes()
+    if need > 0.8 * free:
+        logger.warning("optimizer: the matrices need {:.1f} GB on the GPU and {:.1f} GB are free; solving on the CPU",
+                       need / 1e9, free / 1e9)
+        return CPU
+    return device
+
+
 class DeviceMatrix:
-    """An influence matrix (voxels x weights) for the products a solve repeats: ``forward`` (weights to the dose on
-    the grid, on the device) and ``backward`` (a dose gradient to the weights' gradient, on the host).
+    """An influence matrix (voxels x weights) for the products a solve repeats: ``forward`` (weights to the dose,
+    on the device, plus an optional fixed ``base`` dose) and ``backward`` (a dose gradient to the weights' gradient, on
+    the host). ``grid_shape`` is the dose's shape: the grid, or the rows alone.
 
     On the CPU it is the SciPy matrix as given, and the products are those radiarch has always computed. On the GPU
     it and its transpose are kept in float64 CSR on the device (twice the host matrix's bytes per copy)."""
 
-    def __init__(self, csr, grid_shape: Tuple[int, ...], device: OptimizerDevice):
+    def __init__(self, csr, grid_shape: Tuple[int, ...], device: OptimizerDevice, base=None):
         self.device, self.grid_shape = device, tuple(grid_shape)
         self.shape = csr.shape
         if device.gpu:
             import cupyx.scipy.sparse as csp
             self.mat = csp.csr_matrix(csr.astype(np.float64).tocsr())
             self.mat_t = csp.csr_matrix(csr.T.tocsr().astype(np.float64))
+            self.base = None if base is None else device.xp.asarray(base, dtype=np.float64).ravel()
         else:
             self.mat = csr
             self.mat_t = None
+            self.base = None if base is None else np.asarray(base, dtype=np.float64).ravel()
 
     def forward(self, w) -> Any:
-        """The dose on the grid for the weights ``w`` (host or device), in float64, on the device."""
+        """The dose for the weights ``w`` (host or device), in float64, on the device."""
         if not self.device.gpu:
-            return np.asarray(self.mat @ np.asarray(w, dtype=np.float64).ravel()).reshape(self.grid_shape, order="C")
+            d = np.asarray(self.mat @ np.asarray(w, dtype=np.float64).ravel())
+            return (d if self.base is None else self.base + d).reshape(self.grid_shape, order="C")
         xp = self.device.xp
-        return (self.mat @ xp.asarray(w, dtype=xp.float64).ravel()).reshape(self.grid_shape)
+        d = self.mat @ xp.asarray(w, dtype=xp.float64).ravel()
+        return (d if self.base is None else self.base + d).reshape(self.grid_shape)
 
     def backward(self, grad_dose) -> np.ndarray:
         """``matrix.T @ grad_dose`` on the host, in float64."""
@@ -139,4 +163,4 @@ class DeviceMatrix:
 
 
 __all__ = ["DEVICES", "array_module", "to_host", "DeviceUnavailableError", "OptimizerDevice", "CPU", "device_cache_key",
-           "optimizer_device", "DeviceMatrix"]
+           "optimizer_device", "device_bytes", "device_for", "DeviceMatrix"]

@@ -13,13 +13,14 @@ import json
 import os
 import uuid
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 import numpy as np
 from loguru import logger
 from scipy.sparse import csr_matrix
 
 from ..config import get_settings
+from .array_backend import device_cache_key, optimizer_device
 from ..models.apertures import BeamDeliverabilityReport, SequenceRequest, SequenceResult
 from ..models.beam_model import BeamModelResult, FluenceElementSet, Modality, PerBeamElements
 from ..models.dose import DoseResult, DoseStatistics, EngineSpec, InfluenceBuildRequest, dose_units_for
@@ -91,7 +92,7 @@ class ApertureService:
         self.beam_model_service = beam_model_service or BeamModelService()
 
     def sequence(self, optimization_id: str, request: SequenceRequest) -> SequenceResult:
-        cache_key = request.compute_cache_key(optimization_id)
+        cache_key = device_cache_key(request.compute_cache_key(optimization_id))
         cached = self.store.lookup_by_cache_key(cache_key)
         if cached is not None:
             return cached
@@ -120,22 +121,15 @@ class ApertureService:
         dij = csr_matrix((inf.data, inf.indices, inf.indptr), shape=(inf.n_voxels, inf.n_elements))
         grid_shape = tuple(geometry.density.shape)
 
-        obj_terms = self.optimization_service._build_objective_terms(request.objectives, geometry, grid_shape)
-        con_terms = self.optimization_service._build_constraint_terms(request.constraints, geometry, grid_shape)
-
-        def cost_terms(dose: np.ndarray) -> Tuple[float, np.ndarray]:
-            total = 0.0
-            grad = np.zeros(grid_shape, dtype=np.float64)
-            for term, mask in obj_terms + con_terms:
-                loss, g = term(dose, mask)
-                total += loss
-                grad += g
-            return total, grad
-
+        device = optimizer_device()
+        cost_terms = self.optimization_service.cost_terms(request.objectives, request.constraints, geometry, grid_shape, device)
         res = sequence_plan(plan, weights, dij, grid_shape, cost_terms, machine, levels=request.levels,
                             method=request.solver_method, max_iterations=request.max_iterations,
                             energy_mv=request.energy_mv, name=f"{plan.name}-{machine.machine_id}",
-                            hard_terms=hard_constraint_terms(self.optimization_service, request.hard_constraints, geometry, grid_shape))
+                            hard_terms=hard_constraint_terms(self.optimization_service, request.hard_constraints, geometry, grid_shape, device),
+                            device=device)
+        if device.gpu:
+            res.convergence.notes = list(res.convergence.notes or []) + ["solved on the GPU (optimizer_device)"]
 
         # the aperture plan as a beam model of its own
         sequence_id = str(uuid.uuid4())

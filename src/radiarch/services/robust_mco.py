@@ -29,6 +29,7 @@ from typing import Callable, List, Sequence, Tuple
 import numpy as np
 
 from ..models.optimization import HardConstraint
+from .array_backend import CPU, OptimizerDevice, array_module
 from .hard_constraints import HardConstraintTerm
 
 SMOOTHING_GY = 0.01      # width of the log-sum-exp over scenarios, in Gy of the weighted sum (per unit weight), when
@@ -61,7 +62,7 @@ class WorstCase:
     def value_and_grad(self, dose: np.ndarray, mask: np.ndarray) -> Tuple[float, np.ndarray]:
         s = int(np.argmax(self.per_scenario(dose, mask)))
         v, g = self.objective.value_and_grad(dose[s], mask)
-        grad = np.zeros(dose.shape)
+        grad = array_module(dose).zeros(dose.shape)
         grad[s] = g
         return float(v), grad
 
@@ -86,7 +87,7 @@ class ScenarioTerm:
 
     def term(self, dose: np.ndarray, rho: float) -> Tuple[float, np.ndarray]:
         loss, g = self.inner.term(dose[self.scenario], rho)
-        grad = np.zeros(dose.shape)
+        grad = array_module(dose).zeros(dose.shape)
         grad[self.scenario] = g
         return loss, grad
 
@@ -117,7 +118,8 @@ def scenario_wise(objectives: Sequence, masks: Sequence[np.ndarray], raw: np.nda
 
     def dose_terms(dose: np.ndarray) -> Tuple[float, np.ndarray]:
         S = dose.shape[0]
-        sums, grads = np.zeros(S), np.zeros(dose.shape)
+        xp = array_module(dose)
+        sums, grads = np.zeros(S), xp.zeros(dose.shape)
         for s in range(S):
             for wi, o, m in zip(raw, objectives, masks):
                 v, g = o.value_and_grad(dose[s], m)
@@ -127,7 +129,7 @@ def scenario_wise(objectives: Sequence, masks: Sequence[np.ndarray], raw: np.nda
         p = np.exp((sums - top) / tau)
         lse = top + tau * np.log(p.sum())
         p /= p.sum()
-        return float(lse), grads * p.reshape((S,) + (1,) * (dose.ndim - 1))
+        return float(lse), grads * xp.asarray(p).reshape((S,) + (1,) * (dose.ndim - 1))
 
     def bound(dose: np.ndarray) -> float:
         return dose_terms(dose)[0] - tau * np.log(dose.shape[0])
@@ -136,17 +138,26 @@ def scenario_wise(objectives: Sequence, masks: Sequence[np.ndarray], raw: np.nda
 
 
 class StackedOps:
-    """Weights to the stacked dose on the navigation voxels and back: one dose-matrix row block per scenario."""
+    """Weights to the stacked dose on the navigation voxels and back: one dose-matrix row block per scenario. On a GPU
+    ``device`` the blocks and the stacked dose are there (:mod:`.array_backend`)."""
 
-    def __init__(self, matrices: Sequence) -> None:
+    def __init__(self, matrices: Sequence, device: OptimizerDevice = CPU) -> None:
         self.matrices = list(matrices)
+        self.dev = [device.matrix(M, (M.shape[0],)) for M in self.matrices] if device.gpu else None
+        self.xp = device.xp
 
     def forward(self, w: np.ndarray) -> np.ndarray:
+        if self.dev is not None:
+            return self.xp.stack([dm.forward(w) for dm in self.dev])
         w = np.asarray(w, dtype=np.float64).ravel()
         return np.stack([np.asarray(M @ w, dtype=np.float64).ravel() for M in self.matrices])
 
     def backward(self, grad: np.ndarray) -> np.ndarray:
         out = np.zeros(self.matrices[0].shape[1])
+        if self.dev is not None:
+            for dm, g in zip(self.dev, grad):
+                out += dm.backward(g)
+            return out
         for M, g in zip(self.matrices, grad):
             out += np.asarray(M.T @ np.asarray(g, dtype=np.float64).ravel(), dtype=np.float64)
         return out

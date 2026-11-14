@@ -48,7 +48,7 @@ def on_device(monkeypatch):
 class TestSetting:
     def test_the_cpu_is_the_default(self):
         from radiarch.config import Settings
-        assert Settings().optimizer_device == "cpu"
+        assert Settings.model_fields["optimizer_device"].default == "cpu"      # whatever the environment sets
         assert AB.optimizer_device("cpu") is AB.CPU and not AB.CPU.gpu
 
     def test_an_unknown_device_is_refused(self):
@@ -162,3 +162,94 @@ class TestOnTheGPU:
         monkeypatch.setattr(AB.OptimizerDevice, "free_bytes", lambda self: 10)
         prob = svc._assemble_problem(_req())
         assert not prob.device.gpu and prob.dev_mats == {}
+
+
+# ---------------------------------------------------------------------------
+# The meterset solves and the robust Pareto sets' operators (the second stage)
+# ---------------------------------------------------------------------------
+
+def _meterset_problem(seed=6):
+    rng = np.random.default_rng(seed)
+    shape = (8, 10, 12)
+    S = sp.random(int(np.prod(shape)), 25, density=0.2, format="csr", random_state=seed, dtype=np.float32)
+    ptv = np.zeros(shape); ptv[2:6, 3:7, 3:9] = 1.0
+    oar = np.zeros(shape); oar[2:6, 7:10, 3:9] = 1.0
+    return S, shape, ptv, oar, rng
+
+
+def _cost_terms(ptv, oar, device):
+    terms = [(O.DUniform("PTV", 2.0), ptv), (O.DMax("OAR", 0.5, 2.0), oar)]
+    if device.gpu:
+        terms = [(t, device.asarray(m)) for t, m in terms]
+
+    def cost_terms(dose):
+        total, grad = 0.0, device.xp.zeros(dose.shape)
+        for t, m in terms:
+            loss, g = t(dose, m)
+            total, grad = total + loss, grad + g
+        return total, grad
+    return cost_terms
+
+
+class TestMetersetsOnTheCPU:
+    def test_a_cpu_meterset_solve_is_unchanged_by_the_device_parameter(self):
+        from radiarch.services.sequencing import optimize_segment_weights
+        S, shape, ptv, oar, _ = _meterset_problem()
+        a, _ = optimize_segment_weights(S, shape, _cost_terms(ptv, oar, AB.CPU), np.ones(25), max_iterations=100)
+        b, _ = optimize_segment_weights(S, shape, _cost_terms(ptv, oar, AB.CPU), np.ones(25), max_iterations=100, device=AB.CPU)
+        assert np.array_equal(a, b)
+
+
+@needs_gpu
+class TestMetersetsOnTheGPU:
+    def test_segment_metersets_reach_the_cpu_cost(self):
+        from radiarch.services.sequencing import optimize_segment_weights
+        S, shape, ptv, oar, _ = _meterset_problem()
+        gpu = AB.optimizer_device("gpu")
+        _, c_cpu = optimize_segment_weights(S, shape, _cost_terms(ptv, oar, AB.CPU), np.ones(25), max_iterations=300)
+        _, c_gpu = optimize_segment_weights(S, shape, _cost_terms(ptv, oar, gpu), np.ones(25), max_iterations=300, device=gpu)
+        assert c_gpu.final_cost == pytest.approx(c_cpu.final_cost, rel=1e-6, abs=1e-12)
+
+    def test_interval_metersets_with_a_hard_constraint_reach_the_cpu_cost(self):
+        from radiarch.services.vmat import optimize_interval_mu
+        S, shape, ptv, oar, _ = _meterset_problem(7)
+        gpu = AB.optimizer_device("gpu")
+        hc = HardConstraint(structure_name="OAR", metric="Dmean", op="<=", value_gy=0.3)
+        lo = np.full(25, 0.05)
+        mu_cpu, c_cpu = optimize_interval_mu(S, shape, _cost_terms(ptv, oar, AB.CPU), np.ones(25), lo, max_iterations=300,
+                                             hard_terms=[HardConstraintTerm(hc, oar)])
+        mu_gpu, c_gpu = optimize_interval_mu(S, shape, _cost_terms(ptv, oar, gpu), np.ones(25), lo, max_iterations=300,
+                                             hard_terms=[HardConstraintTerm(hc, gpu.asarray(oar))], device=gpu)
+        assert isinstance(mu_gpu, np.ndarray) and (mu_gpu >= lo - 1e-12).all()
+        assert c_gpu.final_cost == pytest.approx(c_cpu.final_cost, rel=1e-5, abs=1e-12)
+        assert c_gpu.constraint_violations == c_cpu.constraint_violations
+
+    def test_the_stacked_operators_match_the_cpu(self):
+        from radiarch.services.robust_mco import StackedOps
+        rng = np.random.default_rng(8)
+        mats = [sp.random(400, 30, density=0.1, format="csr", random_state=s, dtype=np.float32) for s in range(3)]
+        gpu = AB.optimizer_device("gpu")
+        cpu_ops, gpu_ops = StackedOps(mats), StackedOps(mats, gpu)
+        w, g = rng.random(30), rng.random((3, 400))
+        assert np.allclose(AB.to_host(gpu_ops.forward(w)), cpu_ops.forward(w), rtol=1e-12)
+        assert np.allclose(gpu_ops.backward(gpu.asarray(g)), cpu_ops.backward(g), rtol=1e-12)
+
+    def test_the_worst_case_and_the_scenario_wise_sum_match_the_cpu(self):
+        from radiarch.services.robust_mco import WorstCase, scenario_terms, scenario_wise
+        rng = np.random.default_rng(9)
+        dose = rng.random((4, 500)) * 3
+        masks = [(rng.random(500) > 0.5).astype(np.float64) for _ in range(2)]
+        objs = [O.UniformRMS("PTV", 2.0), O.MeanDose("OAR", 0.0)]
+        gpu = AB.optimizer_device("gpu")
+        dmasks = [gpu.asarray(m) for m in masks]
+        for o, m, dm in zip(objs, masks, dmasks):
+            (v1, g1), (v2, g2) = WorstCase(o).value_and_grad(dose, m), WorstCase(o).value_and_grad(gpu.asarray(dose), dm)
+            assert v2 == pytest.approx(v1, rel=1e-12) and np.allclose(AB.to_host(g2), g1, rtol=1e-12)
+        (f1, b1), (f2, b2) = scenario_wise(objs, masks, np.array([1.0, 0.5])), scenario_wise(objs, dmasks, np.array([1.0, 0.5]))
+        (l1, g1), (l2, g2) = f1(dose), f2(gpu.asarray(dose))
+        assert l2 == pytest.approx(l1, rel=1e-12) and np.allclose(AB.to_host(g2), g1, rtol=1e-12)
+        assert b2(gpu.asarray(dose)) == pytest.approx(b1(dose), rel=1e-12)
+        hc = HardConstraint(structure_name="OAR", metric="Dmax", op="<=", value_gy=2.5)
+        (t1,), (t2,) = scenario_terms([hc], [masks[1]], ["nominal"]), scenario_terms([hc], [dmasks[1]], ["nominal"])
+        (l1, g1), (l2, g2) = t1.term(dose[:1], 1.0), t2.term(gpu.asarray(dose[:1]), 1.0)
+        assert l2 == pytest.approx(l1, rel=1e-12) and np.allclose(AB.to_host(g2), g1, rtol=1e-12)

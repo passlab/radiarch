@@ -39,7 +39,7 @@ from loguru import logger
 from scipy.sparse import csr_matrix
 
 from ..config import get_settings
-from .array_backend import CPU, DeviceMatrix, OptimizerDevice, device_cache_key, optimizer_device
+from .array_backend import CPU, DeviceMatrix, OptimizerDevice, device_cache_key, device_for
 from ..models.dose import InfluenceBuildRequest, ScenarioSpec, default_rbe, dose_units_for
 from ..models.optimization import (
     CheckpointInfo,
@@ -118,8 +118,15 @@ class _Problem:
     rbe: float = 1.0
     engine_digest: Optional[str] = None      # the build that made the matrices (cached or new), R12
     device: OptimizerDevice = CPU            # where the solve loops evaluate (array_backend)
-    dev_mats: Dict[str, DeviceMatrix] = field(default_factory=dict)   # GPU: each scenario's matrix on the device
+    dev_mats: Dict[str, DeviceMatrix] = field(default_factory=dict)   # GPU: the scenarios' matrices put on the device so far
     dev_obj_terms: list = field(default_factory=list)                  # obj_terms with their masks on the device
+
+    def device_matrix(self, scenario_hash: str) -> DeviceMatrix:
+        """A scenario's matrix on :attr:`device`, put there when a solve first needs it (a robust Pareto set, which
+        solves on its own rows, never does)."""
+        if scenario_hash not in self.dev_mats:
+            self.dev_mats[scenario_hash] = self.device.matrix(self.scenario_dij[scenario_hash][1], self.grid_shape)
+        return self.dev_mats[scenario_hash]
 
 
 class OptimizationService:
@@ -286,7 +293,7 @@ class OptimizationService:
         ``forward`` gives the dose on the device (:func:`.array_backend.to_host` brings it back) and ``backward``
         takes it there."""
         if prob.device.gpu:
-            dm = prob.dev_mats[prob.scenarios[0].hash()]
+            dm = prob.device_matrix(prob.scenarios[0].hash())
             forward, backward = dm.forward, dm.backward
         else:
             _, mat = prob.scenario_dij[prob.scenarios[0].hash()]
@@ -357,7 +364,9 @@ class OptimizationService:
         scenario_dij, dij_digest = self._build_scenario_dij(request, scenarios)
         aggregation = (request.robustness.aggregation
                        if request.robustness.enabled else "EXPECTED")
-        device, dev_mats = self._device_matrices(scenario_dij, scenarios, grid_shape)
+        # the setting's device when every scenario's matrix fits on it; they are put there as the solves need them
+        device = device_for([scenario_dij[sc.hash()][1] for sc in scenarios])
+        dev_mats: Dict[str, DeviceMatrix] = {}
         dev_obj_terms = [(o, device.asarray(m)) for o, m in obj_terms] if device.gpu else obj_terms
         dev_constraint_terms = [(c, device.asarray(m)) for c, m in constraint_terms] if device.gpu else constraint_terms
 
@@ -381,6 +390,8 @@ class OptimizationService:
             for sc in scenarios:
                 inf, mat = scenario_dij[sc.hash()]
                 if device.gpu:          # the dose in float64 on the device, as nominal_ops computes it
+                    if sc.hash() not in dev_mats:
+                        dev_mats[sc.hash()] = device.matrix(mat, grid_shape)
                     dm = dev_mats[sc.hash()]
                     loss, grad_dose = eval_dose_terms(dm.forward(w))
                     grad_w = dm.backward(grad_dose)
@@ -410,22 +421,6 @@ class OptimizationService:
             w0=w0, rbe=rbe, engine_digest=dij_digest,
             device=device, dev_mats=dev_mats, dev_obj_terms=dev_obj_terms,
         )
-
-    @staticmethod
-    def _device_matrices(scenario_dij, scenarios, grid_shape) -> Tuple[OptimizerDevice, Dict[str, DeviceMatrix]]:
-        """The device of the setting ``optimizer_device`` and, on the GPU, every scenario's matrix on it. Falls back
-        to the CPU when the matrices and their transposes (float64, about 24 bytes per non-zero) would take more
-        than 80 % of the GPU's free memory."""
-        device = optimizer_device()
-        if not device.gpu:
-            return device, {}
-        need = sum(24 * scenario_dij[sc.hash()][1].nnz for sc in scenarios)
-        free = device.free_bytes()
-        if need > 0.8 * free:
-            logger.warning("optimizer: the influence matrices need {:.1f} GB on the GPU and {:.1f} GB are free; "
-                           "solving on the CPU", need / 1e9, free / 1e9)
-            return CPU, {}
-        return device, {sc.hash(): device.matrix(scenario_dij[sc.hash()][1], grid_shape) for sc in scenarios}
 
     # -----------------------------------------------------------------
     # Objective / constraint / regularizer construction
@@ -469,6 +464,25 @@ class OptimizationService:
             )
             terms.append((con, mask))
         return terms
+
+    def cost_terms(self, objectives: List[ObjectiveSpec], constraints: List[ConstraintSpec], geometry, grid_shape: tuple,
+                   device: OptimizerDevice = CPU) -> Callable[[np.ndarray], Tuple[float, np.ndarray]]:
+        """The objectives and penalty constraints as one ``cost_terms(dose) -> (loss, grad)`` over the grid, their
+        masks on ``device``: what the meterset solves of arcs and aperture plans minimize."""
+        terms = (self._build_objective_terms(objectives, geometry, grid_shape)
+                 + self._build_constraint_terms(constraints, geometry, grid_shape))
+        if device.gpu:
+            terms = [(term, device.asarray(mask)) for term, mask in terms]
+
+        def cost_terms(dose: np.ndarray) -> Tuple[float, np.ndarray]:
+            total = 0.0
+            grad = device.xp.zeros(grid_shape, dtype=device.xp.float64)
+            for term, mask in terms:
+                loss, g = term(dose, mask)
+                total += loss
+                grad += g
+            return total, grad
+        return cost_terms
 
     def _build_regularizers(self, request: OptimizationRunRequest, beam_model):
         reg = request.solver.regularization

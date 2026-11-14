@@ -84,8 +84,12 @@ Both must move to the GPU for the gain.
 ADR 0022: `RADIARCH_OPTIMIZER_DEVICE` (`cpu` by default, `gpu`, `auto`) moves the fluence solves' products and
 objective terms to the GPU. On an A100, `protocol_lung_vmat` with `pb` on the GPU as well takes 496 s against 2072 s
 on the CPU (its fluence solves 2 to 7 s against 117 to 124 s), and `mco_front_tg119` 2278 s against 4510 s (its first
-set's 19 solves 16 s against 1226 s), every graded check passing. The meterset solves still run on the CPU and are
-now most of what remains.
+set's 19 solves 16 s against 1226 s), every graded check passing. A second stage the same day moved the meterset
+solves, the robust Pareto sets and second sets too: the protocol case then takes 299 s (6.9 times faster than on the
+CPU), TG-119 1004 s (4.5 times), of which its solves are 104 s, and the lung Pareto case 2535 s against 20001 s
+(7.9 times, every graded check passing). What remains is the engines: the pencil beam's
+influence matrices (about 220 s of the protocol case) and the collapsed cone on the CPU (about 840 s of TG-119), where
+a GPU collapsed cone (DoseCUDA, above) would be the next measured trial.
 
 ## MCsquare: speed, and the crash
 
