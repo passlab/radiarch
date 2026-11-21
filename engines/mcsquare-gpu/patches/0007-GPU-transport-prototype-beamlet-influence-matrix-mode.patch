@@ -1,0 +1,660 @@
+From 66477248c133e20710f27cf2be2e77aa999a2d0f Mon Sep 17 00:00:00 2001
+From: The Radiarch Project <radiarch@invalid>
+Date: Fri, 20 Nov 2026 21:39:27 -0500
+Subject: [PATCH 7/7] GPU transport prototype: beamlet (influence-matrix) mode
+
+Run_simulation_beamlet hands over to gpu_Run_simulation_beamlet when MCSQUARE_GPU=1 (3D, sparse dose output only).
+Spots are simulated in groups that fit a dose-memory budget (MCSQUARE_GPU_DOSE_BYTES, default 4 GB), each spot of a
+group with its own dose grid on the device; MCsquare's Generate_PBS_particle samples each spot's Num_Primaries from
+its single-spot plan, in parallel over spots. PostProcess_Scoring's scaling, the threshold and the compaction run
+on the device (Thrust, entries ordered by spot and voxel); the host writes the blocks export_Sparse_image and
+Merge_Sparse_Files would write, straight into the merged Outputs/Sparse_Dose files, without per-spot temporary
+files. Dose-to-water post-processing or segmentation fall back to post-processing on the host.
+---
+ src/compute_simulation_beamlet.c         |   5 +
+ src/gpu_api.h                            |  11 +-
+ src/gpu_glue.c                           | 326 +++++++++++++++++++++--
+ src/gpu_transport.cu                     |  94 +++++--
+ src/include/compute_simulation.h         |   1 +
+ src/include/compute_simulation_beamlet.h |   2 +
+ 6 files changed, 403 insertions(+), 36 deletions(-)
+
+diff --git a/src/compute_simulation_beamlet.c b/src/compute_simulation_beamlet.c
+index bc2efc7..ffb5982 100644
+--- a/src/compute_simulation_beamlet.c
++++ b/src/compute_simulation_beamlet.c
+@@ -15,6 +15,11 @@ The MCsquare software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ 
+ void Run_simulation_beamlet(DATA_config *config, Materials *material, DATA_CT **CT_phases, plan_parameters *plan, machine_parameters *machine, DATA_4D_Fields *Fields){
+ 
++  if(getenv("MCSQUARE_GPU") != NULL && atoi(getenv("MCSQUARE_GPU")) == 1){
++    gpu_Run_simulation_beamlet(config, material, CT_phases, plan, machine);
++    return;
++  }
++
+   int spotID;
+ 
+   int tot_phases;
+diff --git a/src/gpu_api.h b/src/gpu_api.h
+index 7a04baa..816a25e 100644
+--- a/src/gpu_api.h
++++ b/src/gpu_api.h
+@@ -58,12 +58,21 @@ typedef struct {
+   const float *sec_E, *sec_D;   /* per row */
+   const float *sec_DD;          /* 13 per row */
+   int max_rows;
++
++  /* beamlet (influence-matrix) mode: one dense dose grid per spot of a group */
++  int beamlet;
++  int max_slots;
+ } GpuSetup;
+ 
+ int gpu_init(const GpuSetup *s);
+ /* transports n primaries (SoA, MCsquare's CT frame, eV, multiplicity M) and accumulates their dose */
+ int gpu_batch(long n, const float *x, const float *y, const float *z, const float *u, const float *v,
+-              const float *w, const float *T, const float *M);
++              const float *w, const float *T, const float *M, const int *slot);
++/* beamlet mode: copies the dose grids of slots 0..nslots-1 (nslots * nvox floats) and zeroes them on the device */
++int gpu_group_dose(float *out, int nslots);
++/* beamlet mode, on the device: scales slot j's grid by scale[j], keeps positive values, and returns the voxels above
++   threshold as global indices (slot * nvox + voxel, ascending) and values, allocated with malloc; zeroes the grids */
++int gpu_group_sparse(int nslots, const float *scale, float threshold, long long **idx, float **val, long *n);
+ /* adds the accumulated dose (MCsquare's units before PostProcess_Scoring) into dose_out, frees the device */
+ int gpu_finish(float *dose_out, double *seconds_kernel, long long *steps, long long *secondaries,
+                long long *stack_overflows, long long *angle_clamps);
+diff --git a/src/gpu_glue.c b/src/gpu_glue.c
+index 4406d05..dd96081 100644
+--- a/src/gpu_glue.c
++++ b/src/gpu_glue.c
+@@ -15,19 +15,9 @@ static double now_s(void){
+   return tv.tv_sec + 1e-6 * tv.tv_usec;
+ }
+ 
+-unsigned long gpu_Simulation_loop(DATA_config *config, Materials *material, DATA_CT *ct, plan_parameters *plan,
+-                                  machine_parameters *machine, DATA_Scoring *Tot_scoring, unsigned long Num_primaries){
+-
+-  static int Num_call = 0;
+-  Num_call++;
+-
+-  if(config->Score_LET || config->Score_PromptGammas || config->Independent_scoring_grid || config->Score_Energy){
+-    printf("\n ERROR: the GPU prototype scores dose only, on the CT grid (no LET, prompt gamma or energy output).\n\n");
+-    exit(2);
+-  }
+-
+-  double t_setup = now_s();
+-
++// The device's copy of the CT, the materials (stopping powers, nuclear data) and the physics settings.
++static int setup_gpu(DATA_config *config, Materials *material, DATA_CT *ct, unsigned long long seed, int beamlet,
++                     int max_slots){
+   // Materials, flattened
+   int nmat = config->Num_Materials;
+   int *sp_off = (int*)malloc(nmat * sizeof(int));
+@@ -49,6 +39,7 @@ unsigned long gpu_Simulation_loop(DATA_config *config, Materials *material, DATA
+   }
+ 
+   GpuSetup s;
++  memset(&s, 0, sizeof(s));
+   s.nmat = nmat; s.sp = sp; s.sp_off = sp_off; s.sp_n = sp_n; s.N_el = N_el; s.X0 = X0;
+   for(int a=0; a<3; a++){ s.gs[a] = ct->GridSize[a]; s.len[a] = ct->Length[a]; s.vox[a] = ct->VoxelLength[a]; }
+   s.nvox = ct->Nbr_voxels; s.ct_mat = ct->material; s.ct_rho = ct->density;
+@@ -56,8 +47,7 @@ unsigned long gpu_Simulation_loop(DATA_config *config, Materials *material, DATA
+   s.D_Max = config->D_Max; s.Eps_Max = config->Epsilon_Max;
+   s.dose_to_water = config->DoseToWater; s.water_id = config->Water_Material_ID;
+   s.dose_weighting = config->Dose_weighting_algorithm;
+-  s.seed = (config->RNG_Seed != 0) ? (unsigned long long)config->RNG_Seed + 100000ULL * Num_call
+-                                   : (unsigned long long)time(NULL) + Num_call;
++  s.seed = seed;
+   s.device = getenv("MCSQUARE_GPU_DEVICE") ? atoi(getenv("MCSQUARE_GPU_DEVICE")) : 0;
+ 
+   // Nuclear data, flattened (species 0, 1, 2 = protons, deuterons, alphas: MCsquare's P_, D_, A_ tables)
+@@ -139,7 +129,33 @@ unsigned long gpu_Simulation_loop(DATA_config *config, Materials *material, DATA
+   s.in_off = in_off; s.in_n = in_n; s.in_E = in_E; s.in_xs = in_xs; s.in_rec = in_rec;
+   s.in_mult = in_mult; s.in_sn = in_sn; s.in_soff = in_soff;
+   s.sec_E = sec_E; s.sec_D = sec_D; s.sec_DD = sec_DD; s.max_rows = max_rows;
+-  if(gpu_init(&s) != 0){ printf("\n ERROR: GPU initialisation failed\n\n"); exit(2); }
++  s.beamlet = beamlet;
++  s.max_slots = max_slots;
++  int rc = gpu_init(&s);
++  free(sp); free(sp_off); free(sp_n); free(N_el); free(X0);
++  free(mat_type); free(comp_off); free(comp_n); free(el_off); free(el_n); free(in_off); free(in_n); free(mat_A);
++  free(interp_xs); free(comp_label); free(comp_frac); free(el_E); free(el_xs); free(el_diff); free(in_E); free(in_xs);
++  free(in_rec); free(in_mult); free(in_sn); free(in_soff); free(sec_E); free(sec_D); free(sec_DD);
++  return rc;
++}
++
++
++unsigned long gpu_Simulation_loop(DATA_config *config, Materials *material, DATA_CT *ct, plan_parameters *plan,
++                                  machine_parameters *machine, DATA_Scoring *Tot_scoring, unsigned long Num_primaries){
++
++  static int Num_call = 0;
++  Num_call++;
++
++  if(config->Score_LET || config->Score_PromptGammas || config->Independent_scoring_grid || config->Score_Energy){
++    printf("\n ERROR: the GPU prototype scores dose only, on the CT grid (no LET, prompt gamma or energy output).\n\n");
++    exit(2);
++  }
++
++  double t_setup = now_s();
++
++  unsigned long long seed = (config->RNG_Seed != 0) ? (unsigned long long)config->RNG_Seed + 100000ULL * Num_call
++                                                    : (unsigned long long)time(NULL) + Num_call;
++  if(setup_gpu(config, material, ct, seed, 0, 1) != 0){ printf("\n ERROR: GPU initialisation failed\n\n"); exit(2); }
+   t_setup = now_s() - t_setup;
+ 
+   // One MKL stream per thread, seeded as Simulation_loop seeds them
+@@ -208,7 +224,7 @@ unsigned long gpu_Simulation_loop(DATA_config *config, Materials *material, DATA
+     Num_simulated_primaries += sampled;
+     double t1 = now_s();
+     t_gen += t1 - t0;
+-    if(gpu_batch(n, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]) != 0){
++    if(gpu_batch(n, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], NULL) != 0){
+       printf("\n ERROR: GPU batch failed\n\n"); exit(2);
+     }
+     t_gpu += now_s() - t1;
+@@ -222,9 +238,281 @@ unsigned long gpu_Simulation_loop(DATA_config *config, Materials *material, DATA
+          " (kernels %.3f s), %.3g steps, %.3g primaries/s on the GPU; nuclear %d: %lld secondaries,"
+          " %lld lost to a full stack, %lld angle indices clamped\n",
+          Num_simulated_primaries, t_setup, nthreads, t_gen, t_gpu, t_kernel, (double)steps,
+-         t_kernel > 0 ? Num_simulated_primaries / t_kernel : 0.0, s.nuclear, nsec, ovf, clamps);
++         t_kernel > 0 ? Num_simulated_primaries / t_kernel : 0.0, config->Simulate_Nuclear_Interactions, nsec, ovf, clamps);
+ 
+   for(int c=0; c<8; c++) free(buf[c]);
+-  free(streams); free(sp); free(sp_off); free(sp_n); free(N_el); free(X0);
++  free(streams);
+   return Num_simulated_primaries;
+ }
++
++
++/*
++Beamlet (influence-matrix) mode on the GPU. Replaces Run_simulation_beamlet when MCSQUARE_GPU=1 (3D, sparse dose
++output only). Spots are simulated in groups that fit a dose-memory budget (MCSQUARE_GPU_DOSE_BYTES, default 4 GB):
++each spot of a group has its own dose grid on the device; its primaries are sampled by MCsquare's own
++Generate_PBS_particle from the single-spot plan, Num_Primaries of them as Run_simulation_beamlet counts them. Each
++grid is post-processed as PostProcess_Scoring does and written in the sparse format export_Sparse_image and
++Merge_Sparse_Files produce, straight into the merged Outputs/Sparse_Dose files (no per-spot temporary files).
++*/
++typedef struct { unsigned char *bytes; size_t n, cap; } ByteBuf;
++
++static void bb_put(ByteBuf *b, const void *p, size_t n){
++  if(b->n + n > b->cap){
++    b->cap = (b->n + n) * 2 + 1024;
++    b->bytes = (unsigned char*)realloc(b->bytes, b->cap);
++  }
++  memcpy(b->bytes + b->n, p, n);
++  b->n += n;
++}
++
++void gpu_Run_simulation_beamlet(DATA_config *config, Materials *material, DATA_CT **CT_phases, plan_parameters *plan,
++                                machine_parameters *machine){
++
++  static int Num_call = 0;
++  Num_call++;
++  DATA_CT *ct = CT_phases[0];
++
++  if(config->Simu_4D_Mode != 0 || config->Dose_Sparse_Output != 1 || config->Energy_Sparse_Output || config->LET_Sparse_Output
++     || config->Dose_MHD_Output || config->Dose_ASCII_Output || config->Energy_MHD_Output || config->Energy_ASCII_Output
++     || config->LET_MHD_Output || config->LET_ASCII_Output || config->Compute_DVH || config->Score_PromptGammas
++     || config->Score_LET || config->Independent_scoring_grid){
++    printf("\n ERROR: the GPU prototype's beamlet mode writes sparse dose only (3D, CT grid).\n\n");
++    exit(2);
++  }
++
++  double t0 = now_s();
++  int nspots = config->TotalNbrSpots;
++  int *sb = malloc(nspots * sizeof(int)), *sc = malloc(nspots * sizeof(int)), *sd = malloc(nspots * sizeof(int));
++  int k = 0;
++  for(int b=0; b<plan->NumberOfFields; b++)
++    for(int c=0; c<plan->fields[b].NumberOfControlPoints; c++)
++      for(int d=0; d<plan->fields[b].ControlPoints[c].NbOfScannedSpots; d++){
++        if(k < nspots){ sb[k] = b; sc[k] = c; sd[k] = d; }
++        k++;
++      }
++  if(k != nspots){ printf("\n ERROR: %d spots in the plan, %d expected\n\n", k, nspots); exit(2); }
++
++  long nvox = ct->Nbr_voxels;
++  double budget = getenv("MCSQUARE_GPU_DOSE_BYTES") ? atof(getenv("MCSQUARE_GPU_DOSE_BYTES")) : 4e9;
++  int K = (int)(budget / (4.0 * nvox));
++  if(K < 1) K = 1;
++  if(K > nspots) K = nspots;
++  unsigned long long seed = (config->RNG_Seed != 0) ? (unsigned long long)config->RNG_Seed + 100000ULL * Num_call
++                                                    : (unsigned long long)time(NULL) + Num_call;
++  if(setup_gpu(config, material, ct, seed, 1, K) != 0){ printf("\n ERROR: GPU initialisation failed\n\n"); exit(2); }
++
++  int nthreads = config->Num_Threads;
++  VAR_RND_SEED *streams = (VAR_RND_SEED*)malloc(nthreads * sizeof(VAR_RND_SEED));
++  #if USE_MKL_LIB==0
++    unsigned int *stream_vals = (unsigned int*)malloc(nthreads * sizeof(unsigned int));
++  #endif
++  plan_parameters **beamlets = malloc(nthreads * sizeof(plan_parameters*));
++  for(int t=0; t<nthreads; t++){
++    #if USE_MKL_LIB==0
++      streams[t] = &stream_vals[t];
++    #endif
++    Init_RND(config, &streams[t], t + Num_call*1e5);
++    beamlets[t] = Init_single_spot_plan(plan);
++  }
++
++  // the merged header, as export_Sparse_image writes it for the first spot
++  char header_path[400], bin_path[400], bin_name[200];
++  sprintf(bin_name, "Sparse_Dose%s.bin", config->output_robustness_suffix);
++  sprintf(header_path, "%sSparse_Dose%s.txt", config->Output_Directory, config->output_robustness_suffix);
++  sprintf(bin_path, "%s%s", config->Output_Directory, bin_name);
++  CreateDir(config->Output_Directory);
++  FILE *fh = fopen(header_path, "w");
++  if(fh == NULL){ printf("\n ERROR: cannot write %s\n\n", header_path); exit(2); }
++  fprintf(fh, "# MCsquare sparse matrix format\n");
++  struct tm *date = localtime(&config->timestamp);
++  fprintf(fh, "SimulationDate = %d/%d/%d %d:%d:%d\n", date->tm_year+1900, date->tm_mon+1, date->tm_mday, date->tm_hour, date->tm_min, date->tm_sec);
++  fprintf(fh, "PlanName = %s\n", plan->PlanName);
++  fprintf(fh, "SimulationMode = Beamlet\n");
++  fprintf(fh, "NbrSpots = %u\n", config->TotalNbrSpots);
++  if(config->Robustness_Mode == 1){
++    fprintf(fh, "SimulationMode = Robustness\n");
++    fprintf(fh, "RobustParam_SystematicSetupError = %f %f %f\n", config->Systematic_Setup_Error[0], config->Systematic_Setup_Error[1], config->Systematic_Setup_Error[2]);
++    fprintf(fh, "RobustParam_RandomSetupError = %f %f %f\n", config->Random_Setup_Error[0], config->Random_Setup_Error[1], config->Random_Setup_Error[2]);
++    fprintf(fh, "RobustParam_SystematicRangeError = %f\n", config->Systematic_Range_Error);
++    fprintf(fh, "Scenario_SystematicSetupError = %f %f %f\n", config->Current_Systematic_setup[0], config->Current_Systematic_setup[1], config->Current_Systematic_setup[2]);
++    fprintf(fh, "Scenario_RandomSetupError = %f %f %f\n", config->Current_Random_setup[0], config->Current_Random_setup[1], config->Current_Random_setup[2]);
++    fprintf(fh, "Scenario_SystematicRangeError = %f\n", config->Current_Range_error);
++  }
++  fprintf(fh, "ImageSize = %d %d %d\n", ct->GridSize[0], ct->GridSize[1], ct->GridSize[2]);
++  fprintf(fh, "VoxelSpacing = %f %f %f\n", 10*ct->VoxelLength[0], 10*ct->VoxelLength[1], 10*ct->VoxelLength[2]);
++  fprintf(fh, "Offset = %f %f %f\n", 10*ct->Origin[0], 10*ct->Origin[1], 10*ct->Origin[2]);
++  fprintf(fh, "BinaryFile = %s\n", bin_name);
++  fclose(fh);
++  FILE *fb = fopen(bin_path, "wb");
++  if(fb == NULL){ printf("\n ERROR: cannot write %s\n\n", bin_path); exit(2); }
++
++  unsigned long Nprim = (unsigned long)config->Num_Primaries;
++  long cap_spot = Nprim + 400;
++  float *grid = NULL;
++  if(config->DoseToWater == 1 || config->Dose_Segmentation != 0 || getenv("MCSQUARE_GPU_HOST_POST") != NULL)
++    grid = (float*)malloc((size_t)K * nvox * sizeof(float));
++  float *buf[8];
++  for(int c=0; c<8; c++) buf[c] = (float*)malloc((size_t)K * cap_spot * sizeof(float));
++  int *slot = (int*)malloc((size_t)K * cap_spot * sizeof(int));
++  long *spot_n = malloc(K * sizeof(long));
++  unsigned long *spot_sampled = malloc(K * sizeof(unsigned long));
++  ByteBuf *out = calloc(K, sizeof(ByteBuf));
++  double voxel_volume = (double)ct->VoxelLength[0] * ct->VoxelLength[1] * ct->VoxelLength[2];
++  double t_gen = 0, t_gpu = 0, t_out = 0;
++  long total_primaries = 0;
++  // MCsquare's post-processing on the device unless it needs the materials or the densities
++  int device_post = (config->DoseToWater != 1 && config->Dose_Segmentation == 0);
++  if(getenv("MCSQUARE_GPU_HOST_POST") != NULL) device_post = 0;
++  float *scale = malloc(K * sizeof(float));
++
++  for(int g0=0; g0<nspots; g0+=K){
++    int kk = (nspots - g0 < K) ? nspots - g0 : K;
++    double ta = now_s();
++
++    #pragma omp parallel for num_threads(nthreads) schedule(dynamic,1)
++    for(int j=0; j<kk; j++){
++      int tid = omp_get_thread_num();
++      plan_parameters *Beamlet = beamlets[tid];
++      int sp = g0 + j;
++      Select_spot(plan, Beamlet, sb[sp], sc[sp], sd[sp]);
++      Hadron_buffer local[200];
++      int nl;
++      unsigned long sampled = 0;
++      long m = 0, base = (long)j * cap_spot;
++      while(sampled < Nprim){
++        nl = 0;
++        Generate_PBS_particle(local, &nl, ct->Length, Beamlet, machine, streams[tid], config, material);
++        sampled += VLENGTH;
++        for(int q=0; q<nl; q++){
++          if(local[q].type == Unknown || m >= cap_spot) continue;
++          long at = base + m;
++          buf[0][at] = local[q].x; buf[1][at] = local[q].y; buf[2][at] = local[q].z;
++          buf[3][at] = local[q].u; buf[4][at] = local[q].v; buf[5][at] = local[q].w;
++          buf[6][at] = local[q].T; buf[7][at] = local[q].M;
++          slot[at] = j;
++          m++;
++        }
++      }
++      spot_n[j] = m;
++      spot_sampled[j] = sampled;
++    }
++
++    // compact the group's primaries (spot j's block starts at j * cap_spot)
++    long n = 0;
++    for(int j=0; j<kk; j++){
++      long base = (long)j * cap_spot;
++      if(base != n){
++        for(int c=0; c<8; c++) memmove(buf[c] + n, buf[c] + base, spot_n[j] * sizeof(float));
++        memmove(slot + n, slot + base, spot_n[j] * sizeof(int));
++      }
++      n += spot_n[j];
++    }
++    total_primaries += n;
++    double tb = now_s();
++    t_gen += tb - ta;
++    if(gpu_batch(n, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], slot) != 0){
++      printf("\n ERROR: GPU batch failed\n\n"); exit(2);
++    }
++    VAR_SCORING threshold = config->Dose_Sparse_Threshold;
++
++    if(device_post){
++      // post-processing and compaction on the device; the entries come back ordered by spot, then voxel
++      for(int j=0; j<kk; j++) scale[j] = (float)((double)plan->normalization_factor / spot_sampled[j] / voxel_volume);
++      long long *gidx = NULL; float *gval = NULL; long m = 0;
++      if(gpu_group_sparse(kk, scale, threshold, &gidx, &gval, &m) != 0){ printf("\n ERROR: GPU compaction failed\n\n"); exit(2); }
++      double tc = now_s();
++      t_gpu += tc - tb;
++      long *first = malloc((kk + 1) * sizeof(long));
++      long e = 0;
++      for(int j=0; j<=kk; j++){
++        while(e < m && gidx[e] < (long long)j * nvox) e++;
++        first[j] = e;
++      }
++      #pragma omp parallel for num_threads(nthreads) schedule(dynamic,1)
++      for(int j=0; j<kk; j++){
++        int sp = g0 + j;
++        ByteBuf *o = &out[j];
++        o->n = 0;
++        uint32_t nsel = (uint32_t)(first[j+1] - first[j]);
++        bb_put(o, &nsel, sizeof(uint32_t));
++        uint32_t FieldID = (uint32_t)plan->fields[sb[sp]].FieldID;
++        uint32_t CPI = (uint32_t)plan->fields[sb[sp]].ControlPoints[sc[sp]].ControlPointIndex;
++        float SX = (float)plan->fields[sb[sp]].ControlPoints[sc[sp]].spots[sd[sp]].Spot_X;
++        float SY = (float)plan->fields[sb[sp]].ControlPoints[sc[sp]].spots[sd[sp]].Spot_Y;
++        bb_put(o, &FieldID, 4); bb_put(o, &CPI, 4); bb_put(o, &SX, 4); bb_put(o, &SY, 4);
++        long a = first[j];
++        while(a < first[j+1]){
++          long b = a + 1;
++          while(b < first[j+1] && gidx[b] == gidx[b-1] + 1) b++;
++          uint32_t run = (uint32_t)(b - a), start = (uint32_t)(gidx[a] - (long long)j * nvox);
++          bb_put(o, &run, 4); bb_put(o, &start, 4); bb_put(o, gval + a, run * sizeof(float));
++          a = b;
++        }
++      }
++      for(int j=0; j<kk; j++) fwrite(out[j].bytes, 1, out[j].n, fb);
++      free(first); free(gidx); free(gval);
++      t_out += now_s() - tc;
++      continue;
++    }
++
++    if(gpu_group_dose(grid, kk) != 0){ printf("\n ERROR: GPU batch failed\n\n"); exit(2); }
++    double tc = now_s();
++    t_gpu += tc - tb;
++
++    // post-processing (PostProcess_Scoring) and the sparse blocks (export_Sparse_image), one spot per thread
++    #pragma omp parallel for num_threads(nthreads) schedule(dynamic,1)
++    for(int j=0; j<kk; j++){
++      int sp = g0 + j;
++      float *d = grid + (size_t)j * nvox;
++      VAR_COMPUTE norm = plan->normalization_factor;
++      for(long i=0; i<nvox; i++){
++        float v = d[i];
++        if(config->DoseToWater == 1) v /= material[ct->material[i]].SPR;
++        v = v * norm / spot_sampled[j];
++        v *= (v > 0);
++        v = v / voxel_volume;
++        if(config->Dose_Segmentation != 0) v *= (ct->density[i] > config->Segmentation_Density_Threshold);
++        d[i] = v;
++      }
++      uint32_t nsel = 0;
++      for(long i=0; i<nvox; i++) if(d[i] > threshold) nsel++;
++      ByteBuf *o = &out[j];
++      o->n = 0;
++      bb_put(o, &nsel, sizeof(uint32_t));
++      uint32_t FieldID = (uint32_t)plan->fields[sb[sp]].FieldID;
++      uint32_t CPI = (uint32_t)plan->fields[sb[sp]].ControlPoints[sc[sp]].ControlPointIndex;
++      float SX = (float)plan->fields[sb[sp]].ControlPoints[sc[sp]].spots[sd[sp]].Spot_X;
++      float SY = (float)plan->fields[sb[sp]].ControlPoints[sc[sp]].spots[sd[sp]].Spot_Y;
++      bb_put(o, &FieldID, 4); bb_put(o, &CPI, 4); bb_put(o, &SX, 4); bb_put(o, &SY, 4);
++      uint32_t first = 0, run = 0;
++      for(uint32_t i=0; i<(uint32_t)nvox; i++){
++        if(d[i] > threshold){
++          if(run == 0) first = i;
++          run++;
++        }
++        else if(run != 0){
++          bb_put(o, &run, 4); bb_put(o, &first, 4); bb_put(o, d + first, run * sizeof(float));
++          run = 0;
++        }
++      }
++      if(run != 0){ bb_put(o, &run, 4); bb_put(o, &first, 4); bb_put(o, d + first, run * sizeof(float)); }
++    }
++    for(int j=0; j<kk; j++) fwrite(out[j].bytes, 1, out[j].n, fb);
++    t_out += now_s() - tc;
++  }
++  fclose(fb);
++
++  double t_kernel = 0.0;
++  long long steps = 0, nsec = 0, ovf = 0, clamps = 0;
++  gpu_finish(NULL, &t_kernel, &steps, &nsec, &ovf, &clamps);
++  printf("\nGPU prototype, beamlets (%s post-processing): %d spots in groups of %d, %ld primaries; sampling %.3f s, GPU %.3f s (kernels %.3f s),"
++         " post-processing and output %.3f s, total %.3f s; %.3g steps; nuclear %d: %lld secondaries, %lld lost to a full"
++         " stack, %lld angle indices clamped\n", device_post ? "device" : "host", nspots, K, total_primaries, t_gen, t_gpu, t_kernel, t_out, now_s() - t0,
++         (double)steps, config->Simulate_Nuclear_Interactions, nsec, ovf, clamps);
++
++  for(int t=0; t<nthreads; t++) Free_Plan_Parameters(beamlets[t]);
++  for(int j=0; j<K; j++) free(out[j].bytes);
++  for(int c=0; c<8; c++) free(buf[c]);
++  free(out); free(spot_n); free(spot_sampled); free(slot); free(grid); free(scale); free(beamlets); free(streams);
++  free(sb); free(sc); free(sd);
++}
+diff --git a/src/gpu_transport.cu b/src/gpu_transport.cu
+index e29c546..6a8032b 100644
+--- a/src/gpu_transport.cu
++++ b/src/gpu_transport.cu
+@@ -18,6 +18,10 @@ secondary's table energy), the only behaviour a GPU can reproduce: the original
+ #include <chrono>
+ #include <cuda_runtime.h>
+ #include <curand_kernel.h>
++#include <thrust/copy.h>
++#include <thrust/count.h>
++#include <thrust/execution_policy.h>
++#include <thrust/iterator/counting_iterator.h>
+ #include "gpu_api.h"
+ 
+ #define CK(call) do { cudaError_t e_ = (call); if (e_ != cudaSuccess) { \
+@@ -58,11 +62,11 @@ struct Tab {
+ };
+ __constant__ Tab G;
+ 
+-struct Part { float x, y, z, u, v, w, T, M, charge, mass; int type; };
++struct Part { float x, y, z, u, v, w, T, M, charge, mass; int type; int slot; };   // slot: the spot's dose grid (beamlets)
+ 
+ struct Dev {
+   std::vector<void*> allocs;
+-  float *dose_f; double *dose_d; float *prim; long capacity;
++  float *dose_f; double *dose_d; float *prim; int *slots; long capacity; int max_slots; int beamlet;
+   unsigned long long *counters;    // steps, secondaries, stack overflows, angle clamps
+   unsigned long long seed; long batch; double kernel_s; int nvox;
+ };
+@@ -174,9 +178,9 @@ __device__ __forceinline__ void rotate(float &u, float &v, float &w, float theta
+   u /= n; v /= n; w /= n;
+ }
+ 
+-__device__ __forceinline__ void score(float *dose, int idx, float M, float dE, float rho, float SPR) {  // Energy_Scoring_from_index
++__device__ __forceinline__ void score(float *dose, int slot, int idx, float M, float dE, float rho, float SPR) {  // Energy_Scoring_from_index
+   float val = (P.dose_weighting == 0) ? M * dE / (rho * SPR) : M * dE / SPR;
+-  if (val != 0.0f) atomicAdd(dose + idx, val);
++  if (val != 0.0f) atomicAdd(dose + (long)slot * P.nvox + idx, val);
+ }
+ 
+ // ---------------------------------------------------------------------------- nuclear (compute_nuclear_interaction.c)
+@@ -368,8 +372,8 @@ __device__ float nuclear_interaction(Part &p, int m, curandStatePhilox4_32_10_t
+ 
+ // ---------------------------------------------------------------------------- transport (hadron_step, one particle)
+ 
+-__global__ void transport(long n, const float *__restrict__ prim, long cap, float *dose, unsigned long long seed,
+-                          long batch, unsigned long long *counters) {
++__global__ void transport(long n, const float *__restrict__ prim, const int *__restrict__ slots, long cap, float *dose,
++                          unsigned long long seed, long batch, unsigned long long *counters) {
+   long tid = blockIdx.x * (long)blockDim.x + threadIdx.x;
+   long nthreads = (long)gridDim.x * blockDim.x;
+   curandStatePhilox4_32_10_t rng;
+@@ -384,6 +388,7 @@ __global__ void transport(long n, const float *__restrict__ prim, long cap, floa
+     p.u = prim[3 * cap + i]; p.v = prim[4 * cap + i]; p.w = prim[5 * cap + i];
+     p.T = prim[6 * cap + i]; p.M = prim[7 * cap + i];
+     p.charge = 1.0f; p.mass = 1.0f; p.type = PROTON;
++    p.slot = slots ? slots[i] : 0;
+ 
+     for (;;) {                                            // the primary, then its secondaries, depth first
+       while (p.type != UNKNOWN) {
+@@ -429,7 +434,7 @@ __global__ void transport(long n, const float *__restrict__ prim, long cap, floa
+         if (!isfinite(dE)) break;                                       // patch 0003's guard
+         if (p.T - dE <= Ecut) { dE = p.T; p.type = UNKNOWN; }
+         p.T -= dE;
+-        score(dose, hinge, p.M, dE, rho, SPR);
++        score(dose, p.slot, hinge, p.M, dE, rho, SPR);
+         if (p.type == UNKNOWN) break;
+ 
+         k = kin(p.T, p.mass);
+@@ -464,7 +469,7 @@ __global__ void transport(long n, const float *__restrict__ prim, long cap, floa
+           dE_hard += p.T;
+           p.type = UNKNOWN;
+         }
+-        score(dose, idx2, p.M, dE_hard, G.ct_rho[idx2], SPR_hard);
++        score(dose, p.slot, idx2, p.M, dE_hard, G.ct_rho[idx2], SPR_hard);
+       }
+       if (st.n == 0) break;
+       p = st.s[--st.n];
+@@ -536,46 +541,102 @@ extern "C" int gpu_init(const GpuSetup *s) {
+   }
+   for (void *a : D.allocs) if (!a) { fprintf(stderr, "GPU prototype: out of device memory\n"); return 1; }
+   CK(cudaMemcpyToSymbol(G, &t, sizeof(t)));
+-  CK(cudaMalloc(&D.dose_f, s->nvox * sizeof(float)));
+-  CK(cudaMemset(D.dose_f, 0, s->nvox * sizeof(float)));
++  D.max_slots = s->max_slots > 0 ? s->max_slots : 1;
++  D.beamlet = s->beamlet;
++  CK(cudaMalloc(&D.dose_f, (long)D.max_slots * s->nvox * sizeof(float)));
++  CK(cudaMemset(D.dose_f, 0, (long)D.max_slots * s->nvox * sizeof(float)));
+   CK(cudaMalloc(&D.dose_d, s->nvox * sizeof(double)));
+   CK(cudaMemset(D.dose_d, 0, s->nvox * sizeof(double)));
+   CK(cudaMalloc(&D.counters, 4 * sizeof(unsigned long long)));
+   CK(cudaMemset(D.counters, 0, 4 * sizeof(unsigned long long)));
+-  D.prim = nullptr; D.capacity = 0; D.seed = s->seed; D.batch = 0; D.kernel_s = 0.0; D.nvox = s->nvox;
++  D.prim = nullptr; D.slots = nullptr; D.capacity = 0; D.seed = s->seed; D.batch = 0; D.kernel_s = 0.0;
++  D.nvox = s->nvox;
+   return 0;
+ }
+ 
+ extern "C" int gpu_batch(long n, const float *x, const float *y, const float *z, const float *u, const float *v,
+-                         const float *w, const float *T, const float *M) {
++                         const float *w, const float *T, const float *M, const int *slot) {
+   if (n <= 0) return 0;
+   if (n > D.capacity) {
+     if (D.prim) CK(cudaFree(D.prim));
++    if (D.slots) CK(cudaFree(D.slots));
+     CK(cudaMalloc(&D.prim, 8 * n * sizeof(float)));
++    CK(cudaMalloc(&D.slots, n * sizeof(int)));
+     D.capacity = n;
+   }
+   const float *src[8] = {x, y, z, u, v, w, T, M};
+   for (int c = 0; c < 8; c++)
+     CK(cudaMemcpy(D.prim + c * D.capacity, src[c], n * sizeof(float), cudaMemcpyHostToDevice));
++  if (slot) CK(cudaMemcpy(D.slots, slot, n * sizeof(int), cudaMemcpyHostToDevice));
+   int nsm = 0;
+   CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
+   int threads = 128, blocks = nsm * 8;
+   auto t0 = std::chrono::steady_clock::now();
+-  transport<<<blocks, threads>>>(n, D.prim, D.capacity, D.dose_f, D.seed, D.batch, D.counters);
+-  CK(cudaGetLastError());
+-  fold<<<nsm * 4, 256>>>(D.nvox, D.dose_f, D.dose_d);
++  transport<<<blocks, threads>>>(n, D.prim, slot ? D.slots : nullptr, D.capacity, D.dose_f, D.seed, D.batch, D.counters);
+   CK(cudaGetLastError());
++  if (!D.beamlet) {
++    fold<<<nsm * 4, 256>>>(D.nvox, D.dose_f, D.dose_d);
++    CK(cudaGetLastError());
++  }
+   CK(cudaDeviceSynchronize());
+   D.kernel_s += std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+   D.batch++;
+   return 0;
+ }
+ 
++// beamlet mode: PostProcess_Scoring on the device (no dose-to-water post-processing, no segmentation)
++__global__ void postprocess(long n, float *d, int nvox, const float *scale) {
++  for (long i = blockIdx.x * (long)blockDim.x + threadIdx.x; i < n; i += (long)gridDim.x * blockDim.x) {
++    float v = d[i] * scale[i / nvox];
++    d[i] = v * (v > 0.0f);
++  }
++}
++struct Above {
++  float t;
++  __host__ __device__ bool operator()(float v) const { return v > t; }
++};
++
++extern "C" int gpu_group_sparse(int nslots, const float *scale, float threshold, long long **idx_out, float **val_out,
++                                long *n_out) {
++  long n = (long)nslots * D.nvox;
++  float *dscale = nullptr;
++  CK(cudaMalloc(&dscale, nslots * sizeof(float)));
++  CK(cudaMemcpy(dscale, scale, nslots * sizeof(float), cudaMemcpyHostToDevice));
++  int nsm = 0;
++  CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
++  postprocess<<<nsm * 8, 256>>>(n, D.dose_f, D.nvox, dscale);
++  CK(cudaGetLastError());
++  Above pred{threshold};
++  long m = thrust::count_if(thrust::device, D.dose_f, D.dose_f + n, pred);
++  long long *didx = nullptr; float *dval = nullptr;
++  CK(cudaMalloc(&didx, (m > 0 ? m : 1) * sizeof(long long)));
++  CK(cudaMalloc(&dval, (m > 0 ? m : 1) * sizeof(float)));
++  thrust::copy_if(thrust::device, thrust::counting_iterator<long long>(0), thrust::counting_iterator<long long>(n),
++                  D.dose_f, didx, pred);
++  thrust::copy_if(thrust::device, D.dose_f, D.dose_f + n, D.dose_f, dval, pred);
++  CK(cudaGetLastError());
++  *idx_out = (long long *)malloc((m > 0 ? m : 1) * sizeof(long long));
++  *val_out = (float *)malloc((m > 0 ? m : 1) * sizeof(float));
++  CK(cudaMemcpy(*idx_out, didx, m * sizeof(long long), cudaMemcpyDeviceToHost));
++  CK(cudaMemcpy(*val_out, dval, m * sizeof(float), cudaMemcpyDeviceToHost));
++  CK(cudaMemset(D.dose_f, 0, n * sizeof(float)));
++  cudaFree(didx); cudaFree(dval); cudaFree(dscale);
++  *n_out = m;
++  return 0;
++}
++
++extern "C" int gpu_group_dose(float *out, int nslots) {
++  long n = (long)nslots * D.nvox;
++  CK(cudaMemcpy(out, D.dose_f, n * sizeof(float), cudaMemcpyDeviceToHost));
++  CK(cudaMemset(D.dose_f, 0, n * sizeof(float)));
++  return 0;
++}
++
+ extern "C" int gpu_finish(float *dose_out, double *seconds_kernel, long long *steps, long long *secondaries,
+                           long long *stack_overflows, long long *angle_clamps) {
+   std::vector<double> h(D.nvox);
+   CK(cudaMemcpy(h.data(), D.dose_d, D.nvox * sizeof(double), cudaMemcpyDeviceToHost));
+-  for (int i = 0; i < D.nvox; i++) dose_out[i] += (float)h[i];
++  if (dose_out) for (int i = 0; i < D.nvox; i++) dose_out[i] += (float)h[i];
+   unsigned long long c[4] = {0, 0, 0, 0};
+   CK(cudaMemcpy(c, D.counters, sizeof(c), cudaMemcpyDeviceToHost));
+   if (seconds_kernel) *seconds_kernel = D.kernel_s;
+@@ -586,6 +647,7 @@ extern "C" int gpu_finish(float *dose_out, double *seconds_kernel, long long *st
+   for (void *a : D.allocs) cudaFree(a);
+   cudaFree(D.dose_f); cudaFree(D.dose_d); cudaFree(D.counters);
+   if (D.prim) cudaFree(D.prim);
++  if (D.slots) cudaFree(D.slots);
+   D = Dev();
+   return 0;
+ }
+diff --git a/src/include/compute_simulation.h b/src/include/compute_simulation.h
+index 386a6bf..0c54c4e 100644
+--- a/src/include/compute_simulation.h
++++ b/src/include/compute_simulation.h
+@@ -31,6 +31,7 @@ The MCsquare software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ void Run_simulation(DATA_config *config, Materials *material, DATA_CT *ct, plan_parameters *plan, machine_parameters *machine, DATA_4D_Fields *Fields);
+ void Display_simulation_progression(DATA_config *config, char *progress_message);
+ unsigned long Simulation_loop(DATA_config *config, Materials *material, DATA_CT *ct, plan_parameters *plan, machine_parameters *machine, DATA_4D_Fields *Fields, DATA_Scoring *Tot_scoring, unsigned long Num_primaries);
++void gpu_Run_simulation_beamlet(DATA_config *config, Materials *material, DATA_CT **CT_phases, plan_parameters *plan, machine_parameters *machine);
+ unsigned long gpu_Simulation_loop(DATA_config *config, Materials *material, DATA_CT *ct, plan_parameters *plan, machine_parameters *machine, DATA_Scoring *Tot_scoring, unsigned long Num_primaries);
+ 
+ #endif
+diff --git a/src/include/compute_simulation_beamlet.h b/src/include/compute_simulation_beamlet.h
+index 500ce0b..342b0db 100644
+--- a/src/include/compute_simulation_beamlet.h
++++ b/src/include/compute_simulation_beamlet.h
+@@ -31,4 +31,6 @@ The MCsquare software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ 
+ void Run_simulation_beamlet(DATA_config *config, Materials *material, DATA_CT **CT_phases, plan_parameters *plan, machine_parameters *machine, DATA_4D_Fields *Fields);
+ 
++void gpu_Run_simulation_beamlet(DATA_config *config, Materials *material, DATA_CT **CT_phases, plan_parameters *plan, machine_parameters *machine);
++
+ #endif
+-- 
+2.43.0
+

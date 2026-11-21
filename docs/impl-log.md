@@ -2313,3 +2313,11 @@ in water and a 845-spot, five-layer field through bone and lung; transport ran a
 fast math), 1/16–1/19 of the 48-core CPU run's time; whole runs 3–7 times faster (fixed costs: CUDA start-up 0.5 s,
 sampling 0.2 s). Not used by radiarch. Next decisions for the project lead: nuclear interactions (needs issue #42),
 influence matrices on the GPU, robust scenarios, a driver setting.
+
+Influence matrices on the GPU (patch 0007, same day): beamlet mode in spot groups, each spot with its own dose grid
+on the device, MCsquare's per-spot sampling, post-processing, threshold and compaction on the device (Thrust), the
+sparse format written straight into the merged files radiarch reads. On the bone/lung field's 845 spots (nuclear on,
+#42 fix on both): spot integrals and summed dose differ from the CPU's as two CPU seeds do (sd 0.279 % against
+0.276 %, rms 1.165 % against 1.162 %); 2.2 s against 10.2 s for the 48-core CPU run. Next (the project lead's
+decisions): the #42 fix in the production build (the GPU engine has it, so its doses follow it), and wiring the GPU
+engine into radiarch as a setting (build with CUDA, a driver path, validation of the records).

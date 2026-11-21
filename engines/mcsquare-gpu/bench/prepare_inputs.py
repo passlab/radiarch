@@ -33,3 +33,11 @@ w = out / "hetero"
 drv.prepare(w, hu, (2.0, 2.0, 2.0), (-99.0, 1.0, -99.0), plan(layers), nb_primaries=1e7, config_overrides=over)
 for d in sorted(out.iterdir()):
     print(d.name, sum(1 for _ in d.rglob("*")), "files")
+
+# C) the same phantom and field in beamlet mode (radiarch's influence-matrix settings, nuclear interactions on)
+hu = np.full((100, 125, 100), 40.0, dtype=np.float32)
+hu[:, 20:30, :50] = 700.0
+hu[:, 45:70, 50:] = -750.0
+w = out / "hetero_dij"
+drv.prepare(w, hu, (2.0, 2.0, 2.0), (-99.0, 1.0, -99.0), plan(layers), nb_primaries=1e4, beamlets=True)
+print("hetero_dij written")
