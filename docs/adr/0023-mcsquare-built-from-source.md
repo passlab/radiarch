@@ -66,7 +66,13 @@ radiarch on cci-aries):
 4. **A setting.** `mcsquare_build` (`RADIARCH_MCSQUARE_BUILD`): `radiarch` (the default) runs `MCsquare_radiarch`
    directly; `opentps` runs OpenTPS's launcher and binaries as before. The engine digest and fingerprint name the
    build, so results of the two builds never share a cache entry. The engine's version is 0.4.0.
-5. **The workaround goes.** `mco_robust_proton` runs MCsquare on 8 threads again. The driver's retry on a crash
+5. **The material database through a short link (2026-11-21).** MCsquare builds its nuclear-data file names in
+   100-byte buffers from the materials directory, the material's name and the file's name. An install path
+   longer than about 45 characters overran them: OpenTPS's build silently (it overran its stack in CI all
+   along), radiarch's build stops on glibc's check ("buffer overflow detected", CI's checkout under
+   `/home/runner/work/...`). The driver links `Materials` into each work directory and gives the engine that
+   relative name. Larger buffers in the engine are the upstream fix; changing the binary needs a re-validation.
+6. **The workaround goes.** `mco_robust_proton` runs MCsquare on 8 threads again. The driver's retry on a crash
    stays, as a guard.
 
 ## Evidence

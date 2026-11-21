@@ -242,6 +242,22 @@ class TestCrashRetry:
         assert D.dropped_particles("no warning here") == 0
 
 
+def test_the_material_database_is_linked_into_the_work_directory(tmp_path):
+    """The engine gets the materials as the short relative link 'Materials' (its nuclear-data file names live in
+    100-byte buffers; a long absolute path overran them)."""
+    mats = tmp_path / ("a-long-install-path-" * 5) / "Materials"
+    mats.mkdir(parents=True)
+    work = tmp_path / "work"
+    work.mkdir()
+    assert D.materials_link(work, mats) == "Materials"
+    assert (work / "Materials").is_symlink() and (work / "Materials").resolve() == mats.resolve()
+    assert D.materials_link(work, mats) == "Materials"                 # a second run in the same directory
+    other = tmp_path / "work2"
+    (other / "Materials").mkdir(parents=True)
+    with pytest.raises(RuntimeError, match="not the link"):
+        D.materials_link(other, mats)
+
+
 # ---------------------------------------------------------------------------
 # Goldens: what the vendored OpenTPS wrapper wrote before R14, the driver must write
 # ---------------------------------------------------------------------------
@@ -299,6 +315,19 @@ class TestEngineRuns:
         # Dij @ MU and the direct dose are the same physics up to counting statistics.
         via = np.asarray(dij @ np.ones(3, dtype=np.float32)).reshape(self.BOX)
         assert via.sum() == pytest.approx(dose.sum(), rel=0.15)
+
+    def test_a_long_install_path(self, tmp_path):
+        """The engine's assets reached through a path of more than 100 characters (CI's checkout is under
+        /home/runner/work/...): the run must not overrun the engine's file-name buffers."""
+        long_root = tmp_path / ("engines-installed-under-a-long-path-" * 3) / "mcsquare"
+        long_root.parent.mkdir(parents=True)
+        long_root.symlink_to(ASSETS.root.resolve(), target_is_directory=True)
+        assert len(str(long_root / "Materials")) > 100
+        drv = D.MCsquareDriver(assets=D.MCsquareAssets(long_root, ASSETS.build), work_root=tmp_path / "runs",
+                               n_threads=1, seed=5, keep_workdir=True)
+        hu = np.zeros((11, 30, 11), dtype=np.float32)
+        dose = drv.compute_dose(hu, (3.0, 3.0, 3.0), (-15.0, 1.5, -15.0), _plan(energy=100.0), nb_primaries=2000)
+        assert dose.max() > 0
 
     def test_water_calibration_lengthens_the_range(self, tmp_path):
         """HU 0 is a tissue blend in the clinical tables and water in the water calibration;

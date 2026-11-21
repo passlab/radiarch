@@ -2291,3 +2291,10 @@ build: ranges, fall-offs and spot sizes agree; the peak-to-entrance ratio (up to
 at 0.8 R80 (up to 1.7 % lower at 200 MeV) do not, and builds with the nuclear tables' bounds clamped agree with each
 other but not with OpenTPS's: those quantities depend on what lies past the angle table in each binary. Left open
 for the project lead: fixing issue #42 (a physics change), and trying Intel's `icx` for speed.
+
+The first CI run of the build (2026-11-21, `dev`): every engine test aborted with glibc's "buffer overflow
+detected". MCsquare builds its nuclear-data file names in 100-byte buffers from the materials directory; CI's
+checkout path made them 114 characters (aries' `/w/...` and the image's `/app/...` stay near 80, and OpenTPS's
+build overran the buffer silently). The driver now links `Materials` into the work directory and passes that
+relative name (`materials_link`); a test runs the engine from an install path of more than 100 characters, and
+fails without the link.

@@ -737,6 +737,28 @@ class MCsquareRun:
     dropped_particles: int = 0      # particles the engine dropped for an energy that was not a finite number
 
 
+MATERIALS_LINK = "Materials"
+
+
+def materials_link(work: Path, materials_dir: Path) -> str:
+    """The material database as the engine should see it: a link ``Materials`` in the work directory, given as that
+    relative name (the engine runs in ``work``).
+
+    MCsquare builds the nuclear data's file names in 100-byte buffers from this directory, the material's name and
+    the file's name; an absolute path longer than about 45 characters overran them (OpenTPS's build silently,
+    radiarch's build stops on glibc's check: "buffer overflow detected"). The short link keeps the names well inside
+    the buffers wherever radiarch is installed.
+    """
+    link = Path(work) / MATERIALS_LINK
+    target = Path(materials_dir).resolve()
+    if link.is_symlink() and Path(os.readlink(link)) == target:
+        return MATERIALS_LINK
+    if link.is_symlink() or link.exists():
+        raise RuntimeError(f"{link} exists and is not the link to the material database {target}")
+    link.symlink_to(target, target_is_directory=True)
+    return MATERIALS_LINK
+
+
 DROPPED_RE = re.compile(r"Warning: (\d+) particles were dropped because their energy was not a finite number")
 
 
@@ -856,7 +878,7 @@ class MCsquareDriver:
         config_path = Path(config_path).resolve() if config_path else work / "config.txt"
         stdout_path = work / "mcsquare.log"
         env = dict(os.environ)
-        env["MCsquare_Materials_Dir"] = str(self.assets.materials_dir)
+        env["MCsquare_Materials_Dir"] = materials_link(work, self.assets.materials_dir)
         attempts = 0
         while True:
             attempts += 1
