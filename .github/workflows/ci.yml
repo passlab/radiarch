@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    # dev too: the Radiarch session's branch is tested before each checkpoint merge into master
+    branches: [master, dev]
   pull_request:
     branches: [master]
   # Allow every job (fast, full, MCsquare validation) to be run on demand
