@@ -1,0 +1,643 @@
+From 400ae07fa9ea6f4fe3e15a174fe5682bfe826911 Mon Sep 17 00:00:00 2001
+From: The Radiarch Project <radiarch@invalid>
+Date: Fri, 20 Nov 2026 21:15:53 -0500
+Subject: [PATCH 5/5] GPU transport prototype: protons, electromagnetic physics,
+ full dose (MCSQUARE_GPU=1)
+
+Simulation_loop hands over to gpu_Simulation_loop when MCSQUARE_GPU=1. MCsquare's own Generate_PBS_particle samples
+the primaries on the CPU in batches; gpu_transport.cu transports them on a CUDA device, one history per thread
+(as FRED and Wan Chan Tseung 2015 describe), following hadron_step for a proton step by step: VoxelInterface
+stepping, PSTAR/Geant4 stopping powers, restricted energy loss (Compute_dE2), straggling, Fippel multiple
+scattering, hard ionization with local deposit. Philox random numbers; float atomics per batch, folded into double.
+Nuclear interactions, LET, prompt gammas, energy scoring, independent grids and beamlet mode are not supported and
+stop the run. Materials record the length of their stopping-power table (Nbr_SP) for the copy to the device.
+---
+ src/compute_simulation.c         |   3 +
+ src/data_Stop_Pow.c              |   1 +
+ src/data_materials.c             |   3 +
+ src/gpu_api.h                    |  53 +++++
+ src/gpu_glue.c                   | 151 +++++++++++++++
+ src/gpu_transport.cu             | 320 +++++++++++++++++++++++++++++++
+ src/include/compute_simulation.h |   1 +
+ src/include/struct.h             |   2 +
+ 8 files changed, 534 insertions(+)
+ create mode 100644 src/gpu_api.h
+ create mode 100644 src/gpu_glue.c
+ create mode 100644 src/gpu_transport.cu
+
+diff --git a/src/compute_simulation.c b/src/compute_simulation.c
+index 786e646..36e831a 100644
+--- a/src/compute_simulation.c
++++ b/src/compute_simulation.c
+@@ -370,6 +370,9 @@ void Display_simulation_progression(DATA_config *config, char *progress_message)
+ 
+ unsigned long Simulation_loop(DATA_config *config, Materials *material, DATA_CT *ct, plan_parameters *plan, machine_parameters *machine, DATA_4D_Fields *Fields, DATA_Scoring *Tot_scoring, unsigned long Num_primaries){
+ 
++  if(getenv("MCSQUARE_GPU") != NULL && atoi(getenv("MCSQUARE_GPU")) == 1)
++    return gpu_Simulation_loop(config, material, ct, plan, machine, Tot_scoring, Num_primaries);
++
+   static int Num_call = 0;
+   Num_call++;
+ 
+diff --git a/src/data_Stop_Pow.c b/src/data_Stop_Pow.c
+index aa236e8..73b4564 100644
+--- a/src/data_Stop_Pow.c
++++ b/src/data_Stop_Pow.c
+@@ -62,6 +62,7 @@ int Read_Stop_Pow(char *MaterialName, Materials *material, DATA_config *config){
+     i++;
+   }
+ 
++  material->Nbr_SP = i;
+   fclose(file);
+   return 0;
+ }
+diff --git a/src/data_materials.c b/src/data_materials.c
+index 6564e0d..c7ee890 100644
+--- a/src/data_materials.c
++++ b/src/data_materials.c
+@@ -277,6 +277,7 @@ Materials *Init_materials(unsigned int *Nbr_Materials, unsigned int *Max_Compone
+     material[0].PG_Energy_List = material[config->Water_Material_ID].PG_Energy_List;
+     material[0].SP_Energy = material[config->Water_Material_ID].SP_Energy;
+     material[0].Stop_Pow = material[config->Water_Material_ID].Stop_Pow;
++    material[0].Nbr_SP = material[config->Water_Material_ID].Nbr_SP;
+     material[0].Interp_Total_Nuclear_Cross_Section = material[config->Water_Material_ID].Interp_Total_Nuclear_Cross_Section;
+ 
+   
+@@ -335,6 +336,8 @@ Materials *List_materials(unsigned int *Nbr_Materials, DATA_config *config){
+     material[label].N_el = 0;
+     material[label].X0 = 0;
+     material[label].SPR = 1;
++    material[label].Nbr_SP = 0;
++    material[label].Stop_Pow = NULL;
+     material[label].Nuclear_data_type = None;
+     material[label].NbrComponents = 0;
+     material[label].Mixture_Components_label = NULL;
+diff --git a/src/gpu_api.h b/src/gpu_api.h
+new file mode 100644
+index 0000000..ebde623
+--- /dev/null
++++ b/src/gpu_api.h
+@@ -0,0 +1,53 @@
++/*
++GPU transport for MCsquare, prototype (radiarch, 2026-11-21). Plain-C interface between MCsquare's host code
++(gpu_glue.c) and the CUDA kernel (gpu_transport.cu). Apache-2.0, as MCsquare.
++
++Scope of the prototype: protons only, electromagnetic physics only (Simulate_Nuclear_Interactions False: no
++secondaries), full-dose mode, dose on the CT grid. The physics is a one-history-per-thread port of hadron_step
++(compute_hadron.c) with VoxelInterface stepping and the full PSTAR/Geant4 stopping powers.
++*/
++#ifndef H_gpu_api
++#define H_gpu_api
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++typedef struct {
++  /* materials: stopping power tables (eV cm2/g, 0.5 MeV bins from 0), concatenated */
++  int nmat;
++  const float *sp;          /* all tables */
++  const int *sp_off;        /* nmat offsets into sp */
++  const int *sp_n;          /* nmat table lengths */
++  const float *N_el;        /* nmat electron densities (per g) */
++  const float *X0;          /* nmat radiation lengths (g/cm2) */
++  /* CT */
++  int gs[3];
++  int nvox;
++  float len[3];
++  float vox[3];
++  const unsigned short *ct_mat;
++  const float *ct_rho;
++  /* physics settings (MCsquare's config) */
++  float Te_min;             /* eV */
++  float Ecut;               /* eV */
++  float D_Max;              /* cm */
++  float Eps_Max;
++  int dose_to_water;        /* 2 = online SPR */
++  int water_id;
++  int dose_weighting;       /* 0 = volume */
++  unsigned long long seed;
++  int device;
++} GpuSetup;
++
++int gpu_init(const GpuSetup *s);
++/* transports n primaries (SoA, MCsquare's CT frame, eV, multiplicity M) and accumulates their dose */
++int gpu_batch(long n, const float *x, const float *y, const float *z, const float *u, const float *v,
++              const float *w, const float *T, const float *M);
++/* adds the accumulated dose (MCsquare's units before PostProcess_Scoring) into dose_out, frees the device */
++int gpu_finish(float *dose_out, double *seconds_kernel, long long *steps);
++
++#ifdef __cplusplus
++}
++#endif
++#endif
+diff --git a/src/gpu_glue.c b/src/gpu_glue.c
+new file mode 100644
+index 0000000..0e936ab
+--- /dev/null
++++ b/src/gpu_glue.c
+@@ -0,0 +1,151 @@
++/*
++GPU transport for MCsquare, prototype (radiarch, 2026-11-21): the host side. Apache-2.0, as MCsquare.
++
++Replaces Simulation_loop when MCSQUARE_GPU=1: MCsquare's own Generate_PBS_particle samples the primaries on the
++CPU (one MKL stream per OpenMP thread, seeded as Simulation_loop seeds them), in batches; the GPU transports them
++(gpu_transport.cu) and returns the dose into Tot_scoring, before MCsquare's own post-processing and export.
++*/
++#include "include/compute_simulation.h"
++#include "gpu_api.h"
++#include <sys/time.h>
++
++static double now_s(void){
++  struct timeval tv;
++  gettimeofday(&tv, NULL);
++  return tv.tv_sec + 1e-6 * tv.tv_usec;
++}
++
++unsigned long gpu_Simulation_loop(DATA_config *config, Materials *material, DATA_CT *ct, plan_parameters *plan,
++                                  machine_parameters *machine, DATA_Scoring *Tot_scoring, unsigned long Num_primaries){
++
++  static int Num_call = 0;
++  Num_call++;
++
++  if(config->Simulate_Nuclear_Interactions || config->Score_LET || config->Score_PromptGammas
++     || config->Independent_scoring_grid || config->Score_Energy){
++    printf("\n ERROR: the GPU prototype simulates protons without nuclear interactions and scores dose only,"
++           " on the CT grid (set Simulate_Nuclear_Interactions False; no LET, prompt gamma or energy output).\n\n");
++    exit(2);
++  }
++
++  double t_setup = now_s();
++
++  // Materials, flattened
++  int nmat = config->Num_Materials;
++  int *sp_off = (int*)malloc(nmat * sizeof(int));
++  int *sp_n = (int*)malloc(nmat * sizeof(int));
++  float *N_el = (float*)malloc(nmat * sizeof(float));
++  float *X0 = (float*)malloc(nmat * sizeof(float));
++  long total = 0;
++  for(int i=0; i<nmat; i++){
++    sp_off[i] = total;
++    sp_n[i] = (material[i].Stop_Pow != NULL && material[i].Nbr_SP >= 2) ? material[i].Nbr_SP : 2;
++    total += sp_n[i];
++    N_el[i] = material[i].N_el;
++    X0[i] = material[i].X0;
++  }
++  float *sp = (float*)calloc(total, sizeof(float));
++  for(int i=0; i<nmat; i++){
++    if(material[i].Stop_Pow != NULL && material[i].Nbr_SP >= 2)
++      for(int j=0; j<sp_n[i]; j++) sp[sp_off[i] + j] = material[i].Stop_Pow[j];
++  }
++
++  GpuSetup s;
++  s.nmat = nmat; s.sp = sp; s.sp_off = sp_off; s.sp_n = sp_n; s.N_el = N_el; s.X0 = X0;
++  for(int a=0; a<3; a++){ s.gs[a] = ct->GridSize[a]; s.len[a] = ct->Length[a]; s.vox[a] = ct->VoxelLength[a]; }
++  s.nvox = ct->Nbr_voxels; s.ct_mat = ct->material; s.ct_rho = ct->density;
++  s.Te_min = config->Te_Min * UMeV; s.Ecut = config->Ecut_Pro * UMeV;
++  s.D_Max = config->D_Max; s.Eps_Max = config->Epsilon_Max;
++  s.dose_to_water = config->DoseToWater; s.water_id = config->Water_Material_ID;
++  s.dose_weighting = config->Dose_weighting_algorithm;
++  s.seed = (config->RNG_Seed != 0) ? (unsigned long long)config->RNG_Seed + 100000ULL * Num_call
++                                   : (unsigned long long)time(NULL) + Num_call;
++  s.device = getenv("MCSQUARE_GPU_DEVICE") ? atoi(getenv("MCSQUARE_GPU_DEVICE")) : 0;
++  if(gpu_init(&s) != 0){ printf("\n ERROR: GPU initialisation failed\n\n"); exit(2); }
++  t_setup = now_s() - t_setup;
++
++  // One MKL stream per thread, seeded as Simulation_loop seeds them
++  int nthreads = config->Num_Threads;
++  VAR_RND_SEED *streams = (VAR_RND_SEED*)malloc(nthreads * sizeof(VAR_RND_SEED));
++  #if USE_MKL_LIB==0
++    unsigned int *stream_vals = (unsigned int*)malloc(nthreads * sizeof(unsigned int));
++  #endif
++  for(int t=0; t<nthreads; t++){
++    #if USE_MKL_LIB==0
++      streams[t] = &stream_vals[t];
++    #endif
++    Init_RND(config, &streams[t], t*1e4+Num_call*1e5);
++  }
++
++  long batch = getenv("MCSQUARE_GPU_BATCH") ? atol(getenv("MCSQUARE_GPU_BATCH")) : 2000000;
++  long cap = batch + nthreads * (VLENGTH + 200);
++  float *buf[8];
++  for(int c=0; c<8; c++) buf[c] = (float*)malloc(cap * sizeof(float));
++
++  unsigned long Num_simulated_primaries = 0;
++  double t_gen = 0.0, t_gpu = 0.0;
++
++  while(Num_simulated_primaries < Num_primaries){
++    unsigned long want = Num_primaries - Num_simulated_primaries;
++    if(want > (unsigned long)batch) want = batch;
++    long n = 0;
++    unsigned long sampled = 0;
++    double t0 = now_s();
++
++    #pragma omp parallel num_threads(nthreads) reduction(+:sampled)
++    {
++      int tid = omp_get_thread_num();
++      unsigned long share = (want + nthreads - 1) / nthreads;
++      Hadron_buffer local[200];
++      int nl = 0;
++      unsigned long done = 0;
++      long cap_t = share + VLENGTH + 200;
++      float *loc[8];
++      for(int c=0; c<8; c++) loc[c] = (float*)malloc(cap_t * sizeof(float));
++      long m = 0;
++      while(done < share){
++        nl = 0;
++        Generate_PBS_particle(local, &nl, ct->Length, plan, machine, streams[tid], config, material);
++        done += VLENGTH;
++        for(int k=0; k<nl; k++){
++          if(local[k].type == Unknown || m >= cap_t) continue;
++          loc[0][m] = local[k].x; loc[1][m] = local[k].y; loc[2][m] = local[k].z;
++          loc[3][m] = local[k].u; loc[4][m] = local[k].v; loc[5][m] = local[k].w;
++          loc[6][m] = local[k].T; loc[7][m] = local[k].M;
++          m++;
++        }
++      }
++      sampled += done;
++      long at;
++      #pragma omp critical
++      {
++        at = n;
++        n += m;
++      }
++      for(int c=0; c<8; c++){
++        memcpy(buf[c] + at, loc[c], m * sizeof(float));
++        free(loc[c]);
++      }
++    }
++    Num_simulated_primaries += sampled;
++    double t1 = now_s();
++    t_gen += t1 - t0;
++    if(gpu_batch(n, buf[0], buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7]) != 0){
++      printf("\n ERROR: GPU batch failed\n\n"); exit(2);
++    }
++    t_gpu += now_s() - t1;
++  }
++
++  double t_kernel = 0.0;
++  long long steps = 0;
++  gpu_finish(Tot_scoring->dose, &t_kernel, &steps);
++
++  printf("\nGPU prototype: %lu primaries sampled; setup %.3f s, sampling on %d threads %.3f s, GPU %.3f s"
++         " (kernels %.3f s), %.3g steps, %.3g primaries/s on the GPU\n",
++         Num_simulated_primaries, t_setup, nthreads, t_gen, t_gpu, t_kernel, (double)steps,
++         t_kernel > 0 ? Num_simulated_primaries / t_kernel : 0.0);
++
++  for(int c=0; c<8; c++) free(buf[c]);
++  free(streams); free(sp); free(sp_off); free(sp_n); free(N_el); free(X0);
++  return Num_simulated_primaries;
++}
+diff --git a/src/gpu_transport.cu b/src/gpu_transport.cu
+new file mode 100644
+index 0000000..9e8bca2
+--- /dev/null
++++ b/src/gpu_transport.cu
+@@ -0,0 +1,320 @@
++/*
++GPU transport for MCsquare, prototype (radiarch, 2026-11-21). Apache-2.0, as MCsquare; derived from
++compute_hadron.c, compute_EM_interaction.c, compute_geometry.c, compute_scoring.c and struct.c of MCsquare
++(Copyright 2016-2017 Universite catholique de Louvain), which it follows step by step for one proton.
++
++One history per thread (FRED, PMB 2017; Wan Chan Tseung 2015): each thread loops over primaries of a batch.
++Philox random numbers, seeded per thread and batch. Dose: float atomics per batch, folded into double after each
++batch (gPMC 2016). Electromagnetic physics only: no nuclear interactions, so no secondaries.
++*/
++#include <cstdio>
++#include <cmath>
++#include <vector>
++#include <cstddef>
++#include <chrono>
++#include <cuda_runtime.h>
++#include <curand_kernel.h>
++#include "gpu_api.h"
++
++#define CK(call) do { cudaError_t e_ = (call); if (e_ != cudaSuccess) { \
++  fprintf(stderr, "CUDA error %s at %s:%d\n", cudaGetErrorString(e_), __FILE__, __LINE__); return 1; } } while (0)
++
++// MCsquare's constants (define.h, compute_EM_interaction.h), eV and cm
++#define UMEV 1e6f
++#define PSTAR_BIN 0.5f
++#define MC2E 0.5109989e6f
++#define MC2P 938.272046e6f
++#define CONST_DERIV 0.99f
++#define CONST_MS_FIPPEL 18.3f
++// 2 pi r_e^2 m_e c^2 (eV cm2): the factor of the ionization cross section, stopping power and straggling
++#define KION ((float)(2.0 * 3.14159265359 * 2.8179403e-13 * 2.8179403e-13 * 0.5109989e6))
++
++struct Params {
++  int nmat, gs0, gs1, gs2, nvox, dose_to_water, water_id, dose_weighting;
++  float len0, len1, len2, vox0, vox1, vox2, Te_min, Ecut, D_Max, Eps_Max;
++};
++__constant__ Params P;
++
++struct Dev {
++  float *sp; int *sp_off; int *sp_n; float *N_el; float *X0;
++  unsigned short *ct_mat; float *ct_rho;
++  float *dose_f; double *dose_d;
++  float *prim;          // 8 * capacity floats, SoA
++  unsigned long long *steps;
++  long capacity;
++  unsigned long long seed;
++  long batch;
++  double kernel_s;
++};
++static Dev D;
++
++__device__ __forceinline__ float stop_pow(int mat, float T, const float *sp, const int *sp_off, const int *sp_n) {
++  // Total_Stop_Pow: linear interpolation in 0.5 MeV bins (mass 1)
++  int i = (int)floorf(T / (UMEV * PSTAR_BIN));
++  int n = sp_n[mat];
++  if (i < 0) i = 0;
++  if (i > n - 2) i = n - 2;
++  float e1 = i * UMEV * PSTAR_BIN, e2 = (i + 1) * UMEV * PSTAR_BIN;
++  const float *t = sp + sp_off[mat];
++  float s1 = __ldg(t + i), s2 = __ldg(t + i + 1);
++  return s1 + (s2 - s1) * (T - e1) / (e2 - e1);
++}
++
++struct Kin { float E, g, b2, Temax; };
++__device__ __forceinline__ Kin kin(float T) {
++  // Update_Hadron for a proton
++  Kin k;
++  k.E = T + MC2P;
++  k.g = k.E / MC2P;
++  k.b2 = 1.0f - 1.0f / (k.g * k.g);
++  k.Temax = (2.0f * MC2E * MC2P * MC2P * (k.g * k.g - 1.0f)) / (MC2P * MC2P + 2.0f * MC2E * k.g * MC2P + MC2E * MC2E);
++  return k;
++}
++
++__device__ __forceinline__ float xs_ion(float Nel, const Kin &k, float Temin) {
++  // cross_section_ionization
++  if (k.Temax <= Temin) return 0.0f;
++  return KION * Nel * ((1.0f / Temin - 1.0f / k.Temax) - (k.b2 / k.Temax) * logf(k.Temax / Temin)
++                       + (k.Temax - Temin) / (2.0f * k.E * k.E)) / k.b2;
++}
++
++__device__ __forceinline__ float restricted_L(int mat, float rho, float Nel, float T, float Temin,
++                                              const float *sp, const int *sp_off, const int *sp_n, Kin &k) {
++  // Compute_L: restricted stopping power (eV/cm)
++  k = kin(T);
++  float s = stop_pow(mat, T, sp, sp_off, sp_n);
++  float M = 0.0f;
++  if (k.Temax > Temin)
++    M = (KION * Nel / k.b2) * (logf(k.Temax / Temin) - (k.Temax - Temin) * k.b2 / k.Temax
++                                + (k.Temax * k.Temax - Temin * Temin) / (4.0f * k.E * k.E));
++  return rho * s - M;
++}
++
++__device__ __forceinline__ float mean_dE(int mat, float rho, float Nel, float T, float step, float Temin,
++                                         const float *sp, const int *sp_off, const int *sp_n) {
++  // Compute_dE2
++  Kin k1, k2;
++  float L1 = restricted_L(mat, rho, Nel, T, Temin, sp, sp_off, sp_n, k1);
++  float dE1 = L1 * step, tau1 = T / MC2P, e1 = dE1 / T, C = L1 * k1.b2;
++  float T2 = T * CONST_DERIV;
++  float L2 = restricted_L(mat, rho, Nel, T2, Temin, sp, sp_off, sp_n, k2);
++  float C2 = L2 * k2.b2;
++  float dC = (C2 - C) / (T2 - T);
++  float b = T * dC / C;
++  float a = (1.0f + tau1) * (2.0f + tau1);
++  return dE1 * (1.0f + e1 / a + e1 * e1 * (2.0f + 2.0f * tau1 + tau1 * tau1) / (a * a)
++                - b * e1 * (0.5f + 2.0f * e1 / (3.0f * a) + (1.0f - b) * e1 / 6.0f));
++}
++
++__device__ __forceinline__ int ct_index(float x, float y, float z, bool &inside) {
++  // get_CT_Offset (x is mirrored for the index)
++  inside = !(x < 0.0f || y < 0.0f || z < 0.0f || x >= P.len0 || y >= P.len1 || z >= P.len2);
++  int idx = (int)floorf((-x + P.len0) / P.vox0) + P.gs0 * (int)floorf(y / P.vox1)
++            + P.gs0 * P.gs1 * (int)floorf(z / P.vox2);
++  if (idx < 0 || idx >= P.nvox) inside = false;
++  return inside ? idx : 0;
++}
++
++__device__ __forceinline__ float dist_to_interface(float x, float y, float z, float u, float v, float w) {
++  // Dist_To_Interface, float branch
++  float dx = fabsf(((floorf(x / P.vox0) + (u > 0.0f)) * P.vox0 - x) / u);
++  float dy = fabsf(((floorf(y / P.vox1) + (v > 0.0f)) * P.vox1 - y) / v);
++  float dz = fabsf(((floorf(z / P.vox2) + (w > 0.0f)) * P.vox2 - z) / w);
++  float d = fminf(dx, fminf(dy, dz));
++  return d < 1e-3f ? d + 2e-4f : d + 5e-5f;
++}
++
++__device__ __forceinline__ void rotate(float &u, float &v, float &w, float theta, float phi) {
++  // Update_direction
++  float cT = cosf(theta), sT = sinf(theta), cP = cosf(phi), sP = sinf(phi);
++  float pu = u;
++  if (w < 0.999999f && w > -0.999999f) {
++    float s = sqrtf(1.0f - w * w);
++    u = pu * cT + (sT / s) * (pu * w * cP - v * sP);
++    float nv = v * cT + (sT / s) * (v * w * cP + pu * sP);
++    w = w * cT - s * sT * cP;
++    v = nv;
++  } else {
++    v = sT * sP;
++    if (w > 0.0f) { u = sT * cP; w = cT; } else { u = -sT * cP; w = -cT; }
++  }
++  float n = sqrtf(u * u + v * v + w * w);
++  u /= n; v /= n; w /= n;
++}
++
++__device__ __forceinline__ void score(float *dose, int idx, float M, float dE, float rho, float SPR) {
++  // Energy_Scoring_from_index
++  float val = (P.dose_weighting == 0) ? M * dE / (rho * SPR) : M * dE / SPR;
++  if (val != 0.0f) atomicAdd(dose + idx, val);
++}
++
++__global__ void transport(long n, const float *__restrict__ prim, long cap,
++                          const float *__restrict__ sp, const int *__restrict__ sp_off, const int *__restrict__ sp_n,
++                          const float *__restrict__ N_el_m, const float *__restrict__ X0_m,
++                          const unsigned short *__restrict__ ct_mat, const float *__restrict__ ct_rho,
++                          float *dose, unsigned long long seed, long batch, unsigned long long *steps_out) {
++  long tid = blockIdx.x * (long)blockDim.x + threadIdx.x;
++  long nthreads = (long)gridDim.x * blockDim.x;
++  curandStatePhilox4_32_10_t rng;
++  curand_init(seed, (unsigned long long)(batch * nthreads + tid), 0, &rng);
++  const float Temin = P.Te_min, Ecut = P.Ecut;
++  unsigned long long nsteps = 0;
++
++  for (long i = tid; i < n; i += nthreads) {
++    float x = prim[i], y = prim[cap + i], z = prim[2 * cap + i];
++    float u = prim[3 * cap + i], v = prim[4 * cap + i], w = prim[5 * cap + i];
++    float T = prim[6 * cap + i], M = prim[7 * cap + i];
++    bool alive = true;
++
++    while (alive) {
++      nsteps++;
++      if (!isfinite(T)) break;                                         // patch 0003's guard
++      Kin k = kin(T);
++      bool inside;
++      int idx = ct_index(x, y, z, inside);
++      if (!inside) break;
++      int mat = ct_mat[idx];
++      float rho = ct_rho[idx];
++      float Nel = N_el_m[mat] * rho;
++      float sp_mat = rho * stop_pow(mat, T, sp, sp_off, sp_n);
++
++      float step_max = fminf(fminf(dist_to_interface(x, y, z, u, v, w), P.D_Max), P.Eps_Max * T / sp_mat);
++      float dE_max = step_max * sp_mat;
++      float T_low = T - dE_max;
++      if (T_low <= 0.0f) T_low = T;
++      Kin kl = kin(T_low);
++      float section = (fmaxf(xs_ion(Nel, k, Temin), xs_ion(Nel, kl, Temin)) + 1e-10f) * 1.017f;
++
++      float SPR = 1.0f;
++      if (P.dose_to_water == 2) SPR = sp_mat / (rho * stop_pow(P.water_id, T, sp, sp_off, sp_n));
++
++      float step = -logf(curand_uniform(&rng)) / section;
++      if (step > step_max) step = step_max;
++
++      float mdE = mean_dE(mat, rho, Nel, T, step, Temin, sp, sp_off, sp_n);
++      float strag = KION * Nel * step * fminf(Temin, k.Temax) * (1.0f - 0.5f * k.b2) / k.b2;
++      float dE = curand_normal(&rng) * sqrtf(strag) + mdE;
++
++      float X0 = X0_m[mat] / rho;
++      float ms = (CONST_MS_FIPPEL * UMEV / (k.b2 * k.g * MC2P)) * sqrtf(step / X0);
++      float theta = curand_normal(&rng) * ms;
++      float phi = 2.0f * 3.14159265359f * curand_uniform(&rng);
++
++      int hinge = idx;                                                   // VoxelInterface: score in the start voxel
++      x += step * u; y += step * v; z += step * w;
++
++      if (!isfinite(dE)) break;                                          // patch 0003's guard
++      if (T - dE <= Ecut) { dE = T; alive = false; }
++      T -= dE;
++      score(dose, hinge, M, dE, rho, SPR);
++      if (!alive) break;
++
++      k = kin(T);
++      idx = ct_index(x, y, z, inside);
++      if (!inside) break;
++      rotate(u, v, w, theta, phi);
++
++      // hard ionization (a delta electron, absorbed locally) or a fictitious interaction
++      float dE_hard = 0.0f;
++      bool hard = (step != step_max) && (curand_uniform(&rng) <= xs_ion(Nel, k, Temin) / section);
++      if (hard && k.Temax >= Temin) {
++        for (;;) {                                                       // Compute_Ionization_Energy
++          float r = curand_uniform(&rng);
++          float Te = (Temin * k.Temax) / ((1.0f - r) * k.Temax + r * Temin);
++          float g = 1.0f - k.b2 * (Te / k.Temax) + Te * Te / (2.0f * k.E * k.E);
++          if (curand_uniform(&rng) <= g) { dE_hard = Te; break; }
++        }
++      }
++      T -= dE_hard;
++      if (T <= Ecut) { dE_hard += T; alive = false; }
++      score(dose, idx, M, dE_hard, ct_rho[idx], SPR);
++    }
++  }
++  atomicAdd(steps_out, nsteps);
++}
++
++__global__ void fold(long n, float *df, double *dd) {
++  for (long i = blockIdx.x * (long)blockDim.x + threadIdx.x; i < n; i += (long)gridDim.x * blockDim.x) {
++    dd[i] += (double)df[i];
++    df[i] = 0.0f;
++  }
++}
++
++extern "C" int gpu_init(const GpuSetup *s) {
++  CK(cudaSetDevice(s->device));
++  Params p;
++  p.nmat = s->nmat; p.gs0 = s->gs[0]; p.gs1 = s->gs[1]; p.gs2 = s->gs[2]; p.nvox = s->nvox;
++  p.dose_to_water = s->dose_to_water; p.water_id = s->water_id; p.dose_weighting = s->dose_weighting;
++  p.len0 = s->len[0]; p.len1 = s->len[1]; p.len2 = s->len[2];
++  p.vox0 = s->vox[0]; p.vox1 = s->vox[1]; p.vox2 = s->vox[2];
++  p.Te_min = s->Te_min; p.Ecut = s->Ecut; p.D_Max = s->D_Max; p.Eps_Max = s->Eps_Max;
++  CK(cudaMemcpyToSymbol(P, &p, sizeof(p)));
++  long nsp = s->sp_off[s->nmat - 1] + s->sp_n[s->nmat - 1];
++  CK(cudaMalloc(&D.sp, nsp * sizeof(float)));
++  CK(cudaMemcpy(D.sp, s->sp, nsp * sizeof(float), cudaMemcpyHostToDevice));
++  CK(cudaMalloc(&D.sp_off, s->nmat * sizeof(int)));
++  CK(cudaMemcpy(D.sp_off, s->sp_off, s->nmat * sizeof(int), cudaMemcpyHostToDevice));
++  CK(cudaMalloc(&D.sp_n, s->nmat * sizeof(int)));
++  CK(cudaMemcpy(D.sp_n, s->sp_n, s->nmat * sizeof(int), cudaMemcpyHostToDevice));
++  CK(cudaMalloc(&D.N_el, s->nmat * sizeof(float)));
++  CK(cudaMemcpy(D.N_el, s->N_el, s->nmat * sizeof(float), cudaMemcpyHostToDevice));
++  CK(cudaMalloc(&D.X0, s->nmat * sizeof(float)));
++  CK(cudaMemcpy(D.X0, s->X0, s->nmat * sizeof(float), cudaMemcpyHostToDevice));
++  CK(cudaMalloc(&D.ct_mat, s->nvox * sizeof(unsigned short)));
++  CK(cudaMemcpy(D.ct_mat, s->ct_mat, s->nvox * sizeof(unsigned short), cudaMemcpyHostToDevice));
++  CK(cudaMalloc(&D.ct_rho, s->nvox * sizeof(float)));
++  CK(cudaMemcpy(D.ct_rho, s->ct_rho, s->nvox * sizeof(float), cudaMemcpyHostToDevice));
++  CK(cudaMalloc(&D.dose_f, s->nvox * sizeof(float)));
++  CK(cudaMemset(D.dose_f, 0, s->nvox * sizeof(float)));
++  CK(cudaMalloc(&D.dose_d, s->nvox * sizeof(double)));
++  CK(cudaMemset(D.dose_d, 0, s->nvox * sizeof(double)));
++  CK(cudaMalloc(&D.steps, sizeof(unsigned long long)));
++  CK(cudaMemset(D.steps, 0, sizeof(unsigned long long)));
++  D.prim = nullptr; D.capacity = 0; D.seed = s->seed; D.batch = 0; D.kernel_s = 0.0;
++  return 0;
++}
++
++extern "C" int gpu_batch(long n, const float *x, const float *y, const float *z, const float *u, const float *v,
++                         const float *w, const float *T, const float *M) {
++  if (n <= 0) return 0;
++  if (n > D.capacity) {
++    if (D.prim) CK(cudaFree(D.prim));
++    CK(cudaMalloc(&D.prim, 8 * n * sizeof(float)));
++    D.capacity = n;
++  }
++  const float *src[8] = {x, y, z, u, v, w, T, M};
++  for (int c = 0; c < 8; c++)
++    CK(cudaMemcpy(D.prim + c * D.capacity, src[c], n * sizeof(float), cudaMemcpyHostToDevice));
++  int nsm = 0;
++  CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
++  int threads = 128, blocks = nsm * 8;
++  auto t0 = std::chrono::steady_clock::now();
++  transport<<<blocks, threads>>>(n, D.prim, D.capacity, D.sp, D.sp_off, D.sp_n, D.N_el, D.X0, D.ct_mat, D.ct_rho,
++                                 D.dose_f, D.seed, D.batch, D.steps);
++  CK(cudaGetLastError());
++  int nvox = 0;
++  CK(cudaMemcpyFromSymbol(&nvox, P, sizeof(int), offsetof(Params, nvox)));
++  fold<<<nsm * 4, 256>>>(nvox, D.dose_f, D.dose_d);
++  CK(cudaGetLastError());
++  CK(cudaDeviceSynchronize());
++  D.kernel_s += std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
++  D.batch++;
++  return 0;
++}
++
++extern "C" int gpu_finish(float *dose_out, double *seconds_kernel, long long *steps) {
++  int nvox = 0;
++  CK(cudaMemcpyFromSymbol(&nvox, P, sizeof(int), offsetof(Params, nvox)));
++  std::vector<double> h(nvox);
++  CK(cudaMemcpy(h.data(), D.dose_d, nvox * sizeof(double), cudaMemcpyDeviceToHost));
++  for (int i = 0; i < nvox; i++) dose_out[i] += (float)h[i];
++  unsigned long long st = 0;
++  CK(cudaMemcpy(&st, D.steps, sizeof(st), cudaMemcpyDeviceToHost));
++  if (seconds_kernel) *seconds_kernel = D.kernel_s;
++  if (steps) *steps = (long long)st;
++  cudaFree(D.sp); cudaFree(D.sp_off); cudaFree(D.sp_n); cudaFree(D.N_el); cudaFree(D.X0);
++  cudaFree(D.ct_mat); cudaFree(D.ct_rho); cudaFree(D.dose_f); cudaFree(D.dose_d); cudaFree(D.steps);
++  if (D.prim) cudaFree(D.prim);
++  D = Dev();
++  return 0;
++}
+diff --git a/src/include/compute_simulation.h b/src/include/compute_simulation.h
+index a63b64d..386a6bf 100644
+--- a/src/include/compute_simulation.h
++++ b/src/include/compute_simulation.h
+@@ -31,5 +31,6 @@ The MCsquare software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ void Run_simulation(DATA_config *config, Materials *material, DATA_CT *ct, plan_parameters *plan, machine_parameters *machine, DATA_4D_Fields *Fields);
+ void Display_simulation_progression(DATA_config *config, char *progress_message);
+ unsigned long Simulation_loop(DATA_config *config, Materials *material, DATA_CT *ct, plan_parameters *plan, machine_parameters *machine, DATA_4D_Fields *Fields, DATA_Scoring *Tot_scoring, unsigned long Num_primaries);
++unsigned long gpu_Simulation_loop(DATA_config *config, Materials *material, DATA_CT *ct, plan_parameters *plan, machine_parameters *machine, DATA_Scoring *Tot_scoring, unsigned long Num_primaries);
+ 
+ #endif
+diff --git a/src/include/struct.h b/src/include/struct.h
+index 494d810..a46dd8f 100644
+--- a/src/include/struct.h
++++ b/src/include/struct.h
+@@ -108,6 +108,8 @@ struct Materials{
+ 	int Nbr_PG_Energy;
+ 	VAR_DATA *PG_Energy_List;
+ 	DATA_PG *PG_data;
++
++	int Nbr_SP;		// length of SP_Energy and Stop_Pow (GPU prototype)
+ };
+ 
+ 
+-- 
+2.43.0
+

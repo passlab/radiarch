@@ -2298,3 +2298,18 @@ checkout path made them 114 characters (aries' `/w/...` and the image's `/app/..
 build overran the buffer silently). The driver now links `Materials` into the work directory and passes that
 relative name (`materials_link`); a test runs the engine from an install path of more than 100 characters, and
 fails without the link.
+
+## MCsquare on a GPU: the prototype (2026-11-21)
+
+On the project lead's go. `engines/mcsquare-gpu`: patch 0005 on radiarch's MCsquare build hands `Simulation_loop`
+to a CUDA path when `MCSQUARE_GPU=1`. MCsquare's host code still reads every input, samples the primaries and writes
+the dose; the GPU transports them, one history per thread (FRED's published design), following `hadron_step` for a
+proton step by step (voxel-boundary steps, stopping powers per material, restricted energy loss, straggling, Fippel
+scattering, hard ionization), Philox random numbers, float atomics folded into double per batch. Nuclear
+interactions, beamlet mode and the other scorers are out of scope and stop the run. Built with nvcc for sm_80; one
+A100 on cci-aries (lease aries-gpu-0), inputs written by radiarch's driver (`bench/`). The GPU's dose differs from the
+CPU's as much as two CPU seeds do (rms 0.11–1.01 % of the maximum, means within 0.015 %) for 100, 150 and 200 MeV spots
+in water and a 845-spot, five-layer field through bone and lung; transport ran at 13–31 M protons/s (33–45 M with
+fast math), 1/16–1/19 of the 48-core CPU run's time; whole runs 3–7 times faster (fixed costs: CUDA start-up 0.5 s,
+sampling 0.2 s). Not used by radiarch. Next decisions for the project lead: nuclear interactions (needs issue #42),
+influence matrices on the GPU, robust scenarios, a driver setting.

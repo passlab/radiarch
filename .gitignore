@@ -55,3 +55,4 @@ validation/reports/
 
 # MCsquare, radiarch's build (ADR 0023): built from engines/mcsquare-build, not committed
 engines/mcsquare/MCsquare_radiarch
+engines/mcsquare-gpu/MCsquare_gpu

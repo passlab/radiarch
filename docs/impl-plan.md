@@ -86,6 +86,10 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
   a reference **(open, the project lead's decision)**
 - [ ] radiarch's build takes about 1.25 times as long as OpenTPS's Intel build; Intel's `icx` might close it
   **(open, not tried)**
+- [x] (2026-11-21) GPU transport prototype (`engines/mcsquare-gpu`, patch 0005): protons, electromagnetic physics,
+  full dose; dose within the CPU engine's noise; transport 16–19 times faster on one A100 than the 48-core CPU run
+- [ ] A full GPU engine: nuclear interactions (after issue #42), influence matrices on the device, robust scenarios,
+  deterministic runs, a radiarch setting and validation **(open, the project lead's decision)**
 
 ### R2 — DICOM RT in
 - [x] RT Plan and RT Ion Plan readers into the internal plans
