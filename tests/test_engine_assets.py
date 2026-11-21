@@ -37,6 +37,29 @@ def test_mcsquare_layout():
     assert not list(root.rglob("__init__.py")), "engine assets are data, not a Python package"
 
 
+def test_mcsquare_radiarch_build():
+    """radiarch's build of MCsquare (ADR 0023): its recipe, patches and build record, the licences. The binary is
+    built, not committed (engines/mcsquare-build/build-in-docker.sh); when it is there it is a static ELF."""
+    root = ENGINES / "mcsquare"
+    binary = root / "MCsquare_radiarch"
+    if binary.exists():
+        assert os.access(binary, os.X_OK) and binary.read_bytes()[:4] == b"\x7fELF"
+    assert "engines/mcsquare/MCsquare_radiarch" in (REPO / ".gitignore").read_text()
+    build = ENGINES / "mcsquare-build"
+    for script in ("build.sh", "build-in-docker.sh"):
+        assert (build / script).is_file() and os.access(build / script, os.X_OK)
+    assert len([l for l in (build / "BUILD.txt").read_text().splitlines() if l.startswith("sha256 ")]) == 1
+    patches = sorted(p.name for p in (build / "patches").glob("*.patch"))
+    assert [p[:4] for p in patches] == ["0001", "0002", "0003", "0004"], patches
+    assert (build / "BUILD.txt").is_file()
+    assert "Apache 2.0" in (build / "LICENSE-MCsquare").read_text()
+    assert (root / "LICENSE-oneMKL.txt").read_text().startswith("Intel Simplified Software License")
+    assert (root / "LICENSE-oneMKL-third-party-programs.txt").is_file()
+    fetch = (REPO / "scripts" / "fetch-engines.sh").read_text()
+    for kept in ("MCsquare_radiarch", "LICENSE-oneMKL*"):
+        assert f"--exclude '{kept}'" in fetch, f"fetch-engines.sh would delete {kept}"
+
+
 def test_ccc_layout():
     root = ENGINES / "ccc"
     assert (root / "CCC_DoseEngine" / "CCC_DoseEngine").is_file()

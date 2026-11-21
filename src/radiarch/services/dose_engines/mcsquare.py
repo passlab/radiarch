@@ -52,7 +52,7 @@ class MCsquareEngine:
     """Proton dose engine backed by radiarch's MCsquare driver."""
 
     name: str = "mcsquare"
-    version: str = "0.3.0"  # R14: own driver, (z, y, x) frames
+    version: str = "0.4.0"  # ADR 0023: radiarch's build of MCsquare (0.3.0, R14: own driver, (z, y, x) frames)
     modalities: List[str] = field(default_factory=lambda: ["PROTON_PBS"])
 
     # ----- driver and settings -----------------------------------------
@@ -65,7 +65,8 @@ class MCsquareEngine:
     def driver(self, params: Optional[dict] = None) -> MCsquareDriver:
         params = params or {}
         s = self._settings()
-        assets = MCsquareAssets(Path(params["mcsquare_dir"])) if params.get("mcsquare_dir") else MCsquareAssets(default_assets_dir())
+        build = str(params.get("mcsquare_build", s.mcsquare_build) or "radiarch")
+        assets = MCsquareAssets(Path(params["mcsquare_dir"]) if params.get("mcsquare_dir") else default_assets_dir(), build)
         return MCsquareDriver(
             assets=assets,
             work_root=Path(s.artifact_dir) / "mcsquare",
@@ -77,13 +78,13 @@ class MCsquareEngine:
         )
 
     def digest(self, params: Optional[dict] = None) -> str:
-        """The build a run reads (R12): the launcher, the binaries, the material database, and the run's beam data
-        library and scanner calibration."""
+        """The build a run reads (R12): the program (radiarch's binary, or OpenTPS's launcher and binaries), the
+        material database, and the run's beam data library and scanner calibration."""
         from .digest import files_digest, tree_files
 
         drv = self.driver(params)
         a = drv.assets
-        files = [a.launcher, *a.binaries(), *tree_files(a.materials_dir), a.bdl_path(drv.bdl_name), *tree_files(a.scanner_dir(drv.scanner))]
+        files = [*a.program_files(), *tree_files(a.materials_dir), a.bdl_path(drv.bdl_name), *tree_files(a.scanner_dir(drv.scanner))]
         return files_digest(files, a.root)
 
     # ----- diagnostics --------------------------------------------------
@@ -93,6 +94,8 @@ class MCsquareEngine:
         ok, reason = drv.availability()
         diag: Dict[str, Any] = {
             "assets_dir": str(drv.assets.root),
+            "build": drv.assets.build,
+            "program": [str(p) for p in drv.assets.program_files()],
             "binaries": [b.name for b in drv.assets.binaries()],
             "launcher": str(drv.assets.launcher),
             "scanner": drv.scanner,

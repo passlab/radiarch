@@ -1,0 +1,128 @@
+From d4b38a96a27b0a6967ca5b4d7318052c9d624661 Mon Sep 17 00:00:00 2001
+From: The Radiarch Project <radiarch@invalid>
+Date: Fri, 20 Nov 2026 17:20:53 -0500
+Subject: [PATCH 1/4] Build with oneMKL: USE_MKL_LIB from the compiler line;
+ Init_RND initialises the caller's stream
+
+With USE_MKL_LIB 1 the gcc branch passed the stream handle by value, so vslNewStream set a local copy and every
+vsRng call failed on an uninitialised stream. Init_RND now takes a pointer to the caller's handle; with MKL the
+engine draws from VSL MCG59 with master's seeds (time or RNG_Seed, plus the thread offset).
+---
+ src/compute_random.c              | 12 ++++++------
+ src/compute_scenario_simulation.c |  2 +-
+ src/compute_simulation.c          |  2 +-
+ src/compute_simulation_beamlet.c  |  2 +-
+ src/include/compute_random.h      |  2 +-
+ src/include/define.h              |  2 ++
+ 6 files changed, 12 insertions(+), 10 deletions(-)
+
+diff --git a/src/compute_random.c b/src/compute_random.c
+index b4fb2c4..9dc8e2f 100644
+--- a/src/compute_random.c
++++ b/src/compute_random.c
+@@ -12,30 +12,30 @@ The MCsquare software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ 
+ #include "include/compute_random.h"
+ 
+-void Init_RND(DATA_config *config, VAR_RND_SEED RNDstream, int offset){
++void Init_RND(DATA_config *config, VAR_RND_SEED *RNDstream, int offset){
+ 
+   #if USE_MKL_LIB==1
+ 
+     if(config->RNG_Seed == 0){
+-      vslNewStream(&RNDstream, VSL_BRNG_MCG59, time(NULL)+offset);	// initialisation du stream du RNG avec le seed (time+thread_id)
++      vslNewStream(RNDstream, VSL_BRNG_MCG59, time(NULL)+offset);	// initialisation du stream du RNG avec le seed (time+thread_id)
+     }
+     else{
+-      vslNewStream(&RNDstream, VSL_BRNG_MCG59, config->RNG_Seed+offset);
++      vslNewStream(RNDstream, VSL_BRNG_MCG59, config->RNG_Seed+offset);
+     }
+ 
+   #else
+ 
+     if(config->RNG_Seed == 0){
+-      *RNDstream = time(NULL)+offset;	// initialisation du stream du RNG avec le seed (time+thread_id)
++      **RNDstream = time(NULL)+offset;	// initialisation du stream du RNG avec le seed (time+thread_id)
+     }
+     else{
+-      *RNDstream = config->RNG_Seed+offset;
++      **RNDstream = config->RNG_Seed+offset;
+     }
+ 
+   #endif
+ 
+   ALIGNED_(64) VAR_COMPUTE v_rnd[VLENGTH];
+-  rand_uniform(RNDstream, v_rnd);				// on genere une première fois un set de nbr car les premiers semblent mal distribués
++  rand_uniform(*RNDstream, v_rnd);				// on genere une première fois un set de nbr car les premiers semblent mal distribués
+ 
+ }
+ 
+diff --git a/src/compute_scenario_simulation.c b/src/compute_scenario_simulation.c
+index e6c247b..8a75934 100644
+--- a/src/compute_scenario_simulation.c
++++ b/src/compute_scenario_simulation.c
+@@ -196,7 +196,7 @@ void Scenarios_selection_random(DATA_config *config, Materials *material, DATA_C
+     unsigned int *RNDstream = &RNDstream_val;
+   #endif
+ 
+-  Init_RND(config, RNDstream, 0);
++  Init_RND(config, &RNDstream, 0);
+ 
+ 
+   config->TotalNumScenarios = config->Num_random_scenarios;
+diff --git a/src/compute_simulation.c b/src/compute_simulation.c
+index 446adde..786e646 100644
+--- a/src/compute_simulation.c
++++ b/src/compute_simulation.c
+@@ -399,7 +399,7 @@ unsigned long Simulation_loop(DATA_config *config, Materials *material, DATA_CT
+         unsigned int *RNDstream = &RNDstream_val;
+       #endif
+ 
+-      Init_RND(config, RNDstream, tid*1e4+Num_call*1e5);
++      Init_RND(config, &RNDstream, tid*1e4+Num_call*1e5);
+ 
+     // Init scoring
+     DATA_Scoring scoring = Init_Scoring(config, ct, 0);
+diff --git a/src/compute_simulation_beamlet.c b/src/compute_simulation_beamlet.c
+index c5be16b..22fa5b2 100644
+--- a/src/compute_simulation_beamlet.c
++++ b/src/compute_simulation_beamlet.c
+@@ -82,7 +82,7 @@ void Run_simulation_beamlet(DATA_config *config, Materials *material, DATA_CT **
+         unsigned int *RNDstream = &RNDstream_val;
+       #endif
+ 
+-      Init_RND(config, RNDstream, tid);
++      Init_RND(config, &RNDstream, tid);
+ 
+ 
+       // Init scoring    
+diff --git a/src/include/compute_random.h b/src/include/compute_random.h
+index ef6108f..dd71178 100644
+--- a/src/include/compute_random.h
++++ b/src/include/compute_random.h
+@@ -16,7 +16,7 @@ The MCsquare software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ #include "define.h"
+ #include "struct.h"
+ 
+-void Init_RND(DATA_config *config, VAR_RND_SEED RNDstream, int offset);
++void Init_RND(DATA_config *config, VAR_RND_SEED *RNDstream, int offset);
+ void rand_uniform(VAR_RND_SEED seedp, VAR_COMPUTE *v_rnd);
+ VAR_COMPUTE single_rand_uniform(VAR_RND_SEED seedp);
+ void rand_normal(VAR_RND_SEED seedp, VAR_COMPUTE *v_rnd, VAR_COMPUTE *v_mu, VAR_COMPUTE *v_sigma);
+diff --git a/src/include/define.h b/src/include/define.h
+index 4483b3a..dbc73b2 100644
+--- a/src/include/define.h
++++ b/src/include/define.h
+@@ -21,7 +21,9 @@ The MCsquare software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ #include <float.h>
+ #include <omp.h> 
+ 
++#ifndef USE_MKL_LIB
+ #define USE_MKL_LIB 0
++#endif
+ 
+ #define VAR_DATA_PRECISION 1	// 1 =  float, 2 = double
+ #define VAR_SCORING_PRECISION 1	// 1 =  float, 2 = double
+-- 
+2.43.0
+

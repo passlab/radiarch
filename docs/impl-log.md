@@ -2261,3 +2261,33 @@ tried (`docs/reports/engine-performance.md`). Measured on the 96-core server and
   the other stages). Both suites pass on the server (CPU 1245, GPU 1277). Tests:
   `test_every_compress_level_gives_the_same_matrix` (levels 0, 1 and 6, arrays and dtypes, the zip's entry types),
   `test_the_store_keeps_matrices_as_they_are_by_default`. `docs/PRODUCTION.md` names the setting.
+
+## MCsquare built from source: the crash's cause and radiarch's build (2026-11-20)
+
+On the project lead's word ("Yes please fix"). The inputs of one 8-thread `mco_robust_proton` run (five beamlet runs)
+were captured and replayed outside radiarch on cci-aries. OpenTPS's binary crashed in 4 of 300 replays, every time
+in `total_Nuclear_cross_section` with a table index of `INT_MIN`: a proton whose energy came out NaN stayed alive
+(`T - NaN <= Ecut` is false) and indexed the table. No race was found (ThreadSanitizer saw only OpenMP's barriers,
+which it cannot see through). AddressSanitizer found two more defects on the way: `Transport_to_CT` read
+`Translation[3]` for every particle that misses the CT (about 12 000 a run; harmless in the Intel binary, where the
+slot is the return address), and the known overruns of the nuclear tables (upstream issue #42).
+
+radiarch now builds MCsquare (ADR 0023): `engines/mcsquare-build/build.sh` takes upstream's `gcc` branch at
+`3ed27f5`, applies four patches (0001 makes its MKL path work, `Init_RND` set only its own copy of the stream;
+0002 the `Transport_to_CT` overrun; 0003 drops and counts particles whose energy or energy loss is not finite;
+0004 the beamlet output paths, which `sprintf` printed into themselves and gcc wrote over, so the influence matrix
+was never merged although the engine exited 0) and links a static binary with gcc 13.3 and oneMKL 2024.2.2:
+`engines/mcsquare/MCsquare_radiarch`. Built, not committed (the project lead's choice; 6 MB): the image's
+`ubuntu:24.04` stage and CI (`build-in-docker.sh`, cached) build it, reproducibly bit for bit once the sources are
+linked in a fixed order (a locale-sorted glob had changed it), and fail on any binary other than `BUILD.txt`'s. Setting `mcsquare_build` (`radiarch`, the
+default, or `opentps`); the driver runs the binary directly, reads the dropped-particle warning into
+`MCsquareRun.dropped_particles`, and the digest and fingerprint name the build; engine 0.4.0. `mco_robust_proton`
+is back on 8 threads; the retry stays. `fetch-engines.sh` leaves the build alone.
+
+Results (all on cci-aries): the final binary 0 crashes in 300 replays of the two inputs that had crashed (OpenTPS's
+4); 81 engine tests pass against it; the three proton validation cases pass on both builds at the same commit; about
+1.25 times OpenTPS's time per run (flag variants and profiles in the ADR). `proton_bragg_peak` with five seeds per
+build: ranges, fall-offs and spot sizes agree; the peak-to-entrance ratio (up to 0.8 % lower) and the lateral spread
+at 0.8 R80 (up to 1.7 % lower at 200 MeV) do not, and builds with the nuclear tables' bounds clamped agree with each
+other but not with OpenTPS's: those quantities depend on what lies past the angle table in each binary. Left open
+for the project lead: fixing issue #42 (a physics change), and trying Intel's `icx` for speed.

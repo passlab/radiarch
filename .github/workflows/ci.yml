@@ -102,6 +102,13 @@ jobs:
           for i in $(seq 60); do curl -sf http://localhost:8042/dicom-web/studies >/dev/null && exit 0; sleep 2; done
           echo "Orthanc did not answer"; exit 1
 
+      - name: MCsquare, radiarch's build (ADR 0023; cached by its recipe)
+        uses: actions/cache@v4
+        with:
+          path: engines/mcsquare/MCsquare_radiarch
+          key: mcsquare-radiarch-${{ hashFiles('engines/mcsquare-build/**') }}
+      - name: Build MCsquare in ubuntu:24.04 when the cache missed (fails unless it is the build of record)
+        run: test -x engines/mcsquare/MCsquare_radiarch || RADIARCH_MCSQUARE_EXPECT_RECORD=1 engines/mcsquare-build/build-in-docker.sh
       - name: Run full suite (MCsquare V4 validation auto-skips)
         run: python -m pytest tests/ -v --tb=short
         env:
@@ -203,6 +210,13 @@ jobs:
           pip install --upgrade pip setuptools wheel
           pip install -e ./src[dev]
 
+      - name: MCsquare, radiarch's build (ADR 0023; cached by its recipe)
+        uses: actions/cache@v4
+        with:
+          path: engines/mcsquare/MCsquare_radiarch
+          key: mcsquare-radiarch-${{ hashFiles('engines/mcsquare-build/**') }}
+      - name: Build MCsquare in ubuntu:24.04 when the cache missed (fails unless it is the build of record)
+        run: test -x engines/mcsquare/MCsquare_radiarch || RADIARCH_MCSQUARE_EXPECT_RECORD=1 engines/mcsquare-build/build-in-docker.sh
       - name: Run real-MCsquare V4 validation
         env:
           RADIARCH_RUN_MCSQUARE_VALIDATION: "1"
@@ -231,6 +245,13 @@ jobs:
           pip install -e ./src[dev,validation]
       - name: Install uv (pymedphys runs in its own Python 3.12 environment)
         uses: astral-sh/setup-uv@v5
+      - name: MCsquare, radiarch's build (ADR 0023; cached by its recipe)
+        uses: actions/cache@v4
+        with:
+          path: engines/mcsquare/MCsquare_radiarch
+          key: mcsquare-radiarch-${{ hashFiles('engines/mcsquare-build/**') }}
+      - name: Build MCsquare in ubuntu:24.04 when the cache missed (fails unless it is the build of record)
+        run: test -x engines/mcsquare/MCsquare_radiarch || RADIARCH_MCSQUARE_EXPECT_RECORD=1 engines/mcsquare-build/build-in-docker.sh
       - name: Run the harness (fast mode)
         # fails on errors and on graded failures the records do not explain (validation/known_findings.yaml)
         run: python -m radiarch.validation.run --all --fast --known-findings --out validation/results

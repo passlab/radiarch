@@ -1,0 +1,50 @@
+From 64f3b54b904f8b06a5172450f249d43fd509bb97 Mon Sep 17 00:00:00 2001
+From: The Radiarch Project <radiarch@invalid>
+Date: Fri, 20 Nov 2026 17:28:32 -0500
+Subject: [PATCH 2/4] Transport_to_CT: a particle whose line never enters the
+ CT stays outside
+
+When none of the three translations put the particle inside the CT, the loop ended with i == 3 and the code
+read Translation[3], past the array, and new_position, which is unset when all three translations are negative.
+What that gave depends on the compiler: in the Intel build OpenTPS ships, Translation[3] is the return address
+(a denormal, so dE is about 0) and new_position starts at (0, 0, 0), so such a particle started at the CT's
+corner; in a gcc build it is whatever the stack holds. The particle is now left where it is, outside, and
+Generate_PBS_particle counts it as generated outside the geometry, as it already did for particles that the
+translation left outside. (Found with AddressSanitizer; about 12 000 particles per beamlet run of radiarch's
+robust proton case take this path; in all of them a translation lands outside the CT, none had all three
+negative.)
+---
+ src/compute_beam_model.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/src/compute_beam_model.c b/src/compute_beam_model.c
+index 6979217..9129cd2 100644
+--- a/src/compute_beam_model.c
++++ b/src/compute_beam_model.c
+@@ -549,7 +549,7 @@ void Transport_to_CT(Hadron_buffer *hadron, VAR_DATA CT_Length[3], DATA_config *
+   if(hadron->w > 0)	Translation[2] = (0 - hadron->z) / hadron->w;
+   else 			Translation[2] = (CT_Length[2] - hadron->z) / hadron->w;
+ 
+-  int i;
++  int i, found = 0;
+   for(i=0; i<3; i++){
+ 
+     if(Translation[i] < 0) continue;
+@@ -562,9 +562,13 @@ void Transport_to_CT(Hadron_buffer *hadron, VAR_DATA CT_Length[3], DATA_config *
+ 
+ 
+ 
+-    if(new_position[0] > 0.0 && new_position[1] > 0.0 && new_position[2] > 0.0 && new_position[0] < CT_Length[0] &&  new_position[1] < CT_Length[1] &&  new_position[2] < CT_Length[2] && !isnan(new_position[0]) && !isnan(new_position[1]) && !isnan(new_position[2])) break;
++    if(new_position[0] > 0.0 && new_position[1] > 0.0 && new_position[2] > 0.0 && new_position[0] < CT_Length[0] &&  new_position[1] < CT_Length[1] &&  new_position[2] < CT_Length[2] && !isnan(new_position[0]) && !isnan(new_position[1]) && !isnan(new_position[2])){ found = 1; break; }
+   }
+ 
++  // The particle's line never enters the CT: leave it outside, where the caller counts it as generated
++  // outside the geometry. (Before, Translation[3] and an unset new_position were read here.)
++  if(!found) return;
++
+   hadron->x = new_position[0];
+   hadron->y = new_position[1];
+   hadron->z = new_position[2];
+-- 
+2.43.0
+

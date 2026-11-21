@@ -54,3 +54,7 @@ count, scanner and beam data library are settings and per-request parameters;
   and removes its partial outputs; a kill from outside (the OOM killer, a cancel) is not retried. The retry
   recovered 2 of 3 crashed runs in a trial, so `mco_robust_proton` also runs the engine on one thread
   (`docs/reports/engine-performance.md`).
+- **The cause, and radiarch's own build (2026-11-20, ADR 0023).** It was not a race: a proton whose energy came
+  out NaN stayed alive and indexed a cross-section table at `INT_MIN`. radiarch now builds MCsquare from source
+  with patches that drop such particles (and fix two out-of-bounds defects); `mco_robust_proton` is back on
+  8 threads. The retry stays as a guard. OpenTPS's binaries stay selectable (`mcsquare_build=opentps`).

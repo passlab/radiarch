@@ -165,8 +165,12 @@ def engine_identity(engine: str) -> Dict[str, Any]:
 
         drv = MCsquareDriver()
         out["engine_version"] = MCsquareEngine().version
-        binary = _mcsquare_binary(drv.assets.root)
-        out["launcher"] = str(drv.assets.launcher)
+        out["mcsquare_build"] = drv.assets.build
+        if drv.assets.build == "radiarch":
+            binary = drv.assets.radiarch_binary
+        else:
+            binary = _mcsquare_binary(drv.assets.root)
+            out["launcher"] = str(drv.assets.launcher)
         out["binary"] = str(binary) if binary else "n/a"
         out["binary_sha256"] = _sha256(binary) if binary and binary.is_file() else "missing"
         try:
@@ -175,7 +179,9 @@ def engine_identity(engine: str) -> Dict[str, Any]:
             out["scanner"] = str(getattr(drv, "scanner_name", getattr(drv, "scanner", "n/a")))
         except Exception as exc:  # pragma: no cover
             out["bdl_path"] = f"unavailable ({exc})"
-        out["build"] = "MCsquare binaries as shipped with OpenTPS 3.0.1 (engines/mcsquare; LICENSE-OpenTPS); driver: radiarch"
+        out["build"] = ("MCsquare_radiarch: upstream's gcc branch (3ed27f5) with radiarch's patches, gcc and static oneMKL "
+                        "(engines/mcsquare-build, ADR 0023); driver: radiarch" if drv.assets.build == "radiarch" else
+                        "MCsquare binaries as shipped with OpenTPS 3.0.1 (engines/mcsquare; LICENSE-OpenTPS); driver: radiarch")
     elif engine == "pb":
         from ..services.dose_engines import pb as pbm
         eng = pbm.PencilBeamEngine()

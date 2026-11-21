@@ -76,7 +76,16 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
 - [x] Engine assets with provenance (`engines/mcsquare/`, done in R15)
 - [x] (2026-11-13) A run the engine crashed (SIGSEGV, SIGBUS, SIGABRT) is run once more; `mco_robust_proton` runs the
   engine on one thread (the nightly's segfault of 2026-11-13: 4 of 28 runs with 8 threads, 0 of 24 with one)
-- [ ] Find the engine's race (a build with AddressSanitizer and the upstream bounds patches) **(open)**
+- [x] (2026-11-20) The crash's cause (a NaN energy reaching a cross-section table at `INT_MIN`; no race) and
+  radiarch's own build of MCsquare: upstream's `gcc` branch, four patches, gcc and static oneMKL
+  (`engines/mcsquare-build/`, `MCsquare_radiarch`, setting `mcsquare_build`; ADR 0023). `mco_robust_proton` on
+  8 threads again
+- [ ] Upstream's out-of-bounds reads in the nuclear tables and issue #42 (secondary angles sampled with eV against
+  MeV brackets): the overrun makes the peak-to-entrance ratio and the deep lateral halo depend on the binary (up
+  to 0.8 % and 1.7 % between OpenTPS's and radiarch's builds, ADR 0023); fixing them changes the physics and needs
+  a reference **(open, the project lead's decision)**
+- [ ] radiarch's build takes about 1.25 times as long as OpenTPS's Intel build; Intel's `icx` might close it
+  **(open, not tried)**
 
 ### R2 — DICOM RT in
 - [x] RT Plan and RT Ion Plan readers into the internal plans

@@ -255,8 +255,8 @@ class TestNativeScenarioSets:
 
 def _mcsquare_ok() -> bool:
     try:
-        from radiarch.services.dose_engines.mcsquare_driver import MCsquareAssets, default_assets_dir
-        return MCsquareAssets(default_assets_dir()).availability()[0]
+        from radiarch.services.dose_engines.mcsquare_driver import default_assets
+        return default_assets().availability()[0]
     except Exception:
         return False
 

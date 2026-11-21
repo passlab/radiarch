@@ -22,7 +22,7 @@ import scipy.sparse as sp
 from radiarch.models.proton_plan import ProtonBeam, ProtonLayer, ProtonPlan, ProtonSpot, RangeShifterSetting
 from radiarch.services.dose_engines import mcsquare_driver as D
 
-ASSETS = D.MCsquareAssets(D.default_assets_dir())
+ASSETS = D.default_assets()
 GOLDEN = Path(__file__).resolve().parent / "golden" / "mcsquare_inputs_simplefantom"
 
 
@@ -170,7 +170,7 @@ class TestCrashRetry:
                 'mkdir -p Outputs; echo partial > Outputs/part$n.txt; echo "attempt $n"\n'
                 'if [ "$n" -le {crashes} ]; then exit {fail}; fi\n')
 
-    def _driver(self, tmp_path, crashes, fail):
+    def _driver(self, tmp_path, crashes, fail, build="radiarch"):
         root = tmp_path / "engine"
         (root / "Materials").mkdir(parents=True)
         (root / "Materials" / "list.dat").write_text("")
@@ -180,18 +180,21 @@ class TestCrashRetry:
         (root / "MCsquare_linux").write_text("")
         (root / "MCsquare_linux").chmod(0o755)
         (root / "MCsquare").write_text(self.LAUNCHER.format(crashes=crashes, fail=fail))
+        (root / D.RADIARCH_BINARY).write_text("#!/bin/sh\n" + self.LAUNCHER.format(crashes=crashes, fail=fail))
+        (root / D.RADIARCH_BINARY).chmod(0o755)
         work = tmp_path / "work"
         work.mkdir()
-        return D.MCsquareDriver(assets=D.MCsquareAssets(root)), work
+        return D.MCsquareDriver(assets=D.MCsquareAssets(root, build)), work
 
     def test_crash_signal(self):
         assert D.crash_signal(139) == 11 and D.crash_signal(-11) == 11      # through the shell, or the process itself
         assert D.crash_signal(134) == 6 and D.crash_signal(135) == 7
         assert all(D.crash_signal(rc) is None for rc in (0, 1, 2, 127, 137, 143, -9, -15))
 
+    @pytest.mark.parametrize("build", D.BUILDS)
     @pytest.mark.parametrize("fail", [139, 135, 134])
-    def test_one_crash_is_run_again(self, tmp_path, fail):
-        drv, work = self._driver(tmp_path, crashes=1, fail=fail)
+    def test_one_crash_is_run_again(self, tmp_path, fail, build):
+        drv, work = self._driver(tmp_path, crashes=1, fail=fail, build=build)
         run = drv.run(work)
         assert run.returncode == 0 and run.attempts == 2
         assert (work / "count").read_text().strip() == "2"
@@ -199,8 +202,9 @@ class TestCrashRetry:
         assert run.stdout_path.read_text().strip() == "attempt 2"
         assert sorted(p.name for p in (work / "Outputs").iterdir()) == ["part2.txt"]     # the crash's output is gone
 
-    def test_a_second_crash_raises(self, tmp_path):
-        drv, work = self._driver(tmp_path, crashes=2, fail=139)
+    @pytest.mark.parametrize("build", D.BUILDS)
+    def test_a_second_crash_raises(self, tmp_path, build):
+        drv, work = self._driver(tmp_path, crashes=2, fail=139, build=build)
         with pytest.raises(RuntimeError, match=r"exited with 139 \(attempt 2; the first crashed too\)"):
             drv.run(work)
         assert (work / "count").read_text().strip() == "2"
@@ -211,6 +215,31 @@ class TestCrashRetry:
         with pytest.raises(RuntimeError, match=rf"exited with {fail} in "):
             drv.run(work)
         assert (work / "count").read_text().strip() == "1"
+
+    def test_each_build_runs_its_own_program(self, tmp_path):
+        drv, work = self._driver(tmp_path, crashes=0, fail=1, build="radiarch")
+        cfg = work / "config.txt"
+        assert drv.assets.command(cfg) == [str(drv.assets.radiarch_binary), str(cfg)]
+        assert drv.assets.program_files() == [drv.assets.radiarch_binary]
+        opentps = D.MCsquareAssets(drv.assets.root, "opentps")
+        assert opentps.command(cfg) == ["sh", str(opentps.launcher), str(cfg)]
+        assert opentps.program_files() == [opentps.launcher, *opentps.binaries()]
+        assert drv.assets.fingerprint() != opentps.fingerprint()
+        assert drv.availability() == (True, "ok") and opentps.availability() == (True, "ok")
+        drv.assets.radiarch_binary.unlink()
+        ok, reason = drv.availability()
+        assert not ok and D.RADIARCH_BINARY in reason and opentps.availability()[0]
+        with pytest.raises(ValueError, match="unknown MCsquare build"):
+            D.MCsquareAssets(drv.assets.root, "icc")
+
+    def test_dropped_particles_are_counted(self, tmp_path):
+        drv, work = self._driver(tmp_path, crashes=0, fail=1)
+        drv.assets.radiarch_binary.write_text(
+            "#!/bin/sh\necho 'Simulation of beamlet 1/1'\n"
+            "echo 'Warning: 3 particles were dropped because their energy was not a finite number'\n")
+        run = drv.run(work)
+        assert run.returncode == 0 and run.dropped_particles == 3
+        assert D.dropped_particles("no warning here") == 0
 
 
 # ---------------------------------------------------------------------------

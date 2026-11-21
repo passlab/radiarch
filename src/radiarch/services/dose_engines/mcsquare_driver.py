@@ -5,9 +5,11 @@ program driven entirely by files: a text configuration, the CT as an MHD
 volume, HU-to-density and HU-to-material tables, a beam data library (BDL)
 and a plan text file. It writes the dose as an MHD volume or, in beamlet mode,
 one sparse column per spot. Radiarch never links or imports it: this module
-writes those files, starts the engine as a subprocess through its own
-launcher script (which picks the binary for the CPU and points the engine at
-its material database) and reads the results back.
+writes those files, starts the engine as a subprocess and reads the results
+back. The engine is radiarch's build of upstream's source with radiarch's
+patches (``MCsquare_radiarch``, ADR 0023), or, with ``mcsquare_build=opentps``,
+the binaries OpenTPS ships, started through their launcher script (which picks
+the binary for the CPU).
 
 The file formats and the coordinate conventions below are a port of OpenTPS's
 ``mcsquareIO.py`` and ``mcsquareDoseCalculator.py`` (Apache-2.0), checked
@@ -65,9 +67,10 @@ EV_PER_G_TO_GY = 1.602176e-19 * 1000.0  # eV/g per primary → Gy per proton (Op
 TEMPLATE_PATH = Path(__file__).with_name("mcsquare_config_template.txt")
 DEFAULT_SCANNER = "UCL_Toshiba"
 DEFAULT_BDL = "BDL_default_DN_RangeShifter.txt"
-# The engine crashes now and then in a multithreaded run (a segfault in about 1 of 12 beamlet runs with
-# 8 threads, 2026-11-13); a run that dies on one of these signals is run once more. A kill from outside
-# (the OOM killer, a cancel) is not retried.
+# OpenTPS's build crashed now and then (a segfault in about 1 of 12 beamlet runs with 8 threads, 2026-11-13): a
+# particle with a NaN energy indexed a cross-section table at INT_MIN. radiarch's build drops such particles
+# (ADR 0023); a run that still dies on one of these signals is run once more. A kill from outside (the OOM killer,
+# a cancel) is not retried.
 CRASH_SIGNALS = (signal.SIGSEGV, signal.SIGBUS, signal.SIGABRT)
 RETRIES_ON_CRASH = 1
 
@@ -96,6 +99,19 @@ def default_assets_dir() -> Path:
     return engine_assets_dir("mcsquare")
 
 
+def default_build() -> str:
+    """The MCsquare build the settings name (``RADIARCH_MCSQUARE_BUILD``; ``radiarch`` by default, ADR 0023)."""
+    try:
+        from ...config import get_settings
+        return get_settings().mcsquare_build or "radiarch"
+    except Exception:  # pragma: no cover — settings unavailable in odd test setups
+        return "radiarch"
+
+
+def default_assets() -> "MCsquareAssets":
+    return MCsquareAssets(default_assets_dir(), default_build())
+
+
 def engine_assets_dir(name: str) -> Path:
     """``engines/<name>`` of the repository (``src/../engines``) or of an installed
     tree whose source root holds ``engines/`` (the container image: ``/app/engines``)."""
@@ -111,22 +127,52 @@ def engine_assets_dir(name: str) -> Path:
 # Assets
 # ---------------------------------------------------------------------------
 
+BUILDS = ("radiarch", "opentps")
+RADIARCH_BINARY = "MCsquare_radiarch"
+
+
 @dataclass(frozen=True)
 class MCsquareAssets:
-    """Where the engine, its material database, beam data libraries and scanners live."""
+    """Where the engine, its material database, beam data libraries and scanners live.
+
+    ``build`` picks the program (ADR 0023): ``radiarch`` runs ``MCsquare_radiarch``, built from upstream's source
+    with radiarch's patches (``engines/mcsquare-build``); ``opentps`` runs OpenTPS's launcher, which picks one of the
+    ``MCsquare_linux*`` binaries OpenTPS ships for the CPU.
+    """
 
     root: Path
+    build: str = "radiarch"
+
+    def __post_init__(self) -> None:
+        if self.build not in BUILDS:
+            raise ValueError(f"unknown MCsquare build {self.build!r}; expected one of {', '.join(BUILDS)}")
 
     @property
     def launcher(self) -> Path:
         return self.root / "MCsquare"
 
     @property
+    def radiarch_binary(self) -> Path:
+        return self.root / RADIARCH_BINARY
+
+    @property
     def materials_dir(self) -> Path:
         return self.root / "Materials"
 
     def binaries(self) -> List[Path]:
+        """OpenTPS's binaries, one per instruction set."""
         return sorted(p for p in self.root.glob("MCsquare_linux*") if p.is_file())
+
+    def program_files(self) -> List[Path]:
+        """The files the build runs: radiarch's binary, or OpenTPS's launcher and binaries."""
+        if self.build == "radiarch":
+            return [self.radiarch_binary]
+        return [self.launcher, *self.binaries()]
+
+    def command(self, config_path: Path) -> List[str]:
+        if self.build == "radiarch":
+            return [str(self.radiarch_binary), str(config_path)]
+        return ["sh", str(self.launcher), str(config_path)]
 
     def bdl_path(self, name: str = DEFAULT_BDL) -> Path:
         p = Path(name)
@@ -139,10 +185,14 @@ class MCsquareAssets:
     def availability(self) -> Tuple[bool, str]:
         if platform.system() != "Linux":
             return False, f"MCsquare binaries ship for Linux only (this is {platform.system()})"
-        if not self.launcher.is_file():
-            return False, f"launcher not found: {self.launcher}"
-        if not any(os.access(b, os.X_OK) for b in self.binaries()):
-            return False, f"no executable MCsquare_linux* binary under {self.root}"
+        if self.build == "radiarch":
+            if not (self.radiarch_binary.is_file() and os.access(self.radiarch_binary, os.X_OK)):
+                return False, f"no executable {RADIARCH_BINARY} under {self.root} (engines/mcsquare-build/build.sh builds it)"
+        else:
+            if not self.launcher.is_file():
+                return False, f"launcher not found: {self.launcher}"
+            if not any(os.access(b, os.X_OK) for b in self.binaries()):
+                return False, f"no executable MCsquare_linux* binary under {self.root}"
         if not (self.materials_dir / "list.dat").is_file():
             return False, f"material database not found: {self.materials_dir}"
         if not self.bdl_path().is_file():
@@ -152,8 +202,14 @@ class MCsquareAssets:
         return True, "ok"
 
     def fingerprint(self) -> str:
-        """Identifies the engine build: launcher text and the sizes and names of the binaries."""
+        """Identifies the engine build: radiarch's binary's content, or OpenTPS's launcher text and the sizes and
+        names of its binaries (the fingerprint OpenTPS builds had before ADR 0023)."""
         h = hashlib.sha256()
+        if self.build == "radiarch":
+            h.update(f"{RADIARCH_BINARY}:".encode())
+            if self.radiarch_binary.is_file():
+                h.update(self.radiarch_binary.read_bytes())
+            return h.hexdigest()[:16]
         if self.launcher.is_file():
             h.update(self.launcher.read_bytes())
         for b in self.binaries():
@@ -678,6 +734,16 @@ class MCsquareRun:
     stdout_path: Path
     returncode: int
     attempts: int = 1
+    dropped_particles: int = 0      # particles the engine dropped for an energy that was not a finite number
+
+
+DROPPED_RE = re.compile(r"Warning: (\d+) particles were dropped because their energy was not a finite number")
+
+
+def dropped_particles(log_text: str) -> int:
+    """The count radiarch's build prints when it dropped particles whose energy was not a finite number (ADR 0023)."""
+    m = DROPPED_RE.search(log_text)
+    return int(m.group(1)) if m else 0
 
 
 class MCsquareDriver:
@@ -686,7 +752,7 @@ class MCsquareDriver:
     def __init__(self, assets: Optional[MCsquareAssets] = None, work_root: Optional[Path] = None,
                  n_threads: int = 0, seed: int = 0, keep_workdir: bool = False,
                  scanner: str = DEFAULT_SCANNER, bdl: str = DEFAULT_BDL) -> None:
-        self.assets = assets or MCsquareAssets(default_assets_dir())
+        self.assets = assets or default_assets()
         self.work_root = Path(work_root).resolve() if work_root else None
         self.n_threads = int(n_threads)
         self.seed = int(seed)
@@ -777,10 +843,11 @@ class MCsquareDriver:
     # ----- running ----------------------------------------------------
 
     def run(self, work: Path, config_path: Optional[Path] = None) -> MCsquareRun:
-        """Run the engine in ``work`` through its launcher; raises on a non-zero exit.
+        """Run the engine in ``work`` (radiarch's binary, or OpenTPS's launcher); raises on a non-zero exit.
 
         A run that crashes (:data:`CRASH_SIGNALS`) is run once more from the same inputs: the first
-        attempt's log is kept as ``mcsquare-attempt1.log`` and its partial ``Outputs/`` removed.
+        attempt's log is kept as ``mcsquare-attempt1.log`` and its partial ``Outputs/`` removed. Particles the
+        engine dropped for an energy that was not a finite number are counted on the run and logged.
         """
         ok, reason = self.availability()
         if not ok:
@@ -795,7 +862,7 @@ class MCsquareDriver:
             attempts += 1
             with open(stdout_path, "w") as log:
                 proc = subprocess.run(
-                    ["sh", str(self.assets.launcher), str(config_path)],
+                    self.assets.command(config_path),
                     cwd=str(work), stdout=log, stderr=subprocess.STDOUT, env=env, check=False,
                 )
             sig = crash_signal(proc.returncode)
@@ -809,7 +876,10 @@ class MCsquareDriver:
             tail = stdout_path.read_text()[-2000:]
             again = f" (attempt {attempts}; the first crashed too)" if attempts > 1 else ""
             raise RuntimeError(f"MCsquare exited with {proc.returncode}{again} in {work}:\n{tail}")
-        return MCsquareRun(work, config_path, stdout_path, proc.returncode, attempts)
+        dropped = dropped_particles(stdout_path.read_text(errors="replace"))
+        if dropped:
+            logger.warning("MCsquare dropped {} particles whose energy was not a finite number in {}", dropped, work)
+        return MCsquareRun(work, config_path, stdout_path, proc.returncode, attempts, dropped)
 
     # ----- results ----------------------------------------------------
 

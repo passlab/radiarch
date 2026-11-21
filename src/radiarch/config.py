@@ -87,6 +87,13 @@ class Settings(BaseSettings):
         default="",
         description="Directory with the MCsquare launcher, binaries, Materials/, BDL/ and Scanners/. Empty = the copy vendored with OpenTPS core.",
     )
+    mcsquare_build: str = Field(
+        default="radiarch",
+        description=(
+            "Which MCsquare build runs: 'radiarch' (MCsquare_radiarch, built from upstream's source with radiarch's "
+            "patches, ADR 0023) or 'opentps' (the launcher and the binaries OpenTPS ships). Per-run params override."
+        ),
+    )
     mcsquare_n_threads: int = Field(default=0, ge=0, description="Engine threads per run; 0 = all cores.")
     mcsquare_seed: int = Field(default=0, ge=0, description="RNG seed; 0 = from the clock (deterministic runs need a seed and one thread).")
     mcsquare_scanner: str = Field(default="UCL_Toshiba", description="Scanner calibration under Scanners/ (or an absolute directory).")

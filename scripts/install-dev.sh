@@ -62,10 +62,13 @@ echo
 echo "==> Sanity check: radiarch imports and the engine assets resolve"
 python3 -c "
 import radiarch
-from radiarch.services.dose_engines.mcsquare_driver import MCsquareAssets, default_assets_dir
-a = MCsquareAssets(default_assets_dir())
+from radiarch.services.dose_engines.mcsquare_driver import default_assets
+a = default_assets()
 print('   radiarch', radiarch.__file__)
 print('   MCsquare assets', a.root, a.availability())
 "
+if [ ! -x "${REPO_ROOT}/engines/mcsquare/MCsquare_radiarch" ]; then
+  echo "   MCsquare_radiarch is not built: engines/mcsquare-build/build-in-docker.sh builds it (ADR 0023)"
+fi
 echo
 echo "Done. You can now run: pytest tests/"

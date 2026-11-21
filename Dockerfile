@@ -8,6 +8,16 @@ COPY src/pyproject.toml src/
 RUN pip install --no-cache-dir --prefix=/install -e ./src[dev] 2>/dev/null || \
     pip install --no-cache-dir --prefix=/install ./src
 
+# ---- Stage 1b: MCsquare, radiarch's build (ADR 0023) ----
+# Built from upstream's source with radiarch's patches in ubuntu:24.04, the toolchain of record; the build fails
+# when the binary is not the one BUILD.txt names (a different binary can change doses).
+FROM ubuntu:24.04 AS mcsquare
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    gcc libc6-dev git python3 python3-venv ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+COPY engines/mcsquare-build/ /build/mcsquare-build/
+RUN RADIARCH_MCSQUARE_EXPECT_RECORD=1 /build/mcsquare-build/build.sh /out/MCsquare_radiarch
+
 # ---- Stage 2: Runtime ----
 FROM python:3.12-slim
 
@@ -24,6 +34,7 @@ COPY --from=builder /install /usr/local
 # Copy application source and the dose engine assets (engines/README.md)
 COPY src/ ./
 COPY engines/ ./engines/
+COPY --from=mcsquare /out/MCsquare_radiarch ./engines/mcsquare/MCsquare_radiarch
 
 # Ensure the engine binaries are executable (COPY can drop the +x bit depending
 # on the build context). The Celery worker invokes MCsquare_linux* and

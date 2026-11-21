@@ -168,8 +168,8 @@ class TestImportAndRecalculateApi:
     def test_recalculated_mcsquare_dose_equals_the_engine_on_the_same_plan(self, env):
         """The imported plan reproduces the plan it was written from: the recalculated
         dose equals the engine's dose for the model plan at a fixed seed."""
-        from radiarch.services.dose_engines.mcsquare_driver import MCsquareAssets, default_assets_dir
-        if not MCsquareAssets(default_assets_dir()).availability()[0]:
+        from radiarch.services.dose_engines.mcsquare_driver import default_assets
+        if not default_assets().availability()[0]:
             pytest.skip("MCsquare binaries not available")
         client, geo, work = env
         from radiarch.models.proton_plan import ProtonBeam, ProtonLayer, ProtonPlan, ProtonSpot

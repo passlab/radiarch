@@ -1,0 +1,100 @@
+From c56a96108a6166a17ffc9c8fd2f2bd67496381c8 Mon Sep 17 00:00:00 2001
+From: The Radiarch Project <radiarch@invalid>
+Date: Fri, 20 Nov 2026 17:27:23 -0500
+Subject: [PATCH 3/4] Drop a particle whose energy or energy loss is not a
+ finite number, and count it
+
+A live particle whose continuous energy loss came out NaN kept its NaN energy (T - NaN <= Ecut is false) and
+carried it into get_interaction_type -> total_Nuclear_cross_section, whose table index (int)floor(NaN) is INT_MIN:
+the engine crashed with SIGSEGV now and then (radiarch's nightly, 2026-11-13; cores of 2026-11-20 show this
+path). The NaN also went into the dose. hadron_step now drops such a particle (before the step and after its
+continuous energy loss), scores nothing for it, and counts it; the run ends with a warning when the count is
+not zero.
+---
+ src/compute_hadron.c | 23 +++++++++++++++++++++++
+ src/data_config.c    |  1 +
+ src/include/struct.h |  1 +
+ src/main.c           |  2 ++
+ 4 files changed, 27 insertions(+)
+
+diff --git a/src/compute_hadron.c b/src/compute_hadron.c
+index 868be87..62bc27b 100644
+--- a/src/compute_hadron.c
++++ b/src/compute_hadron.c
+@@ -37,6 +37,17 @@ void hadron_step(Hadron *hadron, DATA_Scoring *scoring, Materials *material, DAT
+   
+ 
+ 
++  // A particle whose energy is not a finite number (NaN or inf) would index the stopping-power and cross-section
++  // tables at INT_MIN (the engine crashed now and then) and score NaN dose: drop it and count it.
++  for(int q = 0; q<VLENGTH; q++){
++    if(hadron->v_type[q] != Unknown && !isfinite(hadron->v_T[q])){
++      #pragma omp atomic
++      config->Particle_Undefined_energy += 1;
++      hadron->v_type[q] = Unknown;
++    }
++    if(!isfinite(hadron->v_T[q])) hadron->v_T[q] = 0.0;
++  }
++
+   Update_Hadron(hadron);
+   // Init variables
+   ALIGNED_(64) int v_index[VLENGTH];
+@@ -238,6 +249,18 @@ void hadron_step(Hadron *hadron, DATA_Scoring *scoring, Materials *material, DAT
+   #endif
+ 
+ 
++  // A live particle whose energy loss is not a finite number would keep a NaN energy (T - NaN <= Ecut is false)
++  // and carry it into get_interaction_type, and into the dose: drop it, score nothing, and count it.
++  for(int q = 0; q<VLENGTH; q++){
++    if(hadron->v_type[q] != Unknown && !(isfinite(v_dE[q]) && isfinite(hadron->v_T[q]))){
++      #pragma omp atomic
++      config->Particle_Undefined_energy += 1;
++      hadron->v_type[q] = Unknown;
++      hadron->v_T[q] = 0.0;
++      v_dE[q] = 0.0;
++    }
++  }
++
+   // scoring de la perte d'énergie
+   #pragma omp simd
+   for(int v = 0; v<VLENGTH; v++){
+diff --git a/src/data_config.c b/src/data_config.c
+index 9c4c486..75d117f 100644
+--- a/src/data_config.c
++++ b/src/data_config.c
+@@ -578,6 +578,7 @@ int Parse_Config(DATA_config *config, char *file_name){
+   CreateDir(config->Output_Directory);
+ 
+   config->Particle_Generated_outside = 0;
++  config->Particle_Undefined_energy = 0;
+   config->RangeShifter_enabled = 0;
+   config->Water_Material_ID = 17;
+   config->Current_Breathing_amplitude = 1.0;
+diff --git a/src/include/struct.h b/src/include/struct.h
+index 8971ff4..494d810 100644
+--- a/src/include/struct.h
++++ b/src/include/struct.h
+@@ -349,6 +349,7 @@ struct DATA_config{
+ 
+ 	// Internal variables
+ 	unsigned int Particle_Generated_outside;
++	unsigned long Particle_Undefined_energy;	// particles dropped because their energy or energy loss was not a finite number
+ 	VAR_DATA Num_delivered_protons;
+ 	unsigned int Num_4DCT_phases;
+ 	unsigned int TotalNbrSpots;
+diff --git a/src/main.c b/src/main.c
+index ed9f3d1..cddfb83 100644
+--- a/src/main.c
++++ b/src/main.c
+@@ -407,6 +407,8 @@ int main(int argc, char *argv[]){
+ 
+ 
+ 
++  if(config.Particle_Undefined_energy > 0) printf("\nWarning: %lu particles were dropped because their energy was not a finite number\n", config.Particle_Undefined_energy);
++
+   //////////////////////
+   // Clean Memory
+   //////////////////////
+-- 
+2.43.0
+

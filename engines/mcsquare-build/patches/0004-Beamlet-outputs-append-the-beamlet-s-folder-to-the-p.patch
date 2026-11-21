@@ -1,0 +1,48 @@
+From ffbd208ace6deb39201525307ba46a8a8c8ff859 Mon Sep 17 00:00:00 2001
+From: The Radiarch Project <radiarch@invalid>
+Date: Fri, 20 Nov 2026 18:28:34 -0500
+Subject: [PATCH 4/4] Beamlet outputs: append the beamlet's folder to the path
+ instead of printing the path into itself
+
+sprintf(file_path, "%sBeamlet_%d/", file_path, ...) reads and writes the same buffer, which C leaves undefined.
+The Intel build happened to give Outputs/tmp/Beamlet_N/; gcc at -O3 writes Beamlet_N/ over the prefix, so the
+sparse beamlet files went to the work directory and Merge_Sparse_Files found none ("unable to open temporary
+file"). The three calls now print the folder at the end of the path.
+---
+ src/compute_simulation_beamlet.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/src/compute_simulation_beamlet.c b/src/compute_simulation_beamlet.c
+index 22fa5b2..bc2efc7 100644
+--- a/src/compute_simulation_beamlet.c
++++ b/src/compute_simulation_beamlet.c
+@@ -352,7 +352,7 @@ void Run_simulation_beamlet(DATA_config *config, Materials *material, DATA_CT **
+ 	      strcpy(file_path, config->Output_Directory);
+ 	      strcat(file_path, "tmp/");
+ 	      CreateDir(file_path);
+-	      sprintf(file_path, "%sBeamlet_%d/", file_path, current_spot+1);
++	      sprintf(file_path + strlen(file_path), "Beamlet_%d/", current_spot+1);
+ 	      CreateDir(file_path);
+ 	      strcat(file_path, "Sparse_Energy");
+ 	      strcat(file_path, config->output_robustness_suffix);
+@@ -374,7 +374,7 @@ void Run_simulation_beamlet(DATA_config *config, Materials *material, DATA_CT **
+ 	      strcpy(file_path, config->Output_Directory);
+ 	      strcat(file_path, "tmp/");
+ 	      CreateDir(file_path);
+-	      sprintf(file_path, "%sBeamlet_%d/", file_path, current_spot+1);
++	      sprintf(file_path + strlen(file_path), "Beamlet_%d/", current_spot+1);
+ 	      CreateDir(file_path);
+ 	      strcat(file_path, "Sparse_Dose");
+ 	      strcat(file_path, config->output_robustness_suffix);
+@@ -396,7 +396,7 @@ void Run_simulation_beamlet(DATA_config *config, Materials *material, DATA_CT **
+ 	      strcpy(file_path, config->Output_Directory);
+ 	      strcat(file_path, "tmp/");
+ 	      CreateDir(file_path);
+-	      sprintf(file_path, "%sBeamlet_%d/", file_path, current_spot+1);
++	      sprintf(file_path + strlen(file_path), "Beamlet_%d/", current_spot+1);
+ 	      CreateDir(file_path);
+ 	      strcat(file_path, "Sparse_LET");
+ 	      strcat(file_path, config->output_robustness_suffix);
+-- 
+2.43.0
+
