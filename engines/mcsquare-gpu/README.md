@@ -7,7 +7,7 @@ GPU path with `MCSQUARE_GPU=1`, so both are compared on identical inputs.
 
 ## What it does
 
-`patches/0005` (on top of `engines/mcsquare-build/patches/0001`–`0004`) hands `Simulation_loop` to
+`patches/0005` and `0006` (on top of `engines/mcsquare-build/patches/0001`–`0004`) hand `Simulation_loop` to
 `gpu_Simulation_loop` when `MCSQUARE_GPU=1`:
 
 - MCsquare's own code reads the configuration, CT, materials, beam data library and plan, samples the primaries
@@ -18,9 +18,13 @@ GPU path with `MCSQUARE_GPU=1`, so both are compared on identical inputs.
   stopping powers per material, restricted energy loss with MCsquare's second-order correction, Gaussian
   straggling, Fippel multiple scattering, hard ionization with the delta electron absorbed locally, the energy cut,
   online dose-to-water. Philox random numbers; dose in float atomics per batch, folded into double after each batch.
-- **Not supported** (the run stops with a message): nuclear interactions (`Simulate_Nuclear_Interactions` must be
-  False, so there are no secondaries), beamlet (influence-matrix) mode, robustness mode, LET, prompt gammas, energy
-  scoring, an independent scoring grid. Runs are not bitwise reproducible (the threads append their primaries in
+- Nuclear interactions (`0006`): MCsquare's proton-proton and ICRU elastic scattering, inelastic events with
+  secondary protons, deuterons and alphas (a per-thread stack of 24, transported before the next primary; a full
+  stack is counted), recoils deposited locally, mixtures by component. The secondaries' emission angles use
+  upstream issue #42's fix (ADR 0023): the original reads past its angle table, which no GPU can reproduce.
+  `MCSQUARE_FIX42=1` gives the CPU path the same fix for comparisons; without it the CPU path is unchanged.
+- **Not supported** (the run stops with a message): beamlet (influence-matrix) mode, robustness mode, LET, prompt
+  gammas, energy scoring, an independent scoring grid. Runs are not bitwise reproducible (the threads append their primaries in
   the order they finish; float atomics).
 
 ## Results (cci-aries: AMD EPYC 7413, 48 cores; one NVIDIA A100-PCIE-40GB)
@@ -36,6 +40,13 @@ of the maximum, in % of the maximum; "CPU vs CPU" is a second CPU run with anoth
 | 13 × 13 spots × 5 layers (110–150 MeV) through bone and lung, 20 × 25 × 20 cm | 10⁷ | 8.1 s | 1.4–1.7 s (0.43–0.53 s) | 1.01 % / −0.015 % | 1.01 % / −0.007 % |
 | the same, kernel built with `--use_fast_math` | 10⁷ | | 1.3 s (0.22–0.30 s) | 1.01 % / −0.013 % | |
 
+With nuclear interactions on both paths (CPU with `MCSQUARE_FIX42=1`):
+
+| Case | Primaries | CPU run | GPU run (transport) | GPU − CPU: rms / mean | CPU − CPU: rms / mean | secondaries, lost, clamped |
+|---|---|---|---|---|---|---|
+| the field through bone and lung | 10⁷ | 8.4 s | 2.0 s (0.84 s) | 1.11 % / −0.023 % | 1.10 % / −0.018 % | 4.3 M, 0, 0 |
+| 200 MeV spot, water | 10⁷ | 13.9 s | 2.3 s (1.19 s) | 0.16 % / −0.015 % | 0.16 % / −0.006 % | 7.7 M, 0, 0 |
+
 - **Agreement:** the GPU's dose differs from the CPU's as much as two CPU runs with different seeds do, in water and
   through bone and lung. Fast math changes nothing visible at this statistics; it needs a check at higher
   statistics before it becomes a default.
@@ -48,9 +59,8 @@ of the maximum, in % of the maximum; "CPU vs CPU" is a second CPU run with anoth
 
 ## What a full engine needs (the next decisions)
 
-1. **Nuclear interactions** — elastic and inelastic, with secondary protons on a per-thread stack spilling to a
-   global queue (FRED's secondary buffer). This needs upstream issue #42 decided first: MCsquare's emission-angle
-   sampling reads past its table, which a GPU cannot reproduce (ADR 0023).
+1. ~~Nuclear interactions~~ — done (`0006`), with issue #42's fix; nuclear physics costs 40–60 % of the
+   transport rate (8–12 M protons/s). Adopting the #42 fix in the production build stays the project lead's call.
 2. **Influence matrices (beamlet mode)** — per spot scoring into a GPU hash table keyed on (voxel, spot), compacted
    on the device to SciPy/CuPy sparse format (MOQUI's design); the CPU path's per-spot full grid and temporary files
    do not carry over.

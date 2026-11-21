@@ -1,0 +1,1026 @@
+From bcd0eddf298e7a4146783c2036269498d95b4d9d Mon Sep 17 00:00:00 2001
+From: The Radiarch Project <radiarch@invalid>
+Date: Fri, 20 Nov 2026 21:27:10 -0500
+Subject: [PATCH 6/6] GPU transport prototype: nuclear interactions and
+ secondaries; issue #42's fix, on the GPU and as an option on the CPU
+
+The GPU path now follows Compute_Nuclear_interaction: proton-proton and ICRU elastic scattering, inelastic events
+with secondary protons, deuterons and alphas (on a per-thread stack, transported before the next primary; a full
+stack is counted), recoils deposited locally, mixtures by component. Particles carry their mass and charge through
+the electromagnetic physics as hadron_step does. The secondaries' emission angles are sampled with upstream issue
+#42's fix: the angular table is interpolated at the secondary's table energy (MeV) instead of its rescaled energy
+(eV), which keeps the index inside ICRU_angles; the original reads past the table, which no GPU can reproduce.
+MCSQUARE_FIX42=1 applies the same fix on the CPU path, for the comparison; without it the CPU path is unchanged.
+---
+ src/compute_nuclear_interaction.c |  23 +-
+ src/gpu_api.h                     |  27 +-
+ src/gpu_glue.c                    |  95 ++++-
+ src/gpu_transport.cu              | 605 +++++++++++++++++++++---------
+ 4 files changed, 566 insertions(+), 184 deletions(-)
+
+diff --git a/src/compute_nuclear_interaction.c b/src/compute_nuclear_interaction.c
+index ea25c19..d41130a 100644
+--- a/src/compute_nuclear_interaction.c
++++ b/src/compute_nuclear_interaction.c
+@@ -12,6 +12,14 @@ The MCsquare software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+ 
+ #include "include/compute_nuclear_interaction.h"
+ 
++// MCSQUARE_FIX42=1: interpolate the secondaries' angular tables at the secondary's table energy (MeV), upstream
++// issue #42's fix, instead of at its rescaled energy in eV (which reads past ICRU_angles). GPU prototype's comparison.
++static int fix42(void){
++  static int v = -1;
++  if(v < 0) v = (getenv("MCSQUARE_FIX42") != NULL && atoi(getenv("MCSQUARE_FIX42")) == 1);
++  return v;
++}
++
+ void proton_proton_cross_section(Hadron *hadron, VAR_COMPUTE *v_density, VAR_COMPUTE *v_result){
+ 
+   __assume_aligned(&hadron->v_T, 64);
+@@ -349,6 +357,7 @@ VAR_COMPUTE Compute_Nuclear_Inelastic_proton(int hadron_index, Hadron *hadron, H
+ 								material->Nuclear_Inelastic[index].P_Energy_list[secondary_index+1]);
+   free(diff_cross_section);
+ 
++  VAR_COMPUTE T_table = secondary_hadron[*Nbr_secondaries].T;   // MeV, on the table's grid (issue #42)
+   // scaling de l'énergie
+   secondary_hadron[*Nbr_secondaries].T = ((hadron->v_T[hadron_index]/UMeV) / material->Inelastic_Energy_List[index]) * UMeV * secondary_hadron[*Nbr_secondaries].T;
+   if(secondary_hadron[*Nbr_secondaries].T < config->Ecut_Pro * UMeV) return secondary_hadron[*Nbr_secondaries].M * secondary_hadron[*Nbr_secondaries].T / hadron->v_M[hadron_index];  
+@@ -393,14 +402,14 @@ VAR_COMPUTE Compute_Nuclear_Inelastic_proton(int hadron_index, Hadron *hadron, H
+ 
+   VAR_DATA dd_cross_section[13];
+ 
+-  dd_cross_section[0] = (VAR_DATA)Linear_Interpolation(	secondary_hadron[*Nbr_secondaries].T, 
++  dd_cross_section[0] = (VAR_DATA)Linear_Interpolation(	(fix42() ? T_table : secondary_hadron[*Nbr_secondaries].T), 
+ 							material->Nuclear_Inelastic[index].P_Energy_list[secondary_index],
+ 							material->Nuclear_Inelastic[index].P_Energy_list[secondary_index+1], 
+ 							dd_cross_section1[0],
+ 							dd_cross_section2[0]);
+ 
+   for(i=1; i<13; i++){
+-    dd_cross_section[i] = dd_cross_section[i-1] + (VAR_DATA)Linear_Interpolation(	secondary_hadron[*Nbr_secondaries].T, 
++    dd_cross_section[i] = dd_cross_section[i-1] + (VAR_DATA)Linear_Interpolation(	(fix42() ? T_table : secondary_hadron[*Nbr_secondaries].T), 
+ 											material->Nuclear_Inelastic[index].P_Energy_list[secondary_index],
+ 											material->Nuclear_Inelastic[index].P_Energy_list[secondary_index+1], 
+ 											dd_cross_section1[i],
+@@ -469,6 +478,7 @@ VAR_COMPUTE Compute_Nuclear_Inelastic_deuteron(int hadron_index, Hadron *hadron,
+ 								material->Nuclear_Inelastic[index].D_Energy_list[secondary_index+1]);
+   free(diff_cross_section);
+ 
++  VAR_COMPUTE T_table = secondary_hadron[*Nbr_secondaries].T;   // MeV, on the table's grid (issue #42)
+   // scaling de l'énergie
+   secondary_hadron[*Nbr_secondaries].T = ((hadron->v_T[hadron_index]/UMeV) / material->Inelastic_Energy_List[index]) * UMeV * secondary_hadron[*Nbr_secondaries].T;
+   if(secondary_hadron[*Nbr_secondaries].T < config->Ecut_Pro * UMeV) return secondary_hadron[*Nbr_secondaries].M * secondary_hadron[*Nbr_secondaries].T / hadron->v_M[hadron_index];
+@@ -514,14 +524,14 @@ VAR_COMPUTE Compute_Nuclear_Inelastic_deuteron(int hadron_index, Hadron *hadron,
+ 
+   VAR_DATA dd_cross_section[13];
+ 
+-  dd_cross_section[0] = (VAR_DATA)Linear_Interpolation(	secondary_hadron[*Nbr_secondaries].T, 
++  dd_cross_section[0] = (VAR_DATA)Linear_Interpolation(	(fix42() ? T_table : secondary_hadron[*Nbr_secondaries].T), 
+ 							material->Nuclear_Inelastic[index].D_Energy_list[secondary_index],
+ 							material->Nuclear_Inelastic[index].D_Energy_list[secondary_index+1], 
+ 							dd_cross_section1[0],
+ 							dd_cross_section2[0]);
+ 
+   for(i=1; i<13; i++){
+-    dd_cross_section[i] = dd_cross_section[i-1] + (VAR_DATA)Linear_Interpolation(	secondary_hadron[*Nbr_secondaries].T, 
++    dd_cross_section[i] = dd_cross_section[i-1] + (VAR_DATA)Linear_Interpolation(	(fix42() ? T_table : secondary_hadron[*Nbr_secondaries].T), 
+ 											material->Nuclear_Inelastic[index].D_Energy_list[secondary_index],
+ 											material->Nuclear_Inelastic[index].D_Energy_list[secondary_index+1], 
+ 											dd_cross_section1[i],
+@@ -591,6 +601,7 @@ VAR_COMPUTE Compute_Nuclear_Inelastic_alpha(int hadron_index, Hadron *hadron, Ha
+ 								material->Nuclear_Inelastic[index].A_Energy_list[secondary_index+1]);
+   free(diff_cross_section);
+ 
++  VAR_COMPUTE T_table = secondary_hadron[*Nbr_secondaries].T;   // MeV, on the table's grid (issue #42)
+   // scaling de l'énergie
+   secondary_hadron[*Nbr_secondaries].T = ((hadron->v_T[hadron_index]/UMeV) / material->Inelastic_Energy_List[index]) * UMeV * secondary_hadron[*Nbr_secondaries].T;
+   if(secondary_hadron[*Nbr_secondaries].T < config->Ecut_Pro * UMeV) return secondary_hadron[*Nbr_secondaries].M * secondary_hadron[*Nbr_secondaries].T / hadron->v_M[hadron_index];
+@@ -634,14 +645,14 @@ VAR_COMPUTE Compute_Nuclear_Inelastic_alpha(int hadron_index, Hadron *hadron, Ha
+ 
+   VAR_DATA dd_cross_section[13];
+ 
+-  dd_cross_section[0] = (VAR_DATA)Linear_Interpolation(	secondary_hadron[*Nbr_secondaries].T, 
++  dd_cross_section[0] = (VAR_DATA)Linear_Interpolation(	(fix42() ? T_table : secondary_hadron[*Nbr_secondaries].T), 
+ 							material->Nuclear_Inelastic[index].A_Energy_list[secondary_index],
+ 							material->Nuclear_Inelastic[index].A_Energy_list[secondary_index+1], 
+ 							dd_cross_section1[0],
+ 							dd_cross_section2[0]);
+ 
+   for(i=1; i<13; i++){
+-    dd_cross_section[i] = dd_cross_section[i-1] + (VAR_DATA)Linear_Interpolation(	secondary_hadron[*Nbr_secondaries].T, 
++    dd_cross_section[i] = dd_cross_section[i-1] + (VAR_DATA)Linear_Interpolation(	(fix42() ? T_table : secondary_hadron[*Nbr_secondaries].T), 
+ 											material->Nuclear_Inelastic[index].A_Energy_list[secondary_index],
+ 											material->Nuclear_Inelastic[index].A_Energy_list[secondary_index+1], 
+ 											dd_cross_section1[i],
+diff --git a/src/gpu_api.h b/src/gpu_api.h
+index ebde623..7a04baa 100644
+--- a/src/gpu_api.h
++++ b/src/gpu_api.h
+@@ -2,8 +2,9 @@
+ GPU transport for MCsquare, prototype (radiarch, 2026-11-21). Plain-C interface between MCsquare's host code
+ (gpu_glue.c) and the CUDA kernel (gpu_transport.cu). Apache-2.0, as MCsquare.
+ 
+-Scope of the prototype: protons only, electromagnetic physics only (Simulate_Nuclear_Interactions False: no
+-secondaries), full-dose mode, dose on the CT grid. The physics is a one-history-per-thread port of hadron_step
++Scope of the prototype: protons and their secondaries (protons, deuterons, alphas), electromagnetic and nuclear
++physics (MCsquare's ICRU, proton-proton and mixture models, with upstream issue #42's fix to the secondaries'
++emission angles), full-dose mode, dose on the CT grid. The physics is a one-history-per-thread port of hadron_step
+ (compute_hadron.c) with VoxelInterface stepping and the full PSTAR/Geant4 stopping powers.
+ */
+ #ifndef H_gpu_api
+@@ -38,6 +39,25 @@ typedef struct {
+   int dose_weighting;       /* 0 = volume */
+   unsigned long long seed;
+   int device;
++
++  /* nuclear interactions (MCsquare's ICRU / proton-proton / mixture models), flattened; nuclear = 0: none */
++  int nuclear;
++  int sim_sec[3];               /* Simulate_Secondary_Protons, _Deuterons, _Alphas */
++  const int *mat_type;          /* nmat: 0 none, 1 ICRU, 2 proton-proton, 3 mixture (MCsquare's enum order) */
++  const float *mat_A;           /* nmat */
++  const int *comp_off, *comp_n; /* nmat: the mixture's components */
++  const int *comp_label;
++  const float *comp_frac;
++  const float *interp_xs;       /* nmat * 250: Interp_Total_Nuclear_Cross_Section, 1 MeV bins */
++  const int *el_off, *el_n;     /* nmat: elastic energies */
++  const float *el_E, *el_xs, *el_diff;          /* el_diff: 36 per energy (cumulative) */
++  const int *in_off, *in_n;     /* nmat: inelastic energies */
++  const float *in_E, *in_xs, *in_rec;
++  const float *in_mult;         /* 3 per inelastic energy: protons, deuterons, alphas */
++  const int *in_sn, *in_soff;   /* 3 per inelastic energy: rows of the secondary tables, offset into sec_* */
++  const float *sec_E, *sec_D;   /* per row */
++  const float *sec_DD;          /* 13 per row */
++  int max_rows;
+ } GpuSetup;
+ 
+ int gpu_init(const GpuSetup *s);
+@@ -45,7 +65,8 @@ int gpu_init(const GpuSetup *s);
+ int gpu_batch(long n, const float *x, const float *y, const float *z, const float *u, const float *v,
+               const float *w, const float *T, const float *M);
+ /* adds the accumulated dose (MCsquare's units before PostProcess_Scoring) into dose_out, frees the device */
+-int gpu_finish(float *dose_out, double *seconds_kernel, long long *steps);
++int gpu_finish(float *dose_out, double *seconds_kernel, long long *steps, long long *secondaries,
++               long long *stack_overflows, long long *angle_clamps);
+ 
+ #ifdef __cplusplus
+ }
+diff --git a/src/gpu_glue.c b/src/gpu_glue.c
+index 0e936ab..4406d05 100644
+--- a/src/gpu_glue.c
++++ b/src/gpu_glue.c
+@@ -21,10 +21,8 @@ unsigned long gpu_Simulation_loop(DATA_config *config, Materials *material, DATA
+   static int Num_call = 0;
+   Num_call++;
+ 
+-  if(config->Simulate_Nuclear_Interactions || config->Score_LET || config->Score_PromptGammas
+-     || config->Independent_scoring_grid || config->Score_Energy){
+-    printf("\n ERROR: the GPU prototype simulates protons without nuclear interactions and scores dose only,"
+-           " on the CT grid (set Simulate_Nuclear_Interactions False; no LET, prompt gamma or energy output).\n\n");
++  if(config->Score_LET || config->Score_PromptGammas || config->Independent_scoring_grid || config->Score_Energy){
++    printf("\n ERROR: the GPU prototype scores dose only, on the CT grid (no LET, prompt gamma or energy output).\n\n");
+     exit(2);
+   }
+ 
+@@ -61,6 +59,86 @@ unsigned long gpu_Simulation_loop(DATA_config *config, Materials *material, DATA
+   s.seed = (config->RNG_Seed != 0) ? (unsigned long long)config->RNG_Seed + 100000ULL * Num_call
+                                    : (unsigned long long)time(NULL) + Num_call;
+   s.device = getenv("MCSQUARE_GPU_DEVICE") ? atoi(getenv("MCSQUARE_GPU_DEVICE")) : 0;
++
++  // Nuclear data, flattened (species 0, 1, 2 = protons, deuterons, alphas: MCsquare's P_, D_, A_ tables)
++  s.nuclear = config->Simulate_Nuclear_Interactions;
++  s.sim_sec[0] = config->Simulate_Secondary_Protons;
++  s.sim_sec[1] = config->Simulate_Secondary_Deuterons;
++  s.sim_sec[2] = config->Simulate_Secondary_Alphas;
++  int *mat_type = calloc(nmat, sizeof(int)), *comp_off = calloc(nmat, sizeof(int)), *comp_n = calloc(nmat, sizeof(int));
++  int *el_off = calloc(nmat, sizeof(int)), *el_n = calloc(nmat, sizeof(int));
++  int *in_off = calloc(nmat, sizeof(int)), *in_n = calloc(nmat, sizeof(int));
++  float *mat_A = calloc(nmat, sizeof(float)), *interp_xs = calloc((long)nmat * 250, sizeof(float));
++  long ncomp = 0, nel = 0, nin = 0, nrows = 0;
++  for(int i=0; i<nmat; i++){
++    mat_type[i] = material[i].Nuclear_data_type;
++    mat_A[i] = material[i].A;
++    if(material[i].Interp_Total_Nuclear_Cross_Section != NULL)
++      for(int j=0; j<250; j++) interp_xs[(long)i*250 + j] = material[i].Interp_Total_Nuclear_Cross_Section[j];
++    comp_off[i] = ncomp;
++    comp_n[i] = (material[i].Nuclear_data_type == Mixture && material[i].Mixture_Components_label != NULL) ? material[i].NbrComponents : 0;
++    ncomp += comp_n[i];
++    el_off[i] = nel;
++    el_n[i] = (material[i].Nuclear_Elastic != NULL && material[i].Elastic_Energy_List != NULL) ? material[i].Nbr_Elastic_Energy : 0;
++    nel += el_n[i];
++    in_off[i] = nin;
++    in_n[i] = (material[i].Nuclear_Inelastic != NULL && material[i].Inelastic_Energy_List != NULL) ? material[i].Nbr_Inelastic_Energy : 0;
++    nin += in_n[i];
++    for(int j=0; j<in_n[i]; j++){
++      DATA_Nuclear_Inelastic *d = &material[i].Nuclear_Inelastic[j];
++      nrows += d->P_Nbr_data + d->D_Nbr_data + d->A_Nbr_data;
++    }
++  }
++  int *comp_label = calloc(ncomp + 1, sizeof(int));
++  float *comp_frac = calloc(ncomp + 1, sizeof(float));
++  float *el_E = calloc(nel + 1, sizeof(float)), *el_xs = calloc(nel + 1, sizeof(float)), *el_diff = calloc(36 * (nel + 1), sizeof(float));
++  float *in_E = calloc(nin + 1, sizeof(float)), *in_xs = calloc(nin + 1, sizeof(float)), *in_rec = calloc(nin + 1, sizeof(float));
++  float *in_mult = calloc(3 * (nin + 1), sizeof(float));
++  int *in_sn = calloc(3 * (nin + 1), sizeof(int)), *in_soff = calloc(3 * (nin + 1), sizeof(int));
++  float *sec_E = calloc(nrows + 1, sizeof(float)), *sec_D = calloc(nrows + 1, sizeof(float)), *sec_DD = calloc(13 * (nrows + 1), sizeof(float));
++  long row = 0;
++  int max_rows = 0;
++  for(int i=0; i<nmat; i++){
++    for(int c=0; c<comp_n[i]; c++){
++      comp_label[comp_off[i] + c] = material[i].Mixture_Components_label[c];
++      comp_frac[comp_off[i] + c] = material[i].Mixture_Components_fraction[c];
++    }
++    for(int j=0; j<el_n[i]; j++){
++      el_E[el_off[i] + j] = material[i].Elastic_Energy_List[j];
++      el_xs[el_off[i] + j] = material[i].Nuclear_Elastic[j].Cross_section;
++      for(int a=0; a<36; a++) el_diff[36L*(el_off[i] + j) + a] = material[i].Nuclear_Elastic[j].Diff_Cross_section[a];
++    }
++    for(int j=0; j<in_n[i]; j++){
++      DATA_Nuclear_Inelastic *d = &material[i].Nuclear_Inelastic[j];
++      long k = in_off[i] + j;
++      in_E[k] = material[i].Inelastic_Energy_List[j];
++      in_xs[k] = d->Cross_section;
++      in_rec[k] = d->Energy_fraction_recoils;
++      float mult[3] = {d->Proton_Mult, d->Deuteron_Mult, d->Alpha_Mult};
++      int n[3] = {d->P_Nbr_data, d->D_Nbr_data, d->A_Nbr_data};
++      VAR_DATA *E[3] = {d->P_Energy_list, d->D_Energy_list, d->A_Energy_list};
++      VAR_DATA *Dx[3] = {d->P_D_Cross_section, d->D_D_Cross_section, d->A_D_Cross_section};
++      VAR_DATA *DD[3] = {d->P_DD_Cross_section, d->D_DD_Cross_section, d->A_DD_Cross_section};
++      for(int sp=0; sp<3; sp++){
++        in_mult[3*k + sp] = mult[sp];
++        in_sn[3*k + sp] = n[sp];
++        in_soff[3*k + sp] = row;
++        if(n[sp] > max_rows) max_rows = n[sp];
++        for(int r=0; r<n[sp]; r++){
++          sec_E[row + r] = E[sp][r];
++          sec_D[row + r] = Dx[sp][r];
++          for(int a=0; a<13; a++) sec_DD[13*(row + r) + a] = DD[sp][13*r + a];
++        }
++        row += n[sp];
++      }
++    }
++  }
++  s.mat_type = mat_type; s.mat_A = mat_A; s.comp_off = comp_off; s.comp_n = comp_n;
++  s.comp_label = comp_label; s.comp_frac = comp_frac; s.interp_xs = interp_xs;
++  s.el_off = el_off; s.el_n = el_n; s.el_E = el_E; s.el_xs = el_xs; s.el_diff = el_diff;
++  s.in_off = in_off; s.in_n = in_n; s.in_E = in_E; s.in_xs = in_xs; s.in_rec = in_rec;
++  s.in_mult = in_mult; s.in_sn = in_sn; s.in_soff = in_soff;
++  s.sec_E = sec_E; s.sec_D = sec_D; s.sec_DD = sec_DD; s.max_rows = max_rows;
+   if(gpu_init(&s) != 0){ printf("\n ERROR: GPU initialisation failed\n\n"); exit(2); }
+   t_setup = now_s() - t_setup;
+ 
+@@ -137,13 +215,14 @@ unsigned long gpu_Simulation_loop(DATA_config *config, Materials *material, DATA
+   }
+ 
+   double t_kernel = 0.0;
+-  long long steps = 0;
+-  gpu_finish(Tot_scoring->dose, &t_kernel, &steps);
++  long long steps = 0, nsec = 0, ovf = 0, clamps = 0;
++  gpu_finish(Tot_scoring->dose, &t_kernel, &steps, &nsec, &ovf, &clamps);
+ 
+   printf("\nGPU prototype: %lu primaries sampled; setup %.3f s, sampling on %d threads %.3f s, GPU %.3f s"
+-         " (kernels %.3f s), %.3g steps, %.3g primaries/s on the GPU\n",
++         " (kernels %.3f s), %.3g steps, %.3g primaries/s on the GPU; nuclear %d: %lld secondaries,"
++         " %lld lost to a full stack, %lld angle indices clamped\n",
+          Num_simulated_primaries, t_setup, nthreads, t_gen, t_gpu, t_kernel, (double)steps,
+-         t_kernel > 0 ? Num_simulated_primaries / t_kernel : 0.0);
++         t_kernel > 0 ? Num_simulated_primaries / t_kernel : 0.0, s.nuclear, nsec, ovf, clamps);
+ 
+   for(int c=0; c<8; c++) free(buf[c]);
+   free(streams); free(sp); free(sp_off); free(sp_n); free(N_el); free(X0);
+diff --git a/src/gpu_transport.cu b/src/gpu_transport.cu
+index 9e8bca2..e29c546 100644
+--- a/src/gpu_transport.cu
++++ b/src/gpu_transport.cu
+@@ -1,16 +1,20 @@
+ /*
+ GPU transport for MCsquare, prototype (radiarch, 2026-11-21). Apache-2.0, as MCsquare; derived from
+-compute_hadron.c, compute_EM_interaction.c, compute_geometry.c, compute_scoring.c and struct.c of MCsquare
+-(Copyright 2016-2017 Universite catholique de Louvain), which it follows step by step for one proton.
++compute_hadron.c, compute_EM_interaction.c, compute_nuclear_interaction.c, compute_geometry.c, compute_scoring.c and
++struct.c of MCsquare (Copyright 2016-2017 Universite catholique de Louvain), which it follows step by step.
+ 
+-One history per thread (FRED, PMB 2017; Wan Chan Tseung 2015): each thread loops over primaries of a batch.
+-Philox random numbers, seeded per thread and batch. Dose: float atomics per batch, folded into double after each
+-batch (gPMC 2016). Electromagnetic physics only: no nuclear interactions, so no secondaries.
++One history per thread (FRED, PMB 2017; Wan Chan Tseung 2015): each thread loops over primaries of a batch and
++transports each primary's secondaries (protons, deuterons, alphas) from a small per-thread stack before taking the
++next primary; a full stack is counted. Philox random numbers, seeded per thread and batch. Dose: float atomics per
++batch, folded into double after each batch (gPMC 2016). Nuclear interactions follow MCsquare's models; the
++secondaries' emission angles are sampled with upstream issue #42's fix (the angular table interpolated at the
++secondary's table energy), the only behaviour a GPU can reproduce: the original reads past the angle table.
+ */
+ #include <cstdio>
+ #include <cmath>
+ #include <vector>
+ #include <cstddef>
++#include <algorithm>
+ #include <chrono>
+ #include <cuda_runtime.h>
+ #include <curand_kernel.h>
+@@ -24,90 +28,120 @@ batch (gPMC 2016). Electromagnetic physics only: no nuclear interactions, so no
+ #define PSTAR_BIN 0.5f
+ #define MC2E 0.5109989e6f
+ #define MC2P 938.272046e6f
++#define UAMU 931.46e6f
++#define PI_F 3.14159265359f
+ #define CONST_DERIV 0.99f
+ #define CONST_MS_FIPPEL 18.3f
+ // 2 pi r_e^2 m_e c^2 (eV cm2): the factor of the ionization cross section, stopping power and straggling
+ #define KION ((float)(2.0 * 3.14159265359 * 2.8179403e-13 * 2.8179403e-13 * 0.5109989e6))
++#define NXS 250            // Interp_Total_Nuclear_Cross_Section bins (1 MeV)
++#define STACK 24           // secondaries per thread
++#define MAX_ROWS 128       // rows of a secondary's energy table
++
++enum { T_NONE = 0, T_ICRU = 1, T_PP = 2, T_MIX = 3 };
++enum { UNKNOWN = 0, PROTON = 1, DEUTERON = 2, TRITON = 3, ALPHA = 4 };
+ 
+ struct Params {
+-  int nmat, gs0, gs1, gs2, nvox, dose_to_water, water_id, dose_weighting;
++  int nmat, gs0, gs1, gs2, nvox, dose_to_water, water_id, dose_weighting, nuclear, sim_sec0, sim_sec1, sim_sec2;
+   float len0, len1, len2, vox0, vox1, vox2, Te_min, Ecut, D_Max, Eps_Max;
+ };
+ __constant__ Params P;
+ 
++// Device tables (pointers in constant memory)
++struct Tab {
++  const float *sp; const int *sp_off; const int *sp_n; const float *N_el; const float *X0;
++  const unsigned short *ct_mat; const float *ct_rho;
++  const int *mat_type; const float *mat_A; const int *comp_off, *comp_n, *comp_label; const float *comp_frac;
++  const float *interp_xs; const int *el_off, *el_n; const float *el_E, *el_xs, *el_diff;
++  const int *in_off, *in_n; const float *in_E, *in_xs, *in_rec, *in_mult; const int *in_sn, *in_soff;
++  const float *sec_E, *sec_D, *sec_DD;
++};
++__constant__ Tab G;
++
++struct Part { float x, y, z, u, v, w, T, M, charge, mass; int type; };
++
+ struct Dev {
+-  float *sp; int *sp_off; int *sp_n; float *N_el; float *X0;
+-  unsigned short *ct_mat; float *ct_rho;
+-  float *dose_f; double *dose_d;
+-  float *prim;          // 8 * capacity floats, SoA
+-  unsigned long long *steps;
+-  long capacity;
+-  unsigned long long seed;
+-  long batch;
+-  double kernel_s;
++  std::vector<void*> allocs;
++  float *dose_f; double *dose_d; float *prim; long capacity;
++  unsigned long long *counters;    // steps, secondaries, stack overflows, angle clamps
++  unsigned long long seed; long batch; double kernel_s; int nvox;
+ };
+ static Dev D;
+ 
+-__device__ __forceinline__ float stop_pow(int mat, float T, const float *sp, const int *sp_off, const int *sp_n) {
+-  // Total_Stop_Pow: linear interpolation in 0.5 MeV bins (mass 1)
+-  int i = (int)floorf(T / (UMEV * PSTAR_BIN));
+-  int n = sp_n[mat];
+-  if (i < 0) i = 0;
+-  if (i > n - 2) i = n - 2;
++// ---------------------------------------------------------------------------- helpers (compute_math.c)
++
++__device__ __forceinline__ float lin(float x, float x1, float x2, float y1, float y2) {
++  return ((y2 - y1) / (x2 - x1)) * (x - x1) + y1;                                   // Linear_Interpolation
++}
++__device__ __forceinline__ int bsearch_(float value, const float *list, int n) {      // Binary_Search
++  if (n <= 1) return -1;
++  int i = -1, j = n;
++  while (j - i > 1) { int k = (i + j) / 2; if (list[k] < value) i = k; else j = k; }
++  return i;
++}
++__device__ __forceinline__ int seqsearch(float value, const float *list, int n) {    // Sequential_Search
++  if (n <= 1) return -1;
++  int index = 0;
++  while (index < n) { if (value <= list[index]) return index - 1; index++; }
++  return index - 1;
++}
++__device__ __forceinline__ int clampi(int i, int lo, int hi) { return i < lo ? lo : (i > hi ? hi : i); }
++
++// ---------------------------------------------------------------------------- electromagnetic (compute_EM_interaction.c)
++
++__device__ __forceinline__ float stop_pow(int mat, float Tn) {         // Total_Stop_Pow, Tn = T / mass
++  int i = (int)floorf(Tn / (UMEV * PSTAR_BIN));
++  i = clampi(i, 0, G.sp_n[mat] - 2);
+   float e1 = i * UMEV * PSTAR_BIN, e2 = (i + 1) * UMEV * PSTAR_BIN;
+-  const float *t = sp + sp_off[mat];
+-  float s1 = __ldg(t + i), s2 = __ldg(t + i + 1);
+-  return s1 + (s2 - s1) * (T - e1) / (e2 - e1);
++  const float *t = G.sp + G.sp_off[mat];
++  return lin(Tn, e1, e2, __ldg(t + i), __ldg(t + i + 1));
+ }
+ 
+ struct Kin { float E, g, b2, Temax; };
+-__device__ __forceinline__ Kin kin(float T) {
+-  // Update_Hadron for a proton
++__device__ __forceinline__ Kin kin(float T, float mass) {             // Update_Hadron
+   Kin k;
+-  k.E = T + MC2P;
+-  k.g = k.E / MC2P;
++  float m = mass * MC2P;
++  k.E = T + m;
++  k.g = k.E / m;
+   k.b2 = 1.0f - 1.0f / (k.g * k.g);
+-  k.Temax = (2.0f * MC2E * MC2P * MC2P * (k.g * k.g - 1.0f)) / (MC2P * MC2P + 2.0f * MC2E * k.g * MC2P + MC2E * MC2E);
++  k.Temax = (2.0f * MC2E * m * m * (k.g * k.g - 1.0f)) / (m * m + 2.0f * MC2E * k.g * m + MC2E * MC2E);
+   return k;
+ }
+ 
+-__device__ __forceinline__ float xs_ion(float Nel, const Kin &k, float Temin) {
+-  // cross_section_ionization
++__device__ __forceinline__ float xs_ion(float Nel, float q, const Kin &k) {    // cross_section_ionization
++  const float Temin = P.Te_min;
+   if (k.Temax <= Temin) return 0.0f;
+-  return KION * Nel * ((1.0f / Temin - 1.0f / k.Temax) - (k.b2 / k.Temax) * logf(k.Temax / Temin)
+-                       + (k.Temax - Temin) / (2.0f * k.E * k.E)) / k.b2;
++  return KION * Nel * q * q * ((1.0f / Temin - 1.0f / k.Temax) - (k.b2 / k.Temax) * logf(k.Temax / Temin)
++                               + (k.Temax - Temin) / (2.0f * k.E * k.E)) / k.b2;
+ }
+ 
+-__device__ __forceinline__ float restricted_L(int mat, float rho, float Nel, float T, float Temin,
+-                                              const float *sp, const int *sp_off, const int *sp_n, Kin &k) {
+-  // Compute_L: restricted stopping power (eV/cm)
+-  k = kin(T);
+-  float s = stop_pow(mat, T, sp, sp_off, sp_n);
++__device__ __forceinline__ float restricted_L(int mat, float rho, float Nel, float T, const Part &p, Kin &k) {  // Compute_L
++  const float Temin = P.Te_min;
++  k = kin(T, p.mass);
++  float s = stop_pow(mat, T / p.mass);
+   float M = 0.0f;
+   if (k.Temax > Temin)
+-    M = (KION * Nel / k.b2) * (logf(k.Temax / Temin) - (k.Temax - Temin) * k.b2 / k.Temax
+-                                + (k.Temax * k.Temax - Temin * Temin) / (4.0f * k.E * k.E));
+-  return rho * s - M;
++    M = (KION * Nel * p.charge * p.charge / k.b2) * (logf(k.Temax / Temin) - (k.Temax - Temin) * k.b2 / k.Temax
++                                                     + (k.Temax * k.Temax - Temin * Temin) / (4.0f * k.E * k.E));
++  return rho * p.charge * p.charge * s - M;
+ }
+ 
+-__device__ __forceinline__ float mean_dE(int mat, float rho, float Nel, float T, float step, float Temin,
+-                                         const float *sp, const int *sp_off, const int *sp_n) {
+-  // Compute_dE2
++__device__ __forceinline__ float mean_dE(int mat, float rho, float Nel, float step, const Part &p) {    // Compute_dE2
+   Kin k1, k2;
+-  float L1 = restricted_L(mat, rho, Nel, T, Temin, sp, sp_off, sp_n, k1);
++  float T = p.T;
++  float L1 = restricted_L(mat, rho, Nel, T, p, k1);
+   float dE1 = L1 * step, tau1 = T / MC2P, e1 = dE1 / T, C = L1 * k1.b2;
+   float T2 = T * CONST_DERIV;
+-  float L2 = restricted_L(mat, rho, Nel, T2, Temin, sp, sp_off, sp_n, k2);
+-  float C2 = L2 * k2.b2;
+-  float dC = (C2 - C) / (T2 - T);
+-  float b = T * dC / C;
++  float L2 = restricted_L(mat, rho, Nel, T2, p, k2);
++  float b = T * ((L2 * k2.b2 - C) / (T2 - T)) / C;
+   float a = (1.0f + tau1) * (2.0f + tau1);
+   return dE1 * (1.0f + e1 / a + e1 * e1 * (2.0f + 2.0f * tau1 + tau1 * tau1) / (a * a)
+                 - b * e1 * (0.5f + 2.0f * e1 / (3.0f * a) + (1.0f - b) * e1 / 6.0f));
+ }
+ 
+-__device__ __forceinline__ int ct_index(float x, float y, float z, bool &inside) {
+-  // get_CT_Offset (x is mirrored for the index)
++// ---------------------------------------------------------------------------- geometry and scoring
++
++__device__ __forceinline__ int ct_index(float x, float y, float z, bool &inside) {   // get_CT_Offset
+   inside = !(x < 0.0f || y < 0.0f || z < 0.0f || x >= P.len0 || y >= P.len1 || z >= P.len2);
+   int idx = (int)floorf((-x + P.len0) / P.vox0) + P.gs0 * (int)floorf(y / P.vox1)
+             + P.gs0 * P.gs1 * (int)floorf(z / P.vox2);
+@@ -115,17 +149,15 @@ __device__ __forceinline__ int ct_index(float x, float y, float z, bool &inside)
+   return inside ? idx : 0;
+ }
+ 
+-__device__ __forceinline__ float dist_to_interface(float x, float y, float z, float u, float v, float w) {
+-  // Dist_To_Interface, float branch
+-  float dx = fabsf(((floorf(x / P.vox0) + (u > 0.0f)) * P.vox0 - x) / u);
+-  float dy = fabsf(((floorf(y / P.vox1) + (v > 0.0f)) * P.vox1 - y) / v);
+-  float dz = fabsf(((floorf(z / P.vox2) + (w > 0.0f)) * P.vox2 - z) / w);
++__device__ __forceinline__ float dist_to_interface(const Part &p) {                   // Dist_To_Interface
++  float dx = fabsf(((floorf(p.x / P.vox0) + (p.u > 0.0f)) * P.vox0 - p.x) / p.u);
++  float dy = fabsf(((floorf(p.y / P.vox1) + (p.v > 0.0f)) * P.vox1 - p.y) / p.v);
++  float dz = fabsf(((floorf(p.z / P.vox2) + (p.w > 0.0f)) * P.vox2 - p.z) / p.w);
+   float d = fminf(dx, fminf(dy, dz));
+   return d < 1e-3f ? d + 2e-4f : d + 5e-5f;
+ }
+ 
+-__device__ __forceinline__ void rotate(float &u, float &v, float &w, float theta, float phi) {
+-  // Update_direction
++__device__ __forceinline__ void rotate(float &u, float &v, float &w, float theta, float phi) {   // Update_direction
+   float cT = cosf(theta), sT = sinf(theta), cP = cosf(phi), sP = sinf(phi);
+   float pu = u;
+   if (w < 0.999999f && w > -0.999999f) {
+@@ -142,95 +174,306 @@ __device__ __forceinline__ void rotate(float &u, float &v, float &w, float theta
+   u /= n; v /= n; w /= n;
+ }
+ 
+-__device__ __forceinline__ void score(float *dose, int idx, float M, float dE, float rho, float SPR) {
+-  // Energy_Scoring_from_index
++__device__ __forceinline__ void score(float *dose, int idx, float M, float dE, float rho, float SPR) {  // Energy_Scoring_from_index
+   float val = (P.dose_weighting == 0) ? M * dE / (rho * SPR) : M * dE / SPR;
+   if (val != 0.0f) atomicAdd(dose + idx, val);
+ }
+ 
+-__global__ void transport(long n, const float *__restrict__ prim, long cap,
+-                          const float *__restrict__ sp, const int *__restrict__ sp_off, const int *__restrict__ sp_n,
+-                          const float *__restrict__ N_el_m, const float *__restrict__ X0_m,
+-                          const unsigned short *__restrict__ ct_mat, const float *__restrict__ ct_rho,
+-                          float *dose, unsigned long long seed, long batch, unsigned long long *steps_out) {
++// ---------------------------------------------------------------------------- nuclear (compute_nuclear_interaction.c)
++
++__device__ __forceinline__ float xs_nuc(int mat, float T, float rho) {                // total_Nuclear_cross_section
++  float Tb = T / (UMEV * 1.0f);
++  int i = (int)floorf(Tb);
++  float T1 = i * UMEV, T2 = (i + 1) * UMEV;
++  if (i >= 249) i = 0;                          // as MCsquare: tabulated up to 250 MeV
++  i = clampi(i, 0, NXS - 2);
++  const float *t = G.interp_xs + mat * NXS;
++  return lin(T, T1, T2, __ldg(t + i), __ldg(t + i + 1)) * rho;
++}
++
++struct Stack { Part s[STACK]; int n; };
++
++__device__ __forceinline__ void push(Stack &st, const Part &q, unsigned long long &overflows, unsigned long long &nsec) {
++  if (st.n < STACK) { st.s[st.n++] = q; nsec++; }
++  else overflows++;
++}
++
++__device__ float elastic_pp(Part &p, Stack &st, curandStatePhilox4_32_10_t &rng,
++                            unsigned long long &ovf, unsigned long long &nsec) {         // Compute_Elastic_PP
++  float c = 2.0f * curand_uniform(&rng) - 1.0f;
++  float T = p.T;
++  float dE = T * (1.0f - c) / 2.0f;
++  float f = 1.0f - T / (T + 2.0f * MC2P);
++  float theta = acosf((c + 1.0f) / sqrtf((c + 1.0f) * (c + 1.0f) + f * (1.0f - c * c)));
++  float phi = 2.0f * PI_F * curand_uniform(&rng);
++  Part q = p;
++  q.T = dE; q.charge = 1.0f; q.mass = 1.0f; q.type = PROTON;
++  float theta2 = acosf((1.0f - c) / sqrtf((1.0f - c) * (1.0f - c) + f * (1.0f - c * c)));
++  float phi2 = (phi > PI_F) ? phi - PI_F : phi + PI_F;
++  rotate(p.u, p.v, p.w, theta, phi);
++  rotate(q.u, q.v, q.w, theta2, phi2);
++  p.T = T - dE;
++  if (q.T < P.Ecut) return q.T;
++  push(st, q, ovf, nsec);
++  return 0.0f;
++}
++
++__device__ float elastic_icru(Part &p, int m, curandStatePhilox4_32_10_t &rng) {      // Compute_Elastic_ICRU
++  float E = p.T / UMEV;
++  int n = G.el_n[m];
++  const float *Elist = G.el_E + G.el_off[m];
++  int i0 = clampi(bsearch_(E, Elist, n), 0, n - 2);
++  const float *d1 = G.el_diff + (long)(G.el_off[m] + i0) * 36, *d2 = d1 + 36;
++  float diff[36];
++  for (int i = 0; i < 36; i++) diff[i] = lin(E, Elist[i0], Elist[i0 + 1], d1[i], d2[i]);
++  float rnd = curand_uniform(&rng) * diff[35];
++  int i = seqsearch(rnd, diff, 36) + 1;
++  float c;
++  const float D2R = PI_F / 180.0f;
++  if (i == 0) c = cosf(5 * D2R) + curand_uniform(&rng) * (cosf(7.5f * D2R) - cosf(5 * D2R));
++  else if (i == 35) c = cosf(175.5f * D2R) + curand_uniform(&rng) * (cosf(180 * D2R) - cosf(177.5f * D2R));
++  else c = cosf(((i + 1) * 5 - 2.5f) * D2R) + curand_uniform(&rng) * (cosf(((i + 1) * 5 + 2.5f) * D2R) - cosf(((i + 1) * 5 - 2.5f) * D2R));
++  float AU = G.mat_A[m] * UAMU;
++  float b2 = (p.T * (p.T + 2.0f * MC2P)) / ((p.T + MC2P + AU) * (p.T + MC2P + AU));
++  float g2 = 1.0f / (1.0f - b2);
++  float tau = sqrtf((MC2P / AU) * (MC2P / AU) * (1.0f - b2) + b2);
++  float theta = acosf((c + tau) / sqrtf((c + tau) * (c + tau) + (1.0f - c * c) / g2));
++  float phi = 2.0f * PI_F * curand_uniform(&rng);
++  rotate(p.u, p.v, p.w, theta, phi);
++  float dE = g2 * b2 * AU * (1.0f - c);
++  p.T -= dE;
++  return dE;
++}
++
++// One secondary species from an inelastic event (Compute_Nuclear_Inelastic_proton/_deuteron/_alpha), s = 0, 1, 2
++__device__ float inelastic_secondary(const Part &p, int m, int idx, int s, Stack &st, curandStatePhilox4_32_10_t &rng,
++                                     unsigned long long &ovf, unsigned long long &nsec, unsigned long long &clamps) {
++  int k0 = G.in_off[m] + idx, k1 = k0 + 1;
++  float mult0 = G.in_mult[3 * k0 + s], mult1 = G.in_mult[3 * k1 + s];
++  if (mult0 == 0.0f || mult1 == 0.0f) return 0.0f;
++  float E = p.T / UMEV;
++  const float *Ein = G.in_E + G.in_off[m];
++  float Ea = Ein[idx], Eb = Ein[idx + 1];
++  float Msec = p.M * lin(E, Ea, Eb, mult0, mult1);
++  int n = G.in_sn[3 * k0 + s];
++  if (n < 2 || n > MAX_ROWS) return 0.0f;
++  const float *Es = G.sec_E + G.in_soff[3 * k0 + s];
++  const float *Da = G.sec_D + G.in_soff[3 * k0 + s], *Db = G.sec_D + G.in_soff[3 * k1 + s];
++  float diff[MAX_ROWS];
++  diff[0] = lin(E, Ea, Eb, Da[0], Db[0]);
++  for (int i = 1; i < n; i++) diff[i] = diff[i - 1] + lin(E, Ea, Eb, Da[i], Db[i]);
++  float rnd = curand_uniform(&rng) * diff[n - 1];
++  int si = clampi(bsearch_(rnd, diff, n), 0, n - 2);
++  float T_table = lin(rnd, diff[si], diff[si + 1], Es[si], Es[si + 1]);        // MeV, on the table's grid
++  float Tsec = (E / Ea) * UMEV * T_table;                                           // eV, scaled to the incident energy
++  if (Tsec < P.Ecut) return Msec * Tsec / p.M;
++  int sim = (s == 0) ? P.sim_sec0 : (s == 1) ? P.sim_sec1 : P.sim_sec2;   // protons, deuterons, alphas
++  if (!sim) return Msec * Tsec / p.M;
++  Part q = p;
++  q.T = Tsec; q.M = Msec;
++  q.type = (s == 0) ? PROTON : (s == 1) ? DEUTERON : ALPHA;
++  q.charge = (s == 2) ? 2.0f : 1.0f;
++  q.mass = (s == 0) ? 1.0f : (s == 1) ? 2.0f : 4.0f;
++  float phi = 2.0f * PI_F * curand_uniform(&rng);
++  const float *DDa = G.sec_DD + 13L * G.in_soff[3 * k0 + s], *DDb = G.sec_DD + 13L * G.in_soff[3 * k1 + s];
++  float dd[13];
++  for (int i = 0; i < 13; i++) {
++    float d1 = lin(E, Ea, Eb, DDa[13 * si + i], DDb[13 * si + i]);
++    float d2 = lin(E, Ea, Eb, DDa[13 * (si + 1) + i], DDb[13 * (si + 1) + i]);
++    float v = lin(T_table, Es[si], Es[si + 1], d1, d2);                        // issue #42: the table's energy
++    dd[i] = (i == 0) ? v : dd[i - 1] + v;
++  }
++  rnd = curand_uniform(&rng) * dd[12];
++  int ai = bsearch_(rnd, dd, 13) + 1;
++  if (ai < 0 || ai > 12) { clamps++; ai = clampi(ai, 0, 12); }
++  const float ang[13] = {0, 10, 20, 30, 40, 50, 60, 70, 90, 110, 130, 150, 180};
++  const float D2R = PI_F / 180.0f;
++  float theta;
++  if (ai == 0) theta = acosf(1.0f + curand_uniform(&rng) * (cosf(5 * D2R) - 1.0f));
++  else if (ai == 12) theta = acosf(cosf(165 * D2R) + curand_uniform(&rng) * (-1.0f - cosf(165 * D2R)));
++  else theta = acosf(cosf((ang[ai - 1] + ang[ai]) * D2R / 2) + curand_uniform(&rng)
++                     * (cosf((ang[ai] + ang[ai + 1]) * D2R / 2) - cosf((ang[ai - 1] + ang[ai]) * D2R / 2)));
++  rotate(q.u, q.v, q.w, theta, phi);
++  push(st, q, ovf, nsec);
++  return 0.0f;
++}
++
++__device__ float inelastic(Part &p, int m, curandStatePhilox4_32_10_t &rng, Stack &st,
++                           unsigned long long &ovf, unsigned long long &nsec, unsigned long long &clamps) {
++  float E = p.T / UMEV;
++  int n = G.in_n[m];
++  const float *Ein = G.in_E + G.in_off[m];
++  int idx = clampi(bsearch_(E, Ein, n), 0, n - 2);
++  float dE = 0.0f;
++  dE += inelastic_secondary(p, m, idx, 0, st, rng, ovf, nsec, clamps);        // protons
++  dE += inelastic_secondary(p, m, idx, 1, st, rng, ovf, nsec, clamps);        // deuterons
++  dE += inelastic_secondary(p, m, idx, 2, st, rng, ovf, nsec, clamps);        // alphas
++  int k0 = G.in_off[m] + idx;
++  dE += p.T * lin(E, Ein[idx], Ein[idx + 1], G.in_rec[k0], G.in_rec[k0 + 1]);   // recoils, deposited here
++  p.type = UNKNOWN;
++  return dE;
++}
++
++__device__ float nuclear_interaction(Part &p, int m, curandStatePhilox4_32_10_t &rng, Stack &st,
++                                     unsigned long long &ovf, unsigned long long &nsec, unsigned long long &clamps) {
++  float E = p.T / UMEV;                                                             // Compute_Nuclear_interaction
++  int type = G.mat_type[m];
++  if (type == T_PP) return (E > 10.0f) ? elastic_pp(p, st, rng, ovf, nsec) : 0.0f;
++  if (type == T_ICRU) {
++    if (!(E > 7.0f && E < 249.0f)) return 0.0f;
++    float rnd = curand_uniform(&rng);
++    int i = (int)floorf(E);
++    const float *t = G.interp_xs + m * NXS;
++    float total = lin(E, (float)i, (float)(i + 1), t[i], t[i + 1]);
++    int n = G.el_n[m];
++    const float *El = G.el_E + G.el_off[m];
++    int j = clampi(bsearch_(E, El, n), 0, n - 2);
++    float el = lin(E, El[j], El[j + 1], G.el_xs[G.el_off[m] + j], G.el_xs[G.el_off[m] + j + 1]) / total;
++    if (rnd <= el) return elastic_icru(p, m, rng);
++    return inelastic(p, m, rng, st, ovf, nsec, clamps);
++  }
++  if (type == T_MIX) {
++    int i = (int)floorf(E);
++    i = clampi(i, 0, NXS - 2);
++    const float *t = G.interp_xs + m * NXS;
++    float total = lin(E, (float)i, (float)(i + 1), t[i], t[i + 1]);
++    float cs = 0.0f;
++    float rnd = curand_uniform(&rng) * total;
++    for (int c = 0; c < G.comp_n[m]; c++) {
++      int tl = G.comp_label[G.comp_off[m] + c];
++      float frac = G.comp_frac[G.comp_off[m] + c];
++      int tt = G.mat_type[tl];
++      if (tt == T_PP) {
++        if (E > 10.0f) cs += frac * (0.315f * powf(E, -1.126f) + 3.78e-6f * E) / 0.1119f;
++        if (rnd <= cs) return elastic_pp(p, st, rng, ovf, nsec);
++      } else if (tt == T_ICRU) {
++        if (E > 7.0f && E < 249.0f) {
++          int n = G.el_n[tl];
++          const float *El = G.el_E + G.el_off[tl];
++          int j = clampi(bsearch_(E, El, n), 0, n - 2);
++          cs += frac * lin(E, El[j], El[j + 1], G.el_xs[G.el_off[tl] + j], G.el_xs[G.el_off[tl] + j + 1]);
++          if (rnd <= cs) return elastic_icru(p, tl, rng);
++          int ni = G.in_n[tl];
++          const float *Ei = G.in_E + G.in_off[tl];
++          int k = clampi(bsearch_(E, Ei, ni), 0, ni - 2);
++          cs += frac * lin(E, Ei[k], Ei[k + 1], G.in_xs[G.in_off[tl] + k], G.in_xs[G.in_off[tl] + k + 1]);
++          if (rnd <= cs) return inelastic(p, tl, rng, st, ovf, nsec, clamps);
++        }
++      }
++    }
++    return 0.0f;
++  }
++  return 0.0f;
++}
++
++// ---------------------------------------------------------------------------- transport (hadron_step, one particle)
++
++__global__ void transport(long n, const float *__restrict__ prim, long cap, float *dose, unsigned long long seed,
++                          long batch, unsigned long long *counters) {
+   long tid = blockIdx.x * (long)blockDim.x + threadIdx.x;
+   long nthreads = (long)gridDim.x * blockDim.x;
+   curandStatePhilox4_32_10_t rng;
+   curand_init(seed, (unsigned long long)(batch * nthreads + tid), 0, &rng);
+-  const float Temin = P.Te_min, Ecut = P.Ecut;
+-  unsigned long long nsteps = 0;
++  const float Ecut = P.Ecut;
++  unsigned long long nsteps = 0, nsec = 0, ovf = 0, clamps = 0;
++  Stack st; st.n = 0;
+ 
+   for (long i = tid; i < n; i += nthreads) {
+-    float x = prim[i], y = prim[cap + i], z = prim[2 * cap + i];
+-    float u = prim[3 * cap + i], v = prim[4 * cap + i], w = prim[5 * cap + i];
+-    float T = prim[6 * cap + i], M = prim[7 * cap + i];
+-    bool alive = true;
+-
+-    while (alive) {
+-      nsteps++;
+-      if (!isfinite(T)) break;                                         // patch 0003's guard
+-      Kin k = kin(T);
+-      bool inside;
+-      int idx = ct_index(x, y, z, inside);
+-      if (!inside) break;
+-      int mat = ct_mat[idx];
+-      float rho = ct_rho[idx];
+-      float Nel = N_el_m[mat] * rho;
+-      float sp_mat = rho * stop_pow(mat, T, sp, sp_off, sp_n);
+-
+-      float step_max = fminf(fminf(dist_to_interface(x, y, z, u, v, w), P.D_Max), P.Eps_Max * T / sp_mat);
+-      float dE_max = step_max * sp_mat;
+-      float T_low = T - dE_max;
+-      if (T_low <= 0.0f) T_low = T;
+-      Kin kl = kin(T_low);
+-      float section = (fmaxf(xs_ion(Nel, k, Temin), xs_ion(Nel, kl, Temin)) + 1e-10f) * 1.017f;
+-
+-      float SPR = 1.0f;
+-      if (P.dose_to_water == 2) SPR = sp_mat / (rho * stop_pow(P.water_id, T, sp, sp_off, sp_n));
+-
+-      float step = -logf(curand_uniform(&rng)) / section;
+-      if (step > step_max) step = step_max;
+-
+-      float mdE = mean_dE(mat, rho, Nel, T, step, Temin, sp, sp_off, sp_n);
+-      float strag = KION * Nel * step * fminf(Temin, k.Temax) * (1.0f - 0.5f * k.b2) / k.b2;
+-      float dE = curand_normal(&rng) * sqrtf(strag) + mdE;
+-
+-      float X0 = X0_m[mat] / rho;
+-      float ms = (CONST_MS_FIPPEL * UMEV / (k.b2 * k.g * MC2P)) * sqrtf(step / X0);
+-      float theta = curand_normal(&rng) * ms;
+-      float phi = 2.0f * 3.14159265359f * curand_uniform(&rng);
+-
+-      int hinge = idx;                                                   // VoxelInterface: score in the start voxel
+-      x += step * u; y += step * v; z += step * w;
+-
+-      if (!isfinite(dE)) break;                                          // patch 0003's guard
+-      if (T - dE <= Ecut) { dE = T; alive = false; }
+-      T -= dE;
+-      score(dose, hinge, M, dE, rho, SPR);
+-      if (!alive) break;
+-
+-      k = kin(T);
+-      idx = ct_index(x, y, z, inside);
+-      if (!inside) break;
+-      rotate(u, v, w, theta, phi);
+-
+-      // hard ionization (a delta electron, absorbed locally) or a fictitious interaction
+-      float dE_hard = 0.0f;
+-      bool hard = (step != step_max) && (curand_uniform(&rng) <= xs_ion(Nel, k, Temin) / section);
+-      if (hard && k.Temax >= Temin) {
+-        for (;;) {                                                       // Compute_Ionization_Energy
+-          float r = curand_uniform(&rng);
+-          float Te = (Temin * k.Temax) / ((1.0f - r) * k.Temax + r * Temin);
+-          float g = 1.0f - k.b2 * (Te / k.Temax) + Te * Te / (2.0f * k.E * k.E);
+-          if (curand_uniform(&rng) <= g) { dE_hard = Te; break; }
++    Part p;
++    p.x = prim[i]; p.y = prim[cap + i]; p.z = prim[2 * cap + i];
++    p.u = prim[3 * cap + i]; p.v = prim[4 * cap + i]; p.w = prim[5 * cap + i];
++    p.T = prim[6 * cap + i]; p.M = prim[7 * cap + i];
++    p.charge = 1.0f; p.mass = 1.0f; p.type = PROTON;
++
++    for (;;) {                                            // the primary, then its secondaries, depth first
++      while (p.type != UNKNOWN) {
++        nsteps++;
++        if (!isfinite(p.T)) break;                                       // patch 0003's guard
++        Kin k = kin(p.T, p.mass);
++        bool inside;
++        int idx = ct_index(p.x, p.y, p.z, inside);
++        if (!inside) break;
++        int mat = G.ct_mat[idx];
++        float rho = G.ct_rho[idx];
++        float Nel = G.N_el[mat] * rho;
++        float q2 = p.charge * p.charge;
++        float sp_mat = rho * q2 * stop_pow(mat, p.T / p.mass);
++
++        float step_max = fminf(fminf(dist_to_interface(p), P.D_Max), P.Eps_Max * p.T / sp_mat);
++        float dE_max = step_max * sp_mat;
++        float T_low = p.T - dE_max;
++        if (T_low <= 0.0f) T_low = p.T;
++        Kin kl = kin(T_low, p.mass);
++        float s1 = xs_ion(Nel, p.charge, k), s2 = xs_ion(Nel, p.charge, kl);
++        if (P.nuclear) { s1 += xs_nuc(mat, p.T, rho); s2 += xs_nuc(mat, T_low, rho); }
++        float section = (fmaxf(s1, s2) + 1e-10f) * 1.017f;
++
++        float SPR = 1.0f;
++        if (P.dose_to_water == 2) SPR = sp_mat / (rho * q2 * stop_pow(P.water_id, p.T / p.mass));
++
++        float step = -logf(curand_uniform(&rng)) / section;
++        if (step > step_max) step = step_max;
++
++        float mdE = mean_dE(mat, rho, Nel, step, p);
++        float strag = KION * Nel * q2 * step * fminf(P.Te_min, k.Temax) * (1.0f - 0.5f * k.b2) / k.b2;
++        float dE = curand_normal(&rng) * sqrtf(strag) + mdE;
++
++        float X0 = G.X0[mat] / rho;
++        float ms = (CONST_MS_FIPPEL * UMEV * p.charge / (k.b2 * k.g * MC2P)) * sqrtf(step / X0);
++        float theta = curand_normal(&rng) * ms;
++        float phi = 2.0f * PI_F * curand_uniform(&rng);
++
++        int hinge = idx;                                                // score in the start voxel
++        p.x += step * p.u; p.y += step * p.v; p.z += step * p.w;
++
++        if (!isfinite(dE)) break;                                       // patch 0003's guard
++        if (p.T - dE <= Ecut) { dE = p.T; p.type = UNKNOWN; }
++        p.T -= dE;
++        score(dose, hinge, p.M, dE, rho, SPR);
++        if (p.type == UNKNOWN) break;
++
++        k = kin(p.T, p.mass);
++        int idx2 = ct_index(p.x, p.y, p.z, inside);
++        if (!inside) break;
++        rotate(p.u, p.v, p.w, theta, phi);
++
++        // the step's end: a fictitious interaction, a hard ionization (local delta electron) or a nuclear one
++        int itype = 0;
++        float r = curand_uniform(&rng);
++        float f_ion = xs_ion(Nel, p.charge, k) / section;
++        if (r <= f_ion) itype = 1;
++        else if (P.nuclear && r <= xs_nuc(mat, p.T, rho) / section + f_ion) itype = 2;
++        if (step == step_max) itype = 0;
++
++        float dE_hard = 0.0f;
++        float SPR_hard = SPR;
++        if (itype == 1 && k.Temax >= P.Te_min) {
++          for (;;) {                                                     // Compute_Ionization_Energy
++            float rr = curand_uniform(&rng);
++            float Te = (P.Te_min * k.Temax) / ((1.0f - rr) * k.Temax + rr * P.Te_min);
++            float g = 1.0f - k.b2 * (Te / k.Temax) + Te * Te / (2.0f * k.E * k.E);
++            if (curand_uniform(&rng) <= g) { dE_hard = Te; break; }
++          }
++          p.T -= dE_hard;
++        }
++        if (itype == 2) {
++          dE_hard = nuclear_interaction(p, mat, rng, st, ovf, nsec, clamps);
++          if (p.type != UNKNOWN && p.T <= Ecut) { p.type = UNKNOWN; dE_hard += p.T; }
++          SPR_hard = 1.0f;                                               // nuclear deposits: no dose-to-water
++        } else if (p.T <= Ecut) {
++          dE_hard += p.T;
++          p.type = UNKNOWN;
+         }
++        score(dose, idx2, p.M, dE_hard, G.ct_rho[idx2], SPR_hard);
+       }
+-      T -= dE_hard;
+-      if (T <= Ecut) { dE_hard += T; alive = false; }
+-      score(dose, idx, M, dE_hard, ct_rho[idx], SPR);
++      if (st.n == 0) break;
++      p = st.s[--st.n];
+     }
+   }
+-  atomicAdd(steps_out, nsteps);
++  atomicAdd(counters + 0, nsteps);
++  atomicAdd(counters + 1, nsec);
++  atomicAdd(counters + 2, ovf);
++  atomicAdd(counters + 3, clamps);
+ }
+ 
+ __global__ void fold(long n, float *df, double *dd) {
+@@ -240,37 +483,66 @@ __global__ void fold(long n, float *df, double *dd) {
+   }
+ }
+ 
++// ---------------------------------------------------------------------------- host
++
++template <typename T> static T *up(const T *h, long n) {
++  T *d = nullptr;
++  if (n <= 0 || h == nullptr) n = 1;
++  if (cudaMalloc(&d, n * sizeof(T)) != cudaSuccess) d = nullptr;
++  else if (h) cudaMemcpy(d, h, n * sizeof(T), cudaMemcpyHostToDevice);
++  D.allocs.push_back(d);                  // a null entry is reported by gpu_init
++  return d;
++}
++
+ extern "C" int gpu_init(const GpuSetup *s) {
+   CK(cudaSetDevice(s->device));
++  D = Dev();
+   Params p;
+   p.nmat = s->nmat; p.gs0 = s->gs[0]; p.gs1 = s->gs[1]; p.gs2 = s->gs[2]; p.nvox = s->nvox;
+   p.dose_to_water = s->dose_to_water; p.water_id = s->water_id; p.dose_weighting = s->dose_weighting;
++  p.nuclear = s->nuclear; p.sim_sec0 = s->sim_sec[0]; p.sim_sec1 = s->sim_sec[1]; p.sim_sec2 = s->sim_sec[2];
+   p.len0 = s->len[0]; p.len1 = s->len[1]; p.len2 = s->len[2];
+   p.vox0 = s->vox[0]; p.vox1 = s->vox[1]; p.vox2 = s->vox[2];
+   p.Te_min = s->Te_min; p.Ecut = s->Ecut; p.D_Max = s->D_Max; p.Eps_Max = s->Eps_Max;
+   CK(cudaMemcpyToSymbol(P, &p, sizeof(p)));
+-  long nsp = s->sp_off[s->nmat - 1] + s->sp_n[s->nmat - 1];
+-  CK(cudaMalloc(&D.sp, nsp * sizeof(float)));
+-  CK(cudaMemcpy(D.sp, s->sp, nsp * sizeof(float), cudaMemcpyHostToDevice));
+-  CK(cudaMalloc(&D.sp_off, s->nmat * sizeof(int)));
+-  CK(cudaMemcpy(D.sp_off, s->sp_off, s->nmat * sizeof(int), cudaMemcpyHostToDevice));
+-  CK(cudaMalloc(&D.sp_n, s->nmat * sizeof(int)));
+-  CK(cudaMemcpy(D.sp_n, s->sp_n, s->nmat * sizeof(int), cudaMemcpyHostToDevice));
+-  CK(cudaMalloc(&D.N_el, s->nmat * sizeof(float)));
+-  CK(cudaMemcpy(D.N_el, s->N_el, s->nmat * sizeof(float), cudaMemcpyHostToDevice));
+-  CK(cudaMalloc(&D.X0, s->nmat * sizeof(float)));
+-  CK(cudaMemcpy(D.X0, s->X0, s->nmat * sizeof(float), cudaMemcpyHostToDevice));
+-  CK(cudaMalloc(&D.ct_mat, s->nvox * sizeof(unsigned short)));
+-  CK(cudaMemcpy(D.ct_mat, s->ct_mat, s->nvox * sizeof(unsigned short), cudaMemcpyHostToDevice));
+-  CK(cudaMalloc(&D.ct_rho, s->nvox * sizeof(float)));
+-  CK(cudaMemcpy(D.ct_rho, s->ct_rho, s->nvox * sizeof(float), cudaMemcpyHostToDevice));
++  if (s->nuclear && s->max_rows > MAX_ROWS) {
++    fprintf(stderr, "GPU prototype: a secondary table has %d rows (at most %d)\n", s->max_rows, MAX_ROWS);
++    return 1;
++  }
++  int nm = s->nmat;
++  long nsp = s->sp_off[nm - 1] + s->sp_n[nm - 1];
++  Tab t = {};
++  t.sp = up(s->sp, nsp); t.sp_off = up(s->sp_off, nm); t.sp_n = up(s->sp_n, nm);
++  t.N_el = up(s->N_el, nm); t.X0 = up(s->X0, nm);
++  t.ct_mat = up(s->ct_mat, s->nvox); t.ct_rho = up(s->ct_rho, s->nvox);
++  if (s->nuclear) {
++    long ncomp = 0, nel = 0, nin = 0, nrows = 0;
++    for (int i = 0; i < nm; i++) {
++      ncomp = std::max(ncomp, (long)(s->comp_off[i] + s->comp_n[i]));
++      nel = std::max(nel, (long)(s->el_off[i] + s->el_n[i]));
++      nin = std::max(nin, (long)(s->in_off[i] + s->in_n[i]));
++    }
++    for (long k = 0; k < 3 * nin; k++) nrows = std::max(nrows, (long)(s->in_soff[k] + s->in_sn[k]));
++    t.mat_type = up(s->mat_type, nm); t.mat_A = up(s->mat_A, nm);
++    t.comp_off = up(s->comp_off, nm); t.comp_n = up(s->comp_n, nm);
++    t.comp_label = up(s->comp_label, ncomp); t.comp_frac = up(s->comp_frac, ncomp);
++    t.interp_xs = up(s->interp_xs, (long)nm * NXS);
++    t.el_off = up(s->el_off, nm); t.el_n = up(s->el_n, nm);
++    t.el_E = up(s->el_E, nel); t.el_xs = up(s->el_xs, nel); t.el_diff = up(s->el_diff, 36 * nel);
++    t.in_off = up(s->in_off, nm); t.in_n = up(s->in_n, nm);
++    t.in_E = up(s->in_E, nin); t.in_xs = up(s->in_xs, nin); t.in_rec = up(s->in_rec, nin);
++    t.in_mult = up(s->in_mult, 3 * nin); t.in_sn = up(s->in_sn, 3 * nin); t.in_soff = up(s->in_soff, 3 * nin);
++    t.sec_E = up(s->sec_E, nrows); t.sec_D = up(s->sec_D, nrows); t.sec_DD = up(s->sec_DD, 13 * nrows);
++  }
++  for (void *a : D.allocs) if (!a) { fprintf(stderr, "GPU prototype: out of device memory\n"); return 1; }
++  CK(cudaMemcpyToSymbol(G, &t, sizeof(t)));
+   CK(cudaMalloc(&D.dose_f, s->nvox * sizeof(float)));
+   CK(cudaMemset(D.dose_f, 0, s->nvox * sizeof(float)));
+   CK(cudaMalloc(&D.dose_d, s->nvox * sizeof(double)));
+   CK(cudaMemset(D.dose_d, 0, s->nvox * sizeof(double)));
+-  CK(cudaMalloc(&D.steps, sizeof(unsigned long long)));
+-  CK(cudaMemset(D.steps, 0, sizeof(unsigned long long)));
+-  D.prim = nullptr; D.capacity = 0; D.seed = s->seed; D.batch = 0; D.kernel_s = 0.0;
++  CK(cudaMalloc(&D.counters, 4 * sizeof(unsigned long long)));
++  CK(cudaMemset(D.counters, 0, 4 * sizeof(unsigned long long)));
++  D.prim = nullptr; D.capacity = 0; D.seed = s->seed; D.batch = 0; D.kernel_s = 0.0; D.nvox = s->nvox;
+   return 0;
+ }
+ 
+@@ -289,12 +561,9 @@ extern "C" int gpu_batch(long n, const float *x, const float *y, const float *z,
+   CK(cudaDeviceGetAttribute(&nsm, cudaDevAttrMultiProcessorCount, 0));
+   int threads = 128, blocks = nsm * 8;
+   auto t0 = std::chrono::steady_clock::now();
+-  transport<<<blocks, threads>>>(n, D.prim, D.capacity, D.sp, D.sp_off, D.sp_n, D.N_el, D.X0, D.ct_mat, D.ct_rho,
+-                                 D.dose_f, D.seed, D.batch, D.steps);
++  transport<<<blocks, threads>>>(n, D.prim, D.capacity, D.dose_f, D.seed, D.batch, D.counters);
+   CK(cudaGetLastError());
+-  int nvox = 0;
+-  CK(cudaMemcpyFromSymbol(&nvox, P, sizeof(int), offsetof(Params, nvox)));
+-  fold<<<nsm * 4, 256>>>(nvox, D.dose_f, D.dose_d);
++  fold<<<nsm * 4, 256>>>(D.nvox, D.dose_f, D.dose_d);
+   CK(cudaGetLastError());
+   CK(cudaDeviceSynchronize());
+   D.kernel_s += std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+@@ -302,18 +571,20 @@ extern "C" int gpu_batch(long n, const float *x, const float *y, const float *z,
+   return 0;
+ }
+ 
+-extern "C" int gpu_finish(float *dose_out, double *seconds_kernel, long long *steps) {
+-  int nvox = 0;
+-  CK(cudaMemcpyFromSymbol(&nvox, P, sizeof(int), offsetof(Params, nvox)));
+-  std::vector<double> h(nvox);
+-  CK(cudaMemcpy(h.data(), D.dose_d, nvox * sizeof(double), cudaMemcpyDeviceToHost));
+-  for (int i = 0; i < nvox; i++) dose_out[i] += (float)h[i];
+-  unsigned long long st = 0;
+-  CK(cudaMemcpy(&st, D.steps, sizeof(st), cudaMemcpyDeviceToHost));
++extern "C" int gpu_finish(float *dose_out, double *seconds_kernel, long long *steps, long long *secondaries,
++                          long long *stack_overflows, long long *angle_clamps) {
++  std::vector<double> h(D.nvox);
++  CK(cudaMemcpy(h.data(), D.dose_d, D.nvox * sizeof(double), cudaMemcpyDeviceToHost));
++  for (int i = 0; i < D.nvox; i++) dose_out[i] += (float)h[i];
++  unsigned long long c[4] = {0, 0, 0, 0};
++  CK(cudaMemcpy(c, D.counters, sizeof(c), cudaMemcpyDeviceToHost));
+   if (seconds_kernel) *seconds_kernel = D.kernel_s;
+-  if (steps) *steps = (long long)st;
+-  cudaFree(D.sp); cudaFree(D.sp_off); cudaFree(D.sp_n); cudaFree(D.N_el); cudaFree(D.X0);
+-  cudaFree(D.ct_mat); cudaFree(D.ct_rho); cudaFree(D.dose_f); cudaFree(D.dose_d); cudaFree(D.steps);
++  if (steps) *steps = (long long)c[0];
++  if (secondaries) *secondaries = (long long)c[1];
++  if (stack_overflows) *stack_overflows = (long long)c[2];
++  if (angle_clamps) *angle_clamps = (long long)c[3];
++  for (void *a : D.allocs) cudaFree(a);
++  cudaFree(D.dose_f); cudaFree(D.dose_d); cudaFree(D.counters);
+   if (D.prim) cudaFree(D.prim);
+   D = Dev();
+   return 0;
+-- 
+2.43.0
+
