@@ -1,13 +1,14 @@
-# MCsquare on a GPU — prototype (2026-11-21)
+# MCsquare on a GPU (2026-11-21)
 
-A CUDA transport path inside radiarch's build of MCsquare, to decide whether a full GPU port is worth doing (the
-project lead's go, 2026-11-21). **Not used by radiarch**: the engine radiarch runs is `engines/mcsquare-build`'s
-(ADR 0023). This directory builds a separate binary, `MCsquare_gpu`, that runs MCsquare's CPU path by default and the
-GPU path with `MCSQUARE_GPU=1`, so both are compared on identical inputs.
+A CUDA transport inside radiarch's build of MCsquare. Started as a prototype (the project lead's go, 2026-11-21);
+since ADR 0024 radiarch runs it with `RADIARCH_MCSQUARE_DEVICE=gpu` (or `auto` on a host with a GPU); the default
+stays the CPU build of `engines/mcsquare-build` (ADR 0023). This directory builds `engines/mcsquare/MCsquare_gpu`,
+which runs MCsquare's CPU path by default and the GPU path with `MCSQUARE_GPU=1` (the driver sets it), so both can
+be compared on identical inputs.
 
 ## What it does
 
-`patches/0005`–`0007` (on top of `engines/mcsquare-build/patches/0001`–`0004`) hand `Simulation_loop` and
+`patches/0006`–`0008` (on top of `engines/mcsquare-build/patches/0001`–`0005`) hand `Simulation_loop` and
 `Run_simulation_beamlet` to the GPU when `MCSQUARE_GPU=1`:
 
 - MCsquare's own code reads the configuration, CT, materials, beam data library and plan, samples the primaries
@@ -18,20 +19,24 @@ GPU path with `MCSQUARE_GPU=1`, so both are compared on identical inputs.
   stopping powers per material, restricted energy loss with MCsquare's second-order correction, Gaussian
   straggling, Fippel multiple scattering, hard ionization with the delta electron absorbed locally, the energy cut,
   online dose-to-water. Philox random numbers; dose in float atomics per batch, folded into double after each batch.
-- Nuclear interactions (`0006`): MCsquare's proton-proton and ICRU elastic scattering, inelastic events with
+- Nuclear interactions (`0007`): MCsquare's proton-proton and ICRU elastic scattering, inelastic events with
   secondary protons, deuterons and alphas (a per-thread stack of 24, transported before the next primary; a full
-  stack is counted), recoils deposited locally, mixtures by component. The secondaries' emission angles use
-  upstream issue #42's fix (ADR 0023): the original reads past its angle table, which no GPU can reproduce.
-  `MCSQUARE_FIX42=1` gives the CPU path the same fix for comparisons; without it the CPU path is unchanged.
-- Influence matrices (`0007`, beamlet mode, what radiarch's optimizer reads): spots are simulated in groups that fit
+  stack is counted), recoils deposited locally, mixtures by component. The secondaries' emission angles are
+  sampled as the CPU path samples them with `engines/mcsquare-build`'s patch 0005 (upstream issue #42's fix, ADR
+  0024); the original read past its angle table, which no GPU can reproduce. (Until ADR 0024 the CPU path had the
+  fix only with `MCSQUARE_FIX42=1`; the tables below were measured that way, with the same physics.)
+- Influence matrices (`0008`, beamlet mode, what radiarch's optimizer reads): spots are simulated in groups that fit
   a dose-memory budget (`MCSQUARE_GPU_DOSE_BYTES`, default 4 GB), each spot of a group with its own dose grid on the
   device; MCsquare's sampler gives each spot its `Num_Primaries` from the single-spot plan, in parallel over spots.
   `PostProcess_Scoring`'s scaling, the threshold and the compaction run on the device; the host writes the blocks of
   MCsquare's sparse format straight into the merged `Outputs/Sparse_Dose` files (no per-spot temporary files), which
   radiarch's reader (`read_sparse_beamlets`) reads unchanged. Dose-to-water post-processing or segmentation fall back
   to post-processing on the host.
-- **Not supported** (the run stops with a message): MCsquare's own robustness mode (radiarch runs each scenario as a
-  separate run, which works), 4D, LET, prompt gammas, energy scoring, an independent scoring grid. Runs are not bitwise reproducible (the threads append their primaries in
+- Robustness scenarios (MCsquare's own mode, which radiarch's robust planning uses): MCsquare applies each
+  scenario's setup errors while sampling and its range error to the densities, then calls the two functions above,
+  so the GPU runs every scenario (one CUDA start-up per scenario).
+- **Not supported** (the run stops with a message): 4D, LET, prompt gammas, energy scoring, an independent scoring
+  grid — none of which radiarch asks for. Runs are not bitwise reproducible (the threads append their primaries in
   the order they finish; float atomics).
 
 ## Results (cci-aries: AMD EPYC 7413, 48 cores; one NVIDIA A100-PCIE-40GB)
@@ -85,21 +90,27 @@ The GPU's runs use 48 CPU threads for MCsquare's own sampling; their transport t
 - For scale: FRED quotes about 10–14 M primaries/s on one GPU in water *with* nuclear interactions; this prototype
   has none, which FRED's paper and the profile of MCsquare's CPU path suggest cost tens of percent.
 
-## What a full engine needs (the next decisions)
+## Status and what is left
 
-1. ~~Nuclear interactions~~ — done (`0006`), with issue #42's fix; nuclear physics costs 40–60 % of the
-   transport rate (8–12 M protons/s). Adopting the #42 fix in the production build stays the project lead's call.
-2. ~~Influence matrices~~ — done (`0007`), dense grids per spot group with compaction on the device (simpler than a
+1. ~~Nuclear interactions~~ — done (`0007`); nuclear physics costs 40–60 % of the transport rate (8–12 M
+   protons/s). Issue #42's fix is in the production CPU build too (ADR 0024).
+2. ~~Influence matrices~~ — done (`0008`), dense grids per spot group with compaction on the device (simpler than a
    hash table, and fast on these grids; a patient grid of 50 M voxels fits about 20 spots per group in 4 GB, where a
    hash table would scale better). 4.6 times the 48-core CPU run's speed on the field above.
-3. **Robust scenarios** (radiarch's separate runs per scenario work now; one CUDA start-up per run), LET, deterministic runs (ordered primaries, deterministic scoring), multi-GPU by spot
-   ranges, and a radiarch driver setting (`mcsquare_build`-style) with validation against the CPU engine.
+3. ~~Robustness scenarios and a radiarch setting~~ — done (ADR 0024): `mcsquare_device`, the image's build stage,
+   the proton validation cases on the GPU.
+4. Open: deterministic runs (ordered primaries, deterministic scoring), one CUDA start-up per worker instead of per
+   run, multi-GPU by spot ranges, a high-statistics check of `--use_fast_math` before it becomes a default, LET.
 
 ## Build and run
 
-    engines/mcsquare-gpu/build.sh                     # -> engines/mcsquare-gpu/MCsquare_gpu (not committed)
+    engines/mcsquare-gpu/build-in-docker.sh           # -> engines/mcsquare/MCsquare_gpu (not committed), as the image
+    engines/mcsquare-gpu/build.sh                     # the same with the host's CUDA (glibc of the host)
     python engines/mcsquare-gpu/bench/prepare_inputs.py INPUTS    # in radiarch's environment
     BIN=... INPUTS=... RUNS=... MATERIALS=engines/mcsquare/Materials engines/mcsquare-gpu/bench/run_case.sh hetero gpu g1 10000000 11
     python engines/mcsquare-gpu/bench/compare.py RUNS/hetero-c1 RUNS/hetero-g1 RUNS/hetero-c2
 
-Needs CUDA (nvcc, built for sm_80), plus everything `engines/mcsquare-build/build.sh` needs.
+`build-in-docker.sh` needs docker only (ubuntu:22.04 with CUDA 12.6's compiler from NVIDIA's apt repository,
+`install-cuda.sh`); `build.sh` needs CUDA (nvcc), plus everything `engines/mcsquare-build/build.sh` needs. The code is
+built for compute capability 8.0 (SASS) with PTX that newer GPUs compile on first use; the binary links the CUDA
+runtime statically and needs the NVIDIA driver (R525 or newer) at run time.

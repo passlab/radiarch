@@ -2321,3 +2321,28 @@ sparse format written straight into the merged files radiarch reads. On the bone
 0.276 %, rms 1.165 % against 1.162 %); 2.2 s against 10.2 s for the 48-core CPU run. Next (the project lead's
 decisions): the #42 fix in the production build (the GPU engine has it, so its doses follow it), and wiring the GPU
 engine into radiarch as a setting (build with CUDA, a driver path, validation of the records).
+
+## Issue #42 fixed in radiarch's MCsquare, and the GPU engine as a setting (2026-11-21)
+
+On the project lead's word ("Yes, I would like both recommendations"). ADR 0024.
+
+Issue #42: patch 0005 in `engines/mcsquare-build` samples a nuclear secondary's emission angle at the energy it was
+drawn at, on the table's grid (MeV), instead of at its rescaled energy in eV, and keeps the mixtures' start-up
+interpolation inside each component's table. The build of record is `6113e096…` (docker and native builds agree);
+engine 0.5.0. A check against Geant4 (OpenGATE, `QGSP_BIC_EMZ`; `engines/mcsquare-build/halo/`) on the Bragg-peak
+case's phantom with an idealised beam, nuclear physics on minus off so that the scattering models cancel: the
+nuclear halo's lateral variance at half the range is within 2–6 % of Geant4's with the fix, 21–25 % below it
+without (OpenTPS's build and radiarch's earlier one alike). `proton_range_water`, `proton_bragg_peak` (also with
+five seeds: the deep lateral sigma grows 2–4 %, fall-offs and spot sizes unchanged) and `mco_robust_proton` pass.
+
+The GPU engine: `MCsquare_gpu` from the same source with patches 0006–0008 (renumbered; the CPU path's
+`MCSQUARE_FIX42` switch is gone, the fix is built in), built in the image in an `ubuntu:22.04` stage with CUDA 12.6
+from NVIDIA's apt repository (the full CUDA images did not fit aries' docker disk and would strain CI's), linked so
+that it needs only glibc and the driver. Setting `mcsquare_device` (cpu/gpu/auto, engine parameter `device`), with
+`auto` falling back to the CPU build when the GPU does not start; GPU results get their own cache keys;
+`docker-compose.gpu.yml` gives the worker a GPU. MCsquare's robustness mode needed nothing: it applies the
+scenario's errors in the sampling and the densities and calls the functions the GPU replaces. On one A100 the three
+proton validation cases pass (the robust case's gap 0.064 against 0.067 on the CPU), and the new GPU tests compare
+dose, influence matrix and scenarios with the CPU build within 1–2 %. Speed against the stock binary and radiarch's
+build at 1–96 threads is in `engines/mcsquare-gpu/README.md` (one A100: 4–5 times radiarch's build on 48 cores per
+Monte Carlo run).

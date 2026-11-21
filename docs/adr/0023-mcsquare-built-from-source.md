@@ -1,8 +1,8 @@
 # ADR 0023 — MCsquare built from source, with radiarch's patches
 
-Date: 2026-11-20. Status: built on the project lead's word ("Yes please fix", 2026-11-20); the engine as
-radiarch's default waits for the merge into `master`. Replaces the single-thread workaround of 2026-11-13
-(ADR 0006, last bullet).
+Date: 2026-11-20. Status: built on the project lead's word ("Yes please fix", 2026-11-20); merged into `master`
+(542aba1). Replaces the single-thread workaround of 2026-11-13 (ADR 0006, last bullet). Upstream issue #42, left
+open here, is fixed by ADR 0024 (patch 0005, a new build of record).
 
 ## Context
 

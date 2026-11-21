@@ -28,6 +28,9 @@ GOLDEN = Path(__file__).resolve().parent / "golden" / "mcsquare_inputs_simplefan
 
 needs_assets = pytest.mark.skipif(not ASSETS.root.is_dir(), reason="MCsquare assets not present")
 needs_binary = pytest.mark.skipif(not ASSETS.availability()[0], reason=ASSETS.availability()[1])
+GPU_ASSETS = D.MCsquareAssets(ASSETS.root, "radiarch", "gpu")
+needs_gpu = pytest.mark.skipif(not (ASSETS.build == "radiarch" and ASSETS.availability()[0] and GPU_ASSETS.availability()[0]),
+                               reason=f"MCsquare on a GPU: {GPU_ASSETS.availability()[1]}")
 
 
 def _plan(spots=((0.0, 0.0, 1.0),), energy=150.0, gantry=0.0, iso=(0.0, 0.0, 0.0)) -> ProtonPlan:
@@ -242,6 +245,110 @@ class TestCrashRetry:
         assert D.dropped_particles("no warning here") == 0
 
 
+class TestDevice:
+    """mcsquare_device (ADR 0024): which binary runs, with what environment, and auto's fallback to the CPU."""
+
+    GPU_SCRIPT = ("#!/bin/sh\necho \"gpu=$MCSQUARE_GPU\" > gpu.txt\n"
+                  "if [ -n \"{fail}\" ]; then echo ' ERROR: GPU initialisation failed'; exit 2; fi\necho gpu run\n")
+
+    def _driver(self, tmp_path, monkeypatch, device, gpu_present=True, gpu_fails=False):
+        drv, work = TestCrashRetry()._driver(tmp_path, crashes=0, fail=1)
+        root = drv.assets.root
+        (root / D.GPU_BINARY).write_text(self.GPU_SCRIPT.format(fail="1" if gpu_fails else ""))
+        (root / D.GPU_BINARY).chmod(0o755)
+        monkeypatch.setattr(D, "cuda_device_present", lambda: (True, "ok") if gpu_present else (False, "no GPU here"))
+        return D.MCsquareDriver(assets=D.MCsquareAssets(root, "radiarch", device)), work
+
+    def test_devices_are_checked(self, tmp_path):
+        root = tmp_path / "engine"
+        with pytest.raises(ValueError, match="unknown MCsquare device"):
+            D.MCsquareAssets(root, "radiarch", "tpu")
+        with pytest.raises(ValueError, match="needs radiarch's build"):
+            D.MCsquareAssets(root, "opentps", "gpu")
+        assert D.MCsquareAssets(root).device == "cpu"
+
+    def test_each_device_runs_its_own_program(self, tmp_path, monkeypatch):
+        cpu, work = self._driver(tmp_path, monkeypatch, "cpu")
+        root, cfg = cpu.assets.root, work / "config.txt"
+        gpu = D.MCsquareAssets(root, "radiarch", "gpu")
+        auto = D.MCsquareAssets(root, "radiarch", "auto")
+        assert cpu.assets.command(cfg) == [str(root / D.RADIARCH_BINARY), str(cfg)] and cpu.assets.environment("cpu") == {}
+        assert gpu.command(cfg) == [str(root / D.GPU_BINARY), str(cfg)] and gpu.environment("gpu") == {"MCSQUARE_GPU": "1"}
+        assert cpu.assets.program_files() == [root / D.RADIARCH_BINARY] and gpu.program_files() == [root / D.GPU_BINARY]
+        assert auto.program_files() == [root / D.RADIARCH_BINARY, root / D.GPU_BINARY]
+        assert auto.resolved_device() == "gpu" and gpu.availability() == (True, "ok")
+        assert len({cpu.assets.fingerprint(), gpu.fingerprint(), auto.fingerprint()}) == 3
+        monkeypatch.setattr(D, "cuda_device_present", lambda: (False, "no GPU here"))
+        assert auto.resolved_device() == "cpu" and auto.command(cfg)[0] == str(root / D.RADIARCH_BINARY)
+        ok, reason = gpu.availability()
+        assert not ok and "no GPU here" in reason and auto.availability() == (True, "ok")
+        (root / D.GPU_BINARY).unlink()
+        ok, reason = gpu.availability()
+        assert not ok and D.GPU_BINARY in reason
+        assert auto.program_files() == [root / D.RADIARCH_BINARY] and auto.resolved_device() == "cpu"
+
+    def test_a_gpu_run_sets_mcsquare_gpu(self, tmp_path, monkeypatch):
+        drv, work = self._driver(tmp_path, monkeypatch, "gpu")
+        run = drv.run(work)
+        assert run.device == "gpu" and (work / "gpu.txt").read_text().strip() == "gpu=1"
+        assert run.stdout_path.read_text().strip() == "gpu run" and not (work / "count").exists()
+
+    def test_auto_runs_on_the_cpu_when_the_gpu_fails_to_start(self, tmp_path, monkeypatch):
+        drv, work = self._driver(tmp_path, monkeypatch, "auto", gpu_fails=True)
+        run = drv.run(work)
+        assert run.device == "cpu" and run.attempts == 1 and run.returncode == 0
+        assert "ERROR: GPU" in (work / "mcsquare-gpu.log").read_text()
+        assert (work / "count").read_text().strip() == "1" and run.stdout_path.read_text().strip() == "attempt 1"
+
+    def test_a_gpu_that_fails_is_an_error_for_gpu(self, tmp_path, monkeypatch):
+        drv, work = self._driver(tmp_path, monkeypatch, "gpu", gpu_fails=True)
+        with pytest.raises(RuntimeError, match="ERROR: GPU initialisation failed"):
+            drv.run(work)
+        assert not (work / "count").exists()
+
+    def test_auto_without_a_gpu_runs_on_the_cpu(self, tmp_path, monkeypatch):
+        drv, work = self._driver(tmp_path, monkeypatch, "auto", gpu_present=False)
+        run = drv.run(work)
+        assert run.device == "cpu" and not (work / "gpu.txt").exists()
+
+    @pytest.mark.skipif(not (ASSETS.availability()[0] and GPU_ASSETS.gpu_binary.is_file() and not D.cuda_device_present()[0]),
+                        reason="needs MCsquare_gpu on a host without a GPU")
+    def test_auto_falls_back_with_the_real_gpu_binary_on_a_host_without_a_gpu(self, tmp_path, monkeypatch):
+        """The GPU binary's own failure on a host without a GPU is the one the driver recognises: ``auto``, told
+        that there is a GPU, still computes the dose, on the CPU."""
+        monkeypatch.setattr(D, "cuda_device_present", lambda: (True, "ok"))
+        drv = D.MCsquareDriver(assets=D.MCsquareAssets(ASSETS.root, "radiarch", "auto"), work_root=tmp_path / "runs",
+                               n_threads=1, seed=5, keep_workdir=True)
+        dose = drv.compute_dose(np.zeros((11, 30, 11), dtype=np.float32), (3.0, 3.0, 3.0), (-15.0, 1.5, -15.0),
+                                _plan(energy=100.0), nb_primaries=2000)
+        assert dose.max() > 0
+        logs = list((tmp_path / "runs").rglob("mcsquare-gpu.log"))
+        assert len(logs) == 1 and D.GPU_FAILURE.search(logs[0].read_text())
+
+    def test_cuda_visible_devices_can_hide_the_gpus(self, monkeypatch):
+        for hidden in ("", "-1", "none"):
+            monkeypatch.setenv("CUDA_VISIBLE_DEVICES", hidden)
+            ok, reason = D.cuda_device_present()
+            assert not ok and "CUDA_VISIBLE_DEVICES" in reason
+
+    @needs_assets
+    def test_the_engine_takes_the_device_from_params_and_keys_it(self, monkeypatch):
+        from radiarch.config import get_settings
+        from radiarch.services.dose_engines.mcsquare import MCsquareEngine
+        from radiarch.services.dose_engines.protocol import EngineParamError
+
+        eng = MCsquareEngine()
+        monkeypatch.setattr(get_settings(), "mcsquare_device", "cpu")
+        assert eng.driver().assets.device == "cpu" and eng.driver({"device": "GPU"}).assets.device == "gpu"
+        monkeypatch.setattr(get_settings(), "mcsquare_device", "auto")
+        assert eng.driver().assets.device == "auto"
+        digests = {d: eng.digest({"device": d}) for d in D.DEVICES}
+        assert len(set(digests.values())) == 3
+        with pytest.raises(EngineParamError, match="unknown MCsquare device"):
+            eng.driver({"device": "tpu"})
+        assert eng.health()["diagnostics"]["device"] == "auto"
+
+
 def test_the_material_database_is_linked_into_the_work_directory(tmp_path):
     """The engine gets the materials as the short relative link 'Materials' (its nuclear-data file names live in
     100-byte buffers; a long absolute path overran them)."""
@@ -389,3 +496,54 @@ class TestEngineRuns:
         assert via.shape == self.BOX and via.sum() == pytest.approx(dose.sum(), rel=0.2)
         with pytest.raises(Exception):
             eng.compute_dose(geom, bm, np.array([1.0], dtype=np.float32))
+
+
+@needs_gpu
+class TestGpuRuns:
+    """MCsquare_gpu against MCsquare_radiarch on the same inputs (ADR 0024): the doses agree within the Monte Carlo
+    noise, in each of the three ways radiarch runs the engine. Needs the GPU binary and a GPU (skipped in CI)."""
+
+    BOX = (21, 60, 21)
+    SPACING = (3.0, 3.0, 3.0)
+    ORIGIN = (-30.0, 1.5, -30.0)
+
+    def _drivers(self, tmp_path):
+        return [D.MCsquareDriver(assets=D.MCsquareAssets(ASSETS.root, "radiarch", dev), work_root=tmp_path / dev,
+                                 n_threads=4, seed=17) for dev in ("cpu", "gpu")]
+
+    @staticmethod
+    def _r80(d):
+        idd = d.sum(axis=(0, 2)); k = int(np.argmax(idd))
+        j = k + int(np.where(idd[k:] <= 0.8 * idd[k])[0][0])
+        return float(np.interp(0.8 * idd[k], [idd[j], idd[j - 1]], [j, j - 1])) * 3.0
+
+    def test_dose(self, tmp_path):
+        hu = np.zeros(self.BOX, dtype=np.float32)
+        hu[:, 15:25, :10] = 700.0                       # bone over half the field
+        plan = _plan(spots=((0.0, 0.0, 1.0), (-9.0, 0.0, 1.0), (9.0, 0.0, 1.0)), energy=150.0)
+        cpu, gpu = self._drivers(tmp_path)
+        dc, dg = (drv.compute_dose(hu, self.SPACING, self.ORIGIN, plan, nb_primaries=3e5) for drv in (cpu, gpu))
+        assert dg.shape == dc.shape and dg.dtype == np.float32
+        assert dg.sum() == pytest.approx(dc.sum(), rel=0.01)
+        assert self._r80(dg) == pytest.approx(self._r80(dc), abs=1.0)
+        hi = dc > 0.1 * dc.max()
+        assert np.sqrt(np.mean(((dg - dc)[hi] / dc.max()) ** 2)) < 0.02
+
+    def test_influence_matrix(self, tmp_path):
+        hu = np.zeros(self.BOX, dtype=np.float32)
+        plan = _plan(spots=((0.0, 0.0, 1.0), (12.0, 0.0, 1.0), (0.0, 12.0, 1.0)), energy=120.0)
+        cpu, gpu = self._drivers(tmp_path)
+        mc, mg = (drv.compute_beamlets(hu, self.SPACING, self.ORIGIN, plan, nb_primaries=3e4) for drv in (cpu, gpu))
+        assert mg.shape == mc.shape == (int(np.prod(self.BOX)), 3)
+        np.testing.assert_allclose(np.asarray(mg.sum(axis=0)).ravel(), np.asarray(mc.sum(axis=0)).ravel(), rtol=0.02)
+
+    def test_robustness_scenarios(self, tmp_path):
+        hu = np.zeros(self.BOX, dtype=np.float32)
+        plan = _plan(spots=((0.0, 0.0, 1.0),), energy=120.0)
+        native = D.robustness_config("REDUCED_SET", (3.0, 3.0, 3.0), (0.0, 0.0, 0.0), 3.0)
+        cpu, gpu = self._drivers(tmp_path)
+        rc, rg = (drv.compute_scenario_doses(hu, self.SPACING, self.ORIGIN, plan, native, nb_primaries=1e5) for drv in (cpu, gpu))
+        assert [r.name for r, _ in rg] == [r.name for r, _ in rc] and len(rg) > 1
+        for (rec, dc), (_, dg) in zip(rc, rg):
+            assert dg.sum() == pytest.approx(dc.sum(), rel=0.02), rec.name
+            assert self._r80(dg) == pytest.approx(self._r80(dc), abs=1.5), rec.name

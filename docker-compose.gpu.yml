@@ -1,0 +1,15 @@
+# The worker with an NVIDIA GPU (ADR 0024): MCsquare's transport runs on it with RADIARCH_MCSQUARE_DEVICE=gpu or auto.
+# Needs the NVIDIA driver (R525 or newer) and the NVIDIA Container Toolkit on the host.
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+# RADIARCH_GPU_DEVICE picks the GPU (its index or UUID; default 0).
+services:
+  worker:
+    environment:
+      - RADIARCH_MCSQUARE_DEVICE=${RADIARCH_MCSQUARE_DEVICE:-auto}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${RADIARCH_GPU_DEVICE:-0}"]
+              capabilities: [gpu]

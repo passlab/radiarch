@@ -9,7 +9,9 @@ writes those files, starts the engine as a subprocess and reads the results
 back. The engine is radiarch's build of upstream's source with radiarch's
 patches (``MCsquare_radiarch``, ADR 0023), or, with ``mcsquare_build=opentps``,
 the binaries OpenTPS ships, started through their launcher script (which picks
-the binary for the CPU).
+the binary for the CPU). With ``mcsquare_device=gpu`` (or ``auto`` on a host
+with a CUDA GPU) the same build's ``MCsquare_gpu`` runs instead: MCsquare's
+own input, sampling and output, the particle transport on the GPU (ADR 0024).
 
 The file formats and the coordinate conventions below are a port of OpenTPS's
 ``mcsquareIO.py`` and ``mcsquareDoseCalculator.py`` (Apache-2.0), checked
@@ -108,8 +110,17 @@ def default_build() -> str:
         return "radiarch"
 
 
+def default_device() -> str:
+    """Where the settings run MCsquare (``RADIARCH_MCSQUARE_DEVICE``; ``cpu`` by default, ADR 0024)."""
+    try:
+        from ...config import get_settings
+        return (get_settings().mcsquare_device or "cpu").lower()
+    except Exception:  # pragma: no cover — settings unavailable in odd test setups
+        return "cpu"
+
+
 def default_assets() -> "MCsquareAssets":
-    return MCsquareAssets(default_assets_dir(), default_build())
+    return MCsquareAssets(default_assets_dir(), default_build(), default_device())
 
 
 def engine_assets_dir(name: str) -> Path:
@@ -129,6 +140,22 @@ def engine_assets_dir(name: str) -> Path:
 
 BUILDS = ("radiarch", "opentps")
 RADIARCH_BINARY = "MCsquare_radiarch"
+DEVICES = ("cpu", "gpu", "auto")
+GPU_BINARY = "MCsquare_gpu"
+# The GPU binary exits with this status, after a line starting " ERROR: GPU", when it cannot use the GPU; ``auto``
+# then runs the CPU build instead.
+GPU_FAILURE = re.compile(r"^ ERROR: GPU", re.MULTILINE)
+
+
+def cuda_device_present() -> Tuple[bool, str]:
+    """Whether this host (or container) shows an NVIDIA GPU: a device node, not hidden by ``CUDA_VISIBLE_DEVICES``.
+    Cheap and without CUDA libraries; whether the GPU works shows when the engine starts (``auto`` falls back)."""
+    visible = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if visible is not None and visible.strip() in ("", "-1", "none", "NoDevFiles"):
+        return False, f"CUDA_VISIBLE_DEVICES={visible!r} hides every GPU"
+    if not any(Path("/dev").glob("nvidia[0-9]*")):
+        return False, "no NVIDIA GPU device (/dev/nvidia0, ...)"
+    return True, "ok"
 
 
 @dataclass(frozen=True)
@@ -138,14 +165,24 @@ class MCsquareAssets:
     ``build`` picks the program (ADR 0023): ``radiarch`` runs ``MCsquare_radiarch``, built from upstream's source
     with radiarch's patches (``engines/mcsquare-build``); ``opentps`` runs OpenTPS's launcher, which picks one of the
     ``MCsquare_linux*`` binaries OpenTPS ships for the CPU.
+
+    ``device`` (ADR 0024, radiarch's build only): ``cpu`` runs ``MCsquare_radiarch``; ``gpu`` runs ``MCsquare_gpu``
+    with the transport on the GPU (``engines/mcsquare-gpu``); ``auto`` runs ``MCsquare_gpu`` when it is there and
+    the host shows a GPU, else ``MCsquare_radiarch`` (and falls back to it when the GPU fails to start).
     """
 
     root: Path
     build: str = "radiarch"
+    device: str = "cpu"
 
     def __post_init__(self) -> None:
         if self.build not in BUILDS:
             raise ValueError(f"unknown MCsquare build {self.build!r}; expected one of {', '.join(BUILDS)}")
+        if self.device not in DEVICES:
+            raise ValueError(f"unknown MCsquare device {self.device!r}; expected one of {', '.join(DEVICES)}")
+        if self.device != "cpu" and self.build != "radiarch":
+            raise ValueError(f"MCsquare device {self.device!r} needs radiarch's build (the GPU binary is built from it), "
+                             f"not {self.build!r}")
 
     @property
     def launcher(self) -> Path:
@@ -156,23 +193,51 @@ class MCsquareAssets:
         return self.root / RADIARCH_BINARY
 
     @property
+    def gpu_binary(self) -> Path:
+        return self.root / GPU_BINARY
+
+    @property
     def materials_dir(self) -> Path:
         return self.root / "Materials"
+
+    def gpu_ready(self) -> Tuple[bool, str]:
+        """Whether ``MCsquare_gpu`` can be started here: the binary, and a GPU the host shows."""
+        if not (self.gpu_binary.is_file() and os.access(self.gpu_binary, os.X_OK)):
+            return False, f"no executable {GPU_BINARY} under {self.root} (engines/mcsquare-gpu/build-in-docker.sh builds it)"
+        return cuda_device_present()
+
+    def resolved_device(self) -> str:
+        """``cpu`` or ``gpu``: where a run starts on this host (``auto`` decides here)."""
+        if self.device == "auto":
+            return "gpu" if self.gpu_ready()[0] else "cpu"
+        return self.device
 
     def binaries(self) -> List[Path]:
         """OpenTPS's binaries, one per instruction set."""
         return sorted(p for p in self.root.glob("MCsquare_linux*") if p.is_file())
 
     def program_files(self) -> List[Path]:
-        """The files the build runs: radiarch's binary, or OpenTPS's launcher and binaries."""
-        if self.build == "radiarch":
+        """The files the setting runs: radiarch's binary (``cpu``), the GPU binary (``gpu``), both (``auto``, the GPU
+        binary when it is there), or OpenTPS's launcher and binaries."""
+        if self.build != "radiarch":
+            return [self.launcher, *self.binaries()]
+        if self.device == "cpu":
             return [self.radiarch_binary]
-        return [self.launcher, *self.binaries()]
+        if self.device == "gpu":
+            return [self.gpu_binary]
+        return [self.radiarch_binary] + ([self.gpu_binary] if self.gpu_binary.is_file() else [])
 
-    def command(self, config_path: Path) -> List[str]:
-        if self.build == "radiarch":
-            return [str(self.radiarch_binary), str(config_path)]
-        return ["sh", str(self.launcher), str(config_path)]
+    def command(self, config_path: Path, device: Optional[str] = None) -> List[str]:
+        """The command line for ``device`` (``cpu`` or ``gpu``; by default where the setting runs on this host)."""
+        if self.build != "radiarch":
+            return ["sh", str(self.launcher), str(config_path)]
+        device = device or self.resolved_device()
+        return [str(self.gpu_binary if device == "gpu" else self.radiarch_binary), str(config_path)]
+
+    @staticmethod
+    def environment(device: str) -> Dict[str, str]:
+        """What the engine's environment adds for ``device``: the GPU binary transports on the GPU with MCSQUARE_GPU=1."""
+        return {"MCSQUARE_GPU": "1"} if device == "gpu" else {}
 
     def bdl_path(self, name: str = DEFAULT_BDL) -> Path:
         p = Path(name)
@@ -186,7 +251,11 @@ class MCsquareAssets:
         if platform.system() != "Linux":
             return False, f"MCsquare binaries ship for Linux only (this is {platform.system()})"
         if self.build == "radiarch":
-            if not (self.radiarch_binary.is_file() and os.access(self.radiarch_binary, os.X_OK)):
+            if self.device == "gpu":
+                ok, reason = self.gpu_ready()
+                if not ok:
+                    return False, f"mcsquare_device 'gpu': {reason}"
+            elif not (self.radiarch_binary.is_file() and os.access(self.radiarch_binary, os.X_OK)):
                 return False, f"no executable {RADIARCH_BINARY} under {self.root} (engines/mcsquare-build/build.sh builds it)"
         else:
             if not self.launcher.is_file():
@@ -206,9 +275,12 @@ class MCsquareAssets:
         names of its binaries (the fingerprint OpenTPS builds had before ADR 0023)."""
         h = hashlib.sha256()
         if self.build == "radiarch":
-            h.update(f"{RADIARCH_BINARY}:".encode())
-            if self.radiarch_binary.is_file():
-                h.update(self.radiarch_binary.read_bytes())
+            if self.device != "cpu":
+                h.update(f"device:{self.device}:".encode())
+            for p in self.program_files():
+                h.update(f"{p.name}:".encode())
+                if p.is_file():
+                    h.update(p.read_bytes())
             return h.hexdigest()[:16]
         if self.launcher.is_file():
             h.update(self.launcher.read_bytes())
@@ -735,6 +807,7 @@ class MCsquareRun:
     returncode: int
     attempts: int = 1
     dropped_particles: int = 0      # particles the engine dropped for an energy that was not a finite number
+    device: str = "cpu"             # where the particles were transported (ADR 0024)
 
 
 MATERIALS_LINK = "Materials"
@@ -869,7 +942,9 @@ class MCsquareDriver:
 
         A run that crashes (:data:`CRASH_SIGNALS`) is run once more from the same inputs: the first
         attempt's log is kept as ``mcsquare-attempt1.log`` and its partial ``Outputs/`` removed. Particles the
-        engine dropped for an energy that was not a finite number are counted on the run and logged.
+        engine dropped for an energy that was not a finite number are counted on the run and logged. With
+        ``mcsquare_device=auto``, a GPU that fails to start (:data:`GPU_FAILURE`) sends the run to the CPU build,
+        with a warning; with ``gpu`` that is an error.
         """
         ok, reason = self.availability()
         if not ok:
@@ -877,16 +952,26 @@ class MCsquareDriver:
         work = Path(work).resolve()
         config_path = Path(config_path).resolve() if config_path else work / "config.txt"
         stdout_path = work / "mcsquare.log"
-        env = dict(os.environ)
-        env["MCsquare_Materials_Dir"] = materials_link(work, self.assets.materials_dir)
+        base_env = dict(os.environ)
+        base_env["MCsquare_Materials_Dir"] = materials_link(work, self.assets.materials_dir)
+        device = self.assets.resolved_device() if self.assets.build == "radiarch" else "cpu"
         attempts = 0
         while True:
             attempts += 1
+            env = {**base_env, **self.assets.environment(device)}
             with open(stdout_path, "w") as log:
                 proc = subprocess.run(
-                    self.assets.command(config_path),
+                    self.assets.command(config_path, device),
                     cwd=str(work), stdout=log, stderr=subprocess.STDOUT, env=env, check=False,
                 )
+            if (device == "gpu" and self.assets.device == "auto" and proc.returncode != 0
+                    and GPU_FAILURE.search(stdout_path.read_text(errors="replace"))):
+                stdout_path.replace(work / "mcsquare-gpu.log")
+                shutil.rmtree(work / "Outputs", ignore_errors=True)
+                logger.warning("MCsquare: the GPU failed to start in {} (mcsquare-gpu.log); running on the CPU", work)
+                device = "cpu"
+                attempts -= 1
+                continue
             sig = crash_signal(proc.returncode)
             if sig is None or attempts > RETRIES_ON_CRASH:
                 break
@@ -901,7 +986,7 @@ class MCsquareDriver:
         dropped = dropped_particles(stdout_path.read_text(errors="replace"))
         if dropped:
             logger.warning("MCsquare dropped {} particles whose energy was not a finite number in {}", dropped, work)
-        return MCsquareRun(work, config_path, stdout_path, proc.returncode, attempts, dropped)
+        return MCsquareRun(work, config_path, stdout_path, proc.returncode, attempts, dropped, device)
 
     # ----- results ----------------------------------------------------
 

@@ -1,7 +1,7 @@
-From 66477248c133e20710f27cf2be2e77aa999a2d0f Mon Sep 17 00:00:00 2001
+From 56129d80971185caa67cec96bcfcfaebe30fb618 Mon Sep 17 00:00:00 2001
 From: The Radiarch Project <radiarch@invalid>
 Date: Fri, 20 Nov 2026 21:39:27 -0500
-Subject: [PATCH 7/7] GPU transport prototype: beamlet (influence-matrix) mode
+Subject: [PATCH 8/8] GPU transport prototype: beamlet (influence-matrix) mode
 
 Run_simulation_beamlet hands over to gpu_Run_simulation_beamlet when MCSQUARE_GPU=1 (3D, sparse dose output only).
 Spots are simulated in groups that fit a dose-memory budget (MCSQUARE_GPU_DOSE_BYTES, default 4 GB), each spot of a

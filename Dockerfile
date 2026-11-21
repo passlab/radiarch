@@ -1,3 +1,6 @@
+# MCsquare on the GPU (ADR 0024) is built into the image unless RADIARCH_MCSQUARE_GPU=0.
+ARG RADIARCH_MCSQUARE_GPU=1
+
 # ---- Stage 1: Builder ----
 FROM python:3.12-slim AS builder
 
@@ -18,6 +21,20 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
 COPY engines/mcsquare-build/ /build/mcsquare-build/
 RUN RADIARCH_MCSQUARE_EXPECT_RECORD=1 /build/mcsquare-build/build.sh /out/MCsquare_radiarch
 
+# ---- Stage 1c: MCsquare on the GPU (ADR 0024) ----
+# The same source and patches with the CUDA transport, built in ubuntu:22.04 (glibc 2.35, older than the runtime's)
+# with CUDA 12.6's compiler, runtime and headers from NVIDIA's apt repository. Building needs no GPU; running needs
+# the NVIDIA driver (R525 or newer) and a GPU given to the container. The runtime picks it with
+# RADIARCH_MCSQUARE_DEVICE=gpu or auto. RADIARCH_MCSQUARE_GPU=0 builds the image without it.
+FROM ubuntu:22.04 AS mcsquare-gpu-1
+COPY engines/mcsquare-build/ /build/mcsquare-build/
+COPY engines/mcsquare-gpu/ /build/mcsquare-gpu/
+RUN /build/mcsquare-gpu/install-cuda.sh && \
+    CUDA_HOME=/usr/local/cuda-12.6 /build/mcsquare-gpu/build.sh /out/MCsquare_gpu
+FROM ubuntu:22.04 AS mcsquare-gpu-0
+RUN mkdir -p /out
+FROM mcsquare-gpu-${RADIARCH_MCSQUARE_GPU} AS mcsquare-gpu
+
 # ---- Stage 2: Runtime ----
 FROM python:3.12-slim
 
@@ -35,6 +52,7 @@ COPY --from=builder /install /usr/local
 COPY src/ ./
 COPY engines/ ./engines/
 COPY --from=mcsquare /out/MCsquare_radiarch ./engines/mcsquare/MCsquare_radiarch
+COPY --from=mcsquare-gpu /out/ ./engines/mcsquare/
 
 # Ensure the engine binaries are executable (COPY can drop the +x bit depending
 # on the build context). The Celery worker invokes MCsquare_linux* and

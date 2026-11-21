@@ -49,7 +49,7 @@ echo "==> Replacing ${DEST}/mcsquare"
 rsync -a --delete \
   --exclude '__init__.py' --exclude '__pycache__' \
   --exclude '*.dll' --exclude '*_win.exe' --exclude '*_win.bat' --exclude 'MCsquare_mac*' --exclude 'lib_mac' \
-  --exclude 'MCsquare_radiarch' --exclude 'LICENSE-oneMKL*' \
+  --exclude 'MCsquare_radiarch' --exclude 'MCsquare_gpu' --exclude 'LICENSE-oneMKL*' \
   "${EXPORT}/${SRC_PROTONS}/" "${DEST}/mcsquare/"
 cp "${EXPORT}/opentps_core/LICENSE" "${DEST}/mcsquare/LICENSE-OpenTPS"
 

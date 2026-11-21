@@ -18,8 +18,9 @@ Design notes
   moves every isocenter; a density or range scale rewrites the HU→density
   table the engine reads. Robustness through MCsquare's own scenario mode
   arrives with R3.
-* **Determinism.** With ``nb_threads=1`` and a non-zero ``seed`` a run is
-  reproducible bit for bit; the defaults (all cores, clock seed) are not.
+* **Determinism.** With ``nb_threads=1`` and a non-zero ``seed`` a run on the
+  CPU is reproducible bit for bit; the defaults (all cores, clock seed) are not,
+  and neither is a run on the GPU (``mcsquare_device``, ADR 0024).
 """
 
 from __future__ import annotations
@@ -52,7 +53,7 @@ class MCsquareEngine:
     """Proton dose engine backed by radiarch's MCsquare driver."""
 
     name: str = "mcsquare"
-    version: str = "0.4.0"  # ADR 0023: radiarch's build of MCsquare (0.3.0, R14: own driver, (z, y, x) frames)
+    version: str = "0.5.0"  # ADR 0024: issue #42's fix, the GPU device (0.4.0, ADR 0023: radiarch's build; 0.3.0, R14)
     modalities: List[str] = field(default_factory=lambda: ["PROTON_PBS"])
 
     # ----- driver and settings -----------------------------------------
@@ -66,7 +67,11 @@ class MCsquareEngine:
         params = params or {}
         s = self._settings()
         build = str(params.get("mcsquare_build", s.mcsquare_build) or "radiarch")
-        assets = MCsquareAssets(Path(params["mcsquare_dir"]) if params.get("mcsquare_dir") else default_assets_dir(), build)
+        device = str(params.get("device", getattr(s, "mcsquare_device", "cpu")) or "cpu").lower()
+        try:
+            assets = MCsquareAssets(Path(params["mcsquare_dir"]) if params.get("mcsquare_dir") else default_assets_dir(), build, device)
+        except ValueError as exc:
+            raise EngineParamError(str(exc)) from exc
         return MCsquareDriver(
             assets=assets,
             work_root=Path(s.artifact_dir) / "mcsquare",
@@ -78,14 +83,19 @@ class MCsquareEngine:
         )
 
     def digest(self, params: Optional[dict] = None) -> str:
-        """The build a run reads (R12): the program (radiarch's binary, or OpenTPS's launcher and binaries), the
-        material database, and the run's beam data library and scanner calibration."""
+        """The build a run reads (R12): the program (radiarch's binary, the GPU binary, or OpenTPS's launcher and
+        binaries), the material database, and the run's beam data library and scanner calibration. A device other
+        than ``cpu`` gives keys of their own (they follow the setting, not the host, as the optimizer's do)."""
+        import hashlib
+
         from .digest import files_digest, tree_files
 
         drv = self.driver(params)
         a = drv.assets
-        files = [*a.program_files(), *tree_files(a.materials_dir), a.bdl_path(drv.bdl_name), *tree_files(a.scanner_dir(drv.scanner))]
-        return files_digest(files, a.root)
+        program = [p for p in a.program_files() if p.is_file()]
+        files = [*program, *tree_files(a.materials_dir), a.bdl_path(drv.bdl_name), *tree_files(a.scanner_dir(drv.scanner))]
+        d = files_digest(files, a.root)
+        return d if a.device == "cpu" else hashlib.sha256(f"{d}:mcsquare-{a.device}".encode()).hexdigest()
 
     # ----- diagnostics --------------------------------------------------
 
@@ -95,6 +105,8 @@ class MCsquareEngine:
         diag: Dict[str, Any] = {
             "assets_dir": str(drv.assets.root),
             "build": drv.assets.build,
+            "device": drv.assets.device,
+            "runs_on": drv.assets.resolved_device() if drv.assets.build == "radiarch" else "cpu",
             "program": [str(p) for p in drv.assets.program_files()],
             "binaries": [b.name for b in drv.assets.binaries()],
             "launcher": str(drv.assets.launcher),

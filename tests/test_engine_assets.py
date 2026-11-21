@@ -50,14 +50,29 @@ def test_mcsquare_radiarch_build():
         assert (build / script).is_file() and os.access(build / script, os.X_OK)
     assert len([l for l in (build / "BUILD.txt").read_text().splitlines() if l.startswith("sha256 ")]) == 1
     patches = sorted(p.name for p in (build / "patches").glob("*.patch"))
-    assert [p[:4] for p in patches] == ["0001", "0002", "0003", "0004"], patches
+    assert [p[:4] for p in patches] == ["0001", "0002", "0003", "0004", "0005"], patches
     assert (build / "BUILD.txt").is_file()
     assert "Apache 2.0" in (build / "LICENSE-MCsquare").read_text()
     assert (root / "LICENSE-oneMKL.txt").read_text().startswith("Intel Simplified Software License")
     assert (root / "LICENSE-oneMKL-third-party-programs.txt").is_file()
     fetch = (REPO / "scripts" / "fetch-engines.sh").read_text()
-    for kept in ("MCsquare_radiarch", "LICENSE-oneMKL*"):
+    for kept in ("MCsquare_radiarch", "MCsquare_gpu", "LICENSE-oneMKL*"):
         assert f"--exclude '{kept}'" in fetch, f"fetch-engines.sh would delete {kept}"
+
+
+def test_mcsquare_gpu_build():
+    """The GPU binary (ADR 0024): built, not committed, from mcsquare-build's patches and its own (0006-0008), in
+    ubuntu:22.04 with CUDA 12.6 from NVIDIA's apt repository. When it is there it is an ELF."""
+    gpu = ENGINES / "mcsquare" / "MCsquare_gpu"
+    if gpu.exists():
+        assert os.access(gpu, os.X_OK) and gpu.read_bytes()[:4] == b"\x7fELF"
+    assert "engines/mcsquare/MCsquare_gpu" in (REPO / ".gitignore").read_text()
+    build = ENGINES / "mcsquare-gpu"
+    for script in ("build.sh", "build-in-docker.sh", "install-cuda.sh"):
+        assert (build / script).is_file() and os.access(build / script, os.X_OK)
+    patches = sorted(p.name for p in (build / "patches").glob("*.patch"))
+    assert [p[:4] for p in patches] == ["0006", "0007", "0008"], patches
+    assert "mcsquare-build" in (build / "build.sh").read_text()
 
 
 def test_ccc_layout():

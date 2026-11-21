@@ -94,6 +94,15 @@ class Settings(BaseSettings):
             "patches, ADR 0023) or 'opentps' (the launcher and the binaries OpenTPS ships). Per-run params override."
         ),
     )
+    mcsquare_device: str = Field(
+        default="cpu",
+        description=(
+            "Where MCsquare transports particles (ADR 0024; radiarch's build only): 'cpu' (MCsquare_radiarch), 'gpu' "
+            "(MCsquare_gpu, the transport on an NVIDIA GPU; fails without the binary or a GPU) or 'auto' (the GPU when "
+            "both are there, else the CPU). GPU runs agree with the CPU's within Monte Carlo noise, are not "
+            "reproducible bit for bit, and get cache keys of their own. Per-run params override ('device')."
+        ),
+    )
     mcsquare_n_threads: int = Field(default=0, ge=0, description="Engine threads per run; 0 = all cores.")
     mcsquare_seed: int = Field(default=0, ge=0, description="RNG seed; 0 = from the clock (deterministic runs need a seed and one thread).")
     mcsquare_scanner: str = Field(default="UCL_Toshiba", description="Scanner calibration under Scanners/ (or an absolute directory).")

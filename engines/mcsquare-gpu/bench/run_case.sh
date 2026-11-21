@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # run_case.sh CASE MODE(cpu|gpu) TAG [PRIMARIES] [SEED]: one run of the prototype on INPUTS/CASE (prepare_inputs.py)
-#   NUCLEAR=1 switches nuclear interactions on; MCSQUARE_FIX42=1 gives the CPU path issue #42's fix (as the GPU's)
+#   NUCLEAR=1 switches nuclear interactions on (both paths have issue #42's fix since mcsquare-build's patch 0005)
 #   BIN (the prototype), INPUTS, RUNS and MATERIALS (engines/mcsquare/Materials) from the environment.
 set -u
 C=$1; MODE=$2; TAG=$3

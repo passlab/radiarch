@@ -1,14 +1,16 @@
 engines/mcsquare/MCsquare_radiarch — the build of record (ADR 0023); the binary is built, not committed
 
-sha256       6e896145d7b2d45a92c48ad0e0ae6f886d5a9ffc1714b6a2f6cdc0449efb0fdf
-built        2026-11-20 with build.sh on cci-aries, and the same bit for bit with build-in-docker.sh (ubuntu:24.04)
+sha256       6113e096de491e05c72f99fb48d0f906df189d1cfe2075df54cc17b62ee5382f
+built        2026-11-21 with build-in-docker.sh (ubuntu:24.04), and the same bit for bit with build.sh on cci-aries
 toolchain    Ubuntu 24.04: gcc 13.3.0-6ubuntu2~24.04.1, libc6-dev 2.39-0ubuntu8.12, binutils 2.42-4ubuntu2.10
-validated    the proton validation cases and 300 crash replays ran on this binary (ADR 0023)
+validated    the proton validation cases ran on this binary (ADR 0024); the crash replays on its predecessor
+             6e896145..., without patch 0005 (ADR 0023)
 upstream     https://gitlab.com/openmcsquare/MCsquare, branch gcc, 3ed27f5773ccedd1352245018e8d48898a4b0f23
 patches      0001 Build with oneMKL: USE_MKL_LIB from the compiler line; Init_RND initialises the caller's stream
              0002 Transport_to_CT: a particle whose line never enters the CT stays outside
              0003 Drop a particle whose energy or energy loss is not a finite number, and count it
              0004 Beamlet outputs: append the beamlet's folder to the path instead of printing the path into itself
+             0005 Nuclear secondaries: sample the emission angle at the secondary's table energy (upstream issue #42)
 oneMKL       mkl-static 2024.2.2 and mkl-include 2024.2.2 (PyPI), sequential, LP64; VSL MCG59
 flags        -std=gnu99 -D_GNU_SOURCE -DUSE_MKL_LIB=1 -fopenmp -w -O3 -march=x86-64-v3 -ffast-math
              -fno-finite-math-only -flto=auto -static -s

@@ -173,6 +173,13 @@ def engine_identity(engine: str) -> Dict[str, Any]:
             out["launcher"] = str(drv.assets.launcher)
         out["binary"] = str(binary) if binary else "n/a"
         out["binary_sha256"] = _sha256(binary) if binary and binary.is_file() else "missing"
+        if drv.assets.build == "radiarch":
+            out["mcsquare_device"] = drv.assets.device
+            out["runs_on"] = drv.assets.resolved_device()
+            if drv.assets.device != "cpu":
+                gpu = drv.assets.gpu_binary
+                out["gpu_binary"] = str(gpu)
+                out["gpu_binary_sha256"] = _sha256(gpu) if gpu.is_file() else "missing"
         try:
             out["bdl_path"] = str(drv.assets.bdl_path(drv.bdl_name))
             out["bdl_sha256"] = _sha256(Path(out["bdl_path"])) if Path(out["bdl_path"]).is_file() else "missing"
@@ -180,7 +187,10 @@ def engine_identity(engine: str) -> Dict[str, Any]:
         except Exception as exc:  # pragma: no cover
             out["bdl_path"] = f"unavailable ({exc})"
         out["build"] = ("MCsquare_radiarch: upstream's gcc branch (3ed27f5) with radiarch's patches, gcc and static oneMKL "
-                        "(engines/mcsquare-build, ADR 0023); driver: radiarch" if drv.assets.build == "radiarch" else
+                        "(engines/mcsquare-build, ADR 0023)"
+                        + ("; transport on the GPU where it runs on it: MCsquare_gpu, the same source with the CUDA "
+                           "transport (engines/mcsquare-gpu, ADR 0024)" if drv.assets.device != "cpu" else "")
+                        + "; driver: radiarch" if drv.assets.build == "radiarch" else
                         "MCsquare binaries as shipped with OpenTPS 3.0.1 (engines/mcsquare; LICENSE-OpenTPS); driver: radiarch")
     elif engine == "pb":
         from ..services.dose_engines import pb as pbm

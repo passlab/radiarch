@@ -53,6 +53,7 @@ validation/reports/
 # The viewer packages: a checkout of passlab/radiarch-ohif at viewer.ref (CI clones it here)
 /viewer/
 
-# MCsquare, radiarch's build (ADR 0023): built from engines/mcsquare-build, not committed
+# MCsquare, radiarch's builds (ADR 0023, 0024): built from engines/mcsquare-build and engines/mcsquare-gpu, not committed
 engines/mcsquare/MCsquare_radiarch
+engines/mcsquare/MCsquare_gpu
 engines/mcsquare-gpu/MCsquare_gpu

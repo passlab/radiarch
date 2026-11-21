@@ -1,8 +1,8 @@
-From 400ae07fa9ea6f4fe3e15a174fe5682bfe826911 Mon Sep 17 00:00:00 2001
+From d6044ab5afc779473abc2d1a1be4c6f60f13dfb2 Mon Sep 17 00:00:00 2001
 From: The Radiarch Project <radiarch@invalid>
 Date: Fri, 20 Nov 2026 21:15:53 -0500
-Subject: [PATCH 5/5] GPU transport prototype: protons, electromagnetic physics,
- full dose (MCSQUARE_GPU=1)
+Subject: [PATCH 6/8] GPU transport prototype: protons, electromagnetic
+ physics, full dose (MCSQUARE_GPU=1)
 
 Simulation_loop hands over to gpu_Simulation_loop when MCSQUARE_GPU=1. MCsquare's own Generate_PBS_particle samples
 the primaries on the CPU in batches; gpu_transport.cu transports them on a CUDA device, one history per thread

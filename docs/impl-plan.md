@@ -80,16 +80,19 @@ Items run in dependency order. Block one (1–11) is the "commercial-shaped" min
   radiarch's own build of MCsquare: upstream's `gcc` branch, four patches, gcc and static oneMKL
   (`engines/mcsquare-build/`, `MCsquare_radiarch`, setting `mcsquare_build`; ADR 0023). `mco_robust_proton` on
   8 threads again
-- [ ] Upstream's out-of-bounds reads in the nuclear tables and issue #42 (secondary angles sampled with eV against
-  MeV brackets): the overrun makes the peak-to-entrance ratio and the deep lateral halo depend on the binary (up
-  to 0.8 % and 1.7 % between OpenTPS's and radiarch's builds, ADR 0023); fixing them changes the physics and needs
-  a reference **(open, the project lead's decision)**
+- [x] (2026-11-21) Upstream issue #42 (secondary angles sampled with eV against MeV brackets) fixed in radiarch's
+  build (patch 0005, with the mixtures' start-up interpolation kept inside its tables; ADR 0024): the nuclear halo
+  now agrees with Geant4's (OpenTPS's build and the previous one gave a fifth to a quarter less); the proton validation
+  cases pass; engine 0.5.0
 - [ ] radiarch's build takes about 1.25 times as long as OpenTPS's Intel build; Intel's `icx` might close it
   **(open, not tried)**
-- [x] (2026-11-21) GPU transport prototype (`engines/mcsquare-gpu`, patch 0005): protons, electromagnetic physics,
-  full dose; dose within the CPU engine's noise; transport 16–19 times faster on one A100 than the 48-core CPU run
-- [ ] A full GPU engine: nuclear interactions (after issue #42), influence matrices on the device, robust scenarios,
-  deterministic runs, a radiarch setting and validation **(open, the project lead's decision)**
+- [x] (2026-11-21) GPU transport prototype (`engines/mcsquare-gpu`): protons, electromagnetic physics, full dose;
+  dose within the CPU engine's noise; transport 16–19 times faster on one A100 than the 48-core CPU run
+- [x] (2026-11-21) The GPU engine: nuclear interactions, influence matrices on the device, MCsquare's robustness
+  scenarios; `MCsquare_gpu` built in the image (CUDA 12.6 in ubuntu:22.04), setting `mcsquare_device`
+  (cpu/gpu/auto, CPU by default); the proton validation cases pass on the GPU (ADR 0024)
+- [ ] GPU engine, the rest: deterministic runs, one CUDA start-up per worker, multi-GPU, fast math after a
+  high-statistics check **(open)**
 
 ### R2 — DICOM RT in
 - [x] RT Plan and RT Ion Plan readers into the internal plans
