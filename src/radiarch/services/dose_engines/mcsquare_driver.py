@@ -7,9 +7,9 @@ and a plan text file. It writes the dose as an MHD volume or, in beamlet mode,
 one sparse column per spot. Radiarch never links or imports it: this module
 writes those files, starts the engine as a subprocess and reads the results
 back. The engine is radiarch's build of upstream's source with radiarch's
-patches (``MCsquare_radiarch``, ADR 0023), or, with ``mcsquare_build=opentps``,
-the binaries OpenTPS ships, started through their launcher script (which picks
-the binary for the CPU). With ``mcsquare_device=gpu`` (or ``auto`` on a host
+patches (``MCsquare_radiarch``, ADR 0023), or, with ``mcsquare_build=upstream``
+(formerly ``opentps``), upstream's own Intel-compiled binaries as OpenTPS ships
+them, started through their launcher script (which picks the binary for the CPU). With ``mcsquare_device=gpu`` (or ``auto`` on a host
 with a CUDA GPU) the same build's ``MCsquare_gpu`` runs instead: MCsquare's
 own input, sampling and output, the particle transport on the GPU (ADR 0024).
 
@@ -138,7 +138,9 @@ def engine_assets_dir(name: str) -> Path:
 # Assets
 # ---------------------------------------------------------------------------
 
-BUILDS = ("radiarch", "opentps")
+BUILDS = ("radiarch", "upstream")
+# Old names of a build, still accepted: ``opentps`` named upstream's binaries after the package they are fetched from.
+BUILD_ALIASES = {"opentps": "upstream"}
 RADIARCH_BINARY = "MCsquare_radiarch"
 DEVICES = ("cpu", "gpu", "auto")
 GPU_BINARY = "MCsquare_gpu"
@@ -163,8 +165,9 @@ class MCsquareAssets:
     """Where the engine, its material database, beam data libraries and scanners live.
 
     ``build`` picks the program (ADR 0023): ``radiarch`` runs ``MCsquare_radiarch``, built from upstream's source
-    with radiarch's patches (``engines/mcsquare-build``); ``opentps`` runs OpenTPS's launcher, which picks one of the
-    ``MCsquare_linux*`` binaries OpenTPS ships for the CPU.
+    with radiarch's patches (``engines/mcsquare-build``); ``upstream`` (formerly ``opentps``, still accepted) runs
+    upstream's launcher, which picks one of upstream's Intel-compiled ``MCsquare_linux*`` binaries for the CPU (as
+    OpenTPS ships them; ``scripts/fetch-engines.sh``).
 
     ``device`` (ADR 0024, radiarch's build only): ``cpu`` runs ``MCsquare_radiarch``; ``gpu`` runs ``MCsquare_gpu``
     with the transport on the GPU (``engines/mcsquare-gpu``); ``auto`` runs ``MCsquare_gpu`` when it is there and
@@ -176,6 +179,7 @@ class MCsquareAssets:
     device: str = "cpu"
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "build", BUILD_ALIASES.get(self.build, self.build))
         if self.build not in BUILDS:
             raise ValueError(f"unknown MCsquare build {self.build!r}; expected one of {', '.join(BUILDS)}")
         if self.device not in DEVICES:
@@ -213,12 +217,12 @@ class MCsquareAssets:
         return self.device
 
     def binaries(self) -> List[Path]:
-        """OpenTPS's binaries, one per instruction set."""
+        """Upstream's binaries, one per instruction set."""
         return sorted(p for p in self.root.glob("MCsquare_linux*") if p.is_file())
 
     def program_files(self) -> List[Path]:
         """The files the setting runs: radiarch's binary (``cpu``), the GPU binary (``gpu``), both (``auto``, the GPU
-        binary when it is there), or OpenTPS's launcher and binaries."""
+        binary when it is there), or upstream's launcher and binaries."""
         if self.build != "radiarch":
             return [self.launcher, *self.binaries()]
         if self.device == "cpu":
@@ -271,8 +275,8 @@ class MCsquareAssets:
         return True, "ok"
 
     def fingerprint(self) -> str:
-        """Identifies the engine build: radiarch's binary's content, or OpenTPS's launcher text and the sizes and
-        names of its binaries (the fingerprint OpenTPS builds had before ADR 0023)."""
+        """Identifies the engine build: radiarch's binary's content, or upstream's launcher text and the sizes and
+        names of its binaries (the fingerprint the engine had before ADR 0023)."""
         h = hashlib.sha256()
         if self.build == "radiarch":
             if self.device != "cpu":

@@ -34,6 +34,10 @@ def test_mcsquare_layout():
         assert (root / "Scanners" / scanner / "HU_Material_Conversion.txt").is_file()
     binaries = sorted(p.name for p in root.glob("MCsquare_linux*"))
     assert "MCsquare_linux" in binaries and "MCsquare_linux_avx2" in binaries
+    # upstream's optimizer and library are not run by radiarch and not fetched (2026-11-21)
+    assert not list(root.glob("MCsquare_opti*")) and not (root / "libMCsquare.so").exists()
+    fetch = (REPO / "scripts" / "fetch-engines.sh").read_text()
+    assert "--exclude 'MCsquare_opti*'" in fetch and "--exclude 'libMCsquare.so'" in fetch
     assert not list(root.rglob("__init__.py")), "engine assets are data, not a Python package"
 
 

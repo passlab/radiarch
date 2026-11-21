@@ -114,8 +114,8 @@ wall time on a loaded host was 1684 s on the CPU against 1494 s with the GPU.
 - Doses change, in radiarch's default build: the nuclear halo's variance is a fifth to a quarter larger than before
   (and than OpenTPS's build); at half the range about 1.5 % of a spot's dose moves from within 10 mm of its axis to
   beyond (5.3 % → 6.8 % at 200 MeV); ranges, fall-offs and spot sizes do not change. Plans made with 0.4.0 are not reproduced by 0.5.0; cached
-  doses and influence matrices of 0.4.0 are not reused. `mcsquare_build=opentps` keeps the old behaviour for
-  comparisons.
+  doses and influence matrices of 0.4.0 are not reused. `mcsquare_build=upstream` (named `opentps` until
+  2026-11-21; the old name is still accepted) keeps upstream's behaviour for comparisons.
 - Geant4 is a second Monte Carlo, not a measurement; the remaining differences (8–11 % less halo variance at 0.8 of
   the range, a peak-to-entrance ratio up to 2.6 % higher) are MCsquare's models, not the overrun.
 - The GPU is opt-in. CI has no GPU: it builds the GPU binary in the image job and checks that it finds its

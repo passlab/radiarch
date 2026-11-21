@@ -64,7 +64,7 @@ class Settings(BaseSettings):
         default="",
         description=(
             "Directory holding CCC_DoseEngine/CCC_DoseEngine and Kernels_differentFluence. "
-            "Empty = the copy vendored with OpenTPS core."
+            "Empty = the repository's engines/ccc (from OpenTPS's copy, scripts/fetch-engines.sh)."
         ),
     )
     ccc_n_jobs: int = Field(default=8, ge=0, description="Parallel CCC processes per dose/Dij build; 0 = half the cores, at most 32. The matrices are the same for any count.")
@@ -85,13 +85,14 @@ class Settings(BaseSettings):
     # Scanners directory, run as a subprocess through radiarch's own driver.
     mcsquare_dir: str = Field(
         default="",
-        description="Directory with the MCsquare launcher, binaries, Materials/, BDL/ and Scanners/. Empty = the copy vendored with OpenTPS core.",
+        description="Directory with the MCsquare binaries, launcher, Materials/, BDL/ and Scanners/. Empty = the repository's engines/mcsquare.",
     )
     mcsquare_build: str = Field(
         default="radiarch",
         description=(
             "Which MCsquare build runs: 'radiarch' (MCsquare_radiarch, built from upstream's source with radiarch's "
-            "patches, ADR 0023) or 'opentps' (the launcher and the binaries OpenTPS ships). Per-run params override."
+            "patches, ADR 0023) or 'upstream' (upstream's launcher and Intel-compiled binaries, as OpenTPS ships them; "
+            "'opentps' is its old name and still accepted). Per-run params override."
         ),
     )
     mcsquare_device: str = Field(

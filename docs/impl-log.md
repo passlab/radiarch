@@ -2346,3 +2346,15 @@ proton validation cases pass (the robust case's gap 0.064 against 0.067 on the C
 dose, influence matrix and scenarios with the CPU build within 1–2 %. Speed against the stock binary and radiarch's
 build at 1–96 threads is in `engines/mcsquare-gpu/README.md` (one A100: 4–5 times radiarch's build on 48 cores per
 Monte Carlo run).
+
+## MCsquare's `opentps` build renamed `upstream`; upstream's unused binaries dropped (2026-11-21)
+
+On the project lead's word ("Please go ahead to change with upstream (keeping opentps as the old name) and the
+cleanup", 2026-11-21). radiarch imports nothing of OpenTPS; it takes MCsquare's data (`Materials/`, `BDL/`,
+`Scanners/`), upstream's Intel-compiled binaries and the CCC photon engine from the copy OpenTPS packages
+(`scripts/fetch-engines.sh`). The setting named the binaries after that package; `mcsquare_build=upstream` now says
+what they are (MCsquare as its authors release it, against radiarch's patched build). `opentps` is still accepted
+and maps to `upstream` (`BUILD_ALIASES`); cache keys follow the files, so cached results stay valid. Upstream's
+optimizer (`MCsquare_opti*`) and library (`libMCsquare.so`), about 88 MB that nothing ran, are no longer in the
+repository or the image, and the fetch leaves them out.
+

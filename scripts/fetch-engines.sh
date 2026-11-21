@@ -2,8 +2,12 @@
 # fetch-engines.sh — refresh the dose engine assets under engines/ from upstream.
 #
 # radiarch runs two engines as separate programs over files:
-#   engines/mcsquare  MCsquare (Apache-2.0): launcher, Linux binaries, Materials/,
-#                     BDL/, Scanners/ — taken from the copy OpenTPS core ships.
+#   engines/mcsquare  MCsquare (Apache-2.0): Materials/, BDL/, Scanners/, and upstream's
+#                     launcher and Intel-compiled Linux binaries (mcsquare_build=upstream)
+#                     — taken from the copy OpenTPS core ships. Not taken: the optimizer
+#                     (MCsquare_opti*) and the library (libMCsquare.so), which radiarch does
+#                     not run; radiarch's own builds (MCsquare_radiarch, MCsquare_gpu) are
+#                     built from source (engines/mcsquare-build, engines/mcsquare-gpu).
 #   engines/ccc       WiscPlan collapsed-cone photon engine (GPLv2): CCC_DoseEngine
 #                     source + Linux binary, kernels, LINAC data — taken from the
 #                     copy OpenTPS core ships.
@@ -49,6 +53,7 @@ echo "==> Replacing ${DEST}/mcsquare"
 rsync -a --delete \
   --exclude '__init__.py' --exclude '__pycache__' \
   --exclude '*.dll' --exclude '*_win.exe' --exclude '*_win.bat' --exclude 'MCsquare_mac*' --exclude 'lib_mac' \
+  --exclude 'MCsquare_opti*' --exclude 'libMCsquare.so' \
   --exclude 'MCsquare_radiarch' --exclude 'MCsquare_gpu' --exclude 'LICENSE-oneMKL*' \
   "${EXPORT}/${SRC_PROTONS}/" "${DEST}/mcsquare/"
 cp "${EXPORT}/opentps_core/LICENSE" "${DEST}/mcsquare/LICENSE-OpenTPS"

@@ -7,7 +7,7 @@ kernel table. Nothing in radiarch links to or imports the two programs.
 
 | Directory | Engine | Licence | Driver |
 |---|---|---|---|
-| `mcsquare/` | MCsquare proton Monte Carlo: `MCsquare_radiarch` (radiarch's build, the default; ADR 0023), OpenTPS's launcher `MCsquare` and Linux binaries (SSE4, AVX, AVX2, AVX-512), `Materials/`, `BDL/`, `Scanners/` | Apache-2.0 (`LICENSE-OpenTPS` covers OpenTPS's copy; `mcsquare-build/LICENSE-MCsquare` the source radiarch builds); oneMKL linked in both builds: Intel Simplified Software License (`LICENSE-oneMKL*.txt`) | `mcsquare_driver.py` |
+| `mcsquare/` | MCsquare proton Monte Carlo: `MCsquare_radiarch` (radiarch's build, the default; ADR 0023), upstream's launcher `MCsquare` and Intel-compiled Linux binaries (SSE4, AVX, AVX2, AVX-512) as OpenTPS ships them, `Materials/`, `BDL/`, `Scanners/` | Apache-2.0 (`LICENSE-OpenTPS` covers OpenTPS's copy; `mcsquare-build/LICENSE-MCsquare` the source radiarch builds); oneMKL linked in both builds: Intel Simplified Software License (`LICENSE-oneMKL*.txt`) | `mcsquare_driver.py` |
 | `mcsquare-build/` | How `MCsquare_radiarch` is built (not committed): `build.sh` (upstream's `gcc` branch at a fixed commit, `patches/`, gcc, static oneMKL), `build-in-docker.sh` (the same in `ubuntu:24.04`, the toolchain of record), `BUILD.txt` (the build of record's checksum and toolchain) | Apache-2.0 | — |
 | `mcsquare-gpu/` | How `MCsquare_gpu` is built (not committed; ADR 0024): the same source and patches plus `patches/0006`–`0008` (the CUDA transport), `build.sh`, `build-in-docker.sh` (`ubuntu:22.04` with CUDA 12.6 from NVIDIA's apt repository, as the image), `bench/` (the comparisons with the CPU engine), `README.md` (design and results) | Apache-2.0 (the CUDA runtime, linked statically: NVIDIA's CUDA EULA, redistributable) | `mcsquare_driver.py` (`mcsquare_device`) |
 | `ccc/` | WiscPlan collapsed-cone photon engine: `CCC_DoseEngine/` (source and Linux binary), `Kernels_6MV/`, `Kernels_differentFluence/`, `LINAC/` | GPLv2 (`licenseWiscPlan.txt`); subprocess only | `ccc_driver.py` |
@@ -17,11 +17,12 @@ kernel table. Nothing in radiarch links to or imports the two programs.
 by default they use these directories (or `/app/engines` in the container image).
 `scripts/fetch-engines.sh <tag>` refreshes both from the OpenTPS repository, the
 upstream that packages them; `Scanners/default` is a copy of `UCL_Toshiba` added
-by radiarch. `tests/test_engine_assets.py` checks the layout. The fetch leaves
+by radiarch; upstream's optimizer (`MCsquare_opti*`) and library (`libMCsquare.so`) are not taken, since radiarch
+runs neither. `tests/test_engine_assets.py` checks the layout. The fetch leaves
 `MCsquare_radiarch`, `MCsquare_gpu` and the oneMKL licence alone. `MCsquare_radiarch` is not in git:
 `engines/mcsquare-build/build-in-docker.sh` builds it (the image and CI do the same) (a new build can change doses, ADR 0023: check the proton
-validation cases and update `BUILD.txt` with it). `RADIARCH_MCSQUARE_BUILD=opentps` runs OpenTPS's
-binaries instead. `MCsquare_gpu` (`engines/mcsquare-gpu/build-in-docker.sh`, or the image) runs the transport on
+validation cases and update `BUILD.txt` with it). `RADIARCH_MCSQUARE_BUILD=upstream` (formerly `opentps`,
+still accepted) runs upstream's binaries instead. `MCsquare_gpu` (`engines/mcsquare-gpu/build-in-docker.sh`, or the image) runs the transport on
 an NVIDIA GPU with `RADIARCH_MCSQUARE_DEVICE=gpu` or `auto` (ADR 0024).
 
 `pb/` is not fetched: `python -m radiarch.services.dose_engines.pb_kernel --mc

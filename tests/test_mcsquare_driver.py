@@ -224,16 +224,22 @@ class TestCrashRetry:
         cfg = work / "config.txt"
         assert drv.assets.command(cfg) == [str(drv.assets.radiarch_binary), str(cfg)]
         assert drv.assets.program_files() == [drv.assets.radiarch_binary]
-        opentps = D.MCsquareAssets(drv.assets.root, "opentps")
-        assert opentps.command(cfg) == ["sh", str(opentps.launcher), str(cfg)]
-        assert opentps.program_files() == [opentps.launcher, *opentps.binaries()]
-        assert drv.assets.fingerprint() != opentps.fingerprint()
-        assert drv.availability() == (True, "ok") and opentps.availability() == (True, "ok")
+        upstream = D.MCsquareAssets(drv.assets.root, "upstream")
+        assert upstream.command(cfg) == ["sh", str(upstream.launcher), str(cfg)]
+        assert upstream.program_files() == [upstream.launcher, *upstream.binaries()]
+        assert drv.assets.fingerprint() != upstream.fingerprint()
+        assert drv.availability() == (True, "ok") and upstream.availability() == (True, "ok")
         drv.assets.radiarch_binary.unlink()
         ok, reason = drv.availability()
-        assert not ok and D.RADIARCH_BINARY in reason and opentps.availability()[0]
+        assert not ok and D.RADIARCH_BINARY in reason and upstream.availability()[0]
         with pytest.raises(ValueError, match="unknown MCsquare build"):
             D.MCsquareAssets(drv.assets.root, "icc")
+
+    def test_opentps_is_the_old_name_of_upstream(self, tmp_path):
+        """``mcsquare_build=opentps`` (before 2026-11-21) still runs upstream's binaries, with the same fingerprint."""
+        root = tmp_path / "engine"
+        old, new = D.MCsquareAssets(root, "opentps"), D.MCsquareAssets(root, "upstream")
+        assert old.build == "upstream" and old == new and old.fingerprint() == new.fingerprint()
 
     def test_dropped_particles_are_counted(self, tmp_path):
         drv, work = self._driver(tmp_path, crashes=0, fail=1)
@@ -264,7 +270,7 @@ class TestDevice:
         with pytest.raises(ValueError, match="unknown MCsquare device"):
             D.MCsquareAssets(root, "radiarch", "tpu")
         with pytest.raises(ValueError, match="needs radiarch's build"):
-            D.MCsquareAssets(root, "opentps", "gpu")
+            D.MCsquareAssets(root, "upstream", "gpu")
         assert D.MCsquareAssets(root).device == "cpu"
 
     def test_each_device_runs_its_own_program(self, tmp_path, monkeypatch):

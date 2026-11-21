@@ -83,7 +83,7 @@ class MCsquareEngine:
         )
 
     def digest(self, params: Optional[dict] = None) -> str:
-        """The build a run reads (R12): the program (radiarch's binary, the GPU binary, or OpenTPS's launcher and
+        """The build a run reads (R12): the program (radiarch's binary, the GPU binary, or upstream's launcher and
         binaries), the material database, and the run's beam data library and scanner calibration. A device other
         than ``cpu`` gives keys of their own (they follow the setting, not the host, as the optimizer's do)."""
         import hashlib
