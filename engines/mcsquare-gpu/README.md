@@ -64,6 +64,17 @@ Influence matrices, nuclear interactions on (CPU with `MCSQUARE_FIX42=1`), the b
 
 Copying the dense grids back instead of compacting on the device took 2.8 s of GPU time (4 GB per group).
 
+Whole-run wall times against the stock binary OpenTPS ships (`MCsquare_linux`, Intel-compiled, upstream unchanged)
+and radiarch's CPU build (ADR 0023), nuclear interactions on, the same seed; median of 3 runs (single thread: 1 run).
+aries has 48 cores, 96 hardware threads. In parentheses: speed-up over the stock binary on one thread.
+
+| | stock, 1 thread | stock, 8 | stock, 48 | stock, 96 | radiarch, 1 | radiarch, 8 | radiarch, 48 | radiarch, 96 | GPU (one A100) |
+|---|---|---|---|---|---|---|---|---|---|
+| bone/lung field, full dose, 10⁷ protons | 251 s (1×) | 33.5 s (7.5×) | 7.1 s (35×) | 5.8 s (43×) | 324 s (0.77×) | 42.6 s (5.9×) | 8.0 s (32×) | 6.9 s (36×) | 1.63 s (154×) |
+| the same field's influence matrix, 845 spots × 10⁴ | 217 s (1×) | 31.2 s (6.9×) | 10.2 s (21×) | 9.0 s (24×) | 276 s (0.79×) | 40.1 s (5.4×) | 10.1 s (22×) | 10.5 s (21×) | 1.98 s (109×) |
+
+The GPU's runs use 48 CPU threads for MCsquare's own sampling; their transport took 0.79 s and 0.57 s of the totals.
+
 - **Agreement:** the GPU's dose differs from the CPU's as much as two CPU runs with different seeds do, in water and
   through bone and lung. Fast math changes nothing visible at this statistics; it needs a check at higher
   statistics before it becomes a default.
