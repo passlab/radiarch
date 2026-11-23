@@ -2358,3 +2358,30 @@ and maps to `upstream` (`BUILD_ALIASES`); cache keys follow the files, so cached
 optimizer (`MCsquare_opti*`) and library (`libMCsquare.so`), about 88 MB that nothing ran, are no longer in the
 repository or the image, and the fetch leaves them out.
 
+## Release 0.4.0 (2026-11-22)
+
+On the project lead's word ("let us release 0.4.0", 2026-11-22). The release `e64ec41` plus this raise; 0.3.2 was
+`c3050a8`.
+
+- **Kind: output can change** (D86). What moved:
+  - `LEAF_MODEL_VERSION` 3 → 4: a rounded leaf end passes a tail beyond its tip (`0228ec6`);
+  - the pencil beam `pb` 1.1.1 → 1.2.0: no 4 mm edge blur (`0228ec6`);
+  - the MCsquare engine 0.3.0 → 0.5.0: radiarch's build from source, which ends the intermittent crash (ADR 0023),
+    and upstream issue #42 fixed (ADR 0024). About 1.5 % of a spot's dose at mid-range moves into the nuclear
+    halo; ranges and spot sizes do not change.
+  - `AUTOPLAN_VERSION` and the protocols do not move.
+- **For a deployment that recomputes stored plans:** photon plans with arcs or MLC apertures give other doses
+  (the leaf model and the pencil beam), and proton doses change by the halo. Re-planning gives plans consistent
+  with this release; recomputing old plans compares two models.
+- **Off by default, no change unless set:** the optimizer on a GPU (`RADIARCH_OPTIMIZER_DEVICE`, ADR 0022), MCsquare
+  on a GPU (`RADIARCH_MCSQUARE_DEVICE`, ADR 0024; the image now carries `MCsquare_gpu`), results scoped by study
+  (`RADIARCH_ACCESS_URL`, ADR 0021).
+- **Defaults that change resources, not results:** the influence store keeps matrices as they are (about 2.4 times
+  the disk per matrix; `RADIARCH_INFLUENCE_STORE_COMPRESS_LEVEL=1` for a site short on disk); the collapsed cone
+  runs 8 processes.
+- **Renamed:** `RADIARCH_MCSQUARE_BUILD=opentps` is `upstream` (the old name is still accepted).
+- **Also in it:** the GPU paths of the pencil beam (batched influence matrices, the same bit for bit) and the
+  radiological depth on CPU threads; the engine digest's cache; asymmetric margins; relative-seriality NTCP and
+  LQ-L; an import's registration; the physicist's way in to the validation records; CI on `dev`.
+- A minor raise: outputs change and settings are added; no API route is removed.
+
